@@ -7,6 +7,14 @@
         "rectMove": [570, 360, 0, 0],
         "specialParams": [200, 1]
     },
+    "RoguelikeRouting-MoveLeft": {
+        "doc": "生成地图后向右滑动回到左侧地图",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [570, 360, 0, 0],
+        "rectMove": [1000, 360, 0, 0],
+        "specialParams": [200, 1]
+    },
     "RoguelikeRouting-MoveRightToPeek": {
         "doc": "在地图初始位置向左滑动以检视前三列节点",
         "algorithm": "JustReturn",
@@ -97,6 +105,26 @@
         "action": "ClickSelf",
         "next": ["Sarkaz@RoguelikeRouting-Continue"]
     },
+    "JieGarden@RoguelikeRouting-ConfirmToContinue": {
+        "doc": "next 里的 RoguelikeRoutingNodeAnalyze 是为了确保回到地图",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [50, 360, 0, 0],
+        "next": ["JieGarden@RoguelikeRoutingNodeAnalyze", "#self"]
+    },
+    "JieGarden@RoguelikeRouting-Continue": {
+        "template": "empty.png",
+        "roi": [1032, 487, 248, 215],
+        "action": "ClickSelf",
+        "postDelay": 500,
+        "next": ["JieGarden@RoguelikeRouting-ConfirmToContinue"]
+    },
+    "JieGarden@RoguelikeRouting-ExitThenContinue": {
+        "template": "Roguelike@ExitThenAbandon.png",
+        "roi": [18, 8, 53, 53],
+        "action": "ClickSelf",
+        "next": ["JieGarden@RoguelikeRouting-Continue"]
+    },
     "Sarkaz@RoguelikeRouting-RefreshNode": {
         "roi": [796, 130, 50, 170],
         "action": "ClickSelf",
@@ -137,8 +165,29 @@
             "JieGarden@RoguelikeMapNode-CombatOps.png",
             "JieGarden@RoguelikeMapNode-EmergencyOps.png",
             "JieGarden@RoguelikeMapNode-Encounter.png",
+            "JieGarden@RoguelikeMapNode-Guidance.png",
             "JieGarden@RoguelikeMapNode-Boons.png",
+            "JieGarden@RoguelikeMapNode-SafeHouse.png",
             "JieGarden@RoguelikeMapNode-RogueTrader.png",
+            "JieGarden@RoguelikeMapNode-WindAndRain.png",
+            "JieGarden@RoguelikeMapNode-Transportation.png",
+            "JieGarden@RoguelikeMapNode-Confrontation.png",
+            "JieGarden@RoguelikeMapNode-BoskyPassage.png"
+        ],
+        "next": ["RoguelikeRoutingAction"]
+    },
+    "JieGarden@Roguelike@Routing-DataCollection": {
+        "template": [
+            "JieGarden@RoguelikeMapNode-CombatOps.png",
+            "JieGarden@RoguelikeMapNode-EmergencyOps.png",
+            "JieGarden@RoguelikeMapNode-Encounter.png",
+            "JieGarden@RoguelikeMapNode-Guidance.png",
+            "JieGarden@RoguelikeMapNode-Boons.png",
+            "JieGarden@RoguelikeMapNode-SafeHouse.png",
+            "JieGarden@RoguelikeMapNode-RogueTrader.png",
+            "JieGarden@RoguelikeMapNode-WindAndRain.png",
+            "JieGarden@RoguelikeMapNode-Transportation.png",
+            "JieGarden@RoguelikeMapNode-Confrontation.png",
             "JieGarden@RoguelikeMapNode-BoskyPassage.png"
         ],
         "next": ["RoguelikeRoutingAction"]
@@ -190,9 +239,45 @@
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@Stages_leaveBoskyPassage#next"]
     },
+    "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageBoskyPassageEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnterThenSkipInner": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageBoskyPassageEnterThenSkipInner"]
+    },
     "JieGarden@RoguelikeRoutingAction-StageCombatOpsEnterThenLeave": {
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@StageCombatOpsEnterThenLeave"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageCombatOpsEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageCombatOpsEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageBoonsEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageBoonsEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageSafeHouseEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageSafeHouseEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageGuidanceEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageGuidanceEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageEncounterEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageTraderEnter": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageTraderEnter"]
+    },
+    "JieGarden@RoguelikeRoutingAction-StageTraderEnterThenLeave": {
+        "algorithm": "JustReturn",
+        "next": ["JieGarden@Roguelike@StageTraderEnterThenLeave"]
     },
     "JieGarden@RoguelikeRoutingAction-StageDisasterEnter": {
         "algorithm": "JustReturn",
@@ -252,10 +337,20 @@
             "JieGarden@RoguelikeMapNode-EmergencyOpsGrey.png",
             "JieGarden@RoguelikeMapNode-Encounter.png",
             "JieGarden@RoguelikeMapNode-EncounterGrey.png",
+            "JieGarden@RoguelikeMapNode-Guidance.png",
+            "JieGarden@RoguelikeMapNode-GuidanceGrey.png",
             "JieGarden@RoguelikeMapNode-Boons.png",
             "JieGarden@RoguelikeMapNode-BoonsGrey.png",
+            "JieGarden@RoguelikeMapNode-SafeHouse.png",
+            "JieGarden@RoguelikeMapNode-SafeHouseGrey.png",
             "JieGarden@RoguelikeMapNode-RogueTrader.png",
             "JieGarden@RoguelikeMapNode-RogueTraderGrey.png",
+            "JieGarden@RoguelikeMapNode-WindAndRain.png",
+            "JieGarden@RoguelikeMapNode-WindAndRainGrey.png",
+            "JieGarden@RoguelikeMapNode-Transportation.png",
+            "JieGarden@RoguelikeMapNode-TransportationGrey.png",
+            "JieGarden@RoguelikeMapNode-Confrontation.png",
+            "JieGarden@RoguelikeMapNode-ConfrontationGrey.png",
             "JieGarden@RoguelikeMapNode-BoskyPassage.png",
             "JieGarden@RoguelikeMapNode-BoskyPassageGrey.png"
         ],

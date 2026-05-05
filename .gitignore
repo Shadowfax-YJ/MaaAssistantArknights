@@ -486,3 +486,5 @@ install-*
 
 # CMake user presets
 CMakeUserPresets.json
+
+.agents/

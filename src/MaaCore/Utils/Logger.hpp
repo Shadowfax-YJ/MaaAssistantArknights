@@ -5,6 +5,7 @@
 #include <io.h>
 #endif
 #include <csignal>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -767,7 +768,8 @@ private:
         if (!m_of || !m_ofs || !m_ofs.is_open()) {
             LoadFileStream();
         }
-        if (m_file_size + m_buff.count_bytes() <= MaxLogSize) {
+        const auto buffered_size = static_cast<std::uintmax_t>(m_buff.count_bytes());
+        if (m_file_size + buffered_size <= MaxLogSize) {
             return;
         }
         try {
@@ -1033,11 +1035,11 @@ private:
     std::ofstream m_ofs;
     LogStreambuf m_buff;
     std::ostream m_of;
-    std::size_t m_file_size = 0;
+    std::uintmax_t m_file_size = 0;
 
     static inline utils::NullStreambuf null_buf {};
     static inline std::ostream null_stream { &null_buf };
-    const std::size_t MaxLogSize = 64LL * 1024 * 1024;
+    static constexpr std::uintmax_t MaxLogSize = 4ULL * 1024 * 1024 * 1024;
 };
 
 inline constexpr Logger::separator Logger::separator::none;

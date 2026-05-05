@@ -1169,6 +1169,14 @@ public class AsstProxy
 
                             Instances.TaskQueueViewModel.AddLog(msgText, UiLogColor.Warning);
                             break;
+
+                        case "RoguelikeRoutePlanned":
+                            var message = details["message"]?.ToString();
+                            if (!string.IsNullOrEmpty(message))
+                            {
+                                Instances.TaskQueueViewModel.AddLog(message, UiLogColor.Info);
+                            }
+                            break;
                     }
 
                     break;

@@ -37,7 +37,8 @@ enum class RoguelikeMode
     FastPass = 10001, // 10001 - 快速通过第一层
 
     // ------------------ 界园主题专用模式 ------------------
-    FindPlaytime = 20001 // 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
+    FindPlaytime = 20001,   // 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
+    DataCollection = 20002, // 20002 - 界园数据收集，避战并优先不期而遇
 };
 
 struct RoguelikeOper
@@ -96,7 +97,8 @@ public:
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||
                (mode == RoguelikeMode::CLP_PDS && theme == RoguelikeTheme::Sami) ||
                (mode == RoguelikeMode::FastPass && theme == RoguelikeTheme::Sarkaz) ||
-               (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden);
+               (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden) ||
+               (mode == RoguelikeMode::DataCollection && theme == RoguelikeTheme::JieGarden);
     }
 
     bool verify_and_load_params(const json::value& params);

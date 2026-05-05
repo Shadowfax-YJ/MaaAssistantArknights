@@ -36,6 +36,18 @@ void asst::RoguelikeMap::add_edge(const size_t& source, const size_t& target)
     Log.info(__FUNCTION__, "| Node", source, "-> Node", target);
 }
 
+void asst::RoguelikeMap::remove_edge(const size_t& source, const size_t& target)
+{
+    if (source >= m_nodes.size() || target >= m_nodes.size()) {
+        Log.error(__FUNCTION__, "| node does not exist");
+        return;
+    }
+
+    std::erase(m_nodes.at(source)->succs, target);
+    std::erase(m_nodes.at(target)->preds, source);
+    Log.info(__FUNCTION__, "| Node", source, "-> Node", target);
+}
+
 void asst::RoguelikeMap::set_curr_pos(const size_t& node_index)
 {
     if (node_index >= m_nodes.size()) {

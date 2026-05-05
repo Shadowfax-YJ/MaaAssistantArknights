@@ -238,6 +238,11 @@ public enum RoguelikeMode
     /// 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
     /// </summary>
     FindPlaytime = 20001,
+
+    /// <summary>
+    /// 20002 - 数据收集，避战并优先不期而遇
+    /// </summary>
+    DataCollection = 20002,
 }
 
 /// <summary>

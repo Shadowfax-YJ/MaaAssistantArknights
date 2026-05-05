@@ -6,6 +6,7 @@
 #include "Controller/Controller.h"
 #include "MaaUtils/ImageIo.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
@@ -103,6 +104,12 @@ asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_pickup_mode()
 {
     LogTraceFunction;
 
+    if (m_config->get_mode() == RoguelikeMode::DataCollection) {
+        Log.info(__FUNCTION__, "| data collection mode, leave is handled by task chain");
+        RoguelikeDataCollector.log_event("copper_pickup_skipped", json::object { { "reason", "data_collection" } });
+        return CopperTaskResult::SKIPPED;
+    }
+
     const auto& image = ctrler()->get_image();
 
 #ifdef ASST_DEBUG
@@ -185,6 +192,12 @@ asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_pickup_mode()
 // 图片示意请看 文档(docs\zh-cn\protocol\integrated-strategy-schema.md) 或 #13835
 asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_exchange_mode()
 {
+    if (m_config->get_mode() == RoguelikeMode::DataCollection) {
+        Log.info(__FUNCTION__, "| data collection mode, abandoning copper exchange");
+        RoguelikeDataCollector.log_event("copper_exchange_skipped", json::object { { "reason", "data_collection" } });
+        return CopperTaskResult::SKIPPED;
+    }
+
     // 确保列表滑动到最左边（有时候进入界面不在最左边）
     bool ret = swipe_copper_list_to_leftmost(2);
 

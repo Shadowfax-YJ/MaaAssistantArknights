@@ -198,6 +198,7 @@
     <system:String x:Key="RoguelikeStrategyMonthlySquad">월간 분대 파밍, 최대한 많은 구역 클리어</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">심층 조사 파밍, 최대한 많은 구역 클리어</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">여흥 노드 파밍, 1층 쉐이의 잔식에 진입, 필요한 노드를 찾지 못하면 재시작</system:String>
+    <system:String x:Key="RoguelikeStrategyDataCollection">데이터 수집: 전투를 피하고 인카운터 우선</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">목표 여흥 노드</system:String>
     <system:String x:Key="RoguelikePlaytimeLing">링 - 주화 놀이</system:String>
     <system:String x:Key="RoguelikePlaytimeShu">슈 - 인과</system:String>

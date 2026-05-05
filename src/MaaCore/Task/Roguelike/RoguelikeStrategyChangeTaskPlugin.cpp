@@ -1,6 +1,7 @@
 #include "RoguelikeStrategyChangeTaskPlugin.h"
 
 #include "Config/TaskData.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/Logger.hpp"
 
 bool asst::RoguelikeStrategyChangeTaskPlugin::verify(AsstMsg msg, const json::value& details) const
@@ -44,6 +45,19 @@ bool asst::RoguelikeStrategyChangeTaskPlugin::_run()
     if (Task.get(strategy_task_name) == nullptr) [[unlikely]] {
         Log.error("Strategy task", strategy_task_name, "doesn't exist!");
         return false;
+    }
+
+    if (m_config->get_mode() == RoguelikeMode::DataCollection) {
+        RoguelikeDataCollector.note_strategy_change(current_strategy);
+        RoguelikeDataCollector.log_event(
+            current_strategy == "_exit" ? "floor_exit" : "strategy_change",
+            json::object {
+                { "strategy", current_strategy },
+                { "stages_task", strategy_task_name },
+        });
+        if (current_strategy == "_exit") {
+            RoguelikeDataCollector.finish_run("floor_exit");
+        }
     }
 
     Task.set_task_base(stages_task_name, strategy_task_name);

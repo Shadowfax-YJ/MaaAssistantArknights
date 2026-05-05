@@ -6,6 +6,7 @@
 #include "MaaUtils/ImageIo.h"
 #include "MaaUtils/NoWarningCV.hpp"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Task/Roguelike/Map/RoguelikeBoskyPassageMap.h"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
@@ -58,6 +59,19 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 
     if (!name_analyzer.analyze()) {
         Log.error("Unknown Event");
+        const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
+        const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
+        if (record_map_encounter) {
+            RoguelikeDataCollector.record_encounter("unknown", image_path);
+        }
+        RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
+                                                                      { "options", json::array {} },
+                                                                      { "selected_option", "" },
+                                                                      { "image", image_path },
+                                                                      { "ocr_failed", true } });
+        if (record_map_encounter) {
+            RoguelikeDataCollector.finish_run("encounter_ocr_error");
+        }
         callback(AsstMsg::SubTaskExtraInfo, basic_info_with_what("EncounterOcrError"));
         return true;
     }
@@ -65,6 +79,19 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
     const auto& result_vec = name_analyzer.get_result();
     if (result_vec.empty()) {
         Log.error("Unknown Event");
+        const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
+        const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
+        if (record_map_encounter) {
+            RoguelikeDataCollector.record_encounter("unknown", image_path);
+        }
+        RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
+                                                                      { "options", json::array {} },
+                                                                      { "selected_option", "" },
+                                                                      { "image", image_path },
+                                                                      { "ocr_failed", true } });
+        if (record_map_encounter) {
+            RoguelikeDataCollector.finish_run("encounter_ocr_error");
+        }
         return true;
     }
 
@@ -87,16 +114,31 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     const std::string& theme = m_config->get_theme();
     const RoguelikeMode& mode = m_config->get_mode();
     const auto& event_map = RoguelikeStageEncounter.get_events(theme, mode);
+    cv::Mat image = ctrler()->get_image();
+    const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
+    const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
 
     auto it = event_map.find(event_name);
     if (it == event_map.end()) {
         Log.error("Unknown event:", event_name);
+        if (record_map_encounter) {
+            RoguelikeDataCollector.record_encounter(event_name, image_path);
+        }
+        RoguelikeDataCollector.log_event("encounter", json::object {
+                                                          { "event_name", event_name },
+                                                          { "options", json::array {} },
+                                                          { "selected_option", "" },
+                                                          { "image", image_path },
+                                                          { "ocr_failed", false },
+                                                          { "unknown_event", true },
+                                                      });
         return std::nullopt;
     }
 
     const auto& event = it->second;
-
-    cv::Mat image = ctrler()->get_image();
+    if (record_map_encounter) {
+        RoguelikeDataCollector.record_encounter(event.name, image_path);
+    }
 
     int special_val = 0;
     // 水月的不好识别，先试试萨米能不能用
@@ -168,6 +210,14 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     if (theme == RoguelikeTheme::JieGarden) {
         reset_option_list_and_view_data();
         if (update_option_list()) {
+            json::array option_details;
+            for (const auto& option : m_option_list) {
+                option_details.emplace_back(json::object {
+                    { "text", option.text },
+                    { "enabled", option.enabled },
+                });
+            }
+
             size_t choice = 0; // 以 0 作为 无效 index
             if (!event.option_text.empty()) {
                 for (const std::string& event_text : event.option_text) {
@@ -199,15 +249,37 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         m_option_list.size()));
             }
             else if (select_analyzed_option(choice - 1)) {
+                RoguelikeDataCollector.log_event("encounter", json::object {
+                                                                  { "event_name", event.name },
+                                                                  { "options", option_details },
+                                                                  { "selected_option", m_option_list[choice - 1].text },
+                                                                  { "image", image_path },
+                                                                  { "ocr_failed", false },
+                                                              });
                 return next_event(event);
             }
 
             // 兜底：从下到上依次选择
             for (choice = m_option_list.size(); choice > 0; --choice) {
                 if (m_option_list[choice - 1].enabled && select_analyzed_option(choice - 1)) {
+                    RoguelikeDataCollector.log_event("encounter", json::object {
+                                                                      { "event_name", event.name },
+                                                                      { "options", option_details },
+                                                                      { "selected_option", m_option_list[choice - 1].text },
+                                                                      { "image", image_path },
+                                                                      { "ocr_failed", false },
+                                                                  });
                     return next_event(event);
                 }
             }
+
+            RoguelikeDataCollector.log_event("encounter", json::object {
+                                                              { "event_name", event.name },
+                                                              { "options", std::move(option_details) },
+                                                              { "selected_option", "" },
+                                                              { "image", image_path },
+                                                              { "ocr_failed", false },
+                                                          });
         }
     }
 
@@ -223,6 +295,14 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         ProcessTask(*this, { click_option_task_name(choose_option, event.option_num) }).run();
         sleep(300);
     }
+
+    RoguelikeDataCollector.log_event("encounter", json::object {
+                                                      { "event_name", event.name },
+                                                      { "options", json::array {} },
+                                                      { "selected_option", std::to_string(choose_option) },
+                                                      { "image", image_path },
+                                                      { "ocr_failed", false },
+                                                  });
 
     sleep(1500);
 

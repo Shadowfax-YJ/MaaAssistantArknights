@@ -126,6 +126,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
 
             case Theme.JieGarden:
                 baseList.Add(new() { Display = LocalizationHelper.GetString("RoguelikeStrategyFindPlaytime"), Value = Mode.FindPlaytime });
+                baseList.Add(new() { Display = LocalizationHelper.GetString("RoguelikeStrategyDataCollection"), Value = Mode.DataCollection });
                 break;
         }
 

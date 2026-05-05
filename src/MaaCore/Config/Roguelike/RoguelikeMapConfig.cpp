@@ -11,6 +11,7 @@ static const std::unordered_map<std::string, RoguelikeNodeType> NODE_TYPE_MAPPIN
     { "EmergencyOps", RoguelikeNodeType::EmergencyOps },
     { "DreadfulFoe", RoguelikeNodeType::DreadfulFoe },
     { "Encounter", RoguelikeNodeType::Encounter },
+    { "Guidance", RoguelikeNodeType::Guidance },
     { "Boons", RoguelikeNodeType::Boons },
     { "SafeHouse", RoguelikeNodeType::SafeHouse },
     { "Recreation", RoguelikeNodeType::Recreation },

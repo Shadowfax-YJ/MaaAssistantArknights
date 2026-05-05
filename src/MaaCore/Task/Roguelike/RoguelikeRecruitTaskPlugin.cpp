@@ -103,6 +103,11 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
         }
     }
 
+    if (theme == RoguelikeTheme::JieGarden && mode == RoguelikeMode::DataCollection && !m_initail_recruit) {
+        ProcessTask(*this, { "JieGarden@RoguelikeRecruit-GiveUp" }).run();
+        return true;
+    }
+
     // 刷常乐节点保存路上招募券
     // 只在非开局招募时保存招募券
     if (theme == RoguelikeTheme::JieGarden && mode == RoguelikeMode::FindPlaytime && !m_initail_recruit) {

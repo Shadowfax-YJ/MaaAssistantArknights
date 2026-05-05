@@ -198,6 +198,7 @@ To customize rotation schedules, please use ｢{key=InfrastModeCustom}｣.</syst
     <system:String x:Key="RoguelikeStrategyMonthlySquad">Grind Monthly Squad, clear as far as possible</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">Grind Deep Investigation, clear as far as possible</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">Farm playtime nodes, enter the cave on the first floor, restart if target node not found</system:String>
+    <system:String x:Key="RoguelikeStrategyDataCollection">Data collection: avoid combat and prefer encounters</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">Target playtime node</system:String>
     <system:String x:Key="RoguelikePlaytimeLing">Ling - Resounding Words</system:String>
     <system:String x:Key="RoguelikePlaytimeShu">Shu - Reap What You Sow</system:String>

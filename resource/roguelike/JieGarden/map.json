@@ -17,12 +17,32 @@
             "template": ["JieGarden@RoguelikeMapNode-Encounter.png", "JieGarden@RoguelikeMapNode-EncounterGrey.png"]
         },
         {
+            "type": "Guidance",
+            "template": ["JieGarden@RoguelikeMapNode-Guidance.png", "JieGarden@RoguelikeMapNode-GuidanceGrey.png"]
+        },
+        {
             "type": "Boons",
             "template": ["JieGarden@RoguelikeMapNode-Boons.png", "JieGarden@RoguelikeMapNode-BoonsGrey.png"]
         },
         {
+            "type": "SafeHouse",
+            "template": ["JieGarden@RoguelikeMapNode-SafeHouse.png", "JieGarden@RoguelikeMapNode-SafeHouseGrey.png"]
+        },
+        {
             "type": "RogueTrader",
             "template": ["JieGarden@RoguelikeMapNode-RogueTrader.png", "JieGarden@RoguelikeMapNode-RogueTraderGrey.png"]
+        },
+        {
+            "type": "LostAndFound",
+            "template": ["JieGarden@RoguelikeMapNode-WindAndRain.png", "JieGarden@RoguelikeMapNode-WindAndRainGrey.png"]
+        },
+        {
+            "type": "Scout",
+            "template": ["JieGarden@RoguelikeMapNode-Transportation.png", "JieGarden@RoguelikeMapNode-TransportationGrey.png"]
+        },
+        {
+            "type": "FaceOff",
+            "template": ["JieGarden@RoguelikeMapNode-Confrontation.png", "JieGarden@RoguelikeMapNode-ConfrontationGrey.png"]
         },
         {
             "type": "BoskyPassage",

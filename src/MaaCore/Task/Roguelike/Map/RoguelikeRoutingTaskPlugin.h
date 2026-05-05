@@ -1,5 +1,8 @@
 #pragma once
 
+#include <limits>
+#include <string>
+
 #include "Common/AsstTypes.h"
 #include "MaaUtils/NoWarningCVMat.hpp"
 #include "RoguelikeMap.h"
@@ -23,6 +26,7 @@ public:
         Sarkaz_FastInvestment,           // 点刺成锭分队快速投资
         JieGarden_FastPassWithBattle,    // 指挥分队一战快速投资/烧水
         JieGarden_FastPassWithoutBattle, // 指挥分队无战快速投资/烧水
+        JieGarden_DataCollection,        // 界园数据收集
     };
 
 protected:
@@ -46,17 +50,56 @@ private:
     bool update_map(
         const cv::Mat& image,
         size_t leftmost_column = RoguelikeMap::INIT_INDEX + 1,
-        std::optional<std::reference_wrapper<cv::Mat>> image_draw_opt = std::nullopt);
+        std::optional<std::reference_wrapper<cv::Mat>> image_draw_opt = std::nullopt,
+        bool include_same_column_edges = true);
 
     void generate_map();
+    void generate_data_collection_map();
     void generate_edges(
         const size_t& node,
         const cv::Mat& image,
         const int& node_x,
+        bool include_same_column_edges = true,
         std::optional<std::reference_wrapper<cv::Mat>> image_draw_opt = std::nullopt);
     void refresh_following_combat_nodes();
     void navigate_route();
+    void navigate_data_collection_route();
     void update_selected_x();
+
+    struct DataCollectionRouteScore
+    {
+        bool valid = false;
+        int encounter_count = 0;
+        int combat_count = 0;
+        int non_combat_count = 0;
+        int path_length = 0;
+        int vertical_edge_count = 0;
+        int first_encounter_step = std::numeric_limits<int>::max();
+        int first_type_priority = 0;
+        size_t first_node = RoguelikeMap::INIT_INDEX;
+        std::vector<size_t> path;
+        std::string reject_reason;
+    };
+
+    DataCollectionRouteScore score_data_collection_path(
+        size_t node,
+        std::optional<size_t> previous_node = std::nullopt,
+        std::vector<size_t> path = {},
+        bool vertical_edge_used_in_path = false) const;
+    cv::Mat build_data_collection_graph_image(
+        const std::vector<size_t>& selected_route = {},
+        std::optional<size_t> selected_node = std::nullopt) const;
+    json::object build_data_collection_route_details(
+        const std::vector<DataCollectionRouteScore>& candidates,
+        std::optional<size_t> chosen,
+        std::string_view reject_reason) const;
+    static bool is_data_collection_rejected_type(RoguelikeNodeType type);
+    static bool is_data_collection_combat_type(RoguelikeNodeType type);
+    static int data_collection_type_priority(RoguelikeNodeType type);
+    static std::string data_collection_display_name(RoguelikeNodeType type);
+    static bool data_collection_score_less(const DataCollectionRouteScore& lhs, const DataCollectionRouteScore& rhs);
+    bool is_data_collection_vertical_edge(size_t source, size_t target) const;
+    std::string build_data_collection_adjacency_list() const;
 
     inline static std::function<std::string(RoguelikeNodeType)> type2name = &RoguelikeMapConfig::type2name;
 
@@ -64,6 +107,11 @@ private:
     RoutingStrategy m_routing_strategy = RoutingStrategy::None;
     RoguelikeMap m_map;
     bool m_need_generate_map = true;
+    int m_data_collection_floor = 0;
+    size_t m_data_collection_current_node = RoguelikeMap::INIT_INDEX;
+    bool m_data_collection_vertical_edge_used = false;
+    cv::Mat m_data_collection_full_map_image;
+    std::vector<int> m_data_collection_column_xs;
     size_t m_selected_column = 0;  // 当前选中节点所在列
     int m_selected_x = 0;          // 当前选中节点的横坐标 (Rect.x)
 

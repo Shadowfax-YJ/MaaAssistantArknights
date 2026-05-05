@@ -5,6 +5,13 @@
 
 bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 {
+    m_invest_with_more_score = false;
+    m_collectible_mode_shopping = false;
+    m_run_for_collectible = false;
+    m_skip_recruit_in_fast_pass = false;
+    m_first_floor_foldartal = false;
+    m_find_playTime_target = 0;
+
     // ------------------ 肉鸽主题设置 ------------------
     std::string theme = params.get("theme", std::string(RoguelikeTheme::Phantom));
     if (!RoguelikeConfig::is_valid_theme(theme)) {
@@ -86,6 +93,10 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
                 // 启用刷常乐节点策略，联动 RoguelikeRoutingTaskPlugin
                 Task.set_task_base(strategy_task, "JieGarden@Roguelike@StrategyChange_mode20001");
             }
+            if (m_mode == RoguelikeMode::DataCollection) {
+                // 启用界园数据收集策略，联动 RoguelikeRoutingTaskPlugin
+                Task.set_task_base(strategy_task, "JieGarden@Roguelike@StrategyChange_mode20002");
+            }
         }
     }
 
@@ -124,4 +135,3 @@ void asst::RoguelikeConfig::clear()
     // ------------------ 通用参数 ------------------
     m_squad = std::string();
 }
-

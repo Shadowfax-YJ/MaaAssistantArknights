@@ -48,6 +48,7 @@ public:
     std::optional<size_t> create_and_insert_node(RoguelikeNodeType type, const size_t& column, const int& y);
 
     void add_edge(const size_t& source, const size_t& target);
+    void remove_edge(const size_t& source, const size_t& target);
     void set_curr_pos(const size_t& node_index);
 
     void set_cost_fun(const RoguelikeNodeCostFun& cost_fun) { m_cost_fun = cost_fun; }

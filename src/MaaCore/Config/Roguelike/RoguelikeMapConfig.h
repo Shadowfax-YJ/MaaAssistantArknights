@@ -12,6 +12,7 @@ enum class RoguelikeNodeType
     EmergencyOps, // 紧急作战
     DreadfulFoe,  // 险路恶敌
     Encounter,    // 不期而遇
+    Guidance,     // 指点迷津
     Boons,        // 古堡馈赠/得偿所愿
     SafeHouse,    // 安全的角落
     Recreation,   // 幕间余兴/兴致盎然

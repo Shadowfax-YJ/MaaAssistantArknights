@@ -10,6 +10,7 @@
 #include "Task/Roguelike/RoguelikeConfig.h"
 #include "Task/Roguelike/RoguelikeControlTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeCustomStartTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Task/Roguelike/RoguelikeDebugTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeFormationTaskPlugin.h"
@@ -130,6 +131,26 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
 
     m_roguelike_task_ptr->set_tasks({ theme + "@Roguelike@Begin" });
 
+    if (mode == RoguelikeMode::DataCollection) {
+        RoguelikeDataCollector.start_session(*m_config_ptr, params);
+    }
+    else {
+        RoguelikeDataCollector.disable();
+    }
+
+    if (theme == RoguelikeTheme::JieGarden) {
+        const std::string get_drop_select = theme + "@Roguelike@GetDropSelect";
+        const std::string get_drop_switch = theme + "@Roguelike@GetDropSwitch";
+        if (mode == RoguelikeMode::DataCollection) {
+            Task.set_task_base(get_drop_select, theme + "@Roguelike@GetDropSelect_dataCollection");
+            Task.set_task_base(get_drop_switch, theme + "@Roguelike@GetDropSwitch_dataCollection");
+        }
+        else {
+            Task.set_task_base(get_drop_select, theme + "@Roguelike@GetDropSelect_default");
+            Task.set_task_base(get_drop_switch, theme + "@Roguelike@GetDropSwitch_default");
+        }
+    }
+
     if (mode == RoguelikeMode::Investment) {
         // 刷源石锭模式是否进入第二层
         if (m_config_ptr->get_invest_with_more_score()) {
@@ -187,10 +208,10 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     // 通过 exceededNext 禁用投资系统，进入商店购买逻辑
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderInvestSystem",
-        params.get("investment_enabled", true) ? INT_MAX : 0);
+        mode == RoguelikeMode::DataCollection ? 0 : (params.get("investment_enabled", true) ? INT_MAX : 0));
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderRefreshWithDice",
-        params.get("refresh_trader_with_dice", false) ? INT_MAX : 0);
+        mode == RoguelikeMode::DataCollection ? 0 : (params.get("refresh_trader_with_dice", false) ? INT_MAX : 0));
 
     for (const auto& plugin : m_roguelike_task_ptr->get_plugins()) {
         if (const auto& p_ptr = std::dynamic_pointer_cast<AbstractRoguelikeTaskPlugin>(plugin); p_ptr != nullptr) {
