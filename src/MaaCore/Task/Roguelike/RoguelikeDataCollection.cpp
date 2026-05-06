@@ -64,6 +64,24 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     m_record_map_encounters = false;
 }
 
+void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::string_view reason)
+{
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty() || m_encounter_summary.empty()) {
+            return;
+        }
+    }
+
+    log_event("run_end", json::object { { "reason", std::string(reason) } });
+    flush_encounter_summary(false);
+
+    std::lock_guard lock(m_mutex);
+    m_current_floor = "未知层";
+    m_floor_index = 0;
+    m_record_map_encounters = false;
+}
+
 void asst::RoguelikeDataCollection::disable()
 {
     flush_encounter_summary();

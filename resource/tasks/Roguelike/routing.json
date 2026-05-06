@@ -243,10 +243,6 @@
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@StageBoskyPassageEnter"]
     },
-    "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnterThenSkipInner": {
-        "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageBoskyPassageEnterThenSkipInner"]
-    },
     "JieGarden@RoguelikeRoutingAction-StageCombatOpsEnterThenLeave": {
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@StageCombatOpsEnterThenLeave"]

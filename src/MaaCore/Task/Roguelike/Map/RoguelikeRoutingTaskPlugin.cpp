@@ -77,6 +77,7 @@ void asst::RoguelikeRoutingTaskPlugin::reset_in_run_variables()
     m_data_collection_vertical_edge_used = false;
     m_data_collection_full_map_image.release();
     m_data_collection_column_xs.clear();
+    m_data_collection_edge_scores.clear();
     m_selected_column = 0;
     m_selected_x = 0;
 }
@@ -417,6 +418,154 @@ void asst::RoguelikeRoutingTaskPlugin::generate_map()
     ProcessTask(*this, { theme + "@RoguelikeRouting-ExitThenContinue" }).run(); // 通过退出重进回到初始位置
 }
 
+asst::RoguelikeRoutingTaskPlugin::DataCollectionEdgeScore
+    asst::RoguelikeRoutingTaskPlugin::score_data_collection_horizontal_edge(
+        const cv::Mat& image,
+        size_t source,
+        int source_x,
+        size_t target,
+        int target_x) const
+{
+    DataCollectionEdgeScore result;
+    result.source = source;
+    result.target = target;
+
+    constexpr int SampleStepX = 2;
+    constexpr int MaxStepYPerSample = 8;
+    constexpr double EdgeScoreThreshold = 0.97;
+    constexpr int BrightGate = 245;
+    constexpr double RoiLeftRatio = 0.15;
+    constexpr double RoiRightRatio = 0.85;
+
+    const int source_y = m_map.get_node_y(source);
+    const int target_y = m_map.get_node_y(target);
+    const int raw_roi_x = source_x + m_node_width;
+    const int raw_roi_right = target_x;
+    const int raw_roi_width = raw_roi_right - raw_roi_x;
+    const int roi_x = raw_roi_x + static_cast<int>(std::round(raw_roi_width * RoiLeftRatio));
+    const int roi_right = raw_roi_x + static_cast<int>(std::round(raw_roi_width * RoiRightRatio));
+    const int roi_y = std::min(source_y, target_y);
+    const int roi_bottom = std::max(source_y + m_node_height, target_y + m_node_height);
+
+    Rect roi(roi_x, roi_y, roi_right - roi_x, roi_bottom - roi_y);
+    if (roi.width <= SampleStepX || roi.height <= 2 || roi.x < 0 || roi.y < 0 ||
+        roi.x + roi.width > image.cols || roi.y + roi.height > image.rows) {
+        result.reject_reason = "invalid_roi";
+        return result;
+    }
+
+    const int start_begin_y = std::clamp(source_y - roi.y, 0, roi.height - 1);
+    const int start_end_y = std::clamp(source_y + m_node_height - 1 - roi.y, 0, roi.height - 1);
+    const int target_begin_y = std::clamp(target_y - roi.y, 0, roi.height - 1);
+    const int target_end_y = std::clamp(target_y + m_node_height - 1 - roi.y, 0, roi.height - 1);
+
+    cv::Mat cropped = make_roi(image, roi);
+    cv::Mat gray;
+    cv::cvtColor(cropped, gray, cv::COLOR_BGR2GRAY);
+
+    cv::Mat bright_mask;
+    cv::threshold(gray, bright_mask, BrightGate, 255, cv::THRESH_BINARY);
+
+    cv::Mat profile_mat;
+    bright_mask.convertTo(profile_mat, CV_32F, 1.0 / 255.0);
+
+    std::vector<int> sample_xs;
+    for (int x = 0; x < roi.width; x += SampleStepX) {
+        sample_xs.emplace_back(x);
+    }
+    if (sample_xs.empty() || sample_xs.back() != roi.width - 1) {
+        sample_xs.emplace_back(roi.width - 1);
+    }
+
+    const int sample_count = static_cast<int>(sample_xs.size());
+    result.path_length = sample_count;
+    std::vector<std::vector<float>> profiles(sample_count, std::vector<float>(roi.height, 0.0F));
+    for (int sample = 0; sample < sample_count; ++sample) {
+        const int x_begin = std::max(0, sample_xs[sample] - SampleStepX / 2);
+        const int x_end = std::min(roi.width - 1, sample_xs[sample] + SampleStepX / 2);
+        for (int y = 0; y < roi.height; ++y) {
+            float max_value = 0.0F;
+            for (int x = x_begin; x <= x_end; ++x) {
+                max_value = std::max(max_value, profile_mat.at<float>(y, x));
+            }
+            profiles[sample][y] = max_value;
+        }
+    }
+
+    constexpr double NegInf = -1.0e9;
+    std::vector<double> prev_dp(roi.height, NegInf);
+    std::vector<double> curr_dp(roi.height, NegInf);
+    std::vector<std::vector<int>> backtrace(sample_count, std::vector<int>(roi.height, -1));
+
+    for (int y = start_begin_y; y <= start_end_y; ++y) {
+        prev_dp[y] = profiles.front()[y];
+    }
+
+    for (int sample = 1; sample < sample_count; ++sample) {
+        std::ranges::fill(curr_dp, NegInf);
+        for (int y = 0; y < roi.height; ++y) {
+            const int prev_begin = std::max(0, y - MaxStepYPerSample);
+            const int prev_end = std::min(roi.height - 1, y + MaxStepYPerSample);
+            for (int prev_y = prev_begin; prev_y <= prev_end; ++prev_y) {
+                const double value = prev_dp[prev_y] + profiles[sample][y];
+                if (value > curr_dp[y]) {
+                    curr_dp[y] = value;
+                    backtrace[sample][y] = prev_y;
+                }
+            }
+        }
+        prev_dp.swap(curr_dp);
+    }
+
+    int best_y = target_begin_y;
+    double best_value = NegInf;
+    for (int y = target_begin_y; y <= target_end_y; ++y) {
+        if (prev_dp[y] > best_value) {
+            best_value = prev_dp[y];
+            best_y = y;
+        }
+    }
+    if (best_value <= NegInf / 2) {
+        result.reject_reason = "endpoint_unreachable";
+        return result;
+    }
+
+    std::vector<int> path(sample_count, best_y);
+    for (int sample = sample_count - 1; sample > 0; --sample) {
+        const int prev_y = backtrace[sample][path[sample]];
+        if (prev_y < 0) {
+            break;
+        }
+        path[sample - 1] = prev_y;
+    }
+
+    int support_count = 0;
+    double total_step = 0;
+    for (int sample = 0; sample < sample_count; ++sample) {
+        const double support = profiles[sample][path[sample]];
+        if (support >= 0.25) {
+            ++support_count;
+        }
+        if (sample > 0) {
+            total_step += std::abs(path[sample] - path[sample - 1]);
+        }
+    }
+
+    result.support_ratio = support_count / static_cast<double>(sample_count);
+    result.endpoint_score = 1.0;
+    result.continuity =
+        1.0 - std::min(1.0, total_step / std::max(1, sample_count - 1) / MaxStepYPerSample);
+    result.end_error = 0.0;
+    result.score = result.support_ratio;
+    result.score = std::clamp(result.score, 0.0, 1.0);
+
+    if (result.score < EdgeScoreThreshold) {
+        result.reject_reason = "below_threshold";
+    }
+
+    return result;
+}
+
 void asst::RoguelikeRoutingTaskPlugin::generate_data_collection_map()
 {
     LogTraceFunction;
@@ -560,7 +709,158 @@ void asst::RoguelikeRoutingTaskPlugin::generate_data_collection_map()
         return best_it->offset;
     };
 
+    auto edge_crosses = [&](const DataCollectionEdgeScore& lhs, const DataCollectionEdgeScore& rhs) {
+        const int lhs_source_y = m_map.get_node_y(lhs.source);
+        const int rhs_source_y = m_map.get_node_y(rhs.source);
+        const int lhs_target_y = m_map.get_node_y(lhs.target);
+        const int rhs_target_y = m_map.get_node_y(rhs.target);
+        return (lhs_source_y < rhs_source_y && lhs_target_y > rhs_target_y + m_direction_threshold) ||
+               (lhs_source_y > rhs_source_y && lhs_target_y + m_direction_threshold < rhs_target_y);
+    };
+
+    auto select_column_edges = [&](std::vector<DataCollectionEdgeScore>& scores) {
+        std::vector<size_t> candidate_indices;
+        for (size_t i = 0; i < scores.size(); ++i) {
+            if (scores[i].reject_reason.empty()) {
+                candidate_indices.emplace_back(i);
+            }
+        }
+
+        std::vector<size_t> selected_indices;
+        if (candidate_indices.size() <= 20) {
+            double best_score = -1.0;
+            double best_endpoint_score = -1.0;
+            int best_path_length = std::numeric_limits<int>::max();
+            const size_t mask_count = size_t { 1 } << candidate_indices.size();
+            for (size_t mask = 1; mask < mask_count; ++mask) {
+                bool valid = true;
+                double total_score = 0;
+                double total_endpoint_score = 0;
+                int total_path_length = 0;
+                std::vector<size_t> selected;
+                for (size_t bit = 0; bit < candidate_indices.size(); ++bit) {
+                    if ((mask & (size_t { 1 } << bit)) == 0) {
+                        continue;
+                    }
+
+                    const size_t score_index = candidate_indices[bit];
+                    for (size_t selected_index : selected) {
+                        if (edge_crosses(scores[score_index], scores[selected_index])) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (!valid) {
+                        break;
+                    }
+
+                    selected.emplace_back(score_index);
+                    total_score += scores[score_index].score;
+                    total_endpoint_score += scores[score_index].endpoint_score;
+                    total_path_length += scores[score_index].path_length;
+                }
+
+                if (!valid) {
+                    continue;
+                }
+
+                if (total_score > best_score ||
+                    (std::abs(total_score - best_score) < 1.0e-6 &&
+                     (total_endpoint_score > best_endpoint_score ||
+                      (std::abs(total_endpoint_score - best_endpoint_score) < 1.0e-6 &&
+                       total_path_length < best_path_length)))) {
+                    best_score = total_score;
+                    best_endpoint_score = total_endpoint_score;
+                    best_path_length = total_path_length;
+                    selected_indices = std::move(selected);
+                }
+            }
+        }
+        else {
+            std::ranges::sort(candidate_indices, [&](size_t lhs, size_t rhs) {
+                if (std::abs(scores[lhs].score - scores[rhs].score) > 1.0e-6) {
+                    return scores[lhs].score > scores[rhs].score;
+                }
+                if (std::abs(scores[lhs].endpoint_score - scores[rhs].endpoint_score) > 1.0e-6) {
+                    return scores[lhs].endpoint_score > scores[rhs].endpoint_score;
+                }
+                return scores[lhs].path_length < scores[rhs].path_length;
+            });
+
+            for (size_t score_index : candidate_indices) {
+                const bool crossed = std::ranges::any_of(selected_indices, [&](size_t selected_index) {
+                    return edge_crosses(scores[score_index], scores[selected_index]);
+                });
+                if (!crossed) {
+                    selected_indices.emplace_back(score_index);
+                }
+            }
+        }
+
+        for (size_t selected_index : selected_indices) {
+            scores[selected_index].accepted = true;
+        }
+
+        for (DataCollectionEdgeScore& score : scores) {
+            if (score.accepted) {
+                score.reject_reason.clear();
+                m_map.add_edge(score.source, score.target);
+            }
+            else if (score.reject_reason.empty()) {
+                score.reject_reason = "crossing_rejected";
+            }
+            m_data_collection_edge_scores.emplace_back(score);
+        }
+    };
+
+    auto add_horizontal_edges = [&](const std::vector<ViewColumn>& columns, const cv::Mat& map_image) {
+        for (size_t i = 1; i < columns.size(); ++i) {
+            const size_t source_column = RoguelikeMap::INIT_INDEX + i;
+            const size_t target_column = source_column + 1;
+            const size_t source_begin = m_map.get_column_begin(source_column);
+            const size_t source_end = m_map.get_column_end(source_column);
+            const size_t target_begin = m_map.get_column_begin(target_column);
+            const size_t target_end = m_map.get_column_end(target_column);
+
+            std::vector<DataCollectionEdgeScore> scores;
+            for (size_t source = source_begin; source < source_end; ++source) {
+                for (size_t target = target_begin; target < target_end; ++target) {
+                    scores.emplace_back(score_data_collection_horizontal_edge(
+                        map_image,
+                        source,
+                        columns[i - 1].x,
+                        target,
+                        columns[i].x));
+                }
+            }
+            select_column_edges(scores);
+        }
+    };
+
+    auto add_vertical_edges = [&](const std::vector<ViewColumn>& columns, const cv::Mat& map_image) {
+        PixelAnalyzer analyzer(map_image);
+        Rect roi(0, 0, m_roi_margin * 2, m_roi_margin * 2);
+        for (size_t i = 0; i < columns.size(); ++i) {
+            const size_t column = RoguelikeMap::INIT_INDEX + 1 + i;
+            const size_t begin = m_map.get_column_begin(column);
+            const size_t end = m_map.get_column_end(column);
+            for (size_t node = begin + 1; node < end; ++node) {
+                const size_t prev = node - 1;
+                roi.x = columns[i].x + m_node_width / 2 - m_roi_margin;
+                roi.y = (m_map.get_node_y(prev) + m_node_height + m_nameplate_offset + m_map.get_node_y(node)) / 2 -
+                        m_roi_margin;
+                analyzer.set_roi(roi);
+                if (analyzer.analyze()) {
+                    m_map.add_edge(prev, node);
+                    m_map.add_edge(node, prev);
+                }
+            }
+        }
+    };
+
     auto build_map_from_columns = [&](const std::vector<ViewColumn>& columns, const cv::Mat& map_image) {
+        m_data_collection_edge_scores.clear();
+
         size_t first_active_column = std::numeric_limits<size_t>::max();
         for (size_t i = 0; i < columns.size(); ++i) {
             const size_t column_index = RoguelikeMap::INIT_INDEX + 1 + i;
@@ -580,9 +880,18 @@ void asst::RoguelikeRoutingTaskPlugin::generate_data_collection_map()
                 const bool visited = node_info.is_grey && first_active_column != std::numeric_limits<size_t>::max() &&
                                      column_index < first_active_column;
                 m_map.set_node_visited(node, visited);
-                generate_edges(node, map_image, column.x, true);
             }
         }
+
+        if (!columns.empty()) {
+            const size_t first_column = RoguelikeMap::INIT_INDEX + 1;
+            for (size_t node = m_map.get_column_begin(first_column); node < m_map.get_column_end(first_column);
+                 ++node) {
+                m_map.add_edge(RoguelikeMap::INIT_INDEX, node);
+            }
+        }
+        add_horizontal_edges(columns, map_image);
+        add_vertical_edges(columns, map_image);
     };
 
     std::vector<ViewColumn> stitched_columns = get_view_columns(stitched_image);
@@ -660,8 +969,17 @@ void asst::RoguelikeRoutingTaskPlugin::generate_data_collection_map()
     for (const ViewColumn& column : stitched_columns) {
         m_data_collection_column_xs.emplace_back(column.x);
     }
-    RoguelikeDataCollector.save_image(stitched_image, "full_map");
-    RoguelikeDataCollector.save_image(build_data_collection_graph_image(), "full_map_graph");
+    const std::string full_map_path = RoguelikeDataCollector.save_image(stitched_image, "full_map");
+    const std::string full_map_graph_path =
+        RoguelikeDataCollector.save_image(build_data_collection_graph_image(), "full_map_graph");
+    RoguelikeDataCollector.log_event(
+        "map_edges",
+        json::object {
+            { "floor", m_data_collection_floor },
+            { "full_map", full_map_path },
+            { "full_map_graph", full_map_graph_path },
+            { "edge_score_matrix", build_data_collection_edge_score_json() },
+        });
 
     for (size_t i = 0; i < swipe_count && !need_exit(); ++i) {
         ProcessTask(*this, { "RoguelikeRouting-MoveLeft" }).run();
@@ -724,6 +1042,12 @@ cv::Mat asst::RoguelikeRoutingTaskPlugin::build_data_collection_graph_image(
         }
         cv::arrowedLine(graph_image, from, to, color, thickness, cv::LINE_AA, 0, 0.08);
     };
+
+    for (const DataCollectionEdgeScore& score : m_data_collection_edge_scores) {
+        if (!score.accepted) {
+            draw_edge(score.source, score.target, cv::Scalar(60, 60, 255), 1);
+        }
+    }
 
     for (size_t node = 1; node < m_map.size(); ++node) {
         for (size_t succ : m_map.get_node_succs(node)) {
@@ -1221,9 +1545,7 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-StageTraderEnterThenLeave");
         break;
     case RoguelikeNodeType::BoskyPassage:
-        Task.set_task_base(
-            "RoguelikeRoutingAction",
-            "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnterThenSkipInner");
+        Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnter");
         break;
     case RoguelikeNodeType::LostAndFound:
     case RoguelikeNodeType::Scout:
@@ -1352,6 +1674,26 @@ bool asst::RoguelikeRoutingTaskPlugin::data_collection_score_less(
     return lhs.path > rhs.path;
 }
 
+json::array asst::RoguelikeRoutingTaskPlugin::build_data_collection_edge_score_json() const
+{
+    json::array edge_scores;
+    for (const DataCollectionEdgeScore& edge_score : m_data_collection_edge_scores) {
+        edge_scores.emplace_back(json::object {
+            { "source", static_cast<int>(edge_score.source) },
+            { "target", static_cast<int>(edge_score.target) },
+            { "score", edge_score.score },
+            { "support_ratio", edge_score.support_ratio },
+            { "endpoint_score", edge_score.endpoint_score },
+            { "continuity", edge_score.continuity },
+            { "end_error", edge_score.end_error },
+            { "path_length", edge_score.path_length },
+            { "accepted", edge_score.accepted },
+            { "reject_reason", edge_score.reject_reason },
+        });
+    }
+    return edge_scores;
+}
+
 json::object asst::RoguelikeRoutingTaskPlugin::build_data_collection_route_details(
     const std::vector<DataCollectionRouteScore>& candidates,
     std::optional<size_t> chosen,
@@ -1410,6 +1752,7 @@ json::object asst::RoguelikeRoutingTaskPlugin::build_data_collection_route_detai
         { "selected_node", chosen ? static_cast<int>(*chosen) : -1 },
         { "selected_type", chosen ? type2name(m_map.get_node_type(*chosen)) : "None" },
         { "vertical_edge_used", m_data_collection_vertical_edge_used },
+        { "edge_score_matrix", build_data_collection_edge_score_json() },
         { "reject_reason", std::string(reject_reason) },
     };
 

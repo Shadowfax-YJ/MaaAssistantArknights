@@ -893,38 +893,6 @@
         "baseTask": "JieGarden@Roguelike@StageEnter",
         "next": ["JieGarden@Roguelike@StageBoskyPassageEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
     },
-    "JieGarden@Roguelike@StageBoskyPassageEnterThenSkipInner": {
-        "baseTask": "JieGarden@Roguelike@StageEnter",
-        "template": "JieGarden@Roguelike@StageBoskyPassageEnter.png",
-        "next": [
-            "JieGarden@Roguelike@StageBoskyPassageEnterThenSkipInner",
-            "JieGarden@Roguelike@StageBoskyPassageSkipInnerJudgeClick"
-        ]
-    },
-    "JieGarden@Roguelike@StageBoskyPassageSkipInnerJudgeClick": {
-        "baseTask": "Roguelike@StageEncounterJudgeClick",
-        "next": ["JieGarden@Roguelike@StageBoskyPassageSkipInnerJudgeClick2"]
-    },
-    "JieGarden@Roguelike@StageBoskyPassageSkipInnerJudgeClick2": {
-        "baseTask": "Roguelike@StageEncounterJudgeClick2",
-        "next": ["JieGarden@Roguelike@StageBoskyPassageSkipInnerOption"]
-    },
-    "JieGarden@Roguelike@StageBoskyPassageSkipInnerOption": {
-        "baseTask": "Roguelike@OptionChoose2-2",
-        "preDelay": 500,
-        "next": ["JieGarden@Roguelike@StageBoskyPassageSkipInnerOptionConfirm"]
-    },
-    "JieGarden@Roguelike@StageBoskyPassageSkipInnerOptionConfirm": {
-        "baseTask": "Roguelike@OptionChoose2-2",
-        "postDelay": 1500,
-        "next": [
-            "JieGarden@Roguelike@CloseEvent",
-            "JieGarden@Roguelike@NextLevel",
-            "JieGarden@Roguelike@NextLevel#next",
-            "JieGarden@Roguelike@Stages#next",
-            "JieGarden@Roguelike@StageEncounterOptions#next"
-        ]
-    },
     "JieGarden@Roguelike@StageCombatOps": {
         "Doc": "普通战斗 紫色系",
         "method": "HSVCount",
@@ -1130,6 +1098,11 @@
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
         "template": "Roguelike@StageVerticalConfirm.png",
         "next": ["JieGarden@Roguelike@QuickFormation"]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmStartButtonClicked": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": ["JieGarden@Roguelike@WaitForStartButtonClicked"]
     },
     "JieGarden@Roguelike@StageVerticalConfirmEncounter": {
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
@@ -1684,7 +1657,11 @@
     },
     "JieGarden@Roguelike@TodoEnter": {},
     "JieGarden@Roguelike@WaitForStartButtonClicked": {
-        "template": "Roguelike@QuickFormation.png"
+        "template": "Roguelike@QuickFormation.png",
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmStartButtonClicked",
+            "JieGarden@Roguelike@WaitForStartButtonClicked"
+        ]
     },
     "JieGarden@RoguelikeEncounter-ClickOption": {
         "doc": "点击选项右侧位置以选择事件选项，再次点击可以确认选择",

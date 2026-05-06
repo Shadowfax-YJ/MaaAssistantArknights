@@ -81,11 +81,31 @@ private:
         std::string reject_reason;
     };
 
+    struct DataCollectionEdgeScore
+    {
+        size_t source = RoguelikeMap::INIT_INDEX;
+        size_t target = RoguelikeMap::INIT_INDEX;
+        double score = 0;
+        double support_ratio = 0;
+        double endpoint_score = 0;
+        double continuity = 0;
+        double end_error = 0;
+        int path_length = 0;
+        bool accepted = false;
+        std::string reject_reason;
+    };
+
     DataCollectionRouteScore score_data_collection_path(
         size_t node,
         std::optional<size_t> previous_node = std::nullopt,
         std::vector<size_t> path = {},
         bool vertical_edge_used_in_path = false) const;
+    DataCollectionEdgeScore score_data_collection_horizontal_edge(
+        const cv::Mat& image,
+        size_t source,
+        int source_x,
+        size_t target,
+        int target_x) const;
     cv::Mat build_data_collection_graph_image(
         const std::vector<size_t>& selected_route = {},
         std::optional<size_t> selected_node = std::nullopt) const;
@@ -93,6 +113,7 @@ private:
         const std::vector<DataCollectionRouteScore>& candidates,
         std::optional<size_t> chosen,
         std::string_view reject_reason) const;
+    json::array build_data_collection_edge_score_json() const;
     static bool is_data_collection_rejected_type(RoguelikeNodeType type);
     static bool is_data_collection_combat_type(RoguelikeNodeType type);
     static int data_collection_type_priority(RoguelikeNodeType type);
@@ -112,6 +133,7 @@ private:
     bool m_data_collection_vertical_edge_used = false;
     cv::Mat m_data_collection_full_map_image;
     std::vector<int> m_data_collection_column_xs;
+    std::vector<DataCollectionEdgeScore> m_data_collection_edge_scores;
     size_t m_selected_column = 0;  // 当前选中节点所在列
     int m_selected_x = 0;          // 当前选中节点的横坐标 (Rect.x)
 

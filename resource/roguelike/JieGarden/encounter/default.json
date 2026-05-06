@@ -151,7 +151,7 @@
         {
             "name": "饕餮廊",
             "option_num": 3,
-            "choose": 1
+            "choose": 3
         },
         {
             "name": "同心",
@@ -252,20 +252,13 @@
         {
             "name": "地镇",
             "option_num": 2,
-            "choose": 1,
-            "fallback_choices": [[3, 1]],
-            "next_event": "地镇-2"
-        },
-        {
-            "name": "地镇-2",
-            "option_num": 2,
-            "choose": 1,
-            "fallback_choices": [[1, 1]]
+            "choose": 2,
+            "fallback_choices": [[3, 3]]
         },
         {
             "name": "传讯",
             "option_num": 3,
-            "choose": 2,
+            "choose": 1,
             "fallback_choices": [[4, 1]]
         },
         {

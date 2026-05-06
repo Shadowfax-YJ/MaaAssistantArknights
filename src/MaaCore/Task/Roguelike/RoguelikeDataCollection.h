@@ -19,6 +19,7 @@ public:
     void start_session(const RoguelikeConfig& config, const json::value& params);
     void stop_session(std::string_view reason = "stopped");
     void finish_run(std::string_view reason = "run_finished");
+    void finish_run_if_has_cached_encounters(std::string_view reason = "cached_encounters");
     void disable();
 
     [[nodiscard]] bool enabled() const;
