@@ -14,6 +14,7 @@
 #nullable enable
 using System.ComponentModel;
 using MaaWpfGui.Configuration.Factory;
+using MaaWpfGui.Constants;
 
 namespace MaaWpfGui.Configuration.Global;
 
@@ -34,11 +35,11 @@ public class VersionUpdate : INotifyPropertyChanged
 
     public UpdateVersionType VersionType { get; set; } = UpdateVersionType.Stable;
 
-    public bool UpdateCheck { get; set; } = true;
+    public bool UpdateCheck { get; set; } = !PrivateBuildFlags.DisableUpdateFeatures;
 
     public bool UpdateAutoCheck { get; set; } = false;
 
-    public bool AutoDownloadUpdatePackage { get; set; } = true;
+    public bool AutoDownloadUpdatePackage { get; set; } = !PrivateBuildFlags.DisableUpdateFeatures;
 
     public bool AutoInstallUpdatePackage { get; set; } = false;
 

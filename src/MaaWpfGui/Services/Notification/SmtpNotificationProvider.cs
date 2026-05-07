@@ -78,6 +78,11 @@ public partial class SmtpNotificationProvider : IExternalNotificationProvider
 
     public async Task<bool> SendAsync(string title, string content)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         content = ProcessContent(content);
 
         var smtpServer = SettingsViewModel.ExternalNotificationSettings.SmtpServer;

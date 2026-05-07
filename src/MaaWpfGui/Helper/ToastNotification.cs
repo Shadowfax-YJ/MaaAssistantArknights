@@ -22,6 +22,7 @@ using System.Text;
 using System.Windows.Interop;
 using HandyControl.Controls;
 using MaaWpfGui.Configuration.Factory;
+using MaaWpfGui.Constants;
 using MaaWpfGui.Helper.Notification;
 using MaaWpfGui.WineCompat;
 using Microsoft.Win32;
@@ -108,6 +109,11 @@ public class ToastNotification : IDisposable
 
         if (decodedTag.StartsWith(_openUrlPrefix))
         {
+            if (PrivateBuildFlags.DisableNetworkFeatures)
+            {
+                return;
+            }
+
             var url = decodedTag[_openUrlPrefix.Length..];
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }

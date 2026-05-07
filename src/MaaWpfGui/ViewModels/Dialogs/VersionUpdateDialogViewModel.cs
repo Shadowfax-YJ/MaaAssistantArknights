@@ -182,7 +182,7 @@ public class VersionUpdateDialogViewModel : Screen
 
     public static bool HasPendingUpdatePackage()
     {
-        return PendingUpdateApplier.HasPendingUpdatePackage();
+        return !PrivateBuildFlags.DisableUpdateFeatures && PendingUpdateApplier.HasPendingUpdatePackage();
     }
 
     public enum CheckUpdateRetT
@@ -272,6 +272,12 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>Task</returns>
     public async Task ShowUpdateOrDownload()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            IsFirstBootAfterUpdate = false;
+            return;
+        }
+
         if (IsFirstBootAfterUpdate)
         {
             IsFirstBootAfterUpdate = false;
@@ -318,6 +324,11 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>Task</returns>
     public async Task VersionUpdateAndAskToRestartAsync()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return;
+        }
+
         if (SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates)
         {
             return;
@@ -355,6 +366,11 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>操作成功返回 <see langword="true"/>，反之则返回 <see langword="false"/>。</returns>
     public async Task<CheckUpdateRetT> CheckAndDownloadVersionUpdate()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return CheckUpdateRetT.NoNeedToUpdate;
+        }
+
         try
         {
             SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates = true;
@@ -658,6 +674,11 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>检查到更新返回 <see langword="true"/>，反之则返回 <see langword="false"/>。</returns>
     private async Task<(CheckUpdateRetT Ret, AppUpdateSource? Source)> CheckUpdate()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return (CheckUpdateRetT.NoNeedToUpdate, null);
+        }
+
         // 调试版不检查更新
         if (IsDebugVersion())
         {
@@ -970,6 +991,11 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>操作成功返回 true，反之则返回 false</returns>
     private static async Task<bool> DownloadGithubAssets(string url, JObject assetsObject)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         try
         {
             return await Instances.HttpService.DownloadFileAsync(
@@ -986,6 +1012,11 @@ public class VersionUpdateDialogViewModel : Screen
 
     private static async Task<bool> DownloadFromMirrorChyan(string url, string filename)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         try
         {
             return await Instances.HttpService.DownloadFileAsync(

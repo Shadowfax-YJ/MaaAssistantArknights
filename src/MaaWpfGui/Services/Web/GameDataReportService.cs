@@ -31,6 +31,12 @@ public class GameDataReportService
 
     public static async Task<bool> PostWithRetryAsync(string url, HttpContent content, Dictionary<string, string> headers, string subtask, Action<string>? callback = null)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            _logger.Information("Game data report skipped because network features are disabled.");
+            return true;
+        }
+
         _logger.Information("Start PostWithRetryAsync, url: {Url}", url);
         _logger.Information("Request headers: {@Headers}", headers);
         var body = await content.ReadAsStringAsync();

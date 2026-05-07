@@ -14,6 +14,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MaaWpfGui.Constants;
 using MaaWpfGui.Helper;
 using MaaWpfGui.ViewModels.UI;
 using Serilog;
@@ -28,6 +29,11 @@ public static class ExternalNotificationService
 
     private static async Task SendAsync(string title, string content, bool isTest = false)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         var enabledProviders = SettingsViewModel.ExternalNotificationSettings.EnabledExternalNotificationProviderList;
 
         foreach (var enabledProvider in enabledProviders)
@@ -76,6 +82,11 @@ public static class ExternalNotificationService
     /// <param name="isTest">Indicate if it is a test or not.</param>
     public static void Send(string title, string content, bool isTest = false)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         var task = SendAsync("[MAA] " + title, content, isTest);
         _taskContainers.RemoveAll(x => x.Status != TaskStatus.Running);
         _taskContainers.Add(task);

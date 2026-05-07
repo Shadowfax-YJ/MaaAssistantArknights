@@ -1028,6 +1028,11 @@ public class SettingsViewModel : Screen
     [UsedImplicitly]
     public async Task CheckAndDownloadAnnouncement()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         if (IsCheckingAnnouncement)
         {
             return;

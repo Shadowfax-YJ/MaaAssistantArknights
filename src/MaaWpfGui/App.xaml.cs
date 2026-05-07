@@ -14,6 +14,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Documents;
+using MaaWpfGui.Constants;
 using MaaWpfGui.WineCompat;
 using MaaWpfGui.WineCompat.FontConfig;
 using Serilog;
@@ -29,6 +30,11 @@ public partial class App : Application
 
     public void Hyperlink_Click(object sender, RoutedEventArgs e)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         Hyperlink link = sender as Hyperlink;
         if (!string.IsNullOrEmpty(link?.NavigateUri?.AbsoluteUri))
         {

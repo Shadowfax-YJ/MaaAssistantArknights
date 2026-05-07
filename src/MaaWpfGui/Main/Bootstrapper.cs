@@ -379,45 +379,48 @@ public class Bootstrapper : Bootstrapper<RootViewModel>
 
         ConfigurationHelper.Load();
         LocalizationHelper.Load();
-        if (PendingUpdateApplier.TryConsumeDelegatedUpdateSuccess())
+        if (!PrivateBuildFlags.DisableUpdateFeatures)
         {
-            _logger.Information("Delegated pending update completed successfully");
-        }
-
-        if (PendingUpdateApplier.TryConsumeDelegatedUpdateFailure(out string delegatedUpdateFailureReason))
-        {
-            _logger.Error("Delegated pending update failed. Reason: {Reason}", delegatedUpdateFailureReason);
-            ShowPendingUpdateRecoveryDialog();
-            Shutdown();
-            return;
-        }
-
-        if (PendingUpdateApplier.HasPendingUpdatePackage())
-        {
-            _logger.Information("Pending update package detected, applying before full startup");
-            var pendingUpdateResult = PendingUpdateApplier.TryApplyPendingUpdatePackage();
-            if (pendingUpdateResult.Delegated)
+            if (PendingUpdateApplier.TryConsumeDelegatedUpdateSuccess())
             {
-                _logger.Information("Pending update package handed off to external updater, exiting current process");
-                Shutdown();
-                return;
+                _logger.Information("Delegated pending update completed successfully");
             }
 
-            if (pendingUpdateResult.Succeeded)
+            if (PendingUpdateApplier.TryConsumeDelegatedUpdateFailure(out string delegatedUpdateFailureReason))
             {
-                RestartAfterPendingUpdateEarly();
-                return;
-            }
-
-            if (pendingUpdateResult.RequiresManualRecovery)
-            {
-                _logger.Error("Pending update package left the installation in an incomplete state. Reason: {Reason}", pendingUpdateResult.FailureReason);
+                _logger.Error("Delegated pending update failed. Reason: {Reason}", delegatedUpdateFailureReason);
                 ShowPendingUpdateRecoveryDialog();
                 Shutdown();
                 return;
             }
 
-            _logger.Warning("Pending update package could not be applied, continuing with normal startup");
+            if (PendingUpdateApplier.HasPendingUpdatePackage())
+            {
+                _logger.Information("Pending update package detected, applying before full startup");
+                var pendingUpdateResult = PendingUpdateApplier.TryApplyPendingUpdatePackage();
+                if (pendingUpdateResult.Delegated)
+                {
+                    _logger.Information("Pending update package handed off to external updater, exiting current process");
+                    Shutdown();
+                    return;
+                }
+
+                if (pendingUpdateResult.Succeeded)
+                {
+                    RestartAfterPendingUpdateEarly();
+                    return;
+                }
+
+                if (pendingUpdateResult.RequiresManualRecovery)
+                {
+                    _logger.Error("Pending update package left the installation in an incomplete state. Reason: {Reason}", pendingUpdateResult.FailureReason);
+                    ShowPendingUpdateRecoveryDialog();
+                    Shutdown();
+                    return;
+                }
+
+                _logger.Warning("Pending update package could not be applied, continuing with normal startup");
+            }
         }
 
         ConfigConverter.ConvertConfig();

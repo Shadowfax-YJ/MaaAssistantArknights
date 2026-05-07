@@ -38,6 +38,11 @@ public static class ResourceUpdater
 
     public static async Task<bool> UpdateFromGithubAsync()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         ToastNotification.ShowDirect(LocalizationHelper.GetString("GameResourceUpdating"));
 
         if (!await DownloadFullPackageAsync(MaaUrls.GithubResourceUpdate, "MaaResourceGithub.zip", true).ConfigureAwait(false))
@@ -125,6 +130,11 @@ public static class ResourceUpdater
     /// </list></returns>
     public static async Task<(CheckUpdateRetT Ret, string? UpdateUrl, string? ReleaseNote)> CheckFromMirrorChyanAsync()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return (CheckUpdateRetT.AlreadyLatest, null, null);
+        }
+
         // https://mirrorc.top/api/resources/MaaResource/latest?current_version=<当前版本日期，从 version.json 里拿时间戳>&cdk=<cdk>&sp_id=<唯一识别码>
         // 响应格式为 {"code":0,"msg":"success","data":{"version_name":"2025-01-22 14:28:32.839","version_number":9,"url":"<增量更新网址>"}}
         const string BaseUrl = MaaUrls.MirrorChyanResourceUpdate;
@@ -277,6 +287,11 @@ public static class ResourceUpdater
 
     public static async Task<bool> DownloadFromMirrorChyanAsync(string? url, string? releaseNote)
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         if (string.IsNullOrEmpty(url))
         {
             return false;
@@ -365,6 +380,11 @@ public static class ResourceUpdater
     /// </list></returns>
     public static async Task<CheckUpdateRetT> CheckAndDownloadResourceUpdate()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return CheckUpdateRetT.AlreadyLatest;
+        }
+
         try
         {
             SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates = true;
@@ -396,6 +416,11 @@ public static class ResourceUpdater
 
     public static async Task ResourceUpdateAndReloadAsync()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         if (SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates)
         {
             return;
@@ -436,6 +461,11 @@ public static class ResourceUpdater
 
     private static async Task<bool> DownloadFullPackageAsync(string url, string saveTo, bool globalSource)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         try
         {
             return await Instances.HttpService.DownloadFileAsync(new(url), saveTo, "application/zip");

@@ -54,6 +54,8 @@ public class HttpService : IHttpService
 
     private HttpClient _client;
 
+    private const string NetworkDisabledReason = "Network disabled by private build";
+
     public HttpService()
     {
         string uiVersion = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.1";
@@ -85,6 +87,12 @@ public class HttpService : IHttpService
 
     public async Task<double> HeadAsync(Uri uri, Dictionary<string, string>? extraHeader = null, UriPartial uriPartial = UriPartial.Query)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return -1.0;
+        }
+
         try
         {
             var request = new HttpRequestMessage { RequestUri = uri, Method = HttpMethod.Head, Version = HttpVersion.Version20, };
@@ -115,6 +123,12 @@ public class HttpService : IHttpService
 
     public async Task<string?> GetStringAsync(Uri uri, Dictionary<string, string>? extraHeader = null, HttpCompletionOption httpCompletionOption = HttpCompletionOption.ResponseContentRead)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return null;
+        }
+
         try
         {
             var response = await GetAsync(uri, extraHeader, httpCompletionOption);
@@ -134,6 +148,12 @@ public class HttpService : IHttpService
 
     public async Task<Stream?> GetStreamAsync(Uri uri, Dictionary<string, string>? extraHeader = null, HttpCompletionOption httpCompletionOption = HttpCompletionOption.ResponseContentRead)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return null;
+        }
+
         try
         {
             var response = await GetAsync(uri, extraHeader, httpCompletionOption);
@@ -153,6 +173,12 @@ public class HttpService : IHttpService
 
     public async Task<HttpResponseMessage> GetAsync(Uri uri, Dictionary<string, string>? extraHeader = null, HttpCompletionOption httpCompletionOption = HttpCompletionOption.ResponseHeadersRead, UriPartial uriPartial = UriPartial.Query)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return BuildNetworkDisabledResponse(HttpMethod.Get, uri);
+        }
+
         var request = new HttpRequestMessage { RequestUri = uri, Method = HttpMethod.Get, Version = HttpVersion.Version20, };
         if (extraHeader != null)
         {
@@ -171,6 +197,12 @@ public class HttpService : IHttpService
 
     public async Task<string?> PostAsJsonAsync<T>(Uri uri, T content, Dictionary<string, string>? extraHeader = null)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return null;
+        }
+
         try
         {
             var response = await PostAsync(uri, new StringContent(JsonSerializer.Serialize(content), Encoding.UTF8, "application/json"), extraHeader);
@@ -185,6 +217,12 @@ public class HttpService : IHttpService
 
     public async Task<string?> PostAsFormUrlEncodedAsync(Uri uri, Dictionary<string, string?> content, Dictionary<string, string>? extraHeader = null)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return null;
+        }
+
         try
         {
             var response = await PostAsync(uri, new FormUrlEncodedContent(content), extraHeader);
@@ -199,6 +237,12 @@ public class HttpService : IHttpService
 
     public async Task<HttpResponseMessage> PostAsync(Uri uri, HttpContent content, Dictionary<string, string>? extraHeader = null, UriPartial uriPartial = UriPartial.Query)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return BuildNetworkDisabledResponse(HttpMethod.Post, uri);
+        }
+
         var message = new HttpRequestMessage(HttpMethod.Post, uri) { Version = HttpVersion.Version20 };
         if (extraHeader is not null)
         {
@@ -219,6 +263,12 @@ public class HttpService : IHttpService
 
     public async Task<bool> DownloadFileAsync(Uri uri, string fileName, string? contentType = "application/octet-stream")
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            LogNetworkDisabled(uri);
+            return false;
+        }
+
         string fileDir = PathsHelper.BaseDir;
         string fileNameWithTemp = fileName + ".temp";
         string fullFilePath = Path.Combine(fileDir, fileName);
@@ -323,5 +373,22 @@ public class HttpService : IHttpService
         client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
         client.Timeout = TimeSpan.FromSeconds(15);
         return client;
+    }
+
+    private void LogNetworkDisabled(Uri uri)
+    {
+        _logger.Information(
+            "Skip HTTP request to {Uri} because network features are disabled.",
+            uri.GetLeftPart(UriPartial.Path));
+    }
+
+    private static HttpResponseMessage BuildNetworkDisabledResponse(HttpMethod method, Uri uri)
+    {
+        return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            RequestMessage = new HttpRequestMessage(method, uri),
+            ReasonPhrase = NetworkDisabledReason,
+            Content = new StringContent(string.Empty, Encoding.UTF8),
+        };
     }
 }

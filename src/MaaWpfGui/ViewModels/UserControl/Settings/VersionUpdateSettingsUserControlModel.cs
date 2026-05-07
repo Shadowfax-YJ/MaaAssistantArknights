@@ -292,7 +292,7 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
                 return;
             }
 
-            if (value.Length == 24)
+            if (!PrivateBuildFlags.DisableUpdateFeatures && value.Length == 24)
             {
                 Task.Run(async () => {
                     await Instances.VersionUpdateDialogViewModel.VersionUpdateAndAskToRestartAsync();
@@ -401,8 +401,13 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool StartupUpdateCheck
     {
-        get => _startupUpdateCheck;
+        get => !PrivateBuildFlags.DisableUpdateFeatures && _startupUpdateCheck;
         set {
+            if (PrivateBuildFlags.DisableUpdateFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _startupUpdateCheck, value);
             ConfigurationHelper.SetGlobalValue(ConfigurationKeys.StartupUpdateCheck, value.ToString());
         }
@@ -415,8 +420,13 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool UpdateAutoCheck
     {
-        get => _updateAutoCheck;
+        get => !PrivateBuildFlags.DisableUpdateFeatures && _updateAutoCheck;
         set {
+            if (PrivateBuildFlags.DisableUpdateFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _updateAutoCheck, value);
             ConfigurationHelper.SetGlobalValue(ConfigurationKeys.UpdateAutoCheck, value.ToString());
         }
@@ -473,8 +483,13 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool AutoDownloadUpdatePackage
     {
-        get => _autoDownloadUpdatePackage;
+        get => !PrivateBuildFlags.DisableUpdateFeatures && _autoDownloadUpdatePackage;
         set {
+            if (PrivateBuildFlags.DisableUpdateFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _autoDownloadUpdatePackage, value);
             ConfigurationHelper.SetGlobalValue(ConfigurationKeys.AutoDownloadUpdatePackage, value.ToString());
         }
@@ -487,8 +502,13 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool AutoInstallUpdatePackage
     {
-        get => _autoInstallUpdatePackage;
+        get => !PrivateBuildFlags.DisableUpdateFeatures && _autoInstallUpdatePackage;
         set {
+            if (PrivateBuildFlags.DisableUpdateFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _autoInstallUpdatePackage, value);
             ConfigurationHelper.SetGlobalValue(ConfigurationKeys.AutoInstallUpdatePackage, value.ToString());
         }
@@ -515,6 +535,11 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     [UsedImplicitly]
     public async Task ManualUpdate()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return;
+        }
+
         if (IsCheckingForUpdates)
         {
             return;
@@ -561,6 +586,11 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
     [UsedImplicitly]
     public async Task ManualUpdateResource()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return;
+        }
+
         if (IsCheckingForUpdates)
         {
             return;

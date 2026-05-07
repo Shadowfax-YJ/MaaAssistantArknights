@@ -91,7 +91,44 @@
         "next": ["JieGarden@Roguelike@LeaveBoskyPassage", "#self"]
     },
     "JieGarden@Roguelike@ClickToDrops": {
-        "specificRect": [600, 600, 25, 25]
+        "specificRect": [600, 600, 25, 25],
+        "next": [
+            "JieGarden@Roguelike@DropsFlag",
+            "JieGarden@Roguelike@ChooseOperFlag",
+            "JieGarden@Roguelike@StageEncounterSpecialClose",
+            "JieGarden@Roguelike@TraderRandomShopping",
+            "JieGarden@Roguelike@StageTraderLeave",
+            "JieGarden@Roguelike@NextLevel",
+            "JieGarden@Roguelike@RandomPickAfterNextLevel",
+            "JieGarden@Roguelike@CloseCollectionContinue",
+            "JieGarden@Roguelike@CloseCollectionClose",
+            "JieGarden@Roguelike@CloseEvent",
+            "JieGarden@Roguelike@Routing-DataCollection",
+            "JieGarden@Roguelike@StageGuidance",
+            "JieGarden@Roguelike@StageSafeHouse",
+            "JieGarden@Roguelike@StageEncounter",
+            "JieGarden@Roguelike@StageConfrontation",
+            "JieGarden@Roguelike@StageWindAndRain",
+            "JieGarden@Roguelike@StageProphecy",
+            "JieGarden@Roguelike@StageEmergencyTransportation",
+            "JieGarden@Roguelike@StageBoons",
+            "JieGarden@Roguelike@BiliBiliNoMorePromptsNextTime",
+            "JieGarden@Roguelike@LeidianGoogleFrameworkConfirm",
+            "JieGarden@Roguelike@GameStart",
+            "JieGarden@Roguelike@StartToWakeUp",
+            "JieGarden@Roguelike@StartToWakeUpOCR",
+            "JieGarden@Roguelike@StartLoginBServer",
+            "JieGarden@Roguelike@StartUpConnectingFlag",
+            "JieGarden@Roguelike@CloseAnno",
+            "JieGarden@Roguelike@CloseAnnoTexas",
+            "JieGarden@Roguelike@CloseAnnoSpecialAccess",
+            "JieGarden@Roguelike@TodaysSupplies",
+            "JieGarden@Roguelike@NotDownloadVoice",
+            "JieGarden@Roguelike@OfflineConfirm",
+            "JieGarden@Roguelike@GameStartCheckResourceOCR",
+            "JieGarden@Roguelike@GameStartUpdateOCR",
+            "JieGarden@Roguelike@ClickToDrops"
+        ]
     },
     "JieGarden@Roguelike@ClickToStartPoint": {
         "next": [

@@ -160,6 +160,11 @@ public partial class ErrorDialogView : INotifyPropertyChanged
 
     private void Hyperlink_OnClick(object sender, RoutedEventArgs e)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         Process.Start(new ProcessStartInfo(((Hyperlink)sender).NavigateUri.AbsoluteUri) { UseShellExecute = true });
     }
 

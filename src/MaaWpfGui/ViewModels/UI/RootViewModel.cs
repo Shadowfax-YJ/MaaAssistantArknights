@@ -53,25 +53,28 @@ public class RootViewModel : Conductor<Screen>.Collection.OneActive
             MessageBoxHelper.Show(LocalizationHelper.GetString("NightlyWarning"));
         }
 
-        Task.Run(async () => {
-            await Instances.AnnouncementDialogViewModel.CheckAndDownloadAnnouncement();
-            if (Instances.AnnouncementDialogViewModel.DoNotRemindThisAnnouncementAgain)
-            {
-                return;
-            }
+        if (!PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            Task.Run(async () => {
+                await Instances.AnnouncementDialogViewModel.CheckAndDownloadAnnouncement();
+                if (Instances.AnnouncementDialogViewModel.DoNotRemindThisAnnouncementAgain)
+                {
+                    return;
+                }
 
-            if (Instances.AnnouncementDialogViewModel.DoNotShowAnnouncement)
-            {
-                return;
-            }
+                if (Instances.AnnouncementDialogViewModel.DoNotShowAnnouncement)
+                {
+                    return;
+                }
 
-            if (Instances.AnnouncementDialogViewModel.AnnouncementInfo != string.Empty)
-            {
-                _ = Execute.OnUIThreadAsync(() => Instances.WindowManager.ShowWindow(Instances.AnnouncementDialogViewModel));
-            }
-        });
+                if (Instances.AnnouncementDialogViewModel.AnnouncementInfo != string.Empty)
+                {
+                    _ = Execute.OnUIThreadAsync(() => Instances.WindowManager.ShowWindow(Instances.AnnouncementDialogViewModel));
+                }
+            });
 
-        _ = Instances.VersionUpdateDialogViewModel.ShowUpdateOrDownload();
+            _ = Instances.VersionUpdateDialogViewModel.ShowUpdateOrDownload();
+        }
     }
 
     private static void ShowVersionMismatchWarningOnStartup()
@@ -242,6 +245,11 @@ public class RootViewModel : Conductor<Screen>.Collection.OneActive
     [UsedImplicitly]
     public void ManualPackageDrop(object sender, DragEventArgs e)
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures)
+        {
+            return;
+        }
+
         if (!TryGetDroppedZipFile(e, out string packagePath))
         {
             return;

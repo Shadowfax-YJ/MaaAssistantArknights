@@ -28,6 +28,11 @@ on:
       - "tools/maadeps-download.py"
       - "!**/*.md"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to publish, for example v0.0.1-fork.1"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -43,6 +48,7 @@ jobs:
     outputs:
       tag: ${{ steps.set_tag.outputs.tag }}
       prerelease: ${{ steps.set_pre.outputs.prerelease }}
+      release_enabled: ${{ steps.set_tag.outputs.release_enabled }}
     steps:
       - name: Show concurrency group
         run: |
@@ -56,19 +62,27 @@ jobs:
 
       - name: Set tag
         id: set_tag
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # For tag pushes, use the tag name
             tag="${{ github.ref_name }}"
+            release_enabled=true
+          elif [[ -n "$INPUT_RELEASE_TAG" ]]; then
+            tag="$INPUT_RELEASE_TAG"
+            release_enabled=true
           else
             # For PRs and branch pushes, use git describe or fallback
             tag=$(git describe --tags --match "v*" HEAD 2>/dev/null || echo "v0.0.1-$(git rev-parse --short HEAD)")
+            release_enabled=false
           fi
           echo "tag=${tag}" | tee -a $GITHUB_OUTPUT
+          echo "release_enabled=${release_enabled}" | tee -a $GITHUB_OUTPUT
 
       - name: Check if it is a pre-release
         id: set_pre
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.set_tag.outputs.release_enabled == 'true'
         run: |
           if [[ '${{ steps.set_tag.outputs.tag }}' =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "prerelease=false" | tee -a $GITHUB_OUTPUT
@@ -77,20 +91,24 @@ jobs:
           fi
 
       - name: Finalize changelog
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.set_tag.outputs.release_enabled == 'true'
         run: |
           this_tag=${{ steps.set_tag.outputs.tag }}
           if [[ '${{ steps.set_pre.outputs.prerelease }}' != 'false' ]]; then
-            last_tag=$(git describe --tags --match "v*" --abbrev=0 --exclude='${{ steps.set_tag.outputs.tag }}')
+            last_tag=$(git describe --tags --match "v*" --abbrev=0 --exclude='${{ steps.set_tag.outputs.tag }}' 2>/dev/null || true)
           else
-            last_tag=$(git describe --tags --match "v*" --abbrev=0 --exclude='${{ steps.set_tag.outputs.tag }}' --exclude='*-*')
+            last_tag=$(git describe --tags --match "v*" --abbrev=0 --exclude='${{ steps.set_tag.outputs.tag }}' --exclude='*-*' 2>/dev/null || true)
           fi
           echo >> CHANGELOG.md
-          echo "**Full Changelog**: [$last_tag -> $this_tag](${{ github.server_url }}/${{ github.repository }}/compare/${last_tag}...${this_tag})" >> CHANGELOG.md
+          if [[ -n "$last_tag" ]]; then
+            echo "**Full Changelog**: [$last_tag -> $this_tag](${{ github.server_url }}/${{ github.repository }}/compare/${last_tag}...${this_tag})" >> CHANGELOG.md
+          else
+            echo "**Full Changelog**: $this_tag" >> CHANGELOG.md
+          fi
 
       - name: Upload changelog to GitHub
         uses: actions/upload-artifact@v7
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.set_tag.outputs.release_enabled == 'true'
         with:
           name: changelog
           path: CHANGELOG.md
@@ -571,7 +589,7 @@ jobs:
 
   release:
     name: Publish Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.meta.outputs.release_enabled == 'true'
     needs: [meta, windows]
     runs-on: ubuntu-latest
     permissions:
@@ -595,6 +613,8 @@ jobs:
       - name: Publish release to GitHub
         uses: softprops/action-gh-release@v3.0.0
         with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           body_path: CHANGELOG.md
           files: |
             assets/*

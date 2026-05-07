@@ -2148,7 +2148,11 @@ public class AsstProxy
 
             case "UnsupportedLevel":
                 Instances.CopilotViewModel.AddLog(LocalizationHelper.GetString("UnsupportedLevel") + subTaskDetails!["level"], UiLogColor.Error);
-                _ = ResourceUpdater.ResourceUpdateAndReloadAsync();
+                if (!PrivateBuildFlags.DisableUpdateFeatures && !PrivateBuildFlags.DisableNetworkFeatures)
+                {
+                    _ = ResourceUpdater.ResourceUpdateAndReloadAsync();
+                }
+
                 break;
 
             case "CustomInfrastRoomGroupsMatch":
@@ -2336,6 +2340,12 @@ public class AsstProxy
 
     private static async Task ProcReportRequest(JObject details)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            _logger.Information("Report request skipped because network features are disabled.");
+            return;
+        }
+
         string? url = (string?)details["url"];
         if (string.IsNullOrEmpty(url))
         {

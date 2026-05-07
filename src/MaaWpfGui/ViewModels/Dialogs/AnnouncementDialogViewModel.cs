@@ -248,6 +248,11 @@ public class AnnouncementDialogViewModel : Screen
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public async Task CheckAndDownloadAnnouncement()
     {
+        if (PrivateBuildFlags.DisableUpdateFeatures || PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         string path = "announcements/wpf";
         if (SettingsViewModel.GuiSettings.Language is not ("zh-cn" or "zh-tw"))
         {

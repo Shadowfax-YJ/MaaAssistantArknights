@@ -64,6 +64,11 @@ public class RemoteControlService
 
     public void InitializePollJobTask()
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         if (_inited)
         {
             return;
@@ -746,6 +751,11 @@ public class RemoteControlService
 
     public static async Task ConnectionTest()
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return;
+        }
+
         var endpoint = RemoteSettings.RemoteControlGetTaskEndpointUri;
 
         if (!IsEndpointValid(endpoint, alarm: true))
@@ -806,6 +816,11 @@ public class RemoteControlService
 
     public static bool IsEndpointValid(string endpoint, bool alarm = false)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(endpoint))
         {
             ShowToast("RemoteControlConnectionTestFailEmpty", alarm);

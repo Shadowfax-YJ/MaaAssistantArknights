@@ -1221,6 +1221,13 @@ public class ConnectSettingsUserControlModel : PropertyChangedBase
     {
         if (!File.Exists(MaaUrls.GoogleAdbFilename))
         {
+            if (PrivateBuildFlags.DisableNetworkFeatures)
+            {
+                using var toast = new ToastNotification(LocalizationHelper.GetString("AdbDownloadFailedTitle"));
+                toast.AppendContentText(LocalizationHelper.GetString("AdbDownloadFailedDesc")).Show();
+                return;
+            }
+
             string[] downloadUrls =
             [
                 MaaUrls.GoogleAdbDownloadUrl,

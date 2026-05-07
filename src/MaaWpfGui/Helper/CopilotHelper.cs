@@ -29,6 +29,11 @@ public static class CopilotHelper
 {
     public static async Task<(PrtsStatus Status, PrtsCopilotModel? Copilot)> RequestCopilotAsync(int copilotId)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return (PrtsStatus.NetworkError, null);
+        }
+
         try
         {
             var response = await Instances.HttpService.GetAsync(new Uri(MaaUrls.PrtsPlusCopilotGet + copilotId));
@@ -53,6 +58,11 @@ public static class CopilotHelper
 
     public static async Task<(PrtsStatus Status, PrtsCopilotSetModel? CopilotSet)> RequestCopilotSetAsync(int copilotId)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return (PrtsStatus.NetworkError, null);
+        }
+
         try
         {
             var response = await Instances.HttpService.GetAsync(new Uri(MaaUrls.PrtsPlusCopilotSetGet + copilotId));
@@ -77,6 +87,11 @@ public static class CopilotHelper
 
     public static async Task<PrtsStatus> RateWebJsonAsync(int copilotId, string rating)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            return PrtsStatus.NetworkError;
+        }
+
         var response = await Instances.HttpService.PostAsJsonAsync(new Uri(MaaUrls.PrtsPlusCopilotRating), new { id = copilotId, rating });
         if (response == null)
         {

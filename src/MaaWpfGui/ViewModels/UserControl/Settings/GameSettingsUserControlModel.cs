@@ -321,8 +321,13 @@ public class GameSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool EnablePenguin
     {
-        get => _enablePenguin;
+        get => !PrivateBuildFlags.DisableNetworkFeatures && _enablePenguin;
         set {
+            if (PrivateBuildFlags.DisableNetworkFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _enablePenguin, value);
             ConfigurationHelper.SetValue(ConfigurationKeys.EnablePenguin, value.ToString());
         }
@@ -335,8 +340,13 @@ public class GameSettingsUserControlModel : PropertyChangedBase
     /// </summary>
     public bool EnableYituliu
     {
-        get => _enableYituliu;
+        get => !PrivateBuildFlags.DisableNetworkFeatures && _enableYituliu;
         set {
+            if (PrivateBuildFlags.DisableNetworkFeatures)
+            {
+                value = false;
+            }
+
             SetAndNotify(ref _enableYituliu, value);
             ConfigurationHelper.SetValue(ConfigurationKeys.EnableYituliu, value.ToString());
         }

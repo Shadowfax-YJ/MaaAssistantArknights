@@ -28,6 +28,12 @@ public class MaaApiService : IMaaApiService
 
     public async Task<(bool Cached, JObject? Response)> RequestMaaApiWithCache(string api, bool allowFallbackToCache = true)
     {
+        if (PrivateBuildFlags.DisableNetworkFeatures)
+        {
+            var cache = allowFallbackToCache ? LoadApiCache(api) : null;
+            return (cache != null, cache);
+        }
+
         return await RequestWithFallback(api, MaaUrls.MaaApi, MaaUrls.MaaApi2, allowFallbackToCache);
     }
 
