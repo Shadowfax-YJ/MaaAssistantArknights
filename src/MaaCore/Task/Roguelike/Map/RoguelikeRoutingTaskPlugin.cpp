@@ -1227,8 +1227,8 @@ void asst::RoguelikeRoutingTaskPlugin::generate_edges(
                 (prev_y < node_y && leftmost_y < rightmost_y - m_direction_threshold) ||
                 (prev_y > node_y && leftmost_y > rightmost_y + m_direction_threshold);
             if (direction_matched) {
-                const bool edge_added = try_add_non_crossing_edge(prev);
 #ifdef ASST_DEBUG
+                const bool edge_added = try_add_non_crossing_edge(prev);
                 if (edge_added && image_draw_opt.has_value()) {
                     cv::line(
                         image_draw_opt.value().get(),
@@ -1237,6 +1237,8 @@ void asst::RoguelikeRoutingTaskPlugin::generate_edges(
                         cv::Scalar(255, 255, 255),
                         2);
                 }
+#else
+                try_add_non_crossing_edge(prev);
 #endif
             }
         }

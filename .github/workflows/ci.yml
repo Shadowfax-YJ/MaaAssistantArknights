@@ -100,7 +100,7 @@ jobs:
     needs: meta
     strategy:
       matrix:
-        arch: [arm64, x64]
+        arch: [x64]
       fail-fast: false
     runs-on: windows-latest
 
@@ -167,7 +167,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
 
       - name: Restore dependencies
-        if: steps.cache-nuget.outputs.cache-hit != 'true'
         run: dotnet restore src/MaaWpfGui/MaaWpfGui.csproj
 
       - name: Taggify version for csproj
@@ -229,6 +228,7 @@ jobs:
 
   ubuntu:
     name: Build for Ubuntu
+    if: false
     needs: meta
     runs-on: ubuntu-latest
     strategy:
@@ -572,7 +572,7 @@ jobs:
   release:
     name: Publish Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [meta, windows, ubuntu]
+    needs: [meta, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
