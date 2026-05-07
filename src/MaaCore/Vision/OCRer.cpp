@@ -15,6 +15,10 @@ using namespace asst;
 
 OCRer::ResultsVecOpt OCRer::analyze() const
 {
+    if (m_image.empty() || m_roi.empty()) {
+        return std::nullopt;
+    }
+
     OcrPack* ocr_ptr = nullptr;
     if (m_params.use_char_model) {
         ocr_ptr = &CharOcr::get_instance();

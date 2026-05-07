@@ -13,6 +13,10 @@ using namespace asst;
 
 Matcher::ResultOpt Matcher::analyze() const
 {
+    if (m_image.empty() || m_roi.empty()) {
+        return std::nullopt;
+    }
+
     const auto match_results = preproc_and_match(make_roi(m_image, m_roi), m_params);
 
     for (size_t i = 0; i < match_results.size(); ++i) {
@@ -82,6 +86,9 @@ Matcher::ResultOpt Matcher::analyze() const
 std::vector<Matcher::RawResult> Matcher::preproc_and_match(const cv::Mat& image, const MatcherConfig::Params& params)
 {
     std::vector<Matcher::RawResult> results;
+    if (image.empty()) {
+        return results;
+    }
 
     // Image-side color conversions: compute once, reuse across all templates
     cv::Mat image_match;

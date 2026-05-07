@@ -83,7 +83,8 @@ Rect asst::VisionHelper::correct_rect(const Rect& rect, const Rect& main_roi)
 Rect VisionHelper::correct_rect(const Rect& rect, const cv::Mat& image)
 {
     if (image.empty() || image.cols <= 0 || image.rows <= 0) {
-        Log.error(__FUNCTION__, "image is empty");
+        // Some analyzers load task_info before binding an image. Keep the requested ROI so set_image() can
+        // correct it later, but do not report this normal initialization order as an error.
         return rect;
     }
     if (rect.empty()) {

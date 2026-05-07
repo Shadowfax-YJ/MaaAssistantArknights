@@ -9,6 +9,10 @@ using namespace asst;
 
 bool PixelAnalyzer::analyze()
 {
+    if (m_image.empty() || m_roi.empty()) {
+        return false;
+    }
+
     const cv::Mat croppedImage = make_roi(m_image, m_roi);
     cv::Mat tempImage;
     cv::Mat binaryImage;

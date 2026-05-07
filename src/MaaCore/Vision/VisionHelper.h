@@ -65,6 +65,9 @@ private:
 template <typename RectTy>
 inline static cv::Mat make_roi(const cv::Mat& img, const RectTy& roi)
 {
+    if (img.empty() || roi.empty()) {
+        return {};
+    }
     return img(make_rect<cv::Rect>(roi));
 }
 

@@ -29,6 +29,9 @@ on:
       - "!**/*.md"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}${{ github.ref == 'refs/heads/dev-v2' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: true
@@ -83,9 +86,7 @@ jobs:
             last_tag=$(git describe --tags --match "v*" --abbrev=0 --exclude='${{ steps.set_tag.outputs.tag }}' --exclude='*-*')
           fi
           echo >> CHANGELOG.md
-          echo "**Full Changelog**: [$last_tag -> $this_tag](https://github.com/MaaAssistantArknights/MaaAssistantArknights/compare/${last_tag}...${this_tag})" >> CHANGELOG.md
-          echo >> CHANGELOG.md
-          echo "[已有 Mirror酱 CDK？前往 Mirror酱 高速下载](https://mirrorchyan.com/zh/projects?rid=MAA&source=maagh-release)" >> CHANGELOG.md
+          echo "**Full Changelog**: [$last_tag -> $this_tag](${{ github.server_url }}/${{ github.repository }}/compare/${last_tag}...${this_tag})" >> CHANGELOG.md
 
       - name: Upload changelog to GitHub
         uses: actions/upload-artifact@v7
@@ -346,6 +347,7 @@ jobs:
 
   macOS-Core:
     name: Build Core for macOS
+    if: false
     needs: meta
     runs-on: macos-26
     strategy:
@@ -408,6 +410,7 @@ jobs:
 
   macOS-GUI:
     name: Build GUI for macOS
+    if: false
     needs: [meta, macOS-Core]
     runs-on: macos-26
     steps:
@@ -569,10 +572,13 @@ jobs:
   release:
     name: Publish Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [meta, windows, ubuntu, macOS-Core, macOS-GUI]
+    needs: [meta, windows, ubuntu]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
-      - name: Download MAA from GitHub
+      - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
           path: assets
@@ -581,9 +587,10 @@ jobs:
         run: |
           mv -vf assets/changelog/* .
           rm -rf assets/MAACore-macos-*
+          rm -rf assets/MAAComponent-DebugSymbol-*
           cd assets
           # find . -type f | xargs mv -fvt .
-          find . -type f | while read f; do mv -fvt . $f; done
+          find . -type f | while read f; do mv -fvt . "$f"; done
 
       - name: Publish release to GitHub
         uses: softprops/action-gh-release@v3.0.0
@@ -592,28 +599,3 @@ jobs:
           files: |
             assets/*
           prerelease: ${{ needs.meta.outputs.prerelease != 'false' }}
-
-      - name: Trigger release distribution workflows
-        run: |
-          gh workflow run --repo $GITHUB_REPOSITORY release-package-distribution.yml \
-            -f release_tag="${{ needs.meta.outputs.tag }}" \
-            -f mirrorchyan=true \
-            -f winget=${{ needs.meta.outputs.prerelease == 'false' }}
-          gh workflow run --repo $GITHUB_REPOSITORY mirrorchyan_release_note.yml
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Trigger OTA release workflow # ref: https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow
-        run: |
-          gh workflow run --repo $GITHUB_REPOSITORY release-ota.yml
-        env:
-          GH_TOKEN: ${{ secrets.MISTEOWORKFLOW }}
-
-      - name: Create issue on failure
-        if: failure()
-        uses: actions-cool/issues-helper@v3
-        with:
-          actions: "create-issue"
-          title: "Errors occured during release ${{ needs.meta.outputs.tag }}"
-          body: |
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

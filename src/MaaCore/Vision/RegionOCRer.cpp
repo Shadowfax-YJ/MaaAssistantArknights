@@ -6,6 +6,10 @@ using namespace asst;
 
 RegionOCRer::ResultOpt RegionOCRer::analyze() const
 {
+    if (m_image.empty() || m_roi.empty()) {
+        return std::nullopt;
+    }
+
     cv::Mat img_roi = make_roi(m_image, m_roi);
     cv::Mat img_roi_gray;
     cv::cvtColor(img_roi, img_roi_gray, cv::COLOR_BGR2GRAY);
