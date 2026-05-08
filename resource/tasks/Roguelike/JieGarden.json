@@ -1182,6 +1182,7 @@
     },
     "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon_ToHardest": {
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon",
+        "template": "Roguelike@StageVerticalConfirm.png",
         "next": ["JieGarden@Roguelike@ExitThenAbandon_ToHardest"]
     },
     "JieGarden@Roguelike@StageVerticalConfirmStartButtonClicked": {
