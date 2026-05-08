@@ -587,11 +587,19 @@
     },
     "JieGarden@Roguelike@ExitThenAbandon": {
         "template": "Roguelike@ExitThenAbandon.png",
-        "next": ["JieGarden@Roguelike@ExitThenAbandon", "JieGarden@Roguelike@Abandon"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon",
+            "JieGarden@Roguelike@ExitThenAbandon",
+            "JieGarden@Roguelike@Abandon"
+        ]
     },
     "JieGarden@Roguelike@ExitThenAbandon_ToHardest": {
         "template": "Roguelike@ExitThenAbandon.png",
-        "next": ["JieGarden@Roguelike@ExitThenAbandon_ToHardest", "JieGarden@Roguelike@Abandon"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon_ToHardest",
+            "JieGarden@Roguelike@ExitThenAbandon_ToHardest",
+            "JieGarden@Roguelike@Abandon"
+        ]
     },
     "JieGarden@Roguelike@GamePass": {},
     "JieGarden@Roguelike@GamePassSkip1": {},
@@ -907,7 +915,11 @@
     "JieGarden@Roguelike@StageBoonsEnter": {
         "template": "JieGarden@Roguelike@StageTraderEnter.png",
         "baseTask": "JieGarden@Roguelike@StageEnter",
-        "next": ["JieGarden@Roguelike@StageBoonsEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmBoons",
+            "JieGarden@Roguelike@StageBoonsEnter",
+            "JieGarden@Roguelike@StageEncounterJudgeClick"
+        ]
     },
     "JieGarden@Roguelike@StageBoskyPassage": {
         "Doc": "思维边界 粉色系",
@@ -928,7 +940,11 @@
     },
     "JieGarden@Roguelike@StageBoskyPassageEnter": {
         "baseTask": "JieGarden@Roguelike@StageEnter",
-        "next": ["JieGarden@Roguelike@StageBoskyPassageEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmBoskyPassage",
+            "JieGarden@Roguelike@StageBoskyPassageEnter",
+            "JieGarden@Roguelike@StageEncounterJudgeClick"
+        ]
     },
     "JieGarden@Roguelike@StageCombatOps": {
         "Doc": "普通战斗 紫色系",
@@ -958,7 +974,10 @@
     "JieGarden@Roguelike@StageCombatOpsEnterThenLeave": {
         "baseTask": "JieGarden@Roguelike@StageCombatOpsEnter",
         "template": "JieGarden@Roguelike@StageCombatOpsEnter.png",
-        "next": ["JieGarden@Roguelike@StageCombatOpsStartActionThenLeave"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmBattleThenLeave",
+            "JieGarden@Roguelike@StageCombatOpsStartActionThenLeave"
+        ]
     },
     "JieGarden@Roguelike@StageCombatOpsStartActionThenLeave": {
         "baseTask": "Roguelike@StartAction",
@@ -1136,6 +1155,35 @@
         "template": "Roguelike@StageVerticalConfirm.png",
         "next": ["JieGarden@Roguelike@QuickFormation"]
     },
+    "JieGarden@Roguelike@StageVerticalConfirmBattleThenLeave": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": [
+            "JieGarden@Roguelike@StageCombatOpsEnterThenLeave",
+            "JieGarden@Roguelike@StageCombatOpsStartActionThenLeave"
+        ]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmBoons": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": ["JieGarden@Roguelike@StageBoonsEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmBoskyPassage": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": ["JieGarden@Roguelike@StageBoskyPassageEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "action": "ClickRect",
+        "specificRect": [280, 452, 250, 70],
+        "next": ["JieGarden@Roguelike@ExitThenAbandon"]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon_ToHardest": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirmCancelThenAbandon",
+        "next": ["JieGarden@Roguelike@ExitThenAbandon_ToHardest"]
+    },
     "JieGarden@Roguelike@StageVerticalConfirmStartButtonClicked": {
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
         "template": "Roguelike@StageVerticalConfirm.png",
@@ -1145,6 +1193,11 @@
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
         "template": "Roguelike@StageVerticalConfirm.png",
         "next": ["JieGarden@Roguelike@StageEncounterEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+    },
+    "JieGarden@Roguelike@StageVerticalConfirmGuidance": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": ["JieGarden@Roguelike@StageGuidanceEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
     },
     "JieGarden@Roguelike@StageVerticalConfirmSafeHouse": {
         "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
@@ -1211,7 +1264,11 @@
     "JieGarden@Roguelike@StageGuidanceEnter": {
         "baseTask": "JieGarden@Roguelike@StageEnter",
         "template": "JieGarden@Roguelike@StageBoskyPassageEnter.png",
-        "next": ["JieGarden@Roguelike@StageGuidanceEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmGuidance",
+            "JieGarden@Roguelike@StageGuidanceEnter",
+            "JieGarden@Roguelike@StageEncounterJudgeClick"
+        ]
     },
     "JieGarden@Roguelike@StageProphecy": {
         "Doc": "命运所指 青色系",
@@ -1246,7 +1303,11 @@
         ]
     },
     "JieGarden@Roguelike@StageSafeHouseEnter": {
-        "next": ["JieGarden@Roguelike@StageSafeHouseEnter", "JieGarden@Roguelike@StageEncounterJudgeClick"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmSafeHouse",
+            "JieGarden@Roguelike@StageSafeHouseEnter",
+            "JieGarden@Roguelike@StageEncounterJudgeClick"
+        ]
     },
     "JieGarden@Roguelike@StageSafeHouseReuse": {
         "algorithm": "OcrDetect",
@@ -1325,6 +1386,15 @@
             "JieGarden@Roguelike@StageTraderLeaveConfirm"
         ]
     },
+    "JieGarden@Roguelike@StageVerticalConfirmYiTrader": {
+        "baseTask": "JieGarden@Roguelike@StageVerticalConfirm",
+        "template": "Roguelike@StageVerticalConfirm.png",
+        "next": [
+            "JieGarden@Roguelike@StageYiTraderEnter",
+            "JieGarden@Roguelike@StageTraderLeave",
+            "JieGarden@Roguelike@StageTraderLeaveConfirm"
+        ]
+    },
     "JieGarden@Roguelike@StageTraderInvest-Wallet": {
         "doc": "商店投资界面的右上角的单局余额",
         "roi": [1060, 20, 80, 25]
@@ -1352,7 +1422,11 @@
     },
     "JieGarden@Roguelike@StageYiTraderEnter": {
         "baseTask": "Roguelike@StageEnter",
-        "next": ["JieGarden@Roguelike@StageTraderLeave", "JieGarden@Roguelike@StageTraderLeaveConfirm"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmYiTrader",
+            "JieGarden@Roguelike@StageTraderLeave",
+            "JieGarden@Roguelike@StageTraderLeaveConfirm"
+        ]
     },
     "JieGarden@Roguelike@Stages": {
         "baseTask": "JieGarden@Roguelike@Stages_default",

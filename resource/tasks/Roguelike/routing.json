@@ -241,71 +241,80 @@
     },
     "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageBoskyPassageEnter"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmBoskyPassage",
+            "JieGarden@Roguelike@StageBoskyPassageEnter"
+        ]
     },
     "JieGarden@RoguelikeRoutingAction-StageCombatOpsEnterThenLeave": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageCombatOpsEnterThenLeave"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmBattleThenLeave",
+            "JieGarden@Roguelike@StageCombatOpsEnterThenLeave"
+        ]
     },
     "JieGarden@RoguelikeRoutingAction-StageCombatOpsEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageCombatOpsEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmBattle", "JieGarden@Roguelike@StageCombatOpsEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageBoonsEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageBoonsEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmBoons", "JieGarden@Roguelike@StageBoonsEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageSafeHouseEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageSafeHouseEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmSafeHouse", "JieGarden@Roguelike@StageSafeHouseEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageGuidanceEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageGuidanceEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmGuidance", "JieGarden@Roguelike@StageGuidanceEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageEncounterEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageTraderEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageTraderEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmTrader", "JieGarden@Roguelike@StageTraderEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageTraderEnterThenLeave": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageTraderEnterThenLeave"]
+        "next": [
+            "JieGarden@Roguelike@StageVerticalConfirmTraderThenLeave",
+            "JieGarden@Roguelike@StageTraderEnterThenLeave"
+        ]
     },
     "JieGarden@RoguelikeRoutingAction-StageDisasterEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageCombatOpsEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmBattle", "JieGarden@Roguelike@StageCombatOpsEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageDoubtsEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageLegendEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageOldShopEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageOmissionsEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StagePlaytimeEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageSchemeEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageEncounterEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmEncounter", "JieGarden@Roguelike@StageEncounterEnter"]
     },
     "JieGarden@RoguelikeRoutingAction-StageYiTraderEnter": {
         "algorithm": "JustReturn",
-        "next": ["JieGarden@Roguelike@StageYiTraderEnter"]
+        "next": ["JieGarden@Roguelike@StageVerticalConfirmYiTrader", "JieGarden@Roguelike@StageYiTraderEnter"]
     },
     "JieGarden@RoguelikeRoutingConfig_BoskyPassage": {
         "algorithm": "JustReturn",
