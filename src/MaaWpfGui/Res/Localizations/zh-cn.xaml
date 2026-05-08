@@ -198,7 +198,7 @@
     <system:String x:Key="RoguelikeStrategyMonthlySquad">刷月度小队，尽可能稳定地打更多层数</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">刷深入调查，尽可能稳定地打更多层数</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">刷常乐节点，第一层进洞，找不到需要的节点就重开</system:String>
-    <system:String x:Key="RoguelikeStrategyDataCollection">数据收集：避战并优先不期而遇</system:String>
+    <system:String x:Key="RoguelikeStrategyDataCollection">尊贵的MAA大人正在收集数据</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">目标常乐节点</system:String>
     <system:String x:Key="RoguelikePlaytimeLing">令 - 掷地有声</system:String>
     <system:String x:Key="RoguelikePlaytimeShu">黍 - 种因得果</system:String>

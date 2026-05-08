@@ -51,6 +51,7 @@ public:
     void set_theme(const std::string& theme);
 
     [[nodiscard]] const Result& get_result() const { return m_result; };
+    [[nodiscard]] const cv::Mat& get_image() const { return m_image; }
 
     /// <summary>
     /// 在 <c>image</c> 中匹配 <c>option_templ</c> 所对应的事件选项。

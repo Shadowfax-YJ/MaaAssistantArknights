@@ -31,6 +31,7 @@ private:
     void report_analyzed_options();
     void update_view(const cv::Mat& image = cv::Mat());
     void reset_view();
+    void record_agent_event_if_needed(const Config::RoguelikeEvent& event);
     void move_to_analyzed_option(size_t index);
     void move_to_option_list_head();
     void move_forward();
@@ -41,6 +42,7 @@ private:
     static bool save_img(const cv::Mat& image, std::string_view description = "image");
 
     OptionAnalyzer::Result m_option_list;
+    cv::Mat m_option_list_image;
     size_t m_view_begin = 0;
     size_t m_view_end = 0;
     std::vector<int> m_option_y_in_view;

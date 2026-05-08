@@ -13,6 +13,17 @@
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
 
+namespace
+{
+std::string save_map_encounter_image(const cv::Mat& image, std::string_view type)
+{
+    if (type == "Legend") {
+        return asst::RoguelikeDataCollector.save_legend_image(image);
+    }
+    return asst::RoguelikeDataCollector.save_encounter_image(image);
+}
+}
+
 bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
     // 安全屋，掷骰子之类的带选项的也都是视为不期而遇了
@@ -60,11 +71,15 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
     if (!name_analyzer.analyze()) {
         Log.error("Unknown Event");
         const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
-        const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
+        const std::string map_encounter_type =
+            record_map_encounter ? RoguelikeDataCollector.map_encounter_type() : "Encounter";
+        const std::string image_path =
+            record_map_encounter ? save_map_encounter_image(image, map_encounter_type) : "";
         if (record_map_encounter) {
-            RoguelikeDataCollector.record_encounter("unknown", image_path);
+            RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
         }
         RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
+                                                                      { "record_type", map_encounter_type },
                                                                       { "options", json::array {} },
                                                                       { "selected_option", "" },
                                                                       { "image", image_path },
@@ -80,11 +95,15 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
     if (result_vec.empty()) {
         Log.error("Unknown Event");
         const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
-        const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
+        const std::string map_encounter_type =
+            record_map_encounter ? RoguelikeDataCollector.map_encounter_type() : "Encounter";
+        const std::string image_path =
+            record_map_encounter ? save_map_encounter_image(image, map_encounter_type) : "";
         if (record_map_encounter) {
-            RoguelikeDataCollector.record_encounter("unknown", image_path);
+            RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
         }
         RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
+                                                                      { "record_type", map_encounter_type },
                                                                       { "options", json::array {} },
                                                                       { "selected_option", "" },
                                                                       { "image", image_path },
@@ -114,30 +133,39 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     const std::string& theme = m_config->get_theme();
     const RoguelikeMode& mode = m_config->get_mode();
     const auto& event_map = RoguelikeStageEncounter.get_events(theme, mode);
+    const bool record_as_encounter = !(theme == RoguelikeTheme::JieGarden && event_name == "相随");
     cv::Mat image = ctrler()->get_image();
-    const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
-    const std::string image_path = record_map_encounter ? RoguelikeDataCollector.save_image(image, "encounter") : "";
+    const bool record_map_encounter = record_as_encounter && RoguelikeDataCollector.should_record_map_encounters();
+    const std::string map_encounter_type =
+        record_map_encounter ? RoguelikeDataCollector.map_encounter_type() : "Encounter";
+    const std::string image_path = record_map_encounter ? save_map_encounter_image(image, map_encounter_type) : "";
+    const auto log_encounter_event = [&](json::object details) {
+        if (record_as_encounter) {
+            details["record_type"] = map_encounter_type;
+            RoguelikeDataCollector.log_event("encounter", std::move(details));
+        }
+    };
 
     auto it = event_map.find(event_name);
     if (it == event_map.end()) {
         Log.error("Unknown event:", event_name);
         if (record_map_encounter) {
-            RoguelikeDataCollector.record_encounter(event_name, image_path);
+            RoguelikeDataCollector.record_encounter(event_name, image_path, map_encounter_type);
         }
-        RoguelikeDataCollector.log_event("encounter", json::object {
-                                                          { "event_name", event_name },
-                                                          { "options", json::array {} },
-                                                          { "selected_option", "" },
-                                                          { "image", image_path },
-                                                          { "ocr_failed", false },
-                                                          { "unknown_event", true },
-                                                      });
+        log_encounter_event(json::object {
+            { "event_name", event_name },
+            { "options", json::array {} },
+            { "selected_option", "" },
+            { "image", image_path },
+            { "ocr_failed", false },
+            { "unknown_event", true },
+        });
         return std::nullopt;
     }
 
     const auto& event = it->second;
     if (record_map_encounter) {
-        RoguelikeDataCollector.record_encounter(event.name, image_path);
+        RoguelikeDataCollector.record_encounter(event.name, image_path, map_encounter_type);
     }
 
     int special_val = 0;
@@ -217,6 +245,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     { "enabled", option.enabled },
                 });
             }
+            record_agent_event_if_needed(event);
 
             size_t choice = 0; // 以 0 作为 无效 index
             if (!event.option_text.empty()) {
@@ -249,38 +278,58 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         m_option_list.size()));
             }
             else if (select_analyzed_option(choice - 1)) {
-                RoguelikeDataCollector.log_event("encounter", json::object {
-                                                                  { "event_name", event.name },
-                                                                  { "options", option_details },
-                                                                  { "selected_option", m_option_list[choice - 1].text },
-                                                                  { "image", image_path },
-                                                                  { "ocr_failed", false },
-                                                              });
+                log_encounter_event(json::object {
+                    { "event_name", event.name },
+                    { "options", option_details },
+                    { "selected_option", m_option_list[choice - 1].text },
+                    { "image", image_path },
+                    { "ocr_failed", false },
+                });
                 return next_event(event);
             }
 
             // 兜底：从下到上依次选择
             for (choice = m_option_list.size(); choice > 0; --choice) {
                 if (m_option_list[choice - 1].enabled && select_analyzed_option(choice - 1)) {
-                    RoguelikeDataCollector.log_event("encounter", json::object {
-                                                                      { "event_name", event.name },
-                                                                      { "options", option_details },
-                                                                      { "selected_option", m_option_list[choice - 1].text },
-                                                                      { "image", image_path },
-                                                                      { "ocr_failed", false },
-                                                                  });
+                    log_encounter_event(json::object {
+                        { "event_name", event.name },
+                        { "options", option_details },
+                        { "selected_option", m_option_list[choice - 1].text },
+                        { "image", image_path },
+                        { "ocr_failed", false },
+                    });
                     return next_event(event);
                 }
             }
 
-            RoguelikeDataCollector.log_event("encounter", json::object {
-                                                              { "event_name", event.name },
-                                                              { "options", std::move(option_details) },
-                                                              { "selected_option", "" },
-                                                              { "image", image_path },
-                                                              { "ocr_failed", false },
-                                                          });
+            log_encounter_event(json::object {
+                { "event_name", event.name },
+                { "options", std::move(option_details) },
+                { "selected_option", "" },
+                { "image", image_path },
+                { "ocr_failed", false },
+            });
         }
+    }
+
+    if (event.option_num == 0 || choose_option == 0) {
+        Log.error(
+            __FUNCTION__,
+            "| invalid configured choice for event:",
+            event.name,
+            "option_num:",
+            event.option_num,
+            "choose_option:",
+            choose_option);
+        log_encounter_event(json::object {
+            { "event_name", event.name },
+            { "options", json::array {} },
+            { "selected_option", "" },
+            { "image", image_path },
+            { "ocr_failed", false },
+            { "invalid_choice", true },
+        });
+        return std::nullopt;
     }
 
     const auto click_option_task_name = [&](size_t item, size_t total) {
@@ -296,13 +345,13 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         sleep(300);
     }
 
-    RoguelikeDataCollector.log_event("encounter", json::object {
-                                                      { "event_name", event.name },
-                                                      { "options", json::array {} },
-                                                      { "selected_option", std::to_string(choose_option) },
-                                                      { "image", image_path },
-                                                      { "ocr_failed", false },
-                                                  });
+    log_encounter_event(json::object {
+        { "event_name", event.name },
+        { "options", json::array {} },
+        { "selected_option", std::to_string(choose_option) },
+        { "image", image_path },
+        { "ocr_failed", false },
+    });
 
     sleep(1500);
 
@@ -312,6 +361,10 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     // fallback 可变选项，临时处理，之后还得改成更通用的方式
     if (!hp_disappeared) {
         for (const auto& [total, item] : event.fallback_choices) {
+            if (total == 0 || item == 0) {
+                Log.warn("Event:", event.name, "skip invalid fallback choice", total, "-", item);
+                continue;
+            }
             Log.info("Trying fallback choice", total, "-", item);
             for (int j = 0; j < 2; ++j) {
                 ProcessTask(*this, { click_option_task_name(item, total) }).run();
@@ -479,6 +532,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     }
 
     m_option_list = analyzer.get_result();
+    m_option_list_image = analyzer.get_image().clone();
     report_analyzed_options();
 
     update_view(image);
@@ -527,7 +581,23 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
 void asst::RoguelikeStageEncounterTaskPlugin::reset_option_list_and_view_data()
 {
     m_option_list.clear();
+    m_option_list_image.release();
     reset_view();
+}
+
+void asst::RoguelikeStageEncounterTaskPlugin::record_agent_event_if_needed(const Config::RoguelikeEvent& event)
+{
+    if (event.name != "相随" || m_option_list.empty() || m_option_list_image.empty()) {
+        return;
+    }
+
+    const std::string& agent_name = m_option_list.front().text;
+    const std::string image_path = RoguelikeDataCollector.save_agent_image(m_option_list_image);
+    RoguelikeDataCollector.record_agent(agent_name, image_path);
+    RoguelikeDataCollector.log_event("agents", json::object {
+                                                  { "name", agent_name },
+                                                  { "image", image_path },
+                                              });
 }
 
 void asst::RoguelikeStageEncounterTaskPlugin::report_analyzed_options()

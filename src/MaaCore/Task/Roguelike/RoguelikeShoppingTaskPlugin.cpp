@@ -7,6 +7,7 @@
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
@@ -17,10 +18,18 @@ bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& d
         return false;
     }
 
-    if (!details.get("details", "task", "").ends_with("Roguelike@TraderRandomShopping")) {
+    const std::string& task_name = details.get("details", "task", "");
+    if (m_config->get_mode() == RoguelikeMode::DataCollection && task_name.ends_with("Roguelike@StageTraderLeave")) {
+        m_action = TaskAction::SaveDataCollectionTrader;
+        return true;
+    }
+
+    if (!task_name.ends_with("Roguelike@TraderRandomShopping")) {
         return false;
     }
-    else if (m_config->get_mode() == RoguelikeMode::Investment) {
+    m_action = TaskAction::Shopping;
+
+    if (m_config->get_mode() == RoguelikeMode::Investment) {
         return m_config->get_invest_with_more_score();
     }
     else if (m_config->get_mode() == RoguelikeMode::Collectible) {
@@ -32,6 +41,10 @@ bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& d
 bool asst::RoguelikeShoppingTaskPlugin::_run()
 {
     LogTraceFunction;
+
+    if (m_action == TaskAction::SaveDataCollectionTrader) {
+        return save_data_collection_trader_image();
+    }
 
     buy_once();
     const auto& theme = m_config->get_theme();
@@ -51,6 +64,24 @@ bool asst::RoguelikeShoppingTaskPlugin::_run()
 
     sleep(1000);
 
+    return true;
+}
+
+bool asst::RoguelikeShoppingTaskPlugin::save_data_collection_trader_image()
+{
+    if (!RoguelikeDataCollector.enabled()) {
+        return true;
+    }
+
+    const auto image = ctrler()->get_image();
+    const bool is_yi_trader = RoguelikeDataCollector.current_floor_is_bosky_passage();
+    const std::string image_path = is_yi_trader ? RoguelikeDataCollector.save_yi_trader_image(image)
+                                                : RoguelikeDataCollector.save_trader_image(image);
+    RoguelikeDataCollector.record_trader(is_yi_trader ? "易与" : "诡异行商", image_path, is_yi_trader);
+    RoguelikeDataCollector.log_event("trader", json::object {
+                                                   { "name", is_yi_trader ? "易与" : "诡异行商" },
+                                                   { "image", image_path },
+                                               });
     return true;
 }
 
@@ -231,4 +262,3 @@ bool asst::RoguelikeShoppingTaskPlugin::buy_once()
     */
     return true;
 }
-

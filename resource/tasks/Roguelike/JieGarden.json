@@ -1470,7 +1470,7 @@
         ]
     },
     "JieGarden@Roguelike@Stages_dataCollection": {
-        "Doc": "数据收集模式：避战，误入奇境进入外层后选择不进入是非境，优先不期而遇多的外层路线",
+        "Doc": "数据收集模式：避战，进入是非境后按外层默认路线收集数据",
         "algorithm": "JustReturn",
         "next": [
             "JieGarden@Roguelike@NextLevel",
@@ -1687,15 +1687,15 @@
         "useRaw": false
     },
     "JieGarden@Roguelike@StrategyChange_mode20002": {
-        "text": ["_dataCollection", "_exit", "_leaveBoskyPassage"],
+        "text": ["洪陆楼", "山水阁", "云瓦亭", "汝吾门", "见字祠", "始末陵", "是非境"],
         "ocrReplace": [
-            ["洪陆楼", "_dataCollection"],
-            ["山水阁", "_dataCollection"],
-            ["云(瓦)?(亭|亨)", "_exit"],
-            ["汝吾(门)?", "_exit"],
-            ["见字祠", "_exit"],
-            ["始末陵", "_exit"],
-            ["是非境", "_leaveBoskyPassage"]
+            ["洪.*[陆陸楼樓]|[陆陸].*[楼樓]", "洪陆楼"],
+            ["山.*[水阁閣]|水.*[阁閣]", "山水阁"],
+            ["[云雲].*[瓦亭亨]|瓦.*[亭亨]", "云瓦亭"],
+            ["汝.*[吾门門]|吾.*[门門]", "汝吾门"],
+            ["[见見].*[字祠]|字.*祠", "见字祠"],
+            ["始.*[末陵]|末.*陵", "始末陵"],
+            ["是.*[非境]|非.*境", "是非境"]
         ],
         "roi": [627, 14, 71, 28],
         "withoutDet": true,

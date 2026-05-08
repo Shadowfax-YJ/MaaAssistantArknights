@@ -22,6 +22,7 @@ protected:
     virtual bool _run() override;
 
 private:
-    mutable bool m_flush_cached_encounters = false;
+    mutable bool m_finish_data_collection_run = false;
+    mutable bool m_finish_data_collection_run_on_error = false;
 };
 }

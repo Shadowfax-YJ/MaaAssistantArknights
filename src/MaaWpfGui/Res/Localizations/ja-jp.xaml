@@ -198,7 +198,7 @@
     <system:String x:Key="RoguelikeStrategyMonthlySquad">月間小隊をグラインドし、できるだけ多くの層をクリア</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">深層探索をグラインドし、できるだけ多くの層をクリア</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">常楽スポットをグラインドし、第一層で洞窟に入り、ターゲットスポットが見つからなければ再起動します</system:String>
-    <system:String x:Key="RoguelikeStrategyDataCollection">データ収集：戦闘を避けて遭遇を優先</system:String>
+    <system:String x:Key="RoguelikeStrategyDataCollection">尊きMAA様がデータ収集中</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">ターゲット常楽系スポット</system:String>
     <system:String x:Key="RoguelikePlaytimeLing">リィン - 地に擲ちて声有り</system:String>
     <system:String x:Key="RoguelikePlaytimeShu">シュウ - 因を種えて果を得る</system:String>

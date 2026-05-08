@@ -6,13 +6,16 @@
 
 bool asst::RoguelikeDebugTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
-    m_flush_cached_encounters = false;
+    m_finish_data_collection_run = false;
+    m_finish_data_collection_run_on_error = false;
 
     if (details.get("subtask", std::string()) != "ProcessTask") {
         return false;
     }
 
     if (msg == AsstMsg::SubTaskError) {
+        m_finish_data_collection_run = true;
+        m_finish_data_collection_run_on_error = true;
         return true;
     }
 
@@ -29,7 +32,7 @@ bool asst::RoguelikeDebugTaskPlugin::verify(AsstMsg msg, const json::value& deta
     if (msg == AsstMsg::SubTaskStart && details.get("subtask", std::string()) == "ProcessTask") {
         if (task_view == "Roguelike@ExitThenAbandon" || task_view == "Roguelike@ExitThenAbandon_ToHardest" ||
             task_view == "Roguelike@Abandon" || task_view == "RoguelikeControlTaskPlugin-ExitThenStop") {
-            m_flush_cached_encounters = true;
+            m_finish_data_collection_run = true;
             return true;
         }
         if (task_view == "Roguelike@GamePass") {
@@ -42,8 +45,9 @@ bool asst::RoguelikeDebugTaskPlugin::verify(AsstMsg msg, const json::value& deta
 
 bool asst::RoguelikeDebugTaskPlugin::_run()
 {
-    if (m_flush_cached_encounters) {
-        RoguelikeDataCollector.finish_run_if_has_cached_encounters("abandon_flow");
+    if (m_finish_data_collection_run) {
+        RoguelikeDataCollector.finish_run_if_active(
+            m_finish_data_collection_run_on_error ? "subtask_error" : "abandon_flow");
     }
     save_img(utils::path("debug") / utils::path("roguelike"));
     return true;

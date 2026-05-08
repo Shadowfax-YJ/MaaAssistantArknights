@@ -19,6 +19,7 @@ public:
     void start_session(const RoguelikeConfig& config, const json::value& params);
     void stop_session(std::string_view reason = "stopped");
     void finish_run(std::string_view reason = "run_finished");
+    void finish_run_if_active(std::string_view reason = "run_finished");
     void finish_run_if_has_cached_encounters(std::string_view reason = "cached_encounters");
     void disable();
 
@@ -27,13 +28,28 @@ public:
 
     void log_event(std::string_view type, json::object details = {});
     std::string save_image(const cv::Mat& image, std::string_view suffix);
+    std::string save_encounter_image(const cv::Mat& image);
+    std::string save_legend_image(const cv::Mat& image);
+    std::string save_trader_image(const cv::Mat& image);
+    std::string save_yi_trader_image(const cv::Mat& image);
+    std::string save_agent_image(const cv::Mat& image);
+    [[nodiscard]] static std::string normalize_jiegarden_floor_name(std::string_view ocr_text);
+    void note_floor_ocr(std::string_view ocr_text);
     void note_strategy_change(std::string_view strategy);
-    void set_record_map_encounters(bool enabled);
+    [[nodiscard]] bool current_floor_is_bosky_passage() const;
+    void set_record_map_encounters(bool enabled, std::string_view type = "Encounter");
     [[nodiscard]] bool should_record_map_encounters() const;
-    void record_encounter(std::string_view name, std::string_view image_path);
+    [[nodiscard]] std::string map_encounter_type() const;
+    void record_encounter(std::string_view name, std::string_view image_path, std::string_view type = "Encounter");
+    void record_trader(std::string_view name, std::string_view image_path, bool is_yi_trader);
+    void record_agent(std::string_view name, std::string_view image_path);
 
 private:
+    std::string save_image(const cv::Mat& image, std::string_view suffix, std::string_view category_dir);
+    bool link_to_images_dir(const std::filesystem::path& target, const std::filesystem::path& filename);
     void flush_encounter_summary(bool force = false);
+    void flush_trader_summary(bool force = false);
+    void flush_agent_summary(bool force = false);
 
     mutable std::mutex m_mutex;
     bool m_enabled = false;
@@ -41,7 +57,10 @@ private:
     std::string m_current_floor;
     int m_floor_index = 0;
     json::object m_encounter_summary;
+    json::object m_trader_summary;
+    json::object m_agent_summary;
     bool m_record_map_encounters = false;
+    std::string m_map_encounter_type = "Encounter";
 };
 
 inline static auto& RoguelikeDataCollector = RoguelikeDataCollection::get_instance();

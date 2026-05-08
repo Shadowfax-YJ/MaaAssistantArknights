@@ -5,6 +5,7 @@
 #include "Controller/Controller.h"
 #include "MaaUtils/ImageIo.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
@@ -207,6 +208,7 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
 
     if (!found) {
         Log.info(__FUNCTION__, "| no open unvisited nodes available");
+        RoguelikeDataCollector.set_record_map_encounters(false);
         Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-LeaveBoskyPassage");
         return;
     }
@@ -227,6 +229,7 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
 
     if (px == -1 || py == -1) {
         Log.error(__FUNCTION__, "| Invalid pixel coordinates for node", chosen, ": (", px, ",", py, ")");
+        RoguelikeDataCollector.set_record_map_encounters(false);
         return;
     }
 
@@ -235,6 +238,7 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
     ctrler()->click(click_point);
     RoguelikeBoskyPassageMap::get_instance().set_visited(chosen);
     RoguelikeBoskyPassageMap::get_instance().set_curr_pos(chosen);
+    RoguelikeDataCollector.set_record_map_encounters(node_type == RoguelikeNodeType::Legend, "Legend");
 
     // 发送节点类型到 WPF
     std::string node_type_name = type2name(node_type);
