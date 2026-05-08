@@ -332,17 +332,44 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         return std::nullopt;
     }
 
-    const auto click_option_task_name = [&](size_t item, size_t total) {
+    const auto click_option_task_name = [&](size_t item, size_t total) -> std::optional<std::string> {
+        if (total == 0 || item == 0) {
+            Log.error("Event:", event.name, "invalid option task", total, "-", item);
+            return std::nullopt;
+        }
         if (item > total) {
             Log.warn("Event:", event.name, "Total:", total, "Choice", item, "out of range, switch to choice", total);
             item = total;
         }
+        if (total > 4) {
+            Log.error("Event:", event.name, "fixed option task only supports up to 4 options, got", total);
+            return std::nullopt;
+        }
         return m_config->get_theme() + "@Roguelike@OptionChoose" + std::to_string(total) + "-" + std::to_string(item);
     };
 
-    for (int j = 0; j < 2; ++j) {
-        ProcessTask(*this, { click_option_task_name(choose_option, event.option_num) }).run();
-        sleep(300);
+    const auto click_configured_option = [&](size_t item, size_t total) -> bool {
+        const std::optional<std::string> task_name = click_option_task_name(item, total);
+        if (!task_name) {
+            return false;
+        }
+        for (int j = 0; j < 2; ++j) {
+            ProcessTask(*this, { *task_name }).run();
+            sleep(300);
+        }
+        return true;
+    };
+
+    if (!click_configured_option(choose_option, event.option_num)) {
+        log_encounter_event(json::object {
+            { "event_name", event.name },
+            { "options", json::array {} },
+            { "selected_option", "" },
+            { "image", image_path },
+            { "ocr_failed", false },
+            { "invalid_choice", true },
+        });
+        return std::nullopt;
     }
 
     log_encounter_event(json::object {
@@ -366,9 +393,8 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 continue;
             }
             Log.info("Trying fallback choice", total, "-", item);
-            for (int j = 0; j < 2; ++j) {
-                ProcessTask(*this, { click_option_task_name(item, total) }).run();
-                sleep(300);
+            if (!click_configured_option(item, total)) {
+                continue;
             }
             sleep(500);
             image = ctrler()->get_image();
@@ -394,9 +420,8 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 return std::nullopt;
             }
 
-            for (int j = 0; j < 2; ++j) {
-                ProcessTask(*this, { click_option_task_name(i, max_time) }).run();
-                sleep(300);
+            if (!click_configured_option(i, max_time)) {
+                continue;
             }
 
             if (need_exit()) {
@@ -520,7 +545,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
         image = ctrler()->get_image();
         const std::optional<int> ret = analyzer.merge_image(image);
         if (!ret) {
-            return false;
+            Log.warn(__FUNCTION__, "| Failed to merge option screenshots; fall back to the latest viewport");
+            analyzer.set_image(image);
+            break;
         }
         if (ret.value() <= 0) {
             break;
