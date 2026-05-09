@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+
 #include "AbstractRoguelikeTaskPlugin.h"
 
 namespace asst
@@ -22,7 +24,9 @@ protected:
     virtual bool _run() override;
 
 private:
+    mutable bool m_start_data_collection_run = false;
     mutable bool m_finish_data_collection_run = false;
     mutable bool m_finish_data_collection_run_on_error = false;
+    mutable std::string m_data_collection_finish_task;
 };
 }

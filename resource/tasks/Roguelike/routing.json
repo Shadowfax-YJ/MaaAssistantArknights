@@ -209,15 +209,15 @@
         "doc": [
             "界园树洞节点优先级策略配置",
             "按优先级从高到低排列节点类型名称",
-            "易与>拾遗>传说>故肆>筹谋>常乐>杂疑(暂时取消)>灾祸(暂时取消)"
+            "传说>易与>拾遗>筹谋>常乐>故肆>杂疑(暂时取消)>灾祸(暂时取消)"
         ],
         "template": [
+            "JieGarden@RoguelikeMapNode-Legend.png",
             "JieGarden@RoguelikeMapNode-YiTrader.png",
             "JieGarden@RoguelikeMapNode-Omissions.png",
-            "JieGarden@RoguelikeMapNode-Legend.png",
-            "JieGarden@RoguelikeMapNode-OldShop.png",
             "JieGarden@RoguelikeMapNode-Scheme.png",
-            "JieGarden@RoguelikeMapNode-Playtime.png"
+            "JieGarden@RoguelikeMapNode-Playtime.png",
+            "JieGarden@RoguelikeMapNode-OldShop.png"
         ]
     },
     "JieGarden@RoguelikeRouting-BoskyPassagePriority_FindPlaytime": {

@@ -119,6 +119,9 @@ bool asst::RoguelikeRoutingTaskPlugin::_run()
             m_need_generate_map = false;
         }
         else {
+            RoguelikeDataCollector.set_pending_abandon_reason(
+                "sarkaz_fast_investment_complete",
+                json::object { { "strategy", "sarkaz_fast_investment" } });
             Task.set_task_base("RoguelikeRoutingAction", "Sarkaz@RoguelikeRoutingAction-ExitThenAbandon");
         }
         break;
@@ -165,6 +168,12 @@ bool asst::RoguelikeRoutingTaskPlugin::_run()
 
             // 若无法避免超过三场战斗则重开
             if (m_map.get_node_cost(next_node) >= 30) {
+                RoguelikeDataCollector.set_pending_abandon_reason(
+                    "too_many_battles_ahead",
+                    json::object {
+                        { "strategy", "fast_pass_with_battle" },
+                        { "node_cost", m_map.get_node_cost(next_node) },
+                    });
                 callback(
                     AsstMsg::TaskChainExtraInfo,
                     json::object {
@@ -222,6 +231,12 @@ bool asst::RoguelikeRoutingTaskPlugin::_run()
 
             // 若无法避免超过两场战斗则重开
             if (m_map.get_node_cost(next_node) >= 2) {
+                RoguelikeDataCollector.set_pending_abandon_reason(
+                    "too_many_battles_ahead",
+                    json::object {
+                        { "strategy", "fast_pass_without_battle" },
+                        { "node_cost", m_map.get_node_cost(next_node) },
+                    });
                 callback(
                     AsstMsg::TaskChainExtraInfo,
                     json::object {
@@ -1356,6 +1371,12 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_route()
     const size_t next_node = m_map.get_next_node();
 
     if (m_map.get_node_cost(next_node) >= 1000) {
+        RoguelikeDataCollector.set_pending_abandon_reason(
+            "no_viable_route",
+            json::object {
+                { "strategy", "sarkaz_fast_investment" },
+                { "node_cost", m_map.get_node_cost(next_node) },
+            });
         Task.set_task_base("RoguelikeRoutingAction", "Sarkaz@RoguelikeRoutingAction-ExitThenAbandon");
         reset_in_run_variables();
         return;
@@ -1377,6 +1398,12 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_route()
         reset_in_run_variables();
     }
     else {
+        RoguelikeDataCollector.set_pending_abandon_reason(
+            "unexpected_route_node",
+            json::object {
+                { "strategy", "sarkaz_fast_investment" },
+                { "node_type", type2name(m_map.get_node_type(next_node)) },
+            });
         Task.set_task_base("RoguelikeRoutingAction", "Sarkaz@RoguelikeRoutingAction-ExitThenAbandon");
         reset_in_run_variables();
     }
@@ -1445,8 +1472,11 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         if (!image_path.empty()) {
             details["image"] = image_path;
         }
+        auto abandon_details = details;
         RoguelikeDataCollector.log_event("route_exit", std::move(details));
-        RoguelikeDataCollector.finish_run("second_floor_no_remaining_encounter");
+        RoguelikeDataCollector.set_pending_abandon_reason(
+            "second_floor_no_remaining_encounter",
+            std::move(abandon_details));
         callback(
             AsstMsg::TaskChainExtraInfo,
             json::object {

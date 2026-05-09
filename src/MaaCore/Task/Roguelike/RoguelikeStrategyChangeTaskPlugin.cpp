@@ -1,5 +1,7 @@
 #include "RoguelikeStrategyChangeTaskPlugin.h"
 
+#include <utility>
+
 #include "Config/TaskData.h"
 #include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/Logger.hpp"
@@ -83,16 +85,15 @@ bool asst::RoguelikeStrategyChangeTaskPlugin::_run()
         else {
             RoguelikeDataCollector.note_strategy_change(current_strategy);
         }
-        RoguelikeDataCollector.log_event(
-            current_strategy == "_exit" ? "floor_exit" : "strategy_change",
-            json::object {
-                { "strategy", current_strategy },
-                { "floor", current_floor },
-                { "ocr_text", ocr_text },
-                { "stages_task", strategy_task_name },
-        });
+        json::object details {
+            { "strategy", current_strategy },
+            { "floor", current_floor },
+            { "ocr_text", ocr_text },
+            { "stages_task", strategy_task_name },
+        };
+        RoguelikeDataCollector.log_event(current_strategy == "_exit" ? "floor_exit" : "strategy_change", details);
         if (current_strategy == "_exit") {
-            RoguelikeDataCollector.finish_run("floor_exit");
+            RoguelikeDataCollector.set_pending_abandon_reason("floor_exit", std::move(details));
         }
     }
 

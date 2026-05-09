@@ -1526,6 +1526,7 @@ public class AsstProxy
                 {
                     string taskName = details!["details"]!["task"]!.ToString();
                     int execTimes = (int)details!["details"]!["exec_times"]!;
+                    var taskChain = details["taskchain"]?.ToString();
 
                     switch (taskName)
                     {
@@ -1597,6 +1598,10 @@ public class AsstProxy
                             break;
 
                         /* 肉鸽相关 */
+                        case "Squad-EnterPoint" when taskChain == "Roguelike":
+                            Instances.TaskQueueViewModel.AddLog(LocalizationHelper.GetString("BegunToExplore") + $" {execTimes} " + LocalizationHelper.GetString("UnitTime"), UiLogColor.Info, splitMode: TaskQueueViewModel.LogCardSplitMode.Before);
+                            break;
+
                         case "ExitThenAbandon":
                             Instances.TaskQueueViewModel.AddLog(LocalizationHelper.GetString("ExplorationAbandoned"), UiLogColor.ExplorationAbandonedIS);
                             AchievementTrackerHelper.Instance.AddProgress(AchievementIds.RoguelikeRetreat);
@@ -1740,13 +1745,6 @@ public class AsstProxy
 
                     case "Roguelike":
                         {
-                            int execTimes = (int)details!["details"]!["exec_times"]!;
-
-                            if (taskName == "StartExplore")
-                            {
-                                Instances.TaskQueueViewModel.AddLog(LocalizationHelper.GetString("BegunToExplore") + $" {execTimes} " + LocalizationHelper.GetString("UnitTime"), UiLogColor.Info, splitMode: TaskQueueViewModel.LogCardSplitMode.Before);
-                            }
-
                             break;
                         }
 

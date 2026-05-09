@@ -21,6 +21,12 @@ public:
     void finish_run(std::string_view reason = "run_finished");
     void finish_run_if_active(std::string_view reason = "run_finished");
     void finish_run_if_has_cached_encounters(std::string_view reason = "cached_encounters");
+    void start_run_if_enabled();
+    void set_pending_abandon_reason(std::string_view reason, json::object details = {});
+    void finish_run_as_abandoned(
+        std::string_view default_reason,
+        const cv::Mat& image,
+        json::object details = {});
     void disable();
 
     [[nodiscard]] bool enabled() const;
@@ -56,6 +62,9 @@ private:
     std::filesystem::path m_session_dir;
     std::string m_current_floor;
     int m_floor_index = 0;
+    bool m_run_active = false;
+    std::string m_pending_abandon_reason;
+    json::object m_pending_abandon_details;
     json::object m_encounter_summary;
     json::object m_trader_summary;
     json::object m_agent_summary;

@@ -1,8 +1,15 @@
 #include "RoguelikeStageEncounterTaskPlugin.h"
 
+#include <algorithm>
+#include <cctype>
+#include <limits>
+#include <utility>
+#include <vector>
+
 #include "Config/Roguelike/RoguelikeStageEncounterConfig.h"
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
+#include "MaaUtils/Encoding.h"
 #include "MaaUtils/ImageIo.h"
 #include "MaaUtils/NoWarningCV.hpp"
 #include "Task/ProcessTask.h"
@@ -21,6 +28,201 @@ std::string save_map_encounter_image(const cv::Mat& image, std::string_view type
         return asst::RoguelikeDataCollector.save_legend_image(image);
     }
     return asst::RoguelikeDataCollector.save_encounter_image(image);
+}
+
+std::wstring normalize_encounter_lookup_text(std::string_view text)
+{
+    std::wstring result;
+    for (wchar_t ch : MAA_NS::to_u16(text)) {
+        if (static_cast<unsigned long>(ch) <= 0x7F) {
+            const unsigned char ascii = static_cast<unsigned char>(ch);
+            if (std::isspace(ascii) || std::ispunct(ascii)) {
+                continue;
+            }
+            if (std::isalpha(ascii)) {
+                ch = static_cast<wchar_t>(std::tolower(ascii));
+            }
+        }
+
+        constexpr std::wstring_view Separators = L"　，。、；：！？（）【】《》“”‘’「」『』〔〕·—…";
+        if (Separators.find(ch) != std::wstring_view::npos) {
+            continue;
+        }
+
+        result.push_back(ch);
+    }
+    return result;
+}
+
+size_t edit_distance(std::wstring_view lhs, std::wstring_view rhs)
+{
+    if (lhs.empty()) {
+        return rhs.size();
+    }
+    if (rhs.empty()) {
+        return lhs.size();
+    }
+
+    std::vector<size_t> prev(rhs.size() + 1);
+    std::vector<size_t> curr(rhs.size() + 1);
+    for (size_t i = 0; i <= rhs.size(); ++i) {
+        prev[i] = i;
+    }
+
+    for (size_t i = 1; i <= lhs.size(); ++i) {
+        curr[0] = i;
+        for (size_t j = 1; j <= rhs.size(); ++j) {
+            const size_t cost = lhs[i - 1] == rhs[j - 1] ? 0 : 1;
+            curr[j] = std::min({ prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost });
+        }
+        std::swap(prev, curr);
+    }
+
+    return prev.back();
+}
+
+size_t max_event_name_distance(size_t name_length)
+{
+    if (name_length >= 4) {
+        return 2;
+    }
+    if (name_length == 3) {
+        return 1;
+    }
+    return 0;
+}
+
+std::string build_event_title_text(const asst::OCRer::ResultsVec& results)
+{
+    if (results.empty()) {
+        return {};
+    }
+
+    const auto top_it = std::ranges::min_element(results, [](const auto& lhs, const auto& rhs) {
+        return lhs.rect.y < rhs.rect.y;
+    });
+    const int top_y = top_it->rect.y;
+    const int line_limit = top_y + std::max(24, top_it->rect.height + 8);
+
+    std::vector<const asst::OCRer::Result*> title_results;
+    for (const auto& result : results) {
+        if (result.rect.y <= line_limit) {
+            title_results.emplace_back(&result);
+        }
+    }
+    std::ranges::sort(title_results, [](const auto* lhs, const auto* rhs) {
+        if (lhs->rect.x == rhs->rect.x) {
+            return lhs->rect.y < rhs->rect.y;
+        }
+        return lhs->rect.x < rhs->rect.x;
+    });
+
+    std::string title;
+    for (const auto* result : title_results) {
+        title += result->text;
+    }
+    return title;
+}
+
+struct EncounterNameMatch
+{
+    std::string name;
+    std::string raw_title;
+    std::string normalized_title;
+    size_t distance = 0;
+};
+
+std::optional<EncounterNameMatch> match_event_name_by_title(
+    const std::string& raw_title,
+    const std::vector<std::string>& event_names)
+{
+    const std::wstring normalized_title = normalize_encounter_lookup_text(raw_title);
+    if (normalized_title.empty()) {
+        return std::nullopt;
+    }
+
+    EncounterNameMatch direct_match;
+    size_t direct_match_length = 0;
+    size_t direct_match_count = 0;
+    for (const std::string& event_name : event_names) {
+        const std::wstring normalized_event = normalize_encounter_lookup_text(event_name);
+        if (normalized_event.empty()) {
+            continue;
+        }
+        if (normalized_title.find(normalized_event) == std::wstring::npos) {
+            continue;
+        }
+
+        if (normalized_event.size() > direct_match_length) {
+            direct_match = { event_name, raw_title, MAA_NS::from_u16(normalized_title), 0 };
+            direct_match_length = normalized_event.size();
+            direct_match_count = 1;
+        }
+        else if (normalized_event.size() == direct_match_length && event_name != direct_match.name) {
+            ++direct_match_count;
+        }
+    }
+    if (direct_match_count == 1) {
+        return direct_match;
+    }
+
+    EncounterNameMatch fuzzy_match;
+    size_t best_distance = std::numeric_limits<size_t>::max();
+    size_t fuzzy_match_count = 0;
+    for (const std::string& event_name : event_names) {
+        const std::wstring normalized_event = normalize_encounter_lookup_text(event_name);
+        if (normalized_event.empty()) {
+            continue;
+        }
+
+        const size_t distance = edit_distance(normalized_title, normalized_event);
+        if (distance > max_event_name_distance(normalized_event.size())) {
+            continue;
+        }
+        if (distance < best_distance) {
+            fuzzy_match = { event_name, raw_title, MAA_NS::from_u16(normalized_title), distance };
+            best_distance = distance;
+            fuzzy_match_count = 1;
+        }
+        else if (distance == best_distance && event_name != fuzzy_match.name) {
+            ++fuzzy_match_count;
+        }
+    }
+
+    if (fuzzy_match_count == 1) {
+        return fuzzy_match;
+    }
+    return std::nullopt;
+}
+
+std::optional<EncounterNameMatch> match_event_name_from_raw_ocr(
+    const asst::OCRer::ResultsVec& results,
+    const std::vector<std::string>& event_names)
+{
+    return match_event_name_by_title(build_event_title_text(results), event_names);
+}
+
+bool is_configured_option_match(std::string_view recognized_text, std::string_view configured_text)
+{
+    if (recognized_text == configured_text) {
+        return true;
+    }
+
+    const std::wstring recognized = normalize_encounter_lookup_text(recognized_text);
+    const std::wstring configured = normalize_encounter_lookup_text(configured_text);
+    if (recognized.empty() || configured.empty()) {
+        return false;
+    }
+    if (recognized == configured) {
+        return true;
+    }
+
+    constexpr size_t MinPartialMatchLength = 6;
+    if (std::min(recognized.size(), configured.size()) < MinPartialMatchLength) {
+        return false;
+    }
+
+    return recognized.find(configured) != std::wstring::npos || configured.find(recognized) != std::wstring::npos;
 }
 }
 
@@ -68,8 +270,40 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
     name_analyzer.set_task_info(event_name_task_ptr);
     name_analyzer.set_required(event_names);
 
-    if (!name_analyzer.analyze()) {
-        Log.error("Unknown Event");
+    std::optional<std::string> current_event_name;
+    std::string raw_event_title;
+    std::string normalized_event_title;
+
+    if (name_analyzer.analyze()) {
+        const auto& result_vec = name_analyzer.get_result();
+        if (!result_vec.empty()) {
+            current_event_name = result_vec.front().text;
+        }
+    }
+
+    if (!current_event_name) {
+        OCRer raw_name_analyzer(image);
+        raw_name_analyzer.set_task_info(event_name_task_ptr);
+        if (raw_name_analyzer.analyze()) {
+            raw_event_title = build_event_title_text(raw_name_analyzer.get_result());
+            normalized_event_title = MAA_NS::from_u16(normalize_encounter_lookup_text(raw_event_title));
+            if (auto match = match_event_name_from_raw_ocr(raw_name_analyzer.get_result(), event_names)) {
+                Log.info(
+                    "Encounter name fallback matched:",
+                    match->raw_title,
+                    "->",
+                    match->name,
+                    "normalized:",
+                    match->normalized_title,
+                    "distance:",
+                    match->distance);
+                current_event_name = match->name;
+            }
+        }
+    }
+
+    if (!current_event_name) {
+        Log.error("Unknown Event", "raw_title:", raw_event_title, "normalized:", normalized_event_title);
         const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
         const std::string map_encounter_type =
             record_map_encounter ? RoguelikeDataCollector.map_encounter_type() : "Encounter";
@@ -78,47 +312,42 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
         if (record_map_encounter) {
             RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
         }
-        RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
-                                                                      { "record_type", map_encounter_type },
-                                                                      { "options", json::array {} },
-                                                                      { "selected_option", "" },
-                                                                      { "image", image_path },
-                                                                      { "ocr_failed", true } });
+        json::object event_details { { "event_name", "" },
+                                     { "record_type", map_encounter_type },
+                                     { "options", json::array {} },
+                                     { "selected_option", "" },
+                                     { "image", image_path },
+                                     { "ocr_failed", true } };
+        if (!raw_event_title.empty()) {
+            event_details["raw_event_name"] = raw_event_title;
+        }
+        if (!normalized_event_title.empty()) {
+            event_details["normalized_event_name"] = normalized_event_title;
+        }
+        RoguelikeDataCollector.log_event("encounter", std::move(event_details));
         if (record_map_encounter) {
-            RoguelikeDataCollector.finish_run("encounter_ocr_error");
+            json::object abandon_details {
+                { "record_type", map_encounter_type },
+                { "ocr_failed", true },
+            };
+            if (!image_path.empty()) {
+                abandon_details["encounter_image"] = image_path;
+            }
+            if (!raw_event_title.empty()) {
+                abandon_details["raw_event_name"] = raw_event_title;
+            }
+            if (!normalized_event_title.empty()) {
+                abandon_details["normalized_event_name"] = normalized_event_title;
+            }
+            RoguelikeDataCollector.finish_run_as_abandoned("encounter_ocr_error", image, std::move(abandon_details));
         }
         callback(AsstMsg::SubTaskExtraInfo, basic_info_with_what("EncounterOcrError"));
         return true;
     }
 
-    const auto& result_vec = name_analyzer.get_result();
-    if (result_vec.empty()) {
-        Log.error("Unknown Event");
-        const bool record_map_encounter = RoguelikeDataCollector.should_record_map_encounters();
-        const std::string map_encounter_type =
-            record_map_encounter ? RoguelikeDataCollector.map_encounter_type() : "Encounter";
-        const std::string image_path =
-            record_map_encounter ? save_map_encounter_image(image, map_encounter_type) : "";
-        if (record_map_encounter) {
-            RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
-        }
-        RoguelikeDataCollector.log_event("encounter", json::object { { "event_name", "" },
-                                                                      { "record_type", map_encounter_type },
-                                                                      { "options", json::array {} },
-                                                                      { "selected_option", "" },
-                                                                      { "image", image_path },
-                                                                      { "ocr_failed", true } });
-        if (record_map_encounter) {
-            RoguelikeDataCollector.finish_run("encounter_ocr_error");
-        }
-        return true;
-    }
-
-    std::string current_event_name = result_vec.front().text;
-
     // 处理主事件及其链式 next_event
-    while (!current_event_name.empty()) {
-        auto next = handle_single_event(current_event_name);
+    while (!current_event_name->empty()) {
+        auto next = handle_single_event(*current_event_name);
         if (!next) {
             break;
         }
@@ -252,7 +481,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 for (const std::string& event_text : event.option_text) {
                     const auto option_it =
                         std::ranges::find_if(m_option_list, [&event_text](const OptionAnalyzer::Option& option) {
-                            return option.text == event_text;
+                            return is_configured_option_match(option.text, event_text);
                         });
                     if (option_it != m_option_list.end()) {
                         choice = std::distance(m_option_list.begin(), option_it) + 1;

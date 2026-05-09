@@ -170,6 +170,9 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     std::filesystem::create_directories(m_session_dir / AgentsDir);
     m_current_floor = "未知层";
     m_floor_index = 0;
+    m_run_active = true;
+    m_pending_abandon_reason.clear();
+    m_pending_abandon_details.clear();
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
@@ -220,6 +223,9 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
     m_floor_index = 0;
+    m_run_active = false;
+    m_pending_abandon_reason.clear();
+    m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
 }
@@ -228,7 +234,7 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
 {
     {
         std::lock_guard lock(m_mutex);
-        if (!m_enabled || m_session_dir.empty()) {
+        if (!m_enabled || m_session_dir.empty() || !m_run_active) {
             return;
         }
     }
@@ -244,6 +250,9 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
     }
     m_current_floor = "未知层";
     m_floor_index = 0;
+    m_run_active = false;
+    m_pending_abandon_reason.clear();
+    m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
 }
@@ -266,8 +275,70 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
     m_floor_index = 0;
+    m_run_active = false;
+    m_pending_abandon_reason.clear();
+    m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+}
+
+void asst::RoguelikeDataCollection::start_run_if_enabled()
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    if (!m_run_active) {
+        m_current_floor = "未知层";
+        m_floor_index = 0;
+        m_pending_abandon_reason.clear();
+        m_pending_abandon_details.clear();
+        m_record_map_encounters = false;
+        m_map_encounter_type = "Encounter";
+    }
+    m_run_active = true;
+}
+
+void asst::RoguelikeDataCollection::set_pending_abandon_reason(std::string_view reason, json::object details)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    m_run_active = true;
+    m_pending_abandon_reason = reason;
+    m_pending_abandon_details = std::move(details);
+}
+
+void asst::RoguelikeDataCollection::finish_run_as_abandoned(
+    std::string_view default_reason,
+    const cv::Mat& image,
+    json::object details)
+{
+    std::string reason;
+    json::object pending_details;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty() || !m_run_active) {
+            return;
+        }
+
+        reason = m_pending_abandon_reason.empty() ? std::string(default_reason) : std::move(m_pending_abandon_reason);
+        pending_details = std::move(m_pending_abandon_details);
+        m_pending_abandon_reason.clear();
+        m_pending_abandon_details.clear();
+    }
+
+    pending_details |= std::move(details);
+    pending_details["reason"] = reason;
+    const std::string image_path = save_image(image, "abandon");
+    if (!image_path.empty()) {
+        pending_details["image"] = image_path;
+    }
+    log_event("run_abandon", std::move(pending_details));
+    finish_run_if_active(reason);
 }
 
 void asst::RoguelikeDataCollection::disable()
@@ -281,6 +352,9 @@ void asst::RoguelikeDataCollection::disable()
     m_session_dir.clear();
     m_current_floor.clear();
     m_floor_index = 0;
+    m_run_active = false;
+    m_pending_abandon_reason.clear();
+    m_pending_abandon_details.clear();
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
@@ -457,6 +531,7 @@ void asst::RoguelikeDataCollection::note_floor_ocr(std::string_view ocr_text)
     }
 
     m_current_floor = floor;
+    m_run_active = true;
     if (const int floor_index = jiegarden_floor_index(floor); floor_index > 0) {
         m_floor_index = floor_index;
     }
@@ -470,6 +545,7 @@ void asst::RoguelikeDataCollection::note_strategy_change(std::string_view strate
     }
 
     if (strategy == "_dataCollection" || strategy == "_exit") {
+        m_run_active = true;
         ++m_floor_index;
         switch (m_floor_index) {
         case 1:
@@ -496,6 +572,7 @@ void asst::RoguelikeDataCollection::note_strategy_change(std::string_view strate
         }
     }
     else if (strategy == "_leaveBoskyPassage" || strategy == "_boskyPassageDefault") {
+        m_run_active = true;
         m_current_floor = "是非境";
     }
 }
@@ -509,6 +586,10 @@ bool asst::RoguelikeDataCollection::current_floor_is_bosky_passage() const
 void asst::RoguelikeDataCollection::set_record_map_encounters(bool enabled, std::string_view type)
 {
     std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+    m_run_active = true;
     m_record_map_encounters = enabled;
     m_map_encounter_type = enabled ? std::string(type) : "Encounter";
 }
@@ -536,6 +617,7 @@ void asst::RoguelikeDataCollection::record_encounter(
     }
 
     const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
     if (!m_encounter_summary.contains(floor)) {
         m_encounter_summary[floor] = json::array {};
     }
@@ -558,6 +640,7 @@ void asst::RoguelikeDataCollection::record_trader(
     }
 
     const std::string floor = is_yi_trader ? "是非境" : (m_current_floor.empty() ? "未知层" : m_current_floor);
+    m_run_active = true;
     if (!m_trader_summary.contains(floor)) {
         m_trader_summary[floor] = json::array {};
     }
@@ -577,6 +660,7 @@ void asst::RoguelikeDataCollection::record_agent(std::string_view name, std::str
     }
 
     const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
     if (!m_agent_summary.contains(floor)) {
         m_agent_summary[floor] = json::array {};
     }

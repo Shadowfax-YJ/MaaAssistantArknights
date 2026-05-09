@@ -13,6 +13,7 @@
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/Logger.hpp"
 #include "Vision/RegionOCRer.h"
 
@@ -91,6 +92,13 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
         else if (timeout && duration > 10min) {
             Log.info("Timeout again, abandon!");
             // 超时撤退了还一直卡着，只能放弃了
+            RoguelikeDataCollector.finish_run_as_abandoned(
+                "combat_timeout_abandon",
+                image,
+                json::object {
+                    { "task", "RoguelikeBattleTaskPlugin" },
+                    { "timeout_minutes", 10 },
+                });
             abandon();
             break;
         }
