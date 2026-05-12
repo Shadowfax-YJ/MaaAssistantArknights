@@ -130,7 +130,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           cd assets
-          find . -type f | while read f; do mv -fvt . "$f"; done
+          find . -mindepth 2 -type f -exec mv -t . {} +
 
       - name: Check release token
         shell: bash
