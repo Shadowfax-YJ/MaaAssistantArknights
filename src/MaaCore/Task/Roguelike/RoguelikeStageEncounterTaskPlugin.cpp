@@ -878,15 +878,21 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiega
 std::string asst::RoguelikeStageEncounterTaskPlugin::capture_and_handle_jiegarden_agent_treasure(
     const Config::RoguelikeEvent& event)
 {
-    const cv::Mat raw_image = ctrler()->get_image();
     reset_option_list_and_view_data();
     if (!update_option_list()) {
-        Log.error(__FUNCTION__, "| Failed to recognize treasure options");
-        return RoguelikeDataCollector.save_agent_treasure_image(raw_image);
+        Log.info(__FUNCTION__, "| Failed to recognize unique treasure option, skip treasure image");
+        return {};
     }
 
-    const std::string image_path = RoguelikeDataCollector.save_agent_treasure_image(
-        m_option_list_image.empty() ? raw_image : m_option_list_image);
+    if (m_option_list.size() != 1) {
+        Log.info(
+            __FUNCTION__,
+            "| Treasure branch did not show exactly one option, skip treasure image. option count:",
+            m_option_list.size());
+        return {};
+    }
+
+    const std::string image_path = RoguelikeDataCollector.save_agent_treasure_image(m_option_list_image);
 
     size_t choice = 0;
     if (!event.option_text.empty()) {

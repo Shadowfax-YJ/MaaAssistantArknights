@@ -6,6 +6,7 @@ option(BUILD_WPF_GUI "build MaaWpfGui" ${WIN32})
 option(BUILD_DEBUG_DEMO "build debug demo" OFF)
 option(BUILD_XCFRAMEWORK "build xcframework for macOS app" OFF)
 option(BUILD_SMOKE_TEST "build smoke_test" OFF)
+option(BUILD_MAA_SCREENCAP "build standalone screencap backend library" ${WIN32})
 option(INSTALL_PYTHON "install python ffi" OFF)
 option(INSTALL_RESOURCE "install resource" OFF)
 option(INSTALL_FLATTEN "do not use bin lib include directory" ON)
@@ -32,6 +33,10 @@ add_library(HeaderOnlyLibraries INTERFACE)
 target_include_directories(HeaderOnlyLibraries INTERFACE 3rdparty/include)
 
 add_subdirectory(src/MaaCore)
+
+if(BUILD_MAA_SCREENCAP)
+    add_subdirectory(src/MaaScreencap)
+endif()
 
 if(BUILD_WPF_GUI)
     add_subdirectory(src/MaaUpdater)

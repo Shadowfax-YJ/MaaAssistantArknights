@@ -6,6 +6,9 @@
 struct AsstExtAPI;
 typedef struct AsstExtAPI* AsstHandle;
 
+struct AsstScreencapAPI;
+typedef struct AsstScreencapAPI* AsstScreencapHandle;
+
 #ifdef _WIN32
 // Win32 截图方式
 typedef enum AsstWin32ScreencapMethodEnum
@@ -129,6 +132,27 @@ extern "C"
     AsstSize ASSTAPI AsstGetUUID(AsstHandle handle, char* buff, AsstSize buff_size);
     AsstSize ASSTAPI AsstGetTasksList(AsstHandle handle, AsstTaskId* buff, AsstSize buff_size);
     AsstSize ASSTAPI AsstGetNullSize();
+
+    // Standalone screencap backend handles. These APIs do not require an AsstHandle
+    // or resource loading, and are intended for external projects that only need
+    // the emulator/window screenshot backends.
+    AsstScreencapHandle ASSTAPI
+        AsstCreateMumuScreencap(const char* mumu_path, int32_t mumu_index, const char* package_name);
+
+#ifdef _WIN32
+    AsstScreencapHandle ASSTAPI
+        AsstCreateWin32Screencap(void* hwnd, uint64_t screencap_method, const char* control_unit_dll_path);
+#endif
+
+    void ASSTAPI AsstDestroyScreencap(AsstScreencapHandle handle);
+    AsstBool ASSTAPI AsstScreencapCapture(AsstScreencapHandle handle);
+    AsstBool ASSTAPI AsstGetScreencapImageInfo(
+        AsstScreencapHandle handle,
+        int32_t* width,
+        int32_t* height,
+        int32_t* channels,
+        AsstSize* data_size);
+    AsstSize ASSTAPI AsstGetScreencapImage(AsstScreencapHandle handle, void* buff, AsstSize buff_size);
 
     ASSTAPI_PORT const char* ASST_CALL AsstGetVersion();
     void ASSTAPI AsstLog(const char* level, const char* message);
