@@ -149,6 +149,9 @@ AsstScreencapHandle AsstCreateMumuScreencap(const char* mumu_path, int32_t mumu_
 
     return backend.release();
 #else
+    (void)mumu_path;
+    (void)mumu_index;
+    (void)package_name;
     LogError << "MuMu screencap backend is not available because ASST_WITH_EMULATOR_EXTRAS is disabled";
     return nullptr;
 #endif

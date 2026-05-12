@@ -1,0 +1,153 @@
+name: Build MAA Instance Manager
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - "dev-v2"
+    paths:
+      - ".github/workflows/instance-manager.yml"
+      - "tools/MaaInstanceManager/**"
+      - "!**/*.md"
+  pull_request:
+    paths:
+      - ".github/workflows/instance-manager.yml"
+      - "tools/MaaInstanceManager/**"
+      - "!**/*.md"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to publish, for example v0.0.1-fork.1"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}${{ github.ref == 'refs/heads/dev-v2' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: true
+
+jobs:
+  meta:
+    name: Gather Meta Information
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set_tag.outputs.tag }}
+      prerelease: ${{ steps.set_pre.outputs.prerelease }}
+      release_enabled: ${{ steps.set_tag.outputs.release_enabled }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Set tag
+        id: set_tag
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            tag="${{ github.ref_name }}"
+            release_enabled=true
+          elif [[ -n "$INPUT_RELEASE_TAG" ]]; then
+            tag="$INPUT_RELEASE_TAG"
+            release_enabled=true
+          else
+            tag=$(git describe --tags --match "v*" HEAD 2>/dev/null || echo "v0.0.1-$(git rev-parse --short HEAD)")
+            release_enabled=false
+          fi
+          echo "tag=${tag}" | tee -a $GITHUB_OUTPUT
+          echo "release_enabled=${release_enabled}" | tee -a $GITHUB_OUTPUT
+
+      - name: Check if it is a pre-release
+        id: set_pre
+        if: steps.set_tag.outputs.release_enabled == 'true'
+        run: |
+          if [[ '${{ steps.set_tag.outputs.tag }}' =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" | tee -a $GITHUB_OUTPUT
+          else
+            echo "prerelease=true" | tee -a $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build Windows x64
+    needs: meta
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          show-progress: false
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.202'
+
+      - name: Restore dependencies
+        run: dotnet restore tools/MaaInstanceManager/MaaInstanceManager.csproj -p:Platform=x64
+
+      - name: Publish manager
+        run: >
+          dotnet publish tools/MaaInstanceManager/MaaInstanceManager.csproj
+          -c Release
+          -p:Platform=x64
+          -r win-x64
+          --self-contained true
+          --no-restore
+          -o publish
+
+      - name: Package manager
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          Compress-Archive -Path publish\* -DestinationPath release\MAAInstanceManager-${{ needs.meta.outputs.tag }}-win-x64.zip
+
+      - name: Upload manager artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MAAInstanceManager-win-x64
+          path: release/MAAInstanceManager-*.zip
+
+  release:
+    name: Publish Manager Release Asset
+    if: needs.meta.outputs.release_enabled == 'true'
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: assets
+
+      - name: Flatten artifacts
+        run: |
+          cd assets
+          find . -type f | while read f; do mv -fvt . "$f"; done
+
+      - name: Check release token
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [[ -z "$RELEASE_TOKEN" ]]; then
+            echo "::error::Set the RELEASE_TOKEN repository secret with Contents read/write permission."
+            exit 1
+          fi
+
+      - name: Publish manager asset to GitHub release
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            assets/MAAInstanceManager-*.zip
+          prerelease: ${{ needs.meta.outputs.prerelease != 'false' }}
