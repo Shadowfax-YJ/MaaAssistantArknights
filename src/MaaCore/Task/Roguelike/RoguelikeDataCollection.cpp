@@ -154,6 +154,86 @@ int jiegarden_floor_index(std::string_view floor)
     });
     return it == JieGardenFloorRules.end() ? 0 : it->index;
 }
+
+std::string bosky_agent_source_from_event(std::string_view event_name)
+{
+    if (event_name == "天圆地方") {
+        return "筹谋";
+    }
+    if (event_name == "所见") {
+        return "拾遗";
+    }
+    if (event_name == "点睛") {
+        return "故肆";
+    }
+    if (event_name == "三缺一" || event_name == "种因得果" || event_name == "掷地有声") {
+        return "常乐";
+    }
+    return {};
+}
+
+std::string agent_source_node_type(
+    std::string_view raw_node_type,
+    std::string_view event_name,
+    std::string_view record_type,
+    std::string_view floor)
+{
+    if (record_type == "Legend" || raw_node_type == "Legend") {
+        return "传说";
+    }
+    if (floor == "是非境") {
+        if (std::string bosky_source = bosky_agent_source_from_event(event_name); !bosky_source.empty()) {
+            return bosky_source;
+        }
+    }
+
+    if (raw_node_type == "Encounter") {
+        return "不期而遇";
+    }
+    if (raw_node_type == "SafeHouse") {
+        return "安全的角落";
+    }
+    if (raw_node_type == "LostAndFound") {
+        return "失与得";
+    }
+    if (raw_node_type == "Guidance") {
+        return "指点迷津";
+    }
+    if (raw_node_type == "Scout") {
+        return "先行一步";
+    }
+    if (raw_node_type == "Boons") {
+        return "得偿所愿";
+    }
+    if (raw_node_type == "RogueTrader") {
+        return "诡异行商";
+    }
+    if (raw_node_type == "BoskyPassage") {
+        return "误入奇境";
+    }
+    if (raw_node_type == "Omissions") {
+        return "拾遗";
+    }
+    if (raw_node_type == "Doubts") {
+        return "杂疑";
+    }
+    if (raw_node_type == "Playtime") {
+        return "常乐";
+    }
+    if (raw_node_type == "OldShop") {
+        return "故肆";
+    }
+    if (raw_node_type == "YiTrader") {
+        return "易与";
+    }
+    if (raw_node_type == "Scheme") {
+        return "筹谋";
+    }
+    if (raw_node_type == "Disaster") {
+        return "祸乱";
+    }
+    return raw_node_type.empty() ? "Unknown" : std::string(raw_node_type);
+}
 }
 
 void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config, const json::value& params)
@@ -178,6 +258,10 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     m_agent_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+    m_last_selected_node_type = "Unknown";
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
 
     json::object params_summary {
         { "starts_count", params.get("starts_count", -1) },
@@ -228,6 +312,10 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+    m_last_selected_node_type = "Unknown";
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
 }
 
 void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason)
@@ -255,6 +343,10 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
     m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+    m_last_selected_node_type = "Unknown";
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
 }
 
 void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::string_view reason)
@@ -280,6 +372,10 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     m_pending_abandon_details.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+    m_last_selected_node_type = "Unknown";
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
 }
 
 void asst::RoguelikeDataCollection::start_run_if_enabled()
@@ -296,6 +392,10 @@ void asst::RoguelikeDataCollection::start_run_if_enabled()
         m_pending_abandon_details.clear();
         m_record_map_encounters = false;
         m_map_encounter_type = "Encounter";
+        m_last_selected_node_type = "Unknown";
+        m_pending_agent_source_node_type = "Unknown";
+        m_pending_agent_source_event_name.clear();
+        m_pending_agent_source_record_type = "Encounter";
     }
     m_run_active = true;
 }
@@ -360,6 +460,10 @@ void asst::RoguelikeDataCollection::disable()
     m_agent_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
+    m_last_selected_node_type = "Unknown";
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
 }
 
 bool asst::RoguelikeDataCollection::enabled() const
@@ -424,6 +528,16 @@ std::string asst::RoguelikeDataCollection::save_yi_trader_image(const cv::Mat& i
 std::string asst::RoguelikeDataCollection::save_agent_image(const cv::Mat& image)
 {
     return save_image(image, "agents", AgentsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_agent_treasure_image(const cv::Mat& image)
+{
+    return save_image(image, "agent_treasure", AgentsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_agent_collectible_image(const cv::Mat& image)
+{
+    return save_image(image, "agent_collectible", AgentsDir);
 }
 
 std::string asst::RoguelikeDataCollection::normalize_jiegarden_floor_name(std::string_view ocr_text)
@@ -577,6 +691,33 @@ void asst::RoguelikeDataCollection::note_strategy_change(std::string_view strate
     }
 }
 
+void asst::RoguelikeDataCollection::note_selected_node_type(std::string_view node_type)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    m_run_active = true;
+    m_last_selected_node_type = node_type.empty() ? "Unknown" : std::string(node_type);
+    m_pending_agent_source_node_type = "Unknown";
+    m_pending_agent_source_event_name.clear();
+    m_pending_agent_source_record_type = "Encounter";
+}
+
+void asst::RoguelikeDataCollection::note_agent_source(std::string_view event_name, std::string_view record_type)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    m_run_active = true;
+    m_pending_agent_source_node_type = m_last_selected_node_type.empty() ? "Unknown" : m_last_selected_node_type;
+    m_pending_agent_source_event_name = std::string(event_name);
+    m_pending_agent_source_record_type = record_type.empty() ? "Encounter" : std::string(record_type);
+}
+
 bool asst::RoguelikeDataCollection::current_floor_is_bosky_passage() const
 {
     std::lock_guard lock(m_mutex);
@@ -652,11 +793,34 @@ void asst::RoguelikeDataCollection::record_trader(
     });
 }
 
-void asst::RoguelikeDataCollection::record_agent(std::string_view name, std::string_view image_path)
+json::object asst::RoguelikeDataCollection::build_agent_source_details_locked() const
+{
+    const std::string raw_node_type =
+        m_pending_agent_source_node_type.empty() ? "Unknown" : m_pending_agent_source_node_type;
+    const std::string record_type =
+        m_pending_agent_source_record_type.empty() ? "Encounter" : m_pending_agent_source_record_type;
+    const std::string node_type =
+        agent_source_node_type(raw_node_type, m_pending_agent_source_event_name, record_type, m_current_floor);
+
+    json::object details {
+        { "node_type", node_type },
+        { "source_node_type", raw_node_type },
+        { "source_record_type", record_type },
+    };
+    if (!m_pending_agent_source_event_name.empty()) {
+        details["source_event_name"] = m_pending_agent_source_event_name;
+    }
+    return details;
+}
+
+json::object asst::RoguelikeDataCollection::record_agent(
+    std::string_view name,
+    std::string_view image_path,
+    json::object extra_details)
 {
     std::lock_guard lock(m_mutex);
     if (!m_enabled || m_session_dir.empty()) {
-        return;
+        return {};
     }
 
     const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
@@ -665,11 +829,18 @@ void asst::RoguelikeDataCollection::record_agent(std::string_view name, std::str
         m_agent_summary[floor] = json::array {};
     }
 
-    m_agent_summary[floor].as_array().emplace_back(json::object {
+    json::object source_details = build_agent_source_details_locked();
+    json::object record {
         { "type", "Agents" },
         { "name", std::string(name) },
         { "image", std::string(image_path) },
-    });
+    };
+    record |= source_details;
+    record |= extra_details;
+    m_agent_summary[floor].as_array().emplace_back(std::move(record));
+
+    source_details |= std::move(extra_details);
+    return source_details;
 }
 
 void asst::RoguelikeDataCollection::flush_encounter_summary(bool force)

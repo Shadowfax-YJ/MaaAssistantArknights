@@ -238,6 +238,7 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
     ctrler()->click(click_point);
     RoguelikeBoskyPassageMap::get_instance().set_visited(chosen);
     RoguelikeBoskyPassageMap::get_instance().set_curr_pos(chosen);
+    RoguelikeDataCollector.note_selected_node_type(type2name(node_type));
     RoguelikeDataCollector.set_record_map_encounters(node_type == RoguelikeNodeType::Legend, "Legend");
 
     // 发送节点类型到 WPF

@@ -4,8 +4,14 @@
         {
             "name": "相随",
             "option_num": 4,
-            "choose": 3,
-            "fallback_choices": [[3, 3]]
+            "choose": 2,
+            "fallback_choices": [[3, 2]]
+        },
+        {
+            "name": "宝盒",
+            "option_num": 1,
+            "choose": 1,
+            "docs": "相随首选项为宝盒时的后续唯一选项"
         },
         {
             "name": "岔路",

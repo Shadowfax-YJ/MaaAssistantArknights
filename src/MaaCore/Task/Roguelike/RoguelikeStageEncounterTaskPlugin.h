@@ -26,18 +26,27 @@ protected:
 
 private:
     bool update_option_list();
+    std::optional<std::string> handle_jiegarden_agent_event(
+        const Config::RoguelikeEvent& event,
+        const Config::RoguelikeEvent* treasure_event);
+    std::string capture_and_handle_jiegarden_agent_treasure(const Config::RoguelikeEvent& event);
     bool select_analyzed_option(size_t index);
     void reset_option_list_and_view_data();
     void report_analyzed_options();
     void update_view(const cv::Mat& image = cv::Mat());
     void reset_view();
     void record_agent_event_if_needed(const Config::RoguelikeEvent& event);
+    void record_agent_event(
+        std::string_view agent_name,
+        const cv::Mat& agent_image,
+        json::object extra_details = {});
     void move_to_analyzed_option(size_t index);
     void move_to_option_list_head();
     void move_forward();
     void move_backward();
 
     std::optional<std::string> next_event(const Config::RoguelikeEvent& event);
+    bool advance_to_next_event(std::string_view next_event_name);
 
     static bool save_img(const cv::Mat& image, std::string_view description = "image");
 

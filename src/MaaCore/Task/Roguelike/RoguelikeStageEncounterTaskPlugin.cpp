@@ -393,6 +393,22 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     const auto& event = it->second;
+    const auto remember_agent_source = [&](std::optional<std::string> next) {
+        if (next && *next == "相随") {
+            RoguelikeDataCollector.note_agent_source(event.name, map_encounter_type);
+        }
+        return next;
+    };
+    const auto checked_next_event = [&]() {
+        return remember_agent_source(next_event(event));
+    };
+    const auto configured_next_event = [&]() -> std::optional<std::string> {
+        if (event.next_event.empty()) {
+            return std::nullopt;
+        }
+        return remember_agent_source(std::optional<std::string> { event.next_event });
+    };
+
     if (record_map_encounter) {
         RoguelikeDataCollector.record_encounter(event.name, image_path, map_encounter_type);
     }
@@ -474,6 +490,13 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     { "enabled", option.enabled },
                 });
             }
+            if (event.name == "相随") {
+                const Config::RoguelikeEvent* treasure_event = nullptr;
+                if (auto treasure_it = event_map.find("宝盒"); treasure_it != event_map.end()) {
+                    treasure_event = &treasure_it->second;
+                }
+                return handle_jiegarden_agent_event(event, treasure_event);
+            }
             record_agent_event_if_needed(event);
 
             size_t choice = 0; // 以 0 作为 无效 index
@@ -514,7 +537,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     { "image", image_path },
                     { "ocr_failed", false },
                 });
-                return next_event(event);
+                return checked_next_event();
             }
 
             // 兜底：从下到上依次选择
@@ -527,7 +550,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         { "image", image_path },
                         { "ocr_failed", false },
                     });
-                    return next_event(event);
+                    return checked_next_event();
                 }
             }
 
@@ -636,7 +659,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     if (hp_disappeared) {
-        return next_event(event);
+        return checked_next_event();
     }
 
     // 兜底处理，从 option_num-option_num 点到 1-1
@@ -666,7 +689,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         --max_time;
     }
 
-    return event.next_event.empty() ? std::nullopt : std::optional { event.next_event };
+    return configured_next_event();
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::satisfies_condition(
@@ -796,6 +819,117 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     return true;
 }
 
+std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiegarden_agent_event(
+    const Config::RoguelikeEvent& event,
+    const Config::RoguelikeEvent* treasure_event)
+{
+    if (event.name != "相随" || m_option_list.empty() || m_option_list_image.empty()) {
+        return std::nullopt;
+    }
+
+    const std::string agent_name = m_option_list.front().text;
+    const cv::Mat agent_image = m_option_list_image.clone();
+    json::object extra_details;
+
+    const bool is_treasure = is_configured_option_match(agent_name, "宝盒");
+    const size_t choice = is_treasure ? 1 : 2;
+    if (choice > m_option_list.size()) {
+        Log.error(__FUNCTION__, "| Not enough options for agent event:", agent_name, "option count:", m_option_list.size());
+        record_agent_event(agent_name, agent_image, std::move(extra_details));
+        return std::nullopt;
+    }
+
+    Log.info(
+        __FUNCTION__,
+        "| Handling agent event:",
+        agent_name,
+        "branch:",
+        is_treasure ? "treasure" : "collectible",
+        "choice:",
+        choice);
+    if (!select_analyzed_option(choice - 1)) {
+        record_agent_event(agent_name, agent_image, std::move(extra_details));
+        return std::nullopt;
+    }
+
+    if (is_treasure) {
+        if (treasure_event == nullptr) {
+            Log.error(__FUNCTION__, "| Missing treasure event config for agent event");
+        }
+        else if (advance_to_next_event(treasure_event->name)) {
+            const std::string treasure_image_path = capture_and_handle_jiegarden_agent_treasure(*treasure_event);
+            if (!treasure_image_path.empty()) {
+                extra_details["treasure_image"] = treasure_image_path;
+            }
+        }
+    }
+    else {
+        const std::string collectible_image_path =
+            RoguelikeDataCollector.save_agent_collectible_image(ctrler()->get_image());
+        if (!collectible_image_path.empty()) {
+            extra_details["collectible_image"] = collectible_image_path;
+        }
+    }
+
+    record_agent_event(agent_name, agent_image, std::move(extra_details));
+    return std::nullopt;
+}
+
+std::string asst::RoguelikeStageEncounterTaskPlugin::capture_and_handle_jiegarden_agent_treasure(
+    const Config::RoguelikeEvent& event)
+{
+    const cv::Mat raw_image = ctrler()->get_image();
+    reset_option_list_and_view_data();
+    if (!update_option_list()) {
+        Log.error(__FUNCTION__, "| Failed to recognize treasure options");
+        return RoguelikeDataCollector.save_agent_treasure_image(raw_image);
+    }
+
+    const std::string image_path = RoguelikeDataCollector.save_agent_treasure_image(
+        m_option_list_image.empty() ? raw_image : m_option_list_image);
+
+    size_t choice = 0;
+    if (!event.option_text.empty()) {
+        for (const std::string& event_text : event.option_text) {
+            const auto option_it =
+                std::ranges::find_if(m_option_list, [&event_text](const OptionAnalyzer::Option& option) {
+                    return is_configured_option_match(option.text, event_text);
+                });
+            if (option_it != m_option_list.end()) {
+                choice = std::distance(m_option_list.begin(), option_it) + 1;
+                break;
+            }
+        }
+    }
+    else if (event.option_num == m_option_list.size()) {
+        choice = process_task(event, 0);
+    }
+    else if (m_option_list.size() == 1) {
+        choice = 1;
+    }
+    else {
+        for (const auto& [total, item] : event.fallback_choices) {
+            if (total == m_option_list.size()) {
+                choice = item;
+                break;
+            }
+        }
+    }
+
+    if (choice == 0 || choice > m_option_list.size()) {
+        Log.error(
+            __FUNCTION__,
+            "| Failed to find treasure choice for",
+            event.name,
+            "option count:",
+            m_option_list.size());
+        return image_path;
+    }
+
+    select_analyzed_option(choice - 1);
+    return image_path;
+}
+
 bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t index)
 {
     LogTraceFunction;
@@ -847,13 +981,27 @@ void asst::RoguelikeStageEncounterTaskPlugin::record_agent_event_if_needed(const
         return;
     }
 
-    const std::string& agent_name = m_option_list.front().text;
-    const std::string image_path = RoguelikeDataCollector.save_agent_image(m_option_list_image);
-    RoguelikeDataCollector.record_agent(agent_name, image_path);
-    RoguelikeDataCollector.log_event("agents", json::object {
-                                                  { "name", agent_name },
-                                                  { "image", image_path },
-                                              });
+    record_agent_event(m_option_list.front().text, m_option_list_image);
+}
+
+void asst::RoguelikeStageEncounterTaskPlugin::record_agent_event(
+    std::string_view agent_name,
+    const cv::Mat& agent_image,
+    json::object extra_details)
+{
+    if (agent_name.empty() || agent_image.empty()) {
+        return;
+    }
+
+    const std::string image_path = RoguelikeDataCollector.save_agent_image(agent_image);
+    json::object source_details =
+        RoguelikeDataCollector.record_agent(agent_name, image_path, std::move(extra_details));
+    json::object details {
+        { "name", std::string(agent_name) },
+        { "image", image_path },
+    };
+    details |= std::move(source_details);
+    RoguelikeDataCollector.log_event("agents", std::move(details));
 }
 
 void asst::RoguelikeStageEncounterTaskPlugin::report_analyzed_options()
@@ -980,6 +1128,14 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(c
         return std::nullopt;
     }
 
+    if (advance_to_next_event(event.next_event)) {
+        return event.next_event;
+    }
+    return std::nullopt;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::advance_to_next_event(std::string_view next_event_name)
+{
     const auto& task = Task.get("Roguelike@StageEncounterJudgeClick");
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 2; ++j) {
@@ -987,15 +1143,15 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(c
             sleep(500);
         }
         if (hp(ctrler()->get_image()) >= 0) {
-            Log.debug("HP restored, going to next_event:", event.next_event);
+            Log.debug("HP restored, going to next_event:", next_event_name);
             // 多点一次，确保选项恢复
             ctrler()->click(task->specific_rect);
             sleep(500);
-            return event.next_event;
+            return true;
         }
     }
 
-    return std::nullopt;
+    return false;
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::save_img(const cv::Mat& image, const std::string_view description)
