@@ -1170,6 +1170,7 @@
     },
     "JieGarden@Roguelike@StageEncounterDrawCopperResultOnly": {
         "baseTask": "JieGarden@Roguelike@StageEncounterDrawCopperResult",
+        "template": "JieGarden@Roguelike@StageEncounterDrawCopperResult.png",
         "next": []
     },
     "JieGarden@Roguelike@StageEncounterEnter": {
