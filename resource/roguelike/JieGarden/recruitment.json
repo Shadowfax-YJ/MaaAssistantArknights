@@ -730,7 +730,8 @@
             "opers": [
                 {
                     "name": "斩业星熊",
-                    "skill": 2,
+                    "skill": 3,
+                    "alternate_skill": 2,
                     "is_start": true,
                     "is_key": true,
                     "recruit_priority": 800,
@@ -1551,7 +1552,7 @@
                     "skill": 2,
                     "is_key": true,
                     "is_start": true,
-                    "recruit_priority": 680,
+                    "recruit_priority": 688,
                     "promote_priority": 250,
                     "recruit_priority_offsets": [
                         {
@@ -1598,7 +1599,7 @@
                     "skill": 2,
                     "is_key": true,
                     "is_start": true,
-                    "recruit_priority": 688,
+                    "recruit_priority": 680,
                     "promote_priority": 200,
                     "recruit_priority_offsets": [
                         {

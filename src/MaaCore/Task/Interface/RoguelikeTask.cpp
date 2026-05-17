@@ -19,6 +19,7 @@
 #include "Task/Roguelike/RoguelikeIterateMonthlySquadPlugin.h"
 #include "Task/Roguelike/RoguelikeLastRewardTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeLevelTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeLootCollectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeRecruitTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeResetTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSettlementTaskPlugin.h"
@@ -109,6 +110,7 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_roguelike_task_ptr->register_plugin<RoguelikeBoskyPassageRoutingTaskPlugin>(m_config_ptr, m_control_ptr);
 
     // ------------------ 界园主题专用插件 ------------------
+    m_roguelike_task_ptr->register_plugin<RoguelikeLootCollectionTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeCoppersTaskPlugin>(m_config_ptr, m_control_ptr);
 
     m_subtasks.emplace_back(m_roguelike_task_ptr);
@@ -141,14 +143,8 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     if (theme == RoguelikeTheme::JieGarden) {
         const std::string get_drop_select = theme + "@Roguelike@GetDropSelect";
         const std::string get_drop_switch = theme + "@Roguelike@GetDropSwitch";
-        if (mode == RoguelikeMode::DataCollection) {
-            Task.set_task_base(get_drop_select, theme + "@Roguelike@GetDropSelect_dataCollection");
-            Task.set_task_base(get_drop_switch, theme + "@Roguelike@GetDropSwitch_dataCollection");
-        }
-        else {
-            Task.set_task_base(get_drop_select, theme + "@Roguelike@GetDropSelect_default");
-            Task.set_task_base(get_drop_switch, theme + "@Roguelike@GetDropSwitch_default");
-        }
+        Task.set_task_base(get_drop_select, theme + "@Roguelike@GetDropSelect_default");
+        Task.set_task_base(get_drop_switch, theme + "@Roguelike@GetDropSwitch_default");
     }
 
     if (mode == RoguelikeMode::Investment) {

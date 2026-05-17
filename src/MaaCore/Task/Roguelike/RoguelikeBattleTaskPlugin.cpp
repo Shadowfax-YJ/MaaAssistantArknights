@@ -1,7 +1,9 @@
 #include "RoguelikeBattleTaskPlugin.h"
 
+#include <cctype>
 #include <chrono>
 #include <future>
+#include <optional>
 #include <ranges>
 #include <vector>
 
@@ -15,6 +17,7 @@
 #include "Task/ProcessTask.h"
 #include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/Logger.hpp"
+#include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
 
 using namespace asst::battle;
@@ -60,9 +63,15 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
     using namespace std::chrono_literals;
     LogTraceFunction;
 
+    m_manual_start_after_deploy_finished = false;
+    const bool pending_candle_chapel_battle =
+        m_config->get_theme() == RoguelikeTheme::JieGarden && m_config->status().jiegarden_candle_chapel_battle;
+    m_config->status().jiegarden_candle_chapel_battle = false;
+
     if (!calc_stage_info()) {
         return false;
     }
+    m_manual_start_after_deploy_finished = pending_candle_chapel_battle;
 
     if (!update_deployment(true)) {
         Log.error("update deployment failed");
@@ -115,6 +124,134 @@ void asst::RoguelikeBattleTaskPlugin::wait_until_start_button_clicked()
         .set_task_delay(0)
         .set_retry_times(0)
         .run();
+}
+
+bool asst::RoguelikeBattleTaskPlugin::click_jiegarden_candle_chapel_start_if_needed()
+{
+    if (!m_manual_start_after_deploy_finished) {
+        return false;
+    }
+    if (const auto deploy_finished = jiegarden_candle_chapel_deploy_finished(); deploy_finished.has_value()) {
+        if (!deploy_finished.value()) {
+            return false;
+        }
+    }
+    else if (!jiegarden_candle_chapel_plan_deploy_finished() || !jiegarden_candle_chapel_start_visible()) {
+        return false;
+    }
+
+    Log.info(__FUNCTION__, "| Click Candle Chapel battle start");
+    const bool ret = ProcessTask(*this, { "JieGarden@Roguelike@CandleChapelBattleStart" }).set_retry_times(3).run();
+    if (!ret) {
+        Log.warn(__FUNCTION__, "| Failed to click Candle Chapel battle start");
+        return false;
+    }
+    m_manual_start_after_deploy_finished = false;
+    return true;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::jiegarden_candle_chapel_start_visible()
+{
+    Matcher matcher(ctrler()->get_image());
+    matcher.set_task_info("JieGarden@Roguelike@CandleChapelBattleStart");
+    const bool visible = matcher.analyze().has_value();
+    Log.trace(__FUNCTION__, "| Candle Chapel battle start visible:", visible);
+    return visible;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::jiegarden_candle_chapel_plan_deploy_finished() const
+{
+    const auto& groups = RoguelikeRecruit.get_group_names(m_config->get_theme());
+    bool has_current_plan = false;
+
+    for (const auto& oper : m_cur_deployment_opers) {
+        if (oper.cooling) {
+            continue;
+        }
+
+        const std::string& oper_name = oper_name_in_config(oper);
+        for (const auto group_id : RoguelikeRecruit.get_group_ids_of_oper(m_config->get_theme(), oper_name)) {
+            if (group_id < 0 || static_cast<size_t>(group_id) >= groups.size()) {
+                continue;
+            }
+
+            const auto plan_iter = m_deploy_plan.find(groups[group_id]);
+            if (plan_iter == m_deploy_plan.end()) {
+                continue;
+            }
+
+            for (const auto& info : plan_iter->second) {
+                if (m_kills < info.kill_lower_bound || m_kills > info.kill_upper_bound) {
+                    continue;
+                }
+
+                has_current_plan = true;
+                if (!m_used_tiles.contains(info.location) && !m_blacklist_location.contains(info.location)) {
+                    Log.trace(
+                        __FUNCTION__,
+                        "| Candle Chapel deploy plan waiting for",
+                        oper.name,
+                        "at",
+                        info.location);
+                    return false;
+                }
+            }
+        }
+    }
+
+    Log.trace(__FUNCTION__, "| Candle Chapel deploy plan finished:", has_current_plan);
+    return has_current_plan;
+}
+
+std::optional<bool> asst::RoguelikeBattleTaskPlugin::jiegarden_candle_chapel_deploy_finished()
+{
+    RegionOCRer analyzer(ctrler()->get_image());
+    analyzer.set_task_info("JieGarden@Roguelike@CandleChapelDeployProgress");
+    analyzer.set_use_char_model(true);
+    if (!analyzer.analyze()) {
+        Log.warn(__FUNCTION__, "| Failed to recognize Candle Chapel deploy progress");
+        return std::nullopt;
+    }
+
+    const std::string& text = analyzer.get_result().text;
+    int current = 0;
+    int total = 0;
+    bool has_current = false;
+    bool has_total = false;
+    bool after_separator = false;
+    std::string digits;
+    for (const char ch : text) {
+        if (std::isdigit(static_cast<unsigned char>(ch))) {
+            const int value = ch - '0';
+            digits.push_back(ch);
+            if (after_separator) {
+                total = total * 10 + value;
+                has_total = true;
+            }
+            else {
+                current = current * 10 + value;
+                has_current = true;
+            }
+        }
+        else if (ch == '/' || ch == '\\' || ch == '|') {
+            after_separator = true;
+        }
+    }
+    if ((!has_current || !has_total) && digits.size() == 2) {
+        current = digits.front() - '0';
+        total = digits.back() - '0';
+        has_current = true;
+        has_total = true;
+    }
+
+    if (!has_current || !has_total || total <= 0) {
+        Log.warn(__FUNCTION__, "| Invalid Candle Chapel deploy progress OCR:", text);
+        return std::nullopt;
+    }
+
+    const bool finished = current >= total;
+    Log.trace(__FUNCTION__, "| Candle Chapel deploy progress:", text, current, "/", total, finished ? "done" : "wait");
+    return finished;
 }
 
 std::string asst::RoguelikeBattleTaskPlugin::oper_name_in_config(const battle::DeploymentOper& oper) const
@@ -532,8 +669,16 @@ bool asst::RoguelikeBattleTaskPlugin::do_once(const cv::Mat& image, const cv::Ma
         }
     }
 
+    if (click_jiegarden_candle_chapel_start_if_needed()) {
+        return true;
+    }
+
+    const bool had_deployed_oper = !m_used_tiles.empty();
     if (do_best_deploy()) { // 这是新的部署逻辑，更加精确
-        m_first_deploy = false;
+        if (had_deployed_oper || !m_used_tiles.empty()) {
+            m_first_deploy = false;
+        }
+        click_jiegarden_candle_chapel_start_if_needed();
         return true;
     }
 
@@ -597,6 +742,7 @@ bool asst::RoguelikeBattleTaskPlugin::do_once(const cv::Mat& image, const cv::Ma
         postproc_of_deployment_conditions(best_oper, placed_loc, direction);
 
         m_first_deploy = false;
+        click_jiegarden_candle_chapel_start_if_needed();
         // 开始计时
         auto deployed_time = std::chrono::steady_clock::now();
         m_deployed_time.insert_or_assign(best_oper.name, deployed_time);
@@ -852,6 +998,7 @@ void asst::RoguelikeBattleTaskPlugin::clear()
 
     m_cur_home_index = 0;
     m_first_deploy = true;
+    m_manual_start_after_deploy_finished = false;
     m_melee_full = false;
     m_ranged_full = false;
     m_homes_status.clear();

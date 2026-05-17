@@ -23,6 +23,10 @@ constexpr const char* LegendsDir = "legends";
 constexpr const char* TradersDir = "traders";
 constexpr const char* YiTradersDir = "yi_traders";
 constexpr const char* AgentsDir = "agents";
+constexpr const char* LootsDir = "loots";
+constexpr const char* StoneMountainsDir = "stone_mountains";
+constexpr const char* TaotieCorridorsDir = "taotie_corridors";
+constexpr const char* EncounterCollectiblesDir = "encounter_collectibles";
 
 struct JieGardenFloorRule
 {
@@ -126,6 +130,40 @@ std::string match_jiegarden_floor_by_signature(const std::wstring& text)
         return "是非境";
     }
     return {};
+}
+
+std::string loot_node_type_name(std::string_view raw_node_type)
+{
+    if (raw_node_type == "CombatOps") {
+        return "普通作战";
+    }
+    if (raw_node_type == "EmergencyOps") {
+        return "紧急作战";
+    }
+    if (raw_node_type == "Guidance") {
+        return "指点迷津作战";
+    }
+    if (raw_node_type == "DreadfulFoe") {
+        return "险路恶敌";
+    }
+    if (raw_node_type.empty()) {
+        return "未知节点";
+    }
+    return std::string(raw_node_type);
+}
+
+std::string loot_image_key(std::string_view type)
+{
+    if (type == "Copper") {
+        return "copper_image";
+    }
+    if (type == "Recruit") {
+        return "recruit_image";
+    }
+    if (type == "Collectible") {
+        return "collectible_image";
+    }
+    return "image";
 }
 
 size_t edit_distance(std::wstring_view lhs, std::wstring_view rhs)
@@ -248,6 +286,10 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     std::filesystem::create_directories(m_session_dir / TradersDir);
     std::filesystem::create_directories(m_session_dir / YiTradersDir);
     std::filesystem::create_directories(m_session_dir / AgentsDir);
+    std::filesystem::create_directories(m_session_dir / LootsDir);
+    std::filesystem::create_directories(m_session_dir / StoneMountainsDir);
+    std::filesystem::create_directories(m_session_dir / TaotieCorridorsDir);
+    std::filesystem::create_directories(m_session_dir / EncounterCollectiblesDir);
     m_current_floor = "未知层";
     m_floor_index = 0;
     m_run_active = true;
@@ -256,6 +298,10 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
+    m_loot_summary.clear();
+    m_stone_mountain_summary.clear();
+    m_taotie_corridor_summary.clear();
+    m_encounter_collectible_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
     m_last_selected_node_type = "Unknown";
@@ -294,6 +340,10 @@ void asst::RoguelikeDataCollection::stop_session(std::string_view reason)
     flush_encounter_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
+    flush_loot_summary(true);
+    flush_stone_mountain_summary(true);
+    flush_taotie_corridor_summary(true);
+    flush_encounter_collectible_summary(true);
     disable();
 }
 
@@ -303,6 +353,10 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     flush_encounter_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
+    flush_loot_summary(true);
+    flush_stone_mountain_summary(true);
+    flush_taotie_corridor_summary(true);
+    flush_encounter_collectible_summary(true);
 
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
@@ -331,6 +385,10 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
     flush_encounter_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
+    flush_loot_summary(false);
+    flush_stone_mountain_summary(false);
+    flush_taotie_corridor_summary(false);
+    flush_encounter_collectible_summary(false);
 
     std::lock_guard lock(m_mutex);
     if (!m_enabled || m_session_dir.empty()) {
@@ -354,7 +412,9 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     {
         std::lock_guard lock(m_mutex);
         if (!m_enabled || m_session_dir.empty() ||
-            (m_encounter_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty())) {
+            (m_encounter_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty() &&
+             m_loot_summary.empty() && m_stone_mountain_summary.empty() && m_taotie_corridor_summary.empty() &&
+             m_encounter_collectible_summary.empty())) {
             return;
         }
     }
@@ -363,6 +423,10 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     flush_encounter_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
+    flush_loot_summary(false);
+    flush_stone_mountain_summary(false);
+    flush_taotie_corridor_summary(false);
+    flush_encounter_collectible_summary(false);
 
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
@@ -446,6 +510,10 @@ void asst::RoguelikeDataCollection::disable()
     flush_encounter_summary();
     flush_trader_summary();
     flush_agent_summary();
+    flush_loot_summary();
+    flush_stone_mountain_summary();
+    flush_taotie_corridor_summary();
+    flush_encounter_collectible_summary();
 
     std::lock_guard lock(m_mutex);
     m_enabled = false;
@@ -458,6 +526,10 @@ void asst::RoguelikeDataCollection::disable()
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
+    m_loot_summary.clear();
+    m_stone_mountain_summary.clear();
+    m_taotie_corridor_summary.clear();
+    m_encounter_collectible_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
     m_last_selected_node_type = "Unknown";
@@ -538,6 +610,30 @@ std::string asst::RoguelikeDataCollection::save_agent_treasure_image(const cv::M
 std::string asst::RoguelikeDataCollection::save_agent_collectible_image(const cv::Mat& image)
 {
     return save_image(image, "agent_collectible", AgentsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_loot_image(const cv::Mat& image, std::string_view suffix)
+{
+    return save_image(image, suffix, LootsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_stone_mountain_image(const cv::Mat& image)
+{
+    return save_image(image, "stone_mountain", StoneMountainsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_taotie_corridor_image(
+    const cv::Mat& image,
+    std::string_view suffix)
+{
+    return save_image(image, suffix, TaotieCorridorsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_encounter_collectible_image(
+    const cv::Mat& image,
+    std::string_view suffix)
+{
+    return save_image(image, suffix, EncounterCollectiblesDir);
 }
 
 std::string asst::RoguelikeDataCollection::normalize_jiegarden_floor_name(std::string_view ocr_text)
@@ -843,6 +939,120 @@ json::object asst::RoguelikeDataCollection::record_agent(
     return source_details;
 }
 
+json::object asst::RoguelikeDataCollection::record_loot(std::string_view type, std::string_view image_path)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return {};
+    }
+
+    const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    const std::string raw_node_type = m_last_selected_node_type.empty() ? "Unknown" : m_last_selected_node_type;
+    const std::string image_key = loot_image_key(type);
+    m_run_active = true;
+    if (!m_loot_summary.contains(floor)) {
+        m_loot_summary[floor] = json::array {};
+    }
+
+    json::object record {
+        { "type", std::string(type) },
+        { "image", std::string(image_path) },
+        { "floor", floor },
+        { "floor_index", m_floor_index },
+        { "node_type", loot_node_type_name(raw_node_type) },
+        { "source_node_type", raw_node_type },
+    };
+    record[image_key] = std::string(image_path);
+
+    m_loot_summary[floor].as_array().emplace_back(record);
+    return record;
+}
+
+void asst::RoguelikeDataCollection::record_stone_mountain(
+    std::string_view image_path,
+    size_t selected_choice,
+    std::string_view selected_option)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
+    if (!m_stone_mountain_summary.contains(floor)) {
+        m_stone_mountain_summary[floor] = json::array {};
+    }
+
+    m_stone_mountain_summary[floor].as_array().emplace_back(json::object {
+        { "type", "StoneMountain" },
+        { "name", "石山" },
+        { "image", std::string(image_path) },
+        { "selected_choice", static_cast<int>(selected_choice) },
+        { "selected_option", std::string(selected_option) },
+    });
+}
+
+void asst::RoguelikeDataCollection::record_taotie_corridor(
+    std::string_view image_path,
+    size_t selected_choice,
+    std::string_view selected_option,
+    std::string_view next_event_image_path,
+    size_t next_event_selected_choice,
+    std::string_view next_event_selected_option)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
+    if (!m_taotie_corridor_summary.contains(floor)) {
+        m_taotie_corridor_summary[floor] = json::array {};
+    }
+
+    json::object record {
+        { "type", "TaotieCorridor" },
+        { "name", "饕餮廊" },
+        { "image", std::string(image_path) },
+        { "initial_image", std::string(image_path) },
+        { "selected_choice", static_cast<int>(selected_choice) },
+        { "selected_option", std::string(selected_option) },
+    };
+    if (!next_event_image_path.empty()) {
+        record["next_event_image"] = std::string(next_event_image_path);
+        record["next_event_selected_choice"] = static_cast<int>(next_event_selected_choice);
+        record["next_event_selected_option"] = std::string(next_event_selected_option);
+    }
+
+    m_taotie_corridor_summary[floor].as_array().emplace_back(std::move(record));
+}
+
+void asst::RoguelikeDataCollection::record_encounter_collectible(
+    std::string_view event_name,
+    std::string_view image_path,
+    size_t popup_index)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
+    if (!m_encounter_collectible_summary.contains(floor)) {
+        m_encounter_collectible_summary[floor] = json::array {};
+    }
+
+    m_encounter_collectible_summary[floor].as_array().emplace_back(json::object {
+        { "type", "EncounterCollectible" },
+        { "event_name", std::string(event_name) },
+        { "image", std::string(image_path) },
+        { "popup_index", static_cast<int>(popup_index) },
+    });
+}
+
 void asst::RoguelikeDataCollection::flush_encounter_summary(bool force)
 {
     std::lock_guard lock(m_mutex);
@@ -894,5 +1104,77 @@ void asst::RoguelikeDataCollection::flush_agent_summary(bool force)
     }
     catch (const std::exception& e) {
         Log.error(__FUNCTION__, "| failed to write agent summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_loot_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_loot_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "loots.jsonl", std::ios::app);
+        ofs << json::value(m_loot_summary).to_string() << '\n';
+        m_loot_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write loot summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_stone_mountain_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_stone_mountain_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "stone_mountains.jsonl", std::ios::app);
+        ofs << json::value(m_stone_mountain_summary).to_string() << '\n';
+        m_stone_mountain_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write stone mountain summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_taotie_corridor_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_taotie_corridor_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "taotie_corridors.jsonl", std::ios::app);
+        ofs << json::value(m_taotie_corridor_summary).to_string() << '\n';
+        m_taotie_corridor_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write taotie corridor summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_encounter_collectible_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_encounter_collectible_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "encounter_collectibles.jsonl", std::ios::app);
+        ofs << json::value(m_encounter_collectible_summary).to_string() << '\n';
+        m_encounter_collectible_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write encounter collectible summary:", e.what());
     }
 }

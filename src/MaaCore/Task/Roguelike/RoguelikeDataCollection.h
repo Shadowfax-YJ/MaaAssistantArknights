@@ -41,6 +41,10 @@ public:
     std::string save_agent_image(const cv::Mat& image);
     std::string save_agent_treasure_image(const cv::Mat& image);
     std::string save_agent_collectible_image(const cv::Mat& image);
+    std::string save_loot_image(const cv::Mat& image, std::string_view suffix);
+    std::string save_stone_mountain_image(const cv::Mat& image);
+    std::string save_taotie_corridor_image(const cv::Mat& image, std::string_view suffix);
+    std::string save_encounter_collectible_image(const cv::Mat& image, std::string_view suffix);
     [[nodiscard]] static std::string normalize_jiegarden_floor_name(std::string_view ocr_text);
     void note_floor_ocr(std::string_view ocr_text);
     void note_strategy_change(std::string_view strategy);
@@ -53,6 +57,22 @@ public:
     void record_encounter(std::string_view name, std::string_view image_path, std::string_view type = "Encounter");
     void record_trader(std::string_view name, std::string_view image_path, bool is_yi_trader);
     json::object record_agent(std::string_view name, std::string_view image_path, json::object extra_details = {});
+    json::object record_loot(std::string_view type, std::string_view image_path);
+    void record_stone_mountain(
+        std::string_view image_path,
+        size_t selected_choice,
+        std::string_view selected_option);
+    void record_taotie_corridor(
+        std::string_view image_path,
+        size_t selected_choice,
+        std::string_view selected_option,
+        std::string_view next_event_image_path,
+        size_t next_event_selected_choice,
+        std::string_view next_event_selected_option);
+    void record_encounter_collectible(
+        std::string_view event_name,
+        std::string_view image_path,
+        size_t popup_index);
 
 private:
     std::string save_image(const cv::Mat& image, std::string_view suffix, std::string_view category_dir);
@@ -61,6 +81,10 @@ private:
     void flush_encounter_summary(bool force = false);
     void flush_trader_summary(bool force = false);
     void flush_agent_summary(bool force = false);
+    void flush_loot_summary(bool force = false);
+    void flush_stone_mountain_summary(bool force = false);
+    void flush_taotie_corridor_summary(bool force = false);
+    void flush_encounter_collectible_summary(bool force = false);
 
     mutable std::mutex m_mutex;
     bool m_enabled = false;
@@ -73,6 +97,10 @@ private:
     json::object m_encounter_summary;
     json::object m_trader_summary;
     json::object m_agent_summary;
+    json::object m_loot_summary;
+    json::object m_stone_mountain_summary;
+    json::object m_taotie_corridor_summary;
+    json::object m_encounter_collectible_summary;
     bool m_record_map_encounters = false;
     std::string m_map_encounter_type = "Encounter";
     std::string m_last_selected_node_type = "Unknown";

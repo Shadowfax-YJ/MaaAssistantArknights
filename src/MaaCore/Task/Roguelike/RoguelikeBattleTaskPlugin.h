@@ -1,6 +1,7 @@
 #pragma once
 
 #include <queue>
+#include <optional>
 #include <stack>
 
 #include "AbstractRoguelikeTaskPlugin.h"
@@ -93,6 +94,10 @@ protected:
 
     void check_drone_tiles();
     void wait_until_start_button_clicked();
+    bool click_jiegarden_candle_chapel_start_if_needed();
+    bool jiegarden_candle_chapel_start_visible();
+    bool jiegarden_candle_chapel_plan_deploy_finished() const;
+    std::optional<bool> jiegarden_candle_chapel_deploy_finished();
 
     std::string oper_name_in_config(const battle::DeploymentOper& oper) const;
     battle::LocationType get_oper_location_type(const battle::DeploymentOper& oper) const;
@@ -131,6 +136,7 @@ protected:
 
     size_t m_cur_home_index = 0;
     bool m_first_deploy = true;
+    bool m_manual_start_after_deploy_finished = false;
     bool m_melee_full = false;
     bool m_ranged_full = false;
 

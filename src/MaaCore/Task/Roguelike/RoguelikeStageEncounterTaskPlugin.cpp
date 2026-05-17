@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <limits>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -224,6 +225,47 @@ bool is_configured_option_match(std::string_view recognized_text, std::string_vi
 
     return recognized.find(configured) != std::wstring::npos || configured.find(recognized) != std::wstring::npos;
 }
+
+size_t random_stone_mountain_choice()
+{
+    static thread_local std::mt19937 engine(std::random_device {}());
+    std::uniform_int_distribution<size_t> dist(1, 2);
+    return dist(engine);
+}
+
+size_t jiegarden_event_collectible_popup_count(std::string_view event_name)
+{
+    if (event_name == "来者不拒") {
+        return 3;
+    }
+    if (event_name == "移时换物") {
+        return 1;
+    }
+    return 0;
+}
+
+std::string jiegarden_event_collectible_suffix(std::string_view event_name, size_t popup_index)
+{
+    const std::string prefix = event_name == "来者不拒" ? "accept_all" : "time_exchange";
+    return std::format("{}_collectible_{}", prefix, popup_index);
+}
+
+std::string_view leaf_task_name(std::string_view task_name)
+{
+    if (const size_t pos = task_name.rfind('@'); pos != std::string_view::npos) {
+        task_name.remove_prefix(pos + 1);
+    }
+    if (const size_t pos = task_name.find('#'); pos != std::string_view::npos) {
+        task_name.remove_suffix(task_name.size() - pos);
+    }
+    return task_name;
+}
+
+bool is_jiegarden_event_collectible_close_task(std::string_view task_name)
+{
+    const std::string_view leaf = leaf_task_name(task_name);
+    return leaf == "StageEncounterCollectibleClose" || leaf == "StageEncounterCollectibleContinue";
+}
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::value& details) const
@@ -243,7 +285,13 @@ bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::va
     if (task_view.starts_with(roguelike_name)) {
         task_view.remove_prefix(roguelike_name.length());
     }
+    if (m_pending_event_collectible_captured < m_pending_event_collectible_expected &&
+        is_jiegarden_event_collectible_close_task(task_view)) {
+        m_run_action = RunAction::CaptureEventCollectiblePopup;
+        return true;
+    }
     if (task_view == "Roguelike@StageEncounterJudgeOption") {
+        m_run_action = RunAction::HandleEncounter;
         return true;
     }
     else {
@@ -251,9 +299,26 @@ bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::va
     }
 }
 
+void asst::RoguelikeStageEncounterTaskPlugin::reset_in_run_variables()
+{
+    reset_option_list_and_view_data();
+    m_pending_stone_mountain_choice = 0;
+    m_pending_stone_mountain_option_text.clear();
+    m_pending_taotie_corridor_initial_image.clear();
+    m_pending_taotie_corridor_choice = 0;
+    m_pending_taotie_corridor_option_text.clear();
+    m_pending_event_collectible_name.clear();
+    m_pending_event_collectible_expected = 0;
+    m_pending_event_collectible_captured = 0;
+}
+
 bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 {
     LogTraceFunction;
+
+    if (m_run_action == RunAction::CaptureEventCollectiblePopup) {
+        return capture_pending_jiegarden_event_collectible_popup();
+    }
 
     const std::string& theme = m_config->get_theme();
     std::vector<std::string> event_names = RoguelikeStageEncounter.get_event_names(theme);
@@ -430,6 +495,10 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     size_t choose_option = process_task(event, special_val);
+    if (theme == RoguelikeTheme::JieGarden && event.name == "石山") {
+        choose_option = random_stone_mountain_choice();
+        Log.info(__FUNCTION__, "| Stone Mountain random choice:", choose_option);
+    }
     Log.info("Event:", event.name, "special_val", special_val, "choose option", choose_option);
 
     auto info = basic_info_with_what("RoguelikeEvent");
@@ -497,10 +566,54 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 }
                 return handle_jiegarden_agent_event(event, treasure_event);
             }
+            record_stone_mountain_event_if_needed(event);
+            record_taotie_corridor_next_event_if_needed(event);
             record_agent_event_if_needed(event);
+            if (event.name == "相会-收藏品选择") {
+                const std::string selection_image_path =
+                    RoguelikeDataCollector.save_encounter_collectible_image(image, "meet_collectible_selection");
+                RoguelikeDataCollector.record_encounter_collectible(event.name, selection_image_path, 1);
+                RoguelikeDataCollector.log_event("encounter_collectible", json::object {
+                    { "event_name", event.name },
+                    { "image", selection_image_path },
+                    { "popup_index", 1 },
+                    { "selection_page", true },
+                    { "selected_choice", 3 },
+                });
+            }
+            else if (event.name == "相会-收藏品选择-投掷后") {
+                const cv::Mat& next_event_image = m_option_list_image.empty() ? image : m_option_list_image;
+                const std::string next_event_image_path =
+                    RoguelikeDataCollector.save_encounter_collectible_image(next_event_image, "meet_collectible_next");
+                RoguelikeDataCollector.record_encounter_collectible("相会-收藏品选择", next_event_image_path, 2);
+                RoguelikeDataCollector.log_event("encounter_collectible", json::object {
+                    { "event_name", "相会-收藏品选择" },
+                    { "next_event", event.name },
+                    { "image", next_event_image_path },
+                    { "popup_index", 2 },
+                    { "next_event_page", true },
+                });
+            }
 
             size_t choice = 0; // 以 0 作为 无效 index
-            if (!event.option_text.empty()) {
+            const bool is_jiegarden_candle_chapel = event.name == "烛堂";
+            const bool is_taotie_corridor_special = event.name == "饕餮廊" && m_option_list.size() == 3;
+            std::string taotie_corridor_initial_image_path;
+            if (event.name == "石山" && m_option_list.size() >= 2) {
+                choice = choose_option;
+            }
+            else if (is_taotie_corridor_special) {
+                taotie_corridor_initial_image_path =
+                    RoguelikeDataCollector.save_taotie_corridor_image(m_option_list_image, "taotie_corridor");
+                choice = m_option_list[1].enabled ? 2 : 3;
+                Log.info(
+                    __FUNCTION__,
+                    "| Taotie Corridor choice:",
+                    choice,
+                    "second option enabled:",
+                    m_option_list[1].enabled ? "true" : "false");
+            }
+            else if (!event.option_text.empty()) {
                 for (const std::string& event_text : event.option_text) {
                     const auto option_it =
                         std::ranges::find_if(m_option_list, [&event_text](const OptionAnalyzer::Option& option) {
@@ -529,7 +642,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         "RoguelikeEncounter | Failed to find choice for scenario with {} option(s)",
                         m_option_list.size()));
             }
-            else if (select_analyzed_option(choice - 1)) {
+            else if (select_analyzed_option(choice - 1, is_jiegarden_candle_chapel)) {
                 log_encounter_event(json::object {
                     { "event_name", event.name },
                     { "options", option_details },
@@ -537,12 +650,86 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     { "image", image_path },
                     { "ocr_failed", false },
                 });
+                if (event.name == "石山") {
+                    const std::string selected_option = m_option_list[choice - 1].text;
+                    auto next = checked_next_event();
+                    if (next && !event.next_event.empty() && *next == event.next_event) {
+                        m_pending_stone_mountain_choice = choice;
+                        m_pending_stone_mountain_option_text = selected_option;
+                    }
+                    else {
+                        m_pending_stone_mountain_choice = 0;
+                        m_pending_stone_mountain_option_text.clear();
+                    }
+                    return next;
+                }
+                if (choice == event.default_choose && arm_jiegarden_event_collectible_popups(event)) {
+                    return std::nullopt;
+                }
+                mark_jiegarden_candle_chapel_battle_if_needed(event);
+                if (is_jiegarden_candle_chapel) {
+                    return std::nullopt;
+                }
+                if (event.name == "相会-收藏品选择" && choice == 3) {
+                    if (!close_jiegarden_meet_collectible_draw_copper_result()) {
+                        Log.warn(__FUNCTION__, "| Failed to close meet collectible draw copper result");
+                        return std::nullopt;
+                    }
+                    return checked_next_event();
+                }
+                if (is_taotie_corridor_special) {
+                    const std::string selected_option = m_option_list[choice - 1].text;
+                    if (choice == 2) {
+                        if (advance_to_next_event("饕餮廊-2")) {
+                            m_pending_taotie_corridor_initial_image = taotie_corridor_initial_image_path;
+                            m_pending_taotie_corridor_choice = choice;
+                            m_pending_taotie_corridor_option_text = selected_option;
+                            return std::string("饕餮廊-2");
+                        }
+                    }
+
+                    RoguelikeDataCollector.record_taotie_corridor(
+                        taotie_corridor_initial_image_path,
+                        choice,
+                        selected_option,
+                        "",
+                        0,
+                        "");
+                    RoguelikeDataCollector.log_event("taotie_corridor", json::object {
+                        { "event_name", event.name },
+                        { "image", taotie_corridor_initial_image_path },
+                        { "selected_choice", static_cast<int>(choice) },
+                        { "selected_option", selected_option },
+                        { "next_event_entered", false },
+                    });
+                    return std::nullopt;
+                }
                 return checked_next_event();
+            }
+
+            if (is_taotie_corridor_special && choice > 0) {
+                const std::string selected_option = m_option_list[choice - 1].text;
+                RoguelikeDataCollector.record_taotie_corridor(
+                    taotie_corridor_initial_image_path,
+                    choice,
+                    selected_option,
+                    "",
+                    0,
+                    "");
+                RoguelikeDataCollector.log_event("taotie_corridor", json::object {
+                    { "event_name", event.name },
+                    { "image", taotie_corridor_initial_image_path },
+                    { "selected_choice", static_cast<int>(choice) },
+                    { "selected_option", selected_option },
+                    { "click_failed", true },
+                });
+                return std::nullopt;
             }
 
             // 兜底：从下到上依次选择
             for (choice = m_option_list.size(); choice > 0; --choice) {
-                if (m_option_list[choice - 1].enabled && select_analyzed_option(choice - 1)) {
+                if (m_option_list[choice - 1].enabled &&
+                    select_analyzed_option(choice - 1, is_jiegarden_candle_chapel)) {
                     log_encounter_event(json::object {
                         { "event_name", event.name },
                         { "options", option_details },
@@ -550,6 +737,10 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         { "image", image_path },
                         { "ocr_failed", false },
                     });
+                    mark_jiegarden_candle_chapel_battle_if_needed(event);
+                    if (is_jiegarden_candle_chapel) {
+                        return std::nullopt;
+                    }
                     return checked_next_event();
                 }
             }
@@ -659,7 +850,16 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     if (hp_disappeared) {
-        return checked_next_event();
+        if (choose_option == event.default_choose && arm_jiegarden_event_collectible_popups(event)) {
+            return std::nullopt;
+        }
+        mark_jiegarden_candle_chapel_battle_if_needed(event);
+        auto next = checked_next_event();
+        if (event.name == "石山" && next && !event.next_event.empty() && *next == event.next_event) {
+            m_pending_stone_mountain_choice = choose_option;
+            m_pending_stone_mountain_option_text = std::to_string(choose_option);
+        }
+        return next;
     }
 
     // 兜底处理，从 option_num-option_num 点到 1-1
@@ -683,6 +883,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             sleep(500);
             image = ctrler()->get_image();
             if (hp(image) < 0) {
+                mark_jiegarden_candle_chapel_battle_if_needed(event);
                 return std::nullopt;
             }
         }
@@ -936,7 +1137,7 @@ std::string asst::RoguelikeStageEncounterTaskPlugin::capture_and_handle_jiegarde
     return image_path;
 }
 
-bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t index)
+bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t index, bool accept_battle_detail)
 {
     LogTraceFunction;
 
@@ -967,11 +1168,22 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
     if (hp(ctrler()->get_image()) < 0) {
         return true;
     }
+    if (accept_battle_detail && jiegarden_guidance_battle_detail_visible()) {
+        Log.info(__FUNCTION__, "| Guidance battle detail is visible after option click");
+        return true;
+    }
 
     Log.error(__FUNCTION__, "| The option doesn't respond to click");
     save_img(ctrler()->get_image(), "current screenshot");
 
     return false;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::jiegarden_guidance_battle_detail_visible() const
+{
+    Matcher matcher(ctrler()->get_image());
+    matcher.set_task_info("JieGarden@Roguelike@StageGuidanceBattleEnter");
+    return matcher.analyze().has_value();
 }
 
 void asst::RoguelikeStageEncounterTaskPlugin::reset_option_list_and_view_data()
@@ -988,6 +1200,187 @@ void asst::RoguelikeStageEncounterTaskPlugin::record_agent_event_if_needed(const
     }
 
     record_agent_event(m_option_list.front().text, m_option_list_image);
+}
+
+void asst::RoguelikeStageEncounterTaskPlugin::record_stone_mountain_event_if_needed(
+    const Config::RoguelikeEvent& event)
+{
+    if (event.name != "石山-2" || m_pending_stone_mountain_choice == 0) {
+        return;
+    }
+    if (m_option_list_image.empty()) {
+        Log.error(__FUNCTION__, "| Stone Mountain next_event image is empty");
+        m_pending_stone_mountain_choice = 0;
+        m_pending_stone_mountain_option_text.clear();
+        return;
+    }
+
+    const std::string image_path = RoguelikeDataCollector.save_stone_mountain_image(m_option_list_image);
+    RoguelikeDataCollector.record_stone_mountain(
+        image_path,
+        m_pending_stone_mountain_choice,
+        m_pending_stone_mountain_option_text);
+    RoguelikeDataCollector.log_event("stone_mountain", json::object {
+        { "event_name", "石山" },
+        { "next_event", event.name },
+        { "image", image_path },
+        { "selected_choice", static_cast<int>(m_pending_stone_mountain_choice) },
+        { "selected_option", m_pending_stone_mountain_option_text },
+    });
+
+    m_pending_stone_mountain_choice = 0;
+    m_pending_stone_mountain_option_text.clear();
+}
+
+void asst::RoguelikeStageEncounterTaskPlugin::record_taotie_corridor_next_event_if_needed(
+    const Config::RoguelikeEvent& event)
+{
+    if (m_pending_taotie_corridor_choice == 0) {
+        return;
+    }
+    if (event.name != "饕餮廊-2") {
+        Log.warn(__FUNCTION__, "| Unexpected event after Taotie Corridor:", event.name);
+        m_pending_taotie_corridor_initial_image.clear();
+        m_pending_taotie_corridor_choice = 0;
+        m_pending_taotie_corridor_option_text.clear();
+        return;
+    }
+    if (m_option_list_image.empty()) {
+        Log.error(__FUNCTION__, "| Taotie Corridor next_event image is empty");
+        m_pending_taotie_corridor_initial_image.clear();
+        m_pending_taotie_corridor_choice = 0;
+        m_pending_taotie_corridor_option_text.clear();
+        return;
+    }
+
+    const std::string next_event_image_path =
+        RoguelikeDataCollector.save_taotie_corridor_image(m_option_list_image, "taotie_corridor_next");
+    const size_t next_event_choice = 2;
+    std::string next_event_option_text;
+    if (m_option_list.size() >= next_event_choice) {
+        next_event_option_text = m_option_list[next_event_choice - 1].text;
+    }
+
+    RoguelikeDataCollector.record_taotie_corridor(
+        m_pending_taotie_corridor_initial_image,
+        m_pending_taotie_corridor_choice,
+        m_pending_taotie_corridor_option_text,
+        next_event_image_path,
+        next_event_choice,
+        next_event_option_text);
+    RoguelikeDataCollector.log_event("taotie_corridor", json::object {
+        { "event_name", "饕餮廊" },
+        { "next_event", event.name },
+        { "image", m_pending_taotie_corridor_initial_image },
+        { "next_event_image", next_event_image_path },
+        { "selected_choice", static_cast<int>(m_pending_taotie_corridor_choice) },
+        { "selected_option", m_pending_taotie_corridor_option_text },
+        { "next_event_selected_choice", static_cast<int>(next_event_choice) },
+        { "next_event_selected_option", next_event_option_text },
+    });
+
+    m_pending_taotie_corridor_initial_image.clear();
+    m_pending_taotie_corridor_choice = 0;
+    m_pending_taotie_corridor_option_text.clear();
+}
+
+void asst::RoguelikeStageEncounterTaskPlugin::mark_jiegarden_candle_chapel_battle_if_needed(
+    const Config::RoguelikeEvent& event)
+{
+    if (m_config->get_theme() != RoguelikeTheme::JieGarden || event.name != "烛堂") {
+        return;
+    }
+
+    m_config->status().jiegarden_candle_chapel_battle = true;
+    RoguelikeDataCollector.note_selected_node_type("Guidance");
+    Log.info(__FUNCTION__, "| Mark Candle Chapel guidance battle");
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::close_jiegarden_meet_collectible_draw_copper_result()
+{
+    if (m_config->get_theme() != RoguelikeTheme::JieGarden) {
+        return false;
+    }
+
+    sleep(1000);
+    const bool confirm_clicked =
+        ProcessTask(*this, { "JieGarden@Roguelike@StageEncounterDrawCopperResultOnly" }).set_retry_times(10).run();
+    sleep(500);
+
+    Log.info(
+        __FUNCTION__,
+        "| Meet collectible draw copper result closed:",
+        "confirm",
+        confirm_clicked);
+    return confirm_clicked;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::arm_jiegarden_event_collectible_popups(
+    const Config::RoguelikeEvent& event)
+{
+    const size_t popup_count = jiegarden_event_collectible_popup_count(event.name);
+    if (popup_count == 0 || !RoguelikeDataCollector.enabled()) {
+        return false;
+    }
+
+    if (m_pending_event_collectible_captured < m_pending_event_collectible_expected) {
+        Log.warn(
+            __FUNCTION__,
+            "| Overwrite pending event collectible popups:",
+            m_pending_event_collectible_name,
+            m_pending_event_collectible_captured,
+            "/",
+            m_pending_event_collectible_expected);
+    }
+
+    m_pending_event_collectible_name = event.name;
+    m_pending_event_collectible_expected = popup_count;
+    m_pending_event_collectible_captured = 0;
+    Log.info(__FUNCTION__, "| Armed event collectible popup capture:", event.name, "count:", popup_count);
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::capture_pending_jiegarden_event_collectible_popup()
+{
+    if (m_pending_event_collectible_name.empty() ||
+        m_pending_event_collectible_captured >= m_pending_event_collectible_expected) {
+        return true;
+    }
+
+    const size_t popup_index = m_pending_event_collectible_captured + 1;
+    cv::Mat popup_image;
+    if (auto hit_image = get_hit_image(); hit_image && !hit_image->empty()) {
+        popup_image = hit_image->clone();
+    }
+    else {
+        popup_image = ctrler()->get_image();
+    }
+
+    const std::string image_path = RoguelikeDataCollector.save_encounter_collectible_image(
+        popup_image,
+        jiegarden_event_collectible_suffix(m_pending_event_collectible_name, popup_index));
+    RoguelikeDataCollector.record_encounter_collectible(m_pending_event_collectible_name, image_path, popup_index);
+    RoguelikeDataCollector.log_event("encounter_collectible", json::object {
+        { "event_name", m_pending_event_collectible_name },
+        { "image", image_path },
+        { "popup_index", static_cast<int>(popup_index) },
+    });
+
+    ++m_pending_event_collectible_captured;
+    Log.info(
+        __FUNCTION__,
+        "| Captured event collectible popup:",
+        m_pending_event_collectible_name,
+        m_pending_event_collectible_captured,
+        "/",
+        m_pending_event_collectible_expected);
+
+    if (m_pending_event_collectible_captured >= m_pending_event_collectible_expected) {
+        m_pending_event_collectible_name.clear();
+        m_pending_event_collectible_expected = 0;
+        m_pending_event_collectible_captured = 0;
+    }
+    return true;
 }
 
 void asst::RoguelikeStageEncounterTaskPlugin::record_agent_event(

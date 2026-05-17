@@ -1,0 +1,31 @@
+{
+    "stage_name": "蔑震",
+    "replacement_home": [
+        {
+            "location": [5, 7],
+            "direction": "up"
+        }
+    ],
+    "deploy_plan": [
+        {
+            "groups": ["单奶", "群奶", "益达", "提丰", "焰苇", "高台输出"],
+            "location": [7, 6],
+            "direction": "left"
+        },
+        {
+            "groups": ["益达", "召唤", "提丰", "焰苇", "高台输出"],
+            "location": [7, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["单奶", "群奶", "益达", "提丰", "焰苇", "高台输出"],
+            "location": [5, 7],
+            "direction": "up"
+        },
+        {
+            "groups": ["地面阻挡", "鱼", "地面远程", "处决者", "回费", "其他地面"],
+            "location": [5, 5],
+            "direction": "left"
+        }
+    ]
+}

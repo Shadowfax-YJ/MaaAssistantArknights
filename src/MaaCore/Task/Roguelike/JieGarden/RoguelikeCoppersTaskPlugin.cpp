@@ -104,12 +104,6 @@ asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_pickup_mode()
 {
     LogTraceFunction;
 
-    if (m_config->get_mode() == RoguelikeMode::DataCollection) {
-        Log.info(__FUNCTION__, "| data collection mode, leave is handled by task chain");
-        RoguelikeDataCollector.log_event("copper_pickup_skipped", json::object { { "reason", "data_collection" } });
-        return CopperTaskResult::SKIPPED;
-    }
-
     const auto& image = ctrler()->get_image();
 
 #ifdef ASST_DEBUG

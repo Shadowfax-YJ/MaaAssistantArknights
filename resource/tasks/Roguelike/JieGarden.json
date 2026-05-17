@@ -189,6 +189,32 @@
             "JieGarden@Roguelike@CloseEvent"
         ]
     },
+    "JieGarden@Roguelike@StageEncounterCollectibleClose": {
+        "template": "JieGarden@Roguelike@CloseCollectionClose.png",
+        "baseTask": "JieGarden@Roguelike@CloseCollectionClose",
+        "postDelay": 1000,
+        "next": [
+            "JieGarden@Roguelike@StageEncounterCollectibleContinue",
+            "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageEncounterOptions#next",
+            "JieGarden@Roguelike@DropsFlag",
+            "JieGarden@Roguelike@Stages#next",
+            "JieGarden@Roguelike@CloseEvent"
+        ]
+    },
+    "JieGarden@Roguelike@StageEncounterCollectibleContinue": {
+        "template": "JieGarden@Roguelike@CloseCollectionContinue.png",
+        "baseTask": "JieGarden@Roguelike@CloseCollectionContinue",
+        "postDelay": 1000,
+        "next": [
+            "JieGarden@Roguelike@StageEncounterCollectibleContinue",
+            "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageEncounterOptions#next",
+            "JieGarden@Roguelike@DropsFlag",
+            "JieGarden@Roguelike@Stages#next",
+            "JieGarden@Roguelike@CloseEvent"
+        ]
+    },
     "JieGarden@Roguelike@CloseEvent": {
         "action": "ClickSelf",
         "roi": [562, 568, 154, 152],
@@ -1142,6 +1168,10 @@
             "JieGarden@Roguelike@ClickToDrops"
         ]
     },
+    "JieGarden@Roguelike@StageEncounterDrawCopperResultOnly": {
+        "baseTask": "JieGarden@Roguelike@StageEncounterDrawCopperResult",
+        "next": []
+    },
     "JieGarden@Roguelike@StageEncounterEnter": {
         "roi": [1046, 458, 220, 203]
     },
@@ -1226,6 +1256,24 @@
     "JieGarden@Roguelike@StageEncounterOptionWonderland": {
         "templThreshold": 0.95
     },
+    "JieGarden@Roguelike@StageEncounterJudgeClick": {
+        "baseTask": "Roguelike@StageEncounterJudgeClick",
+        "next": ["JieGarden@Roguelike@StageEncounterJudgeClick2"]
+    },
+    "JieGarden@Roguelike@StageEncounterJudgeClick2": {
+        "baseTask": "Roguelike@StageEncounterJudgeClick2",
+        "next": ["JieGarden@Roguelike@StageEncounterJudgeOption"]
+    },
+    "JieGarden@Roguelike@StageEncounterJudgeOption": {
+        "baseTask": "Roguelike@StageEncounterJudgeOption",
+        "next": [
+            "JieGarden@Roguelike@StageEncounterCollectibleContinue",
+            "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageGuidanceBattleEnter",
+            "JieGarden@Roguelike@StageEncounterOptions#next",
+            "JieGarden@Roguelike@Stages#next"
+        ]
+    },
     "JieGarden@Roguelike@StageEncounterOptions": {
         "next": [
             "JieGarden@Roguelike@StageEncounterOptionFree",
@@ -1244,6 +1292,10 @@
     "JieGarden@Roguelike@StageEncounterSpecialClose": {},
     "JieGarden@Roguelike@StageEnterBattleAgain": {
         "specificRect": [1100, 558, 111, 50]
+    },
+    "JieGarden@Roguelike@StageGuidanceBattleEnter": {
+        "baseTask": "JieGarden@Roguelike@StageCombatOpsEnter",
+        "template": "JieGarden@Roguelike@StageCombatOpsEnter.png"
     },
     "JieGarden@Roguelike@StageGuidance": {
         "Doc": "指点迷津 粉色系",
@@ -1774,6 +1826,22 @@
             "JieGarden@Roguelike@StageVerticalConfirmStartButtonClicked",
             "JieGarden@Roguelike@WaitForStartButtonClicked"
         ]
+    },
+    "JieGarden@Roguelike@CandleChapelBattleStart": {
+        "doc": "烛堂战斗预备环节部署干员后，手动点击开始战斗",
+        "template": "JieGarden@Roguelike@CandleChapelBattleStart.png",
+        "roi": [1045, 450, 235, 110],
+        "templThreshold": 0.75,
+        "action": "ClickSelf",
+        "postDelay": 1000
+    },
+    "JieGarden@Roguelike@CandleChapelDeployProgress": {
+        "doc": "烛堂战斗预备环节顶部部署进度，如 0/1、1/1",
+        "baseTask": "NumberOcrReplace",
+        "roi": [575, 105, 130, 55],
+        "withoutDet": true,
+        "binThreshold": [160, 255],
+        "useRaw": false
     },
     "JieGarden@RoguelikeEncounter-ClickOption": {
         "doc": "点击选项右侧位置以选择事件选项，再次点击可以确认选择",

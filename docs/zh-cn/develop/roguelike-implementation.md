@@ -365,7 +365,7 @@ Core 中的主题和模式定义在 `RoguelikeConfig.h`：
 
 - 指挥分队在投资或刷开局模式、难度大于等于 3 时，会启用第一层快速策略，部分路线可跳过招募。
 - `FindPlaytime` 通过树洞网格路由寻找指定常乐子节点。
-- `DataCollection` 启动 `RoguelikeDataCollection`，记录路线、事件、商店、代理人、截图和汇总文件。
+- `DataCollection` 启动 `RoguelikeDataCollection`，记录路线、事件、商店、代理人、截图和汇总文件；常规地图路由优先选择紧急作战更多的路线，其次是不期而遇和得偿所愿更多的路线。
 - `RoguelikeCoppersTaskPlugin` 处理通宝拾取和交换。
 - `RoguelikeEncounterOptionAnalyzer` 支持界园动态事件选项列表，是处理变长选项和代理人记录的关键。
 
@@ -416,8 +416,8 @@ debug/roguelike/data_collection/<timestamp>/
 - `session.json`：主题、模式、难度、分队、开局干员和参数摘要。
 - `events.jsonl`：路线决策、策略切换、放弃原因、事件、商店、代理人等事件流。
 - `images/`：所有保存图片的硬链接汇总目录。
-- `encounters/`、`legends/`、`traders/`、`yi_traders/`、`agents/`：分类图片。
-- `encounters.jsonl`、`traders.jsonl`、`agents.jsonl`：按楼层聚合的样本摘要。
+- `encounters/`、`legends/`、`traders/`、`yi_traders/`、`agents/`、`loots/`、`stone_mountains/`、`taotie_corridors/`、`encounter_collectibles/`：分类图片。
+- `encounters.jsonl`、`traders.jsonl`、`agents.jsonl`、`loots.jsonl`、`stone_mountains.jsonl`、`taotie_corridors.jsonl`、`encounter_collectibles.jsonl`：按楼层聚合的样本摘要。`loots.jsonl` 记录通宝、招募券、收藏品截图路径、楼层和来源作战节点类型；`stone_mountains.jsonl` 记录“石山”随机选择的 1/2 选项和后续选项页截图；`taotie_corridors.jsonl` 记录“饕餮廊”首屏截图、实际选择和后续选项页截图；`encounter_collectibles.jsonl` 记录“来者不拒”和“移时换物”的收藏品弹窗截图。
 
 路线插件、事件插件、商店插件和通宝插件都会在数据收集模式中写事件或图片。调试数据收集问题时，应先看 `session.json`、`events.jsonl` 和路线图图片。
 
