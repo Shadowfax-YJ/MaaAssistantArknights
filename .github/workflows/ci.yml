@@ -185,7 +185,7 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
 
       - name: Restore dependencies
-        run: dotnet restore src/MaaWpfGui/MaaWpfGui.csproj
+        run: dotnet restore src/MaaWpfGui/MaaWpfGui.csproj -p:TargetFramework=net9.0-windows10.0.17763.0
 
       - name: Taggify version for csproj
         run: |
@@ -208,7 +208,7 @@ jobs:
       - name: Publish WPF GUI
         continue-on-error: true
         run: |
-          dotnet publish src/MaaWpfGui/MaaWpfGui.csproj -c Release -p:Platform=${{ matrix.arch == 'arm64' && 'ARM64' || 'x64' }} -o install
+          dotnet publish src/MaaWpfGui/MaaWpfGui.csproj -c Release -f net9.0-windows10.0.17763.0 -p:Platform=${{ matrix.arch == 'arm64' && 'ARM64' || 'x64' }} -o install
 
       - name: Collect PDB files
         run: |
