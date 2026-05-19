@@ -417,7 +417,7 @@ debug/roguelike/data_collection/<timestamp>/
 - `events.jsonl`：路线决策、策略切换、放弃原因、事件、商店、代理人等事件流。
 - `images/`：所有保存图片的硬链接汇总目录。
 - `encounters/`、`legends/`、`traders/`、`yi_traders/`、`agents/`、`loots/`、`stone_mountains/`、`taotie_corridors/`、`encounter_collectibles/`：分类图片。
-- `encounters.jsonl`、`traders.jsonl`、`agents.jsonl`、`loots.jsonl`、`stone_mountains.jsonl`、`taotie_corridors.jsonl`、`encounter_collectibles.jsonl`：按楼层聚合的样本摘要。`loots.jsonl` 记录通宝、招募券、收藏品截图路径、楼层和来源作战节点类型；`stone_mountains.jsonl` 记录“石山”随机选择的 1/2 选项和后续选项页截图；`taotie_corridors.jsonl` 记录“饕餮廊”首屏截图、实际选择和后续选项页截图；`encounter_collectibles.jsonl` 记录“来者不拒”和“移时换物”的收藏品弹窗截图。
+- `encounters.jsonl`、`traders.jsonl`、`agents.jsonl`、`loots.jsonl`、`stone_mountains.jsonl`、`taotie_corridors.jsonl`、`encounter_collectibles.jsonl`：按楼层聚合的样本摘要。`loots.jsonl` 记录战利品页兜底截图，以及通宝、招募券、收藏品截图路径、楼层和来源作战节点类型；`stone_mountains.jsonl` 记录“石山”随机选择的 1/2 选项和后续选项页截图；`taotie_corridors.jsonl` 记录“饕餮廊”首屏截图、实际选择和后续选项页截图；`encounter_collectibles.jsonl` 记录“来者不拒”和“移时换物”的收藏品弹窗截图。
 
 路线插件、事件插件、商店插件和通宝插件都会在数据收集模式中写事件或图片。调试数据收集问题时，应先看 `session.json`、`events.jsonl` 和路线图图片。
 

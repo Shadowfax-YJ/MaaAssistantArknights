@@ -11,6 +11,8 @@
 
 namespace
 {
+constexpr int LootPageStableDelay = 1000;
+
 std::string_view leaf_task_name(std::string_view task_name)
 {
     if (const size_t pos = task_name.rfind('@'); pos != std::string_view::npos) {
@@ -53,6 +55,21 @@ bool is_direct_loot_terminal_task(std::string_view task_leaf)
 {
     return task_leaf == "DropsFlag" || task_leaf == "GetDropCompleted" || task_leaf == "GetDropLeave" ||
            task_leaf == "ClickToDrops" || task_leaf == "Stages" || task_leaf == "Routing-DataCollection";
+}
+
+bool starts_with(std::string_view text, std::string_view prefix)
+{
+    return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+}
+
+bool is_loot_page_reset_task(std::string_view task_leaf)
+{
+    return task_leaf == "GetDropCompleted" || task_leaf == "GetDropLeave" ||
+           starts_with(task_leaf, "GetDropLeave") || task_leaf == "Stages" ||
+           task_leaf == "Routing-DataCollection" || task_leaf == "NextLevel" ||
+           task_leaf == "RandomPickAfterNextLevel" || task_leaf == "CloseEvent" ||
+           task_leaf == "ExitThenAbandon" || task_leaf == "Abandon" || task_leaf == "Begin" ||
+           task_leaf == "StrategyChange" || is_recruit_screen_task(task_leaf) || starts_with(task_leaf, "Stage");
 }
 
 bool contains_any(std::string_view text, std::initializer_list<std::string_view> needles)
@@ -129,6 +146,13 @@ bool asst::RoguelikeLootCollectionTaskPlugin::verify(AsstMsg msg, const json::va
     m_capture_action = CaptureAction::None;
     m_loot_type.clear();
     m_image_suffix.clear();
+    m_current_capture_is_collectible_choice = false;
+
+    if (task_leaf == "ClickToDrops") {
+        reset_loot_page_state();
+        m_in_loot_page = true;
+        return false;
+    }
 
     if (!m_pending_direct_loot_image.empty()) {
         if (is_collectible_popup_task(task_leaf)) {
@@ -152,6 +176,25 @@ bool asst::RoguelikeLootCollectionTaskPlugin::verify(AsstMsg msg, const json::va
         }
     }
 
+    if (task_leaf == "DropsFlag") {
+        if (m_in_loot_page) {
+            m_collectible_choice_captured_before_popup = false;
+        }
+        return false;
+    }
+
+    if (is_collectible_popup_task(task_leaf) && m_in_loot_page) {
+        if (m_collectible_choice_captured_before_popup) {
+            m_collectible_choice_captured_before_popup = false;
+            return false;
+        }
+
+        m_loot_type = "Collectible";
+        m_image_suffix = "collectible";
+        m_capture_action = CaptureAction::Immediate;
+        return true;
+    }
+
     if (task_leaf == "GetDropSelectRecruit") {
         m_loot_type = "Recruit";
         m_image_suffix = "recruit";
@@ -161,6 +204,7 @@ bool asst::RoguelikeLootCollectionTaskPlugin::verify(AsstMsg msg, const json::va
     if (task_leaf == "GetDropSelectReward") {
         m_loot_type = "Collectible";
         m_image_suffix = "collectible";
+        m_current_capture_is_collectible_choice = true;
         m_capture_action = CaptureAction::Immediate;
         return true;
     }
@@ -177,6 +221,20 @@ bool asst::RoguelikeLootCollectionTaskPlugin::verify(AsstMsg msg, const json::va
         return true;
     }
 
+    if (is_select_entry_task(task_leaf) && m_in_loot_page && !m_loot_page_fallback_captured) {
+        m_capture_action = CaptureAction::LootPageFallback;
+        return true;
+    }
+    if ((task_leaf == "GetDropCompleted" || starts_with(task_leaf, "GetDropLeave")) && m_in_loot_page &&
+        !m_loot_page_fallback_captured) {
+        m_capture_action = CaptureAction::LootPageFallback;
+        return true;
+    }
+
+    if (is_loot_page_reset_task(task_leaf)) {
+        reset_loot_page_state();
+    }
+
     return false;
 }
 
@@ -187,10 +245,28 @@ bool asst::RoguelikeLootCollectionTaskPlugin::_run()
     }
 
     switch (m_capture_action) {
-    case CaptureAction::Immediate:
-        return save_loot_image_and_record(ctrler()->get_image());
-    case CaptureAction::PendingDirect:
-        m_pending_direct_loot_image = ctrler()->get_image().clone();
+    case CaptureAction::Immediate: {
+        cv::Mat image;
+        if (!capture_loot_action_image(image)) {
+            return false;
+        }
+        const std::string loot_type = m_loot_type;
+        const bool collectible_choice_capture = m_current_capture_is_collectible_choice;
+        const bool ret = save_loot_image_and_record(image);
+        if (loot_type == "Collectible" && collectible_choice_capture) {
+            m_collectible_choice_captured_before_popup = true;
+        }
+        else if (loot_type == "Recruit") {
+            reset_loot_page_state();
+        }
+        return ret;
+    }
+    case CaptureAction::PendingDirect: {
+        cv::Mat image;
+        if (!capture_loot_action_image(image)) {
+            return false;
+        }
+        m_pending_direct_loot_image = image.clone();
         if (m_has_pending_direct_loot_button_rect) {
             Log.info(
                 __FUNCTION__,
@@ -203,9 +279,14 @@ bool asst::RoguelikeLootCollectionTaskPlugin::_run()
             Log.info(__FUNCTION__, "| pending direct loot screenshot:", m_pending_direct_loot_task);
         }
         return true;
+    }
     case CaptureAction::FinalizePending: {
+        const std::string loot_type = m_loot_type;
         const bool ret = save_loot_image_and_record(m_pending_direct_loot_image);
         clear_pending_direct_loot();
+        if (loot_type == "Recruit") {
+            reset_loot_page_state();
+        }
         return ret;
     }
     case CaptureAction::ClassifyPending: {
@@ -230,6 +311,10 @@ bool asst::RoguelikeLootCollectionTaskPlugin::_run()
         Log.trace(__FUNCTION__, "| clear unclassified direct loot screenshot:", m_pending_direct_loot_task);
         clear_pending_direct_loot();
         return true;
+    case CaptureAction::LootPageFallback: {
+        cv::Mat image;
+        return capture_loot_action_image(image);
+    }
     case CaptureAction::None:
         return true;
     }
@@ -243,6 +328,36 @@ void asst::RoguelikeLootCollectionTaskPlugin::clear_pending_direct_loot() const
     m_pending_direct_loot_task.clear();
     m_has_pending_direct_loot_button_rect = false;
     m_pending_direct_loot_button_rect = Rect();
+}
+
+void asst::RoguelikeLootCollectionTaskPlugin::reset_loot_page_state() const
+{
+    clear_pending_direct_loot();
+    m_in_loot_page = false;
+    m_loot_page_fallback_captured = false;
+    m_collectible_choice_captured_before_popup = false;
+    m_current_capture_is_collectible_choice = false;
+}
+
+bool asst::RoguelikeLootCollectionTaskPlugin::capture_loot_action_image(cv::Mat& image)
+{
+    if (m_in_loot_page && !m_loot_page_fallback_captured && !sleep(LootPageStableDelay)) {
+        return false;
+    }
+
+    image = ctrler()->get_image();
+    return save_loot_page_fallback_if_needed(image);
+}
+
+bool asst::RoguelikeLootCollectionTaskPlugin::save_loot_page_fallback_if_needed(const cv::Mat& image)
+{
+    if (!m_in_loot_page || m_loot_page_fallback_captured) {
+        return true;
+    }
+
+    const bool ret = save_loot_image_and_record("LootPage", "loot_page", image);
+    m_loot_page_fallback_captured = true;
+    return ret;
 }
 
 asst::RoguelikeLootCollectionTaskPlugin::PendingDirectLootKind
@@ -328,20 +443,28 @@ asst::RoguelikeLootCollectionTaskPlugin::PendingDirectLootKind
 
 bool asst::RoguelikeLootCollectionTaskPlugin::save_loot_image_and_record(const cv::Mat& image)
 {
-    if (m_loot_type.empty() || m_image_suffix.empty()) {
+    return save_loot_image_and_record(m_loot_type, m_image_suffix, image);
+}
+
+bool asst::RoguelikeLootCollectionTaskPlugin::save_loot_image_and_record(
+    std::string_view type,
+    std::string_view suffix,
+    const cv::Mat& image)
+{
+    if (type.empty() || suffix.empty()) {
         return true;
     }
 
-    const std::string image_path = RoguelikeDataCollector.save_loot_image(image, m_image_suffix);
+    const std::string image_path = RoguelikeDataCollector.save_loot_image(image, suffix);
     if (image_path.empty()) {
-        Log.warn(__FUNCTION__, "| failed to save loot image:", m_loot_type);
+        Log.warn(__FUNCTION__, "| failed to save loot image:", type);
         return true;
     }
 
-    json::object details = RoguelikeDataCollector.record_loot(m_loot_type, image_path);
+    json::object details = RoguelikeDataCollector.record_loot(type, image_path);
     if (details.empty()) {
         details = json::object {
-            { "type", m_loot_type },
+            { "type", std::string(type) },
             { "image", image_path },
         };
     }

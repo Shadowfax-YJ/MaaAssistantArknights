@@ -1431,7 +1431,6 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         m_left_most_column_x_in_view = match_results.front().rect.x;
     }
 
-    const std::string image_path = RoguelikeDataCollector.save_image(image, "route_decision");
     const bool planned_new_floor = m_data_collection_current_node == RoguelikeMap::INIT_INDEX;
 
     std::vector<DataCollectionRouteScore> candidates;
@@ -1463,9 +1462,6 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
 
     if (best_it == candidates.end() || !best_it->valid) {
         auto details = build_data_collection_route_details(candidates, std::nullopt, "no_viable_route");
-        if (!image_path.empty()) {
-            details["image"] = image_path;
-        }
         RoguelikeDataCollector.log_event("route_decision", std::move(details));
         Task.set_task_base("RoguelikeRoutingAction", "JieGarden@Roguelike@Stages_dataCollectionFallback");
         reset_in_run_variables();
@@ -1483,9 +1479,6 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
     }
     details["vertical_edge_used_after"] = m_data_collection_vertical_edge_used;
     m_data_collection_current_node = next_node;
-    if (!image_path.empty()) {
-        details["image"] = image_path;
-    }
     const cv::Mat route_graph = build_data_collection_graph_image(best_it->path, next_node);
     if (!route_graph.empty()) {
         const std::string route_graph_path = RoguelikeDataCollector.save_image(route_graph, "selected_route_graph");
