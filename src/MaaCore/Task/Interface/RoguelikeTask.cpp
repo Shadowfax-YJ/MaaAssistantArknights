@@ -167,6 +167,11 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
             m_roguelike_task_ptr->set_times_limit("StageTraderLeaveConfirm", INT_MAX);
         }
     }
+    else if (mode == RoguelikeMode::DataCollection && theme == RoguelikeTheme::JieGarden) {
+        Task.set_task_base(theme + "@Roguelike@DropsFlag", theme + "@Roguelike@DropsFlag_dataCollection");
+        m_roguelike_task_ptr->set_times_limit("StageTraderInvestCancel", INT_MAX);
+        m_roguelike_task_ptr->set_times_limit("StageTraderLeaveConfirm", INT_MAX);
+    }
     else {
         // 重置战斗后奖励next
         Task.set_task_base(theme + "@Roguelike@DropsFlag", theme + "@Roguelike@DropsFlag_default");

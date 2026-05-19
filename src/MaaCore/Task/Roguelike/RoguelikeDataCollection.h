@@ -36,6 +36,7 @@ public:
     std::string save_image(const cv::Mat& image, std::string_view suffix);
     std::string save_encounter_image(const cv::Mat& image);
     std::string save_legend_image(const cv::Mat& image);
+    std::string save_boon_image(const cv::Mat& image);
     std::string save_trader_image(const cv::Mat& image);
     std::string save_yi_trader_image(const cv::Mat& image);
     std::string save_agent_image(const cv::Mat& image);
@@ -50,11 +51,19 @@ public:
     void note_strategy_change(std::string_view strategy);
     void note_selected_node_type(std::string_view node_type);
     void note_agent_source(std::string_view event_name, std::string_view record_type);
+    [[nodiscard]] std::string selected_node_type() const;
     [[nodiscard]] bool current_floor_is_bosky_passage() const;
     void set_record_map_encounters(bool enabled, std::string_view type = "Encounter");
     [[nodiscard]] bool should_record_map_encounters() const;
     [[nodiscard]] std::string map_encounter_type() const;
     void record_encounter(std::string_view name, std::string_view image_path, std::string_view type = "Encounter");
+    void record_boon(
+        std::string_view name,
+        std::string_view image_path,
+        json::array options,
+        size_t selected_choice,
+        std::string_view selected_option,
+        bool ocr_failed = false);
     void record_trader(std::string_view name, std::string_view image_path, bool is_yi_trader);
     json::object record_agent(std::string_view name, std::string_view image_path, json::object extra_details = {});
     json::object record_loot(std::string_view type, std::string_view image_path);
@@ -79,6 +88,7 @@ private:
     bool link_to_images_dir(const std::filesystem::path& target, const std::filesystem::path& filename);
     [[nodiscard]] json::object build_agent_source_details_locked() const;
     void flush_encounter_summary(bool force = false);
+    void flush_boon_summary(bool force = false);
     void flush_trader_summary(bool force = false);
     void flush_agent_summary(bool force = false);
     void flush_loot_summary(bool force = false);
@@ -95,6 +105,7 @@ private:
     std::string m_pending_abandon_reason;
     json::object m_pending_abandon_details;
     json::object m_encounter_summary;
+    json::object m_boon_summary;
     json::object m_trader_summary;
     json::object m_agent_summary;
     json::object m_loot_summary;

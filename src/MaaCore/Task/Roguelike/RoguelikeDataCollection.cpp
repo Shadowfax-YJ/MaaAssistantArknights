@@ -20,6 +20,7 @@ namespace
 constexpr const char* ImagesDir = "images";
 constexpr const char* EncountersDir = "encounters";
 constexpr const char* LegendsDir = "legends";
+constexpr const char* BoonsDir = "boons";
 constexpr const char* TradersDir = "traders";
 constexpr const char* YiTradersDir = "yi_traders";
 constexpr const char* AgentsDir = "agents";
@@ -296,6 +297,7 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     m_pending_abandon_reason.clear();
     m_pending_abandon_details.clear();
     m_encounter_summary.clear();
+    m_boon_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
     m_loot_summary.clear();
@@ -338,6 +340,7 @@ void asst::RoguelikeDataCollection::stop_session(std::string_view reason)
 {
     log_event("session_end", json::object { { "reason", std::string(reason) } });
     flush_encounter_summary(true);
+    flush_boon_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
     flush_loot_summary(true);
@@ -351,6 +354,7 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
 {
     log_event("run_end", json::object { { "reason", std::string(reason) } });
     flush_encounter_summary(true);
+    flush_boon_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
     flush_loot_summary(true);
@@ -383,6 +387,7 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
 
     log_event("run_end", json::object { { "reason", std::string(reason) } });
     flush_encounter_summary(false);
+    flush_boon_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
     flush_loot_summary(false);
@@ -412,7 +417,7 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     {
         std::lock_guard lock(m_mutex);
         if (!m_enabled || m_session_dir.empty() ||
-            (m_encounter_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty() &&
+            (m_encounter_summary.empty() && m_boon_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty() &&
              m_loot_summary.empty() && m_stone_mountain_summary.empty() && m_taotie_corridor_summary.empty() &&
              m_encounter_collectible_summary.empty())) {
             return;
@@ -421,6 +426,7 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
 
     log_event("run_end", json::object { { "reason", std::string(reason) } });
     flush_encounter_summary(false);
+    flush_boon_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
     flush_loot_summary(false);
@@ -508,6 +514,7 @@ void asst::RoguelikeDataCollection::finish_run_as_abandoned(
 void asst::RoguelikeDataCollection::disable()
 {
     flush_encounter_summary();
+    flush_boon_summary();
     flush_trader_summary();
     flush_agent_summary();
     flush_loot_summary();
@@ -524,6 +531,7 @@ void asst::RoguelikeDataCollection::disable()
     m_pending_abandon_reason.clear();
     m_pending_abandon_details.clear();
     m_encounter_summary.clear();
+    m_boon_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
     m_loot_summary.clear();
@@ -585,6 +593,11 @@ std::string asst::RoguelikeDataCollection::save_encounter_image(const cv::Mat& i
 std::string asst::RoguelikeDataCollection::save_legend_image(const cv::Mat& image)
 {
     return save_image(image, "legend", LegendsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_boon_image(const cv::Mat& image)
+{
+    return save_image(image, "boons", BoonsDir);
 }
 
 std::string asst::RoguelikeDataCollection::save_trader_image(const cv::Mat& image)
@@ -814,6 +827,12 @@ void asst::RoguelikeDataCollection::note_agent_source(std::string_view event_nam
     m_pending_agent_source_record_type = record_type.empty() ? "Encounter" : std::string(record_type);
 }
 
+std::string asst::RoguelikeDataCollection::selected_node_type() const
+{
+    std::lock_guard lock(m_mutex);
+    return m_last_selected_node_type;
+}
+
 bool asst::RoguelikeDataCollection::current_floor_is_bosky_passage() const
 {
     std::lock_guard lock(m_mutex);
@@ -864,6 +883,42 @@ void asst::RoguelikeDataCollection::record_encounter(
         { "name", std::string(name) },
         { "image", std::string(image_path) },
     });
+}
+
+void asst::RoguelikeDataCollection::record_boon(
+    std::string_view name,
+    std::string_view image_path,
+    json::array options,
+    size_t selected_choice,
+    std::string_view selected_option,
+    bool ocr_failed)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return;
+    }
+
+    const std::string floor = m_current_floor.empty() ? "未知层" : m_current_floor;
+    m_run_active = true;
+    if (!m_boon_summary.contains(floor)) {
+        m_boon_summary[floor] = json::array {};
+    }
+
+    json::object record {
+        { "type", "Boons" },
+        { "node_type", "得偿所愿" },
+        { "source_node_type", "Boons" },
+        { "name", std::string(name) },
+        { "image", std::string(image_path) },
+        { "floor", floor },
+        { "floor_index", m_floor_index },
+        { "options", std::move(options) },
+        { "selected_choice", static_cast<int>(selected_choice) },
+        { "selected_option", std::string(selected_option) },
+        { "ocr_failed", ocr_failed },
+    };
+
+    m_boon_summary[floor].as_array().emplace_back(std::move(record));
 }
 
 void asst::RoguelikeDataCollection::record_trader(
@@ -1068,6 +1123,24 @@ void asst::RoguelikeDataCollection::flush_encounter_summary(bool force)
     }
     catch (const std::exception& e) {
         Log.error(__FUNCTION__, "| failed to write encounter summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_boon_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_boon_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "boons.jsonl", std::ios::app);
+        ofs << json::value(m_boon_summary).to_string() << '\n';
+        m_boon_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write boon summary:", e.what());
     }
 }
 

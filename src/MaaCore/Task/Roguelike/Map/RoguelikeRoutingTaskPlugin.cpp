@@ -1525,7 +1525,11 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
 
     const RoguelikeNodeType next_node_type = m_map.get_node_type(next_node);
     RoguelikeDataCollector.note_selected_node_type(type2name(next_node_type));
-    RoguelikeDataCollector.set_record_map_encounters(next_node_type == RoguelikeNodeType::Encounter);
+    const bool record_map_event =
+        next_node_type == RoguelikeNodeType::Encounter || next_node_type == RoguelikeNodeType::Boons;
+    RoguelikeDataCollector.set_record_map_encounters(
+        record_map_event,
+        record_map_event ? type2name(next_node_type) : "Encounter");
 
     switch (next_node_type) {
     case RoguelikeNodeType::Encounter:

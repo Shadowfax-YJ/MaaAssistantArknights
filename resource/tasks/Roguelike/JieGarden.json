@@ -580,6 +580,21 @@
         "template": "Roguelike@DropsFlag.png",
         "baseTask": "JieGarden@Roguelike@DropsFlag_default"
     },
+    "JieGarden@Roguelike@DropsFlag_dataCollection": {
+        "template": "Roguelike@DropsFlag.png",
+        "roi": [875, 601, 152, 119],
+        "next": [
+            "JieGarden@Roguelike@GetDrops#next",
+            "JieGarden@Roguelike@GetDropCompleted",
+            "JieGarden@Roguelike@GetDropLeave",
+            "JieGarden@Roguelike@Stages_dataCollectionAfterDrops#next",
+            "JieGarden@Roguelike@StageEncounterOptions#next",
+            "JieGarden@Roguelike@StageEncounterSpecialClose",
+            "JieGarden@Roguelike@StageTraderLeave",
+            "JieGarden@Roguelike@CloseEvent",
+            "JieGarden@Roguelike@RecruitOther"
+        ]
+    },
     "JieGarden@Roguelike@DropsFlag_default": {
         "template": "Roguelike@DropsFlag.png",
         "next": [
@@ -1543,6 +1558,26 @@
             "JieGarden@Roguelike@ExitThenAbandon"
         ],
         "onErrorNext": ["JieGarden@Roguelike@ExitThenAbandon"]
+    },
+    "JieGarden@Roguelike@Stages_dataCollectionAfterDrops": {
+        "Doc": "数据收集模式：战斗后奖励页返回地图后的安全识别，不在奖励页展开 ExitThenAbandon",
+        "algorithm": "JustReturn",
+        "next": [
+            "JieGarden@Roguelike@NextLevel",
+            "JieGarden@Roguelike@RandomPickAfterNextLevel",
+            "JieGarden@Roguelike@CloseCollectionContinue",
+            "JieGarden@Roguelike@CloseCollectionClose",
+            "JieGarden@Roguelike@CloseEvent",
+            "JieGarden@Roguelike@Routing-DataCollection",
+            "JieGarden@Roguelike@StageGuidance",
+            "JieGarden@Roguelike@StageSafeHouse",
+            "JieGarden@Roguelike@StageEncounter",
+            "JieGarden@Roguelike@StageConfrontation",
+            "JieGarden@Roguelike@StageWindAndRain",
+            "JieGarden@Roguelike@StageProphecy",
+            "JieGarden@Roguelike@StageEmergencyTransportation",
+            "JieGarden@Roguelike@StageBoons"
+        ]
     },
     "JieGarden@Roguelike@Stages_dataCollectionFallback": {
         "Doc": "数据收集路由无可行模板路径时，回落到普通策略的非战斗节点处理",

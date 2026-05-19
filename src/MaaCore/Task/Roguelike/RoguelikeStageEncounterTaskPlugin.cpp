@@ -28,6 +28,9 @@ std::string save_map_encounter_image(const cv::Mat& image, std::string_view type
     if (type == "Legend") {
         return asst::RoguelikeDataCollector.save_legend_image(image);
     }
+    if (type == "Boons") {
+        return asst::RoguelikeDataCollector.save_boon_image(image);
+    }
     return asst::RoguelikeDataCollector.save_encounter_image(image);
 }
 
@@ -375,7 +378,12 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
         const std::string image_path =
             record_map_encounter ? save_map_encounter_image(image, map_encounter_type) : "";
         if (record_map_encounter) {
-            RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
+            if (map_encounter_type == "Boons") {
+                RoguelikeDataCollector.record_boon("unknown", image_path, json::array {}, 0, "", true);
+            }
+            else {
+                RoguelikeDataCollector.record_encounter("unknown", image_path, map_encounter_type);
+            }
         }
         json::object event_details { { "event_name", "" },
                                      { "record_type", map_encounter_type },
@@ -390,7 +398,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
             event_details["normalized_event_name"] = normalized_event_title;
         }
         RoguelikeDataCollector.log_event("encounter", std::move(event_details));
-        if (record_map_encounter) {
+        if (record_map_encounter && map_encounter_type != "Boons") {
             json::object abandon_details {
                 { "record_type", map_encounter_type },
                 { "ocr_failed", true },
@@ -439,13 +447,30 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             RoguelikeDataCollector.log_event("encounter", std::move(details));
         }
     };
+    const auto record_boon_event = [&](
+                                       std::string_view name,
+                                       json::array options,
+                                       size_t selected_choice,
+                                       std::string_view selected_option,
+                                       bool ocr_failed = false) {
+        if (record_map_encounter && map_encounter_type == "Boons") {
+            RoguelikeDataCollector.record_boon(
+                name,
+                image_path,
+                std::move(options),
+                selected_choice,
+                selected_option,
+                ocr_failed);
+        }
+    };
 
     auto it = event_map.find(event_name);
     if (it == event_map.end()) {
         Log.error("Unknown event:", event_name);
-        if (record_map_encounter) {
+        if (record_map_encounter && map_encounter_type != "Boons") {
             RoguelikeDataCollector.record_encounter(event_name, image_path, map_encounter_type);
         }
+        record_boon_event(event_name, json::array {}, 0, "", false);
         log_encounter_event(json::object {
             { "event_name", event_name },
             { "options", json::array {} },
@@ -474,7 +499,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         return remember_agent_source(std::optional<std::string> { event.next_event });
     };
 
-    if (record_map_encounter) {
+    if (record_map_encounter && map_encounter_type != "Boons") {
         RoguelikeDataCollector.record_encounter(event.name, image_path, map_encounter_type);
     }
 
@@ -643,6 +668,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         m_option_list.size()));
             }
             else if (select_analyzed_option(choice - 1, is_jiegarden_candle_chapel)) {
+                record_boon_event(event.name, option_details, choice, m_option_list[choice - 1].text);
                 log_encounter_event(json::object {
                     { "event_name", event.name },
                     { "options", option_details },
@@ -730,6 +756,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             for (choice = m_option_list.size(); choice > 0; --choice) {
                 if (m_option_list[choice - 1].enabled &&
                     select_analyzed_option(choice - 1, is_jiegarden_candle_chapel)) {
+                    record_boon_event(event.name, option_details, choice, m_option_list[choice - 1].text);
                     log_encounter_event(json::object {
                         { "event_name", event.name },
                         { "options", option_details },
@@ -745,6 +772,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 }
             }
 
+            record_boon_event(event.name, option_details, 0, "");
             log_encounter_event(json::object {
                 { "event_name", event.name },
                 { "options", std::move(option_details) },
@@ -764,6 +792,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             event.option_num,
             "choose_option:",
             choose_option);
+        record_boon_event(event.name, json::array {}, 0, "");
         log_encounter_event(json::object {
             { "event_name", event.name },
             { "options", json::array {} },
@@ -804,6 +833,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     };
 
     if (!click_configured_option(choose_option, event.option_num)) {
+        record_boon_event(event.name, json::array {}, 0, "");
         log_encounter_event(json::object {
             { "event_name", event.name },
             { "options", json::array {} },
@@ -815,6 +845,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         return std::nullopt;
     }
 
+    record_boon_event(event.name, json::array {}, choose_option, std::to_string(choose_option));
     log_encounter_event(json::object {
         { "event_name", event.name },
         { "options", json::array {} },

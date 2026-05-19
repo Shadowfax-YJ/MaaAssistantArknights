@@ -66,7 +66,7 @@ bool is_loot_page_reset_task(std::string_view task_leaf)
 {
     return task_leaf == "GetDropCompleted" || task_leaf == "GetDropLeave" ||
            starts_with(task_leaf, "GetDropLeave") || task_leaf == "Stages" ||
-           task_leaf == "Routing-DataCollection" || task_leaf == "NextLevel" ||
+           starts_with(task_leaf, "Routing") || task_leaf == "RoguelikeRoutingAction" || task_leaf == "NextLevel" ||
            task_leaf == "RandomPickAfterNextLevel" || task_leaf == "CloseEvent" ||
            task_leaf == "ExitThenAbandon" || task_leaf == "Abandon" || task_leaf == "Begin" ||
            task_leaf == "StrategyChange" || is_recruit_screen_task(task_leaf) || starts_with(task_leaf, "Stage");
@@ -147,6 +147,11 @@ bool asst::RoguelikeLootCollectionTaskPlugin::verify(AsstMsg msg, const json::va
     m_loot_type.clear();
     m_image_suffix.clear();
     m_current_capture_is_collectible_choice = false;
+
+    if (RoguelikeDataCollector.selected_node_type() == "Boons" && is_collectible_popup_task(task_leaf)) {
+        reset_loot_page_state();
+        return false;
+    }
 
     if (task_leaf == "ClickToDrops") {
         reset_loot_page_state();
