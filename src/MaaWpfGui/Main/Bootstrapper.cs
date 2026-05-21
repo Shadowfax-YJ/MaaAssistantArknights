@@ -21,6 +21,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -96,6 +97,7 @@ public class Bootstrapper : Bootstrapper<RootViewModel>
             };
 
             var currentDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            AddPublishedDlls(maaDlls, currentDirectory);
 
             var dllFiles = Directory.GetFiles(currentDirectory, "*.dll");
 
@@ -106,6 +108,62 @@ public class Bootstrapper : Bootstrapper<RootViewModel>
         catch (Exception)
         {
             return [];
+        }
+    }
+
+    private static void AddPublishedDlls(HashSet<string> dllNames, string currentDirectory)
+    {
+        try
+        {
+            var entryAssemblyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "MAA";
+            var depsJsonPath = Path.Combine(currentDirectory, $"{entryAssemblyName}.deps.json");
+            if (!File.Exists(depsJsonPath))
+            {
+                return;
+            }
+
+            using var depsJson = JsonDocument.Parse(File.ReadAllText(depsJsonPath));
+            if (!depsJson.RootElement.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            foreach (var target in targets.EnumerateObject())
+            {
+                if (target.Value.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                foreach (var library in target.Value.EnumerateObject())
+                {
+                    AddDllsFromDepsSection(dllNames, library.Value, "runtime");
+                    AddDllsFromDepsSection(dllNames, library.Value, "native");
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            _logger.Warning(e, "Failed to read published DLL list from deps.json");
+        }
+    }
+
+    private static void AddDllsFromDepsSection(HashSet<string> dllNames, JsonElement library, string sectionName)
+    {
+        if (library.ValueKind != JsonValueKind.Object ||
+            !library.TryGetProperty(sectionName, out var section) ||
+            section.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var asset in section.EnumerateObject())
+        {
+            var fileName = Path.GetFileName(asset.Name);
+            if (!string.IsNullOrWhiteSpace(fileName) && fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                dllNames.Add(fileName);
+            }
         }
     }
 
