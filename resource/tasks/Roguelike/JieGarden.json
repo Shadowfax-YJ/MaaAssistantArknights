@@ -196,8 +196,8 @@
         "next": [
             "JieGarden@Roguelike@StageEncounterCollectibleContinue",
             "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageEncounterAllCollectiblesOwned",
             "JieGarden@Roguelike@StageEncounterOptions#next",
-            "JieGarden@Roguelike@DropsFlag",
             "JieGarden@Roguelike@Stages#next",
             "JieGarden@Roguelike@CloseEvent"
         ]
@@ -209,8 +209,24 @@
         "next": [
             "JieGarden@Roguelike@StageEncounterCollectibleContinue",
             "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageEncounterAllCollectiblesOwned",
             "JieGarden@Roguelike@StageEncounterOptions#next",
-            "JieGarden@Roguelike@DropsFlag",
+            "JieGarden@Roguelike@Stages#next",
+            "JieGarden@Roguelike@CloseEvent"
+        ]
+    },
+    "JieGarden@Roguelike@StageEncounterAllCollectiblesOwned": {
+        "algorithm": "OcrDetect",
+        "text": ["已同时获得", "所有收藏品"],
+        "roi": [820, 330, 390, 110],
+        "action": "ClickRect",
+        "specificRect": [640, 360, 1, 1],
+        "postDelay": 500,
+        "next": [
+            "JieGarden@Roguelike@StageEncounterAllCollectiblesOwned",
+            "JieGarden@Roguelike@StageEncounterCollectibleContinue",
+            "JieGarden@Roguelike@StageEncounterCollectibleClose",
+            "JieGarden@Roguelike@StageEncounterOptions#next",
             "JieGarden@Roguelike@Stages#next",
             "JieGarden@Roguelike@CloseEvent"
         ]

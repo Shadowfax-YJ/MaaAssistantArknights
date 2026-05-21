@@ -14,6 +14,7 @@
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/Miscellaneous/PixelAnalyzer.h"
 #include "Vision/MultiMatcher.h"
 
@@ -1519,11 +1520,63 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         m_left_most_column_x_in_view +
         static_cast<int>(m_map.get_node_column(next_node) - leftmost_visible_column) * m_column_offset;
     const int next_node_y = m_map.get_node_y(next_node);
+    const RoguelikeNodeType next_node_type = m_map.get_node_type(next_node);
+    auto prefixed = [](const std::string& task_name) {
+        return std::string(RoguelikeTheme::JieGarden) + "@Roguelike@" + task_name;
+    };
+    std::vector<std::string> entry_detection_tasks;
+    switch (next_node_type) {
+    case RoguelikeNodeType::Encounter:
+    case RoguelikeNodeType::LostAndFound:
+    case RoguelikeNodeType::Scout:
+    case RoguelikeNodeType::Prophecy:
+    case RoguelikeNodeType::FaceOff:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmEncounter"), prefixed("StageEncounterEnter") };
+        break;
+    case RoguelikeNodeType::Guidance:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmGuidance"), prefixed("StageGuidanceEnter") };
+        break;
+    case RoguelikeNodeType::Boons:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmBoons"), prefixed("StageBoonsEnter") };
+        break;
+    case RoguelikeNodeType::SafeHouse:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmSafeHouse"), prefixed("StageSafeHouseEnter") };
+        break;
+    case RoguelikeNodeType::RogueTrader:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmTrader"), prefixed("StageTraderEnter") };
+        break;
+    case RoguelikeNodeType::BoskyPassage:
+        entry_detection_tasks = { prefixed("StageVerticalConfirmBoskyPassage"), prefixed("StageBoskyPassageEnter") };
+        break;
+    case RoguelikeNodeType::CombatOps:
+    case RoguelikeNodeType::EmergencyOps:
+    case RoguelikeNodeType::DreadfulFoe:
+        entry_detection_tasks = {
+            prefixed("StageVerticalConfirmBattle"),
+            prefixed("StageCombatOpsEnter"),
+            prefixed("StageEmergencyOpsEnter"),
+        };
+        break;
+    default:
+        break;
+    }
+
     Point next_node_center = Point(next_node_x + m_node_width / 2, next_node_y + m_node_height / 2);
     ctrler()->click(next_node_center);
-    sleep(200);
+    sleep(500);
+    if (!entry_detection_tasks.empty()) {
+        const cv::Mat after_click = ctrler()->get_image();
+        PipelineAnalyzer entry_analyzer(after_click, Rect(), m_inst);
+        entry_analyzer.set_tasks(entry_detection_tasks);
+        MultiMatcher node_analyzer(after_click);
+        node_analyzer.set_task_info(m_config->get_theme() + "@RoguelikeRoutingNodeAnalyze");
+        if (!entry_analyzer.analyze() && node_analyzer.analyze()) {
+            Log.info("Data collection route click did not open node, retry once");
+            ctrler()->click(next_node_center);
+            sleep(500);
+        }
+    }
 
-    const RoguelikeNodeType next_node_type = m_map.get_node_type(next_node);
     RoguelikeDataCollector.note_selected_node_type(type2name(next_node_type));
     const bool record_map_event =
         next_node_type == RoguelikeNodeType::Encounter || next_node_type == RoguelikeNodeType::Boons;
