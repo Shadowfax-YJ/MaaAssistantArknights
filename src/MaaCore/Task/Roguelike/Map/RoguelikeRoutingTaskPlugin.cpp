@@ -1568,9 +1568,9 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         const cv::Mat after_click = ctrler()->get_image();
         PipelineAnalyzer entry_analyzer(after_click, Rect(), m_inst);
         entry_analyzer.set_tasks(entry_detection_tasks);
-        MultiMatcher node_analyzer(after_click);
-        node_analyzer.set_task_info(m_config->get_theme() + "@RoguelikeRoutingNodeAnalyze");
-        if (!entry_analyzer.analyze() && node_analyzer.analyze()) {
+        MultiMatcher retry_node_analyzer(after_click);
+        retry_node_analyzer.set_task_info(m_config->get_theme() + "@RoguelikeRoutingNodeAnalyze");
+        if (!entry_analyzer.analyze() && retry_node_analyzer.analyze()) {
             Log.info("Data collection route click did not open node, retry once");
             ctrler()->click(next_node_center);
             sleep(500);
