@@ -1461,33 +1461,6 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
 
     auto best_it = std::ranges::max_element(candidates, data_collection_score_less);
 
-    const bool has_remaining_encounter_route = std::ranges::any_of(candidates, [](const auto& candidate) {
-        return candidate.valid && candidate.encounter_count > 0;
-    });
-    if (m_data_collection_floor == 2 && !has_remaining_encounter_route) {
-        auto details =
-            build_data_collection_route_details(candidates, std::nullopt, "second_floor_no_remaining_encounter");
-        details["floor"] = m_data_collection_floor;
-        details["planned_new_floor"] = planned_new_floor;
-        if (!image_path.empty()) {
-            details["image"] = image_path;
-        }
-        auto abandon_details = details;
-        RoguelikeDataCollector.log_event("route_exit", std::move(details));
-        RoguelikeDataCollector.set_pending_abandon_reason(
-            "second_floor_no_remaining_encounter",
-            std::move(abandon_details));
-        callback(
-            AsstMsg::TaskChainExtraInfo,
-            json::object {
-                { "what", "RoguelikeRouteExit" },
-                { "message", "界园数据收集: 山水阁后续路线没有不期而遇，提前退出本局" },
-            });
-        Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-ExitThenAbandon");
-        reset_in_run_variables();
-        return;
-    }
-
     if (best_it == candidates.end() || !best_it->valid) {
         auto details = build_data_collection_route_details(candidates, std::nullopt, "no_viable_route");
         if (!image_path.empty()) {
@@ -1640,6 +1613,7 @@ asst::RoguelikeRoutingTaskPlugin::DataCollectionRouteScore
     }
 
     score.valid = true;
+    score.boons_count = type == RoguelikeNodeType::Boons ? 1 : 0;
     score.encounter_count = type == RoguelikeNodeType::Encounter ? 1 : 0;
     score.combat_count = is_data_collection_combat_type(type) ? 1 : 0;
     score.non_combat_count = score.combat_count ? 0 : 1;
@@ -1664,6 +1638,7 @@ asst::RoguelikeRoutingTaskPlugin::DataCollectionRouteScore
     auto best_child = std::ranges::max_element(child_scores, data_collection_score_less);
 
     if (best_child != child_scores.end() && best_child->valid) {
+        score.boons_count += best_child->boons_count;
         score.encounter_count += best_child->encounter_count;
         score.combat_count += best_child->combat_count;
         score.non_combat_count += best_child->non_combat_count;
@@ -1685,6 +1660,9 @@ bool asst::RoguelikeRoutingTaskPlugin::data_collection_score_less(
 {
     if (lhs.valid != rhs.valid) {
         return !lhs.valid && rhs.valid;
+    }
+    if (lhs.boons_count != rhs.boons_count) {
+        return lhs.boons_count < rhs.boons_count;
     }
     if (lhs.encounter_count != rhs.encounter_count) {
         return lhs.encounter_count < rhs.encounter_count;
@@ -1765,6 +1743,7 @@ json::object asst::RoguelikeRoutingTaskPlugin::build_data_collection_route_detai
             { "first_node", static_cast<int>(candidate.first_node) },
             { "first_node_type", candidate.first_node < m_map.size() ? type2name(m_map.get_node_type(candidate.first_node)) : "Unknown" },
             { "valid", candidate.valid },
+            { "boons_count", candidate.boons_count },
             { "encounter_count", candidate.encounter_count },
             { "combat_count", candidate.combat_count },
             { "non_combat_count", candidate.non_combat_count },
@@ -1815,9 +1794,9 @@ bool asst::RoguelikeRoutingTaskPlugin::is_data_collection_vertical_edge(size_t s
 int asst::RoguelikeRoutingTaskPlugin::data_collection_type_priority(RoguelikeNodeType type)
 {
     switch (type) {
-    case RoguelikeNodeType::Encounter:
-        return 4;
     case RoguelikeNodeType::Boons:
+        return 4;
+    case RoguelikeNodeType::Encounter:
         return 3;
     case RoguelikeNodeType::Guidance:
     case RoguelikeNodeType::SafeHouse:

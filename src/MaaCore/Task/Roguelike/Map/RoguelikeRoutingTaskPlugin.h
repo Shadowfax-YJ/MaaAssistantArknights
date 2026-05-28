@@ -69,6 +69,7 @@ private:
     struct DataCollectionRouteScore
     {
         bool valid = false;
+        int boons_count = 0;
         int encounter_count = 0;
         int combat_count = 0;
         int non_combat_count = 0;
