@@ -610,20 +610,9 @@ jobs:
           # find . -type f | xargs mv -fvt .
           find . -type f | while read f; do mv -fvt . "$f"; done
 
-      - name: Check release token
-        shell: bash
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          if [[ -z "$RELEASE_TOKEN" ]]; then
-            echo "::error::Set the RELEASE_TOKEN repository secret with Contents read/write permission."
-            exit 1
-          fi
-
       - name: Publish release to GitHub
         uses: softprops/action-gh-release@v3.0.0
         with:
-          token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ needs.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body_path: CHANGELOG.md
