@@ -116,6 +116,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
             new() { Display = LocalizationHelper.GetString("RoguelikeStrategyLastReward"), Value = Mode.Collectible },
             new() { Display = LocalizationHelper.GetString("RoguelikeStrategyMonthlySquad"), Value = Mode.Squad },
             new() { Display = LocalizationHelper.GetString("RoguelikeStrategyDeepExploration"), Value = Mode.Exploration },
+            new() { Display = LocalizationHelper.GetString("RoguelikeStrategyDeepExplorationCollectiblePoolTest"), Value = Mode.DeepExplorationCollectiblePoolTest },
         };
 
         switch (RoguelikeTheme)

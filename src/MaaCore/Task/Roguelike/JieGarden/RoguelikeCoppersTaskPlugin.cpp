@@ -1,16 +1,60 @@
 #include "RoguelikeCoppersTaskPlugin.h"
 
+#include <fstream>
+#include <format>
+#include <map>
+#include <mutex>
+
+#include <meojson/json.hpp>
+
 #include "Common/AsstTypes.h"
 #include "Config/Roguelike/JieGarden/RoguelikeCoppersConfig.h"
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "MaaUtils/ImageIo.h"
+#include "MaaUtils/Time.hpp"
 #include "Task/ProcessTask.h"
 #include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/Matcher.h"
 #include "Vision/Roguelike/JieGarden/RoguelikeCoppersAnalyzer.h"
+
+namespace
+{
+constexpr int CollectiblePoolTestSwipeToLeftmostTimes = 5;
+constexpr int CollectiblePoolTestSwipeToRightmostTimes = 5;
+
+const std::vector<std::string> CollectiblePoolTestPopupTasks = {
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestCloseCollectionContinue",
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestCloseCollectionClose",
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestAllCollectiblesOwned",
+};
+
+std::string_view debug_image_category_name(asst::CoppersDebugImageCategory category)
+{
+    switch (category) {
+    case asst::CoppersDebugImageCategory::CoppersView:
+        return "coppers_view";
+    case asst::CoppersDebugImageCategory::Popup:
+        return "popups";
+    case asst::CoppersDebugImageCategory::General:
+    default:
+        return "general";
+    }
+}
+
+std::filesystem::path debug_image_category_dir(asst::CoppersDebugImageCategory category)
+{
+    return asst::utils::path("debug") / "roguelike" / "coppers" / std::string(debug_image_category_name(category));
+}
+
+std::filesystem::path debug_image_log_path()
+{
+    return asst::UserDir.get() / asst::utils::path("debug") / "roguelike" / "coppers" / "screenshots.jsonl";
+}
+}
 
 bool asst::RoguelikeCoppersTaskPlugin::load_params([[maybe_unused]] const json::value& params)
 {
@@ -46,6 +90,12 @@ bool asst::RoguelikeCoppersTaskPlugin::verify(AsstMsg msg, const json::value& de
     else if (task_name.ends_with("Roguelike@GetDropSwitch")) {
         m_run_mode = CoppersTaskRunMode::PICKUP;
         Log.info(__FUNCTION__, "| plugin activated for PICKUP mode");
+    }
+    else if (
+        task_name.ends_with("Roguelike@CollectiblePoolTest") &&
+        m_config->get_mode() == RoguelikeMode::DeepExplorationCollectiblePoolTest) {
+        m_run_mode = CoppersTaskRunMode::COLLECTIBLE_POOL_TEST;
+        Log.info(__FUNCTION__, "| plugin activated for COLLECTIBLE_POOL_TEST mode");
     }
     else {
         return false; // 不支持的任务类型
@@ -89,6 +139,9 @@ bool asst::RoguelikeCoppersTaskPlugin::_run()
         break;
     case CoppersTaskRunMode::EXCHANGE:
         result = handle_exchange_mode();
+        break;
+    case CoppersTaskRunMode::COLLECTIBLE_POOL_TEST:
+        result = handle_collectible_pool_test_mode();
         break;
     }
 
@@ -411,6 +464,117 @@ asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_exchange_mode()
     return ret ? CopperTaskResult::SUCCESS : CopperTaskResult::FAILED;
 }
 
+asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_collectible_pool_test_mode()
+{
+    LogTraceFunction;
+
+    bool ret = ProcessTask(*this, { "JieGarden@Roguelike@CoppersOpenBox" }).set_retry_times(3).run();
+    if (!ret) {
+        Log.error(__FUNCTION__, "| failed to open coppers box for collectible pool test");
+        return CopperTaskResult::FAILED;
+    }
+
+    int recast_times = 0;
+    while (true) {
+        sleep(500);
+        ret &= swipe_copper_list_to_leftmost(CollectiblePoolTestSwipeToLeftmostTimes);
+        sleep(300);
+        save_debug_image(
+            ctrler()->get_image(),
+            std::format("collectible_pool_test_{}_leftmost", recast_times),
+            false,
+            CoppersDebugImageCategory::CoppersView);
+
+        ret &= swipe_copper_list_to_rightmost(CollectiblePoolTestSwipeToRightmostTimes);
+        sleep(300);
+        save_debug_image(
+            ctrler()->get_image(),
+            std::format("collectible_pool_test_{}_rightmost", recast_times),
+            false,
+            CoppersDebugImageCategory::CoppersView);
+
+        if (!run_first_matched_task({ "JieGarden@Roguelike@CoppersRecastCollectiblePoolTest" })) {
+            Log.info(__FUNCTION__, "| recast unavailable, collectible pool test finished");
+            return CopperTaskResult::SUCCESS;
+        }
+
+        ret &= ProcessTask(*this, { "JieGarden@Roguelike@CoppersRecastSecondConfirmCollectiblePoolTest" })
+                   .set_retry_times(3)
+                   .run();
+
+        ret &= close_collectible_pool_test_recast_popups();
+        ret &= run_first_matched_task_with_pre_click_snapshot(
+            { "JieGarden@Roguelike@CoppersRecastResultCollectiblePoolTest" },
+            std::format("collectible_pool_test_before_close_result_{}", recast_times),
+            20,
+            CoppersDebugImageCategory::Popup);
+
+        if (!ret) {
+            Log.error(__FUNCTION__, "| failed to finish recast flow for collectible pool test");
+            return CopperTaskResult::FAILED;
+        }
+
+        ++recast_times;
+    }
+}
+
+bool asst::RoguelikeCoppersTaskPlugin::run_first_matched_task(const std::vector<std::string>& task_names) const
+{
+    const cv::Mat image = ctrler()->get_image();
+    PipelineAnalyzer analyzer(image, Rect(), m_inst);
+    analyzer.set_tasks(task_names);
+    auto result = analyzer.analyze();
+    if (!result || !result->task_ptr) {
+        return false;
+    }
+
+    return ProcessTask(*this, { result->task_ptr->name }).set_reusable_image(image).set_retry_times(0).run();
+}
+
+bool asst::RoguelikeCoppersTaskPlugin::run_first_matched_task_with_pre_click_snapshot(
+    const std::vector<std::string>& task_names,
+    const std::string& snapshot_suffix,
+    int retry_times,
+    CoppersDebugImageCategory category) const
+{
+    for (int retry = 0; retry <= retry_times; ++retry) {
+        const cv::Mat image = ctrler()->get_image();
+        PipelineAnalyzer analyzer(image, Rect(), m_inst);
+        analyzer.set_tasks(task_names);
+        auto result = analyzer.analyze();
+        if (!result || !result->task_ptr) {
+            sleep(500);
+            continue;
+        }
+
+        save_debug_image(image, std::format("{}_{}", snapshot_suffix, result->task_ptr->name), false, category);
+        return ProcessTask(*this, { result->task_ptr->name }).set_reusable_image(image).set_retry_times(0).run();
+    }
+
+    return false;
+}
+
+bool asst::RoguelikeCoppersTaskPlugin::close_collectible_pool_test_recast_popups() const
+{
+    bool closed = false;
+
+    int close_times = 0;
+    while (true) {
+        if (!run_first_matched_task_with_pre_click_snapshot(
+                CollectiblePoolTestPopupTasks,
+                std::format("collectible_pool_test_before_close_popup_{}", close_times))) {
+            break;
+        }
+
+        closed = true;
+        ++close_times;
+        sleep(500);
+    }
+
+    Log.info(__FUNCTION__, "| collectible pool test recast popup close:", closed);
+    return closed;
+}
+
 // 滑动通宝列表指定次数
 bool asst::RoguelikeCoppersTaskPlugin::swipe_copper_list(int times, bool to_left) const
 {
@@ -631,21 +795,85 @@ void asst::RoguelikeCoppersTaskPlugin::draw_detection_debug(
 void asst::RoguelikeCoppersTaskPlugin::save_debug_image(
     const cv::Mat& image,
     const std::string& suffix,
-    bool auto_clean) const
+    bool auto_clean,
+    CoppersDebugImageCategory category) const
 {
     try {
-        const static std::vector<int> jpeg_params = { cv::IMWRITE_JPEG_QUALITY, 95, cv::IMWRITE_JPEG_OPTIMIZE, 1 };
+        if (image.empty()) {
+            return;
+        }
 
-        utils::save_debug_image(
-            image,
-            utils::path("debug") / "roguelike" / "coppers",
-            auto_clean,
-            "roguelikeCoppers debug",
-            suffix,
-            "jpeg",
-            jpeg_params);
+        const static std::vector<int> jpeg_params = { cv::IMWRITE_JPEG_QUALITY, 80, cv::IMWRITE_JPEG_OPTIMIZE, 1 };
+        static std::map<std::filesystem::path, size_t> s_save_cnt;
+        static std::mutex s_mutex;
+
+        std::filesystem::path image_dir = debug_image_category_dir(category).lexically_normal();
+        if (image_dir.is_relative()) {
+            image_dir = UserDir.get() / image_dir;
+        }
+
+        if (auto_clean) {
+            std::lock_guard<std::mutex> lock(s_mutex);
+            auto& cnt = s_save_cnt[image_dir];
+            if (cnt == 0) {
+                utils::filenum_ctrl(image_dir, Config.get_options().debug.max_debug_file_num);
+            }
+            cnt = (cnt + 1) % Config.get_options().debug.clean_files_freq;
+        }
+
+        const std::string stem = MAA_NS::format_now_for_filename();
+        const std::filesystem::path image_path = image_dir / std::format("{}_{}.jpeg", stem, suffix);
+
+        Log.info("Save roguelikeCoppers debug to", image_path);
+        if (!MAA_NS::imwrite(image_path, image, jpeg_params)) {
+            Log.error(__FUNCTION__, "| failed to write debug image:", image_path);
+            return;
+        }
+
+        append_debug_image_record(image_path, suffix, category, image);
     }
     catch (const std::exception& e) {
         Log.error(__FUNCTION__, "| failed to save debug image:", e.what());
+    }
+}
+
+void asst::RoguelikeCoppersTaskPlugin::append_debug_image_record(
+    const std::filesystem::path& image_path,
+    const std::string& suffix,
+    CoppersDebugImageCategory category,
+    const cv::Mat& image) const
+{
+    try {
+        static std::mutex s_jsonl_mutex;
+
+        const std::filesystem::path log_path = debug_image_log_path();
+        std::error_code ec;
+        std::filesystem::create_directories(log_path.parent_path(), ec);
+        if (ec) {
+            Log.error(__FUNCTION__, "| failed to create debug image log dir:", ec.message());
+            return;
+        }
+
+        json::value record = json::object {
+            { "timestamp", MAA_NS::format_now() },
+            { "category", std::string(debug_image_category_name(category)) },
+            { "suffix", suffix },
+            { "path", MAA_NS::path_to_utf8_string(image_path) },
+            { "width", image.cols },
+            { "height", image.rows },
+            { "format", "jpeg" },
+            { "jpeg_quality", 80 },
+        };
+
+        std::lock_guard<std::mutex> lock(s_jsonl_mutex);
+        std::ofstream ofs(log_path, std::ios::out | std::ios::app);
+        if (!ofs.is_open()) {
+            Log.error(__FUNCTION__, "| failed to open debug image jsonl:", log_path);
+            return;
+        }
+        ofs << record.to_string() << '\n';
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to append debug image record:", e.what());
     }
 }

@@ -354,12 +354,13 @@
     "JieGarden@Roguelike@CoppersBox": {
         "Doc": "钱盒按钮",
         "template": "empty.png",
-        "roi": [348, 640, 465, 80],
+        "roi": [760, 620, 150, 100],
         "action": "ClickSelf"
     },
     "JieGarden@Roguelike@CoppersCloseBox": {
         "Doc": "关闭钱盒",
-        "baseTask": "JieGarden@Roguelike@CoppersBox"
+        "baseTask": "JieGarden@Roguelike@CoppersBox",
+        "template": "JieGarden@Roguelike@CoppersCloseBox.png"
     },
     "JieGarden@Roguelike@CoppersExchangeConfirm": {
         "Doc": "交换通宝的确认按钮",
@@ -463,7 +464,36 @@
     },
     "JieGarden@Roguelike@CoppersOpenBox": {
         "Doc": "打开钱盒，可能出现在左下角或下方中间偏右",
-        "baseTask": "JieGarden@Roguelike@CoppersBox"
+        "baseTask": "JieGarden@Roguelike@CoppersBox",
+        "template": "JieGarden@Roguelike@CoppersOpenBox.png"
+    },
+    "JieGarden@Roguelike@CollectiblePoolTest": {
+        "Doc": "深入调查随机藏品池测试：进入地图后打开钱盒截图、重投直到不可重投",
+        "template": "empty.png",
+        "action": "DoNothing",
+        "next": ["JieGarden@Roguelike@ExitThenAbandon"],
+        "onErrorNext": ["JieGarden@Roguelike@ExitThenAbandon"]
+    },
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestCloseCollectionClose": {
+        "baseTask": "JieGarden@Roguelike@StageEncounterCollectibleClose",
+        "template": "JieGarden@Roguelike@CloseCollectionClose.png",
+        "templThreshold": 0.9,
+        "next": []
+    },
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestCloseCollectionContinue": {
+        "baseTask": "JieGarden@Roguelike@StageEncounterCollectibleContinue",
+        "template": "JieGarden@Roguelike@CloseCollectionContinue.png",
+        "templThreshold": 0.9,
+        "next": []
+    },
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestAllCollectiblesOwned": {
+        "baseTask": "JieGarden@Roguelike@StageEncounterAllCollectiblesOwned",
+        "next": []
+    },
+    "JieGarden@Roguelike@CoppersCollectiblePoolTestDrawCopperResult": {
+        "baseTask": "JieGarden@Roguelike@StageEncounterDrawCopperResultOnly",
+        "template": "JieGarden@Roguelike@StageEncounterDrawCopperResult.png",
+        "next": []
     },
     "JieGarden@Roguelike@CoppersRecast": {
         "Doc": "重新投钱",
@@ -483,12 +513,31 @@
         "postDelay": 600,
         "next": ["JieGarden@Roguelike@CoppersRecastConfirm", "#self"]
     },
+    "JieGarden@Roguelike@CoppersRecastCollectiblePoolTest": {
+        "baseTask": "JieGarden@Roguelike@CoppersRecast",
+        "template": "JieGarden@Roguelike@CoppersRecast.png",
+        "next": []
+    },
     "JieGarden@Roguelike@CoppersRecastConfirm": {
         "Doc": "重新投钱的确认按钮",
         "baseTask": "JieGarden@Roguelike@CoppersListDialogConfirm",
         "template": "JieGarden@Roguelike@CoppersListDialogConfirm.png",
         "postDelay": 3000,
         "next": ["JieGarden@Roguelike@CoppersRecastResult", "JieGarden@Roguelike@CoppersAfterAction", "#self"]
+    },
+    "JieGarden@Roguelike@CoppersRecastConfirmCollectiblePoolTest": {
+        "baseTask": "JieGarden@Roguelike@CoppersRecastConfirm",
+        "template": "JieGarden@Roguelike@CoppersListDialogConfirm.png",
+        "next": []
+    },
+    "JieGarden@Roguelike@CoppersRecastSecondConfirmCollectiblePoolTest": {
+        "Doc": "随机藏品池测试：重新投钱后的右下角二次确认按钮",
+        "template": "JieGarden@Roguelike@CoppersRecastSecondConfirm.png",
+        "roi": [820, 580, 460, 140],
+        "action": "ClickSelf",
+        "templThreshold": 0.8,
+        "postDelay": 3000,
+        "next": []
     },
     "JieGarden@Roguelike@CoppersRecastResult": {
         "Doc": "点击投钱结果界面的对号 有时延迟时间比较长会失败 目前依赖retry_times有20次兜底",
@@ -497,6 +546,11 @@
         "postDelay": 500,
         "roi": [1033, 462, 153, 155],
         "next": ["JieGarden@Roguelike@CoppersAfterAction", "#self"]
+    },
+    "JieGarden@Roguelike@CoppersRecastResultCollectiblePoolTest": {
+        "baseTask": "JieGarden@Roguelike@CoppersRecastResult",
+        "template": "JieGarden@Roguelike@StageEncounterDrawCopperResult.png",
+        "next": []
     },
     "JieGarden@Roguelike@CoppersTakeConfirm": {
         "Doc": "交换通宝确认按钮 (用于插件 RoguelikeCoppersTaskPlugin 的确认操作)",
@@ -1553,6 +1607,19 @@
             "JieGarden@Roguelike@Stages_leaveBoskyPassage#next"
         ]
     },
+    "JieGarden@Roguelike@Stages_collectiblePoolTest": {
+        "Doc": "深入调查随机藏品池测试：每把进入地图后测试钱盒，随后放弃重开",
+        "algorithm": "JustReturn",
+        "next": [
+            "JieGarden@Roguelike@NextLevel",
+            "JieGarden@Roguelike@RandomPickAfterNextLevel",
+            "JieGarden@Roguelike@CloseCollectionContinue",
+            "JieGarden@Roguelike@CloseCollectionClose",
+            "JieGarden@Roguelike@CollectiblePoolTest",
+            "JieGarden@Roguelike@ExitThenAbandon"
+        ],
+        "onErrorNext": ["JieGarden@Roguelike@ExitThenAbandon"]
+    },
     "JieGarden@Roguelike@Stages_dataCollection": {
         "Doc": "数据收集模式：避战，进入是非境后按外层默认路线收集数据",
         "algorithm": "JustReturn",
@@ -1871,6 +1938,24 @@
         "binThreshold": [200, 255],
         "useRaw": false
     },
+    "JieGarden@Roguelike@StrategyChange_mode8": {
+        "baseTask": "Roguelike@StrategyChange_default",
+        "text": ["_collectiblePoolTest"],
+        "next": ["JieGarden@Roguelike@Stages"],
+        "ocrReplace": [
+            ["洪陆楼", "_collectiblePoolTest"],
+            ["山水阁", "_collectiblePoolTest"],
+            ["云(瓦)?(亭|亨)", "_collectiblePoolTest"],
+            ["汝吾(门)?", "_collectiblePoolTest"],
+            ["见字祠", "_collectiblePoolTest"],
+            ["始末陵", "_collectiblePoolTest"],
+            ["是非境", "_collectiblePoolTest"]
+        ],
+        "roi": [627, 14, 71, 28],
+        "withoutDet": true,
+        "binThreshold": [200, 255],
+        "useRaw": false
+    },
     "JieGarden@Roguelike@TodoEnter": {},
     "JieGarden@Roguelike@WaitForStartButtonClicked": {
         "template": "Roguelike@QuickFormation.png",
@@ -1983,7 +2068,8 @@
             "在集成战略模式招募干员界面点击右下角 <放弃> 文字左侧图标位置，放弃招募机会",
             "界园的招募界面 UI 和其他主题略有不同，图标缩小且位置向左偏移"
         ],
-        "roi": [891, 648, 58, 58]
+        "roi": [891, 648, 58, 58],
+        "action": "ClickSelf"
     },
     "JieGarden@RoguelikeSettlementConfirm": {}
 }

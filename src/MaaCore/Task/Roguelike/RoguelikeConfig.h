@@ -29,6 +29,7 @@ enum class RoguelikeMode
     Collectible = 4, // 4 - 刷开局，以获得热水壶或者演讲稿开局或只凹直升，不期而遇采用保守策略
     Squad = 6,       // 6 - 月度小队，尽可能稳定地打更多层数，不期而遇采用激进策略
     Exploration = 7, // 7 - 深入调查，尽可能稳定地打更多层数，不期而遇采用激进策略
+    DeepExplorationCollectiblePoolTest = 8, // 8 - 深入调查随机藏品池测试，初始化同深入调查
 
     // ------------------ 萨米主题专用模式 ------------------
     CLP_PDS = 5, // 5 - 刷隐藏坍缩范式,以增加坍缩值为最优先目标
@@ -96,6 +97,7 @@ public:
     {
         return mode == RoguelikeMode::Exp || mode == RoguelikeMode::Investment || mode == RoguelikeMode::Collectible ||
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||
+               mode == RoguelikeMode::DeepExplorationCollectiblePoolTest ||
                (mode == RoguelikeMode::CLP_PDS && theme == RoguelikeTheme::Sami) ||
                (mode == RoguelikeMode::FastPass && theme == RoguelikeTheme::Sarkaz) ||
                (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden) ||

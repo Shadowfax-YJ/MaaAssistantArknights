@@ -253,7 +253,7 @@ public class AsstRoguelikeTask : AsstBaseTask
             taskParams["monthly_squad_check_comms"] = MonthlySquadCheckComms;
         }
 
-        if (Mode == RoguelikeMode.Exploration)
+        if (Mode == RoguelikeMode.Exploration || Mode == RoguelikeMode.DeepExplorationCollectiblePoolTest)
         {
             taskParams["deep_exploration_auto_iterate"] = DeepExplorationAutoIterate;
         }

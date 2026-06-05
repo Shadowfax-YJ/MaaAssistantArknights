@@ -161,28 +161,34 @@ public class RootViewModel : Conductor<Screen>.Collection.OneActive
             SetAndNotify(ref _taskProgress, value);
 
             Execute.OnUIThreadAsync(() => {
-                if (Application.Current.MainWindow == null || !Application.Current.MainWindow.IsVisible)
+                Window? mainWindow = Application.Current.MainWindow;
+                if (mainWindow == null || !mainWindow.IsVisible)
                 {
                     return;
                 }
 
                 try
                 {
-                    if (value is null)
-                    {
-                        TaskbarManager.Instance.SetProgressValue(0, 0, Application.Current.MainWindow);
-                    }
-                    else
-                    {
-                        TaskbarManager.Instance.SetProgressValue(value.Value.Current, value.Value.Max, Application.Current.MainWindow);
-                    }
+                    SetTaskbarProgress(value, mainWindow);
                 }
                 catch (Exception e)
                 {
-                    // 不知道会不会有异常，先捕获一下
-                    Logger.Warning("TaskbarManager Exception: " + e.Message);
+                    _logger.Warning(e, "TaskbarManager Exception");
                 }
             });
+        }
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void SetTaskbarProgress((int Current, int Max)? value, Window mainWindow)
+    {
+        if (value is null)
+        {
+            TaskbarManager.Instance.SetProgressValue(0, 0, mainWindow);
+        }
+        else
+        {
+            TaskbarManager.Instance.SetProgressValue(value.Value.Current, value.Value.Max, mainWindow);
         }
     }
 

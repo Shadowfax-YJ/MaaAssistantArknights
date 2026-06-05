@@ -12,7 +12,8 @@ bool asst::RoguelikeDifficultySelectionTaskPlugin::load_params([[maybe_unused]] 
     const RoguelikeMode mode = m_config->get_mode();
 
     // 深入调查和月度小队模式不需要选择难度
-    if (mode == RoguelikeMode::Exploration || mode == RoguelikeMode::Squad) {
+    if (mode == RoguelikeMode::Exploration || mode == RoguelikeMode::DeepExplorationCollectiblePoolTest ||
+        mode == RoguelikeMode::Squad) {
         return false;
     }
 

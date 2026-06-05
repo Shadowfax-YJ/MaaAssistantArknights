@@ -28,7 +28,7 @@ bool asst::RoguelikeRecruitTaskPlugin::verify(AsstMsg msg, const json::value& de
     if (task_view.starts_with(roguelike_name)) {
         task_view.remove_prefix(roguelike_name.length());
     }
-    if (task_view.ends_with("Roguelike@StartExplore")) {
+    if (task_view.ends_with("Roguelike@StartExplore") || task_view.starts_with("StartExplore@Roguelike@")) {
         m_initail_recruit = true;
     }
     if (task_view.ends_with("Roguelike@EnterAfterRecruit")) {
@@ -80,6 +80,14 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
     auto mode = m_config->get_mode();
     auto& squad = m_config->get_squad();
     auto difficulty = m_config->get_difficulty();
+
+    if (mode == RoguelikeMode::DeepExplorationCollectiblePoolTest && m_initail_recruit && m_recruit_count <= 3) {
+        const std::string give_up_task =
+            theme == RoguelikeTheme::JieGarden ? "JieGarden@RoguelikeRecruit-GiveUp" : "RoguelikeRecruit-GiveUp";
+        Log.info(__FUNCTION__, "| Give up initial recruitment for collectible pool test", m_recruit_count);
+        ProcessTask(*this, { give_up_task }).run();
+        return true;
+    }
 
     if (theme == RoguelikeTheme::Sarkaz && mode == RoguelikeMode::Investment) {
         if (squad == "点刺成锭分队") {
@@ -519,6 +527,7 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
 void asst::RoguelikeRecruitTaskPlugin::reset_in_run_variables()
 {
     m_recruit_count = 0;
+    m_initail_recruit = false;
     m_starts_complete = false;
     m_team_complete = false;
 }

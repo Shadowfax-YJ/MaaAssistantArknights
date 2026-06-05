@@ -197,6 +197,7 @@
     <system:String x:Key="RoguelikeCollectibleModeSquad">支援選択を得るモードの分隊</system:String>
     <system:String x:Key="RoguelikeStrategyMonthlySquad">月間小隊をグラインドし、できるだけ多くの層をクリア</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">深層探索をグラインドし、できるだけ多くの層をクリア</system:String>
+    <system:String x:Key="RoguelikeStrategyDeepExplorationCollectiblePoolTest">深層探索ランダム収集品プールテスト</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">常楽スポットをグラインドし、第一層で洞窟に入り、ターゲットスポットが見つからなければ再起動します</system:String>
     <system:String x:Key="RoguelikeStrategyDataCollection">尊きMAA様がデータ収集中</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">ターゲット常楽系スポット</system:String>

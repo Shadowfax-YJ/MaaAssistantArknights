@@ -1,4 +1,6 @@
 #pragma once
+#include <filesystem>
+
 #include "Task/Roguelike/AbstractRoguelikeTaskPlugin.h"
 
 #include "Common/AsstTypes.h"
@@ -11,7 +13,15 @@ namespace asst
 enum class CoppersTaskRunMode
 {
     PICKUP,  // 拾取掉落通宝模式
-    EXCHANGE // 交换已有通宝模式
+    EXCHANGE, // 交换已有通宝模式
+    COLLECTIBLE_POOL_TEST // 深入调查随机藏品池测试模式
+};
+
+enum class CoppersDebugImageCategory
+{
+    General,
+    CoppersView,
+    Popup,
 };
 
 // 插件执行结果状态
@@ -49,6 +59,17 @@ private:
     // 处理交换模式：扫描钱盒通宝并决定是否交换
     CopperTaskResult handle_exchange_mode();
 
+    // 处理深入调查随机藏品池测试模式
+    CopperTaskResult handle_collectible_pool_test_mode();
+
+    bool run_first_matched_task(const std::vector<std::string>& task_names) const;
+    bool run_first_matched_task_with_pre_click_snapshot(
+        const std::vector<std::string>& task_names,
+        const std::string& snapshot_suffix,
+        int retry_times = 0,
+        CoppersDebugImageCategory category = CoppersDebugImageCategory::Popup) const;
+    bool close_collectible_pool_test_recast_popups() const;
+
     // 滑动通宝列表的辅助函数
     bool swipe_copper_list(int times, bool to_left) const;
     bool swipe_copper_list_left(int times) const;
@@ -79,7 +100,16 @@ private:
         const cv::Scalar& color) const;
 
     // 保存调试图像到文件
-    void save_debug_image(const cv::Mat& image, const std::string& suffix, bool auto_clean = true) const;
+    void save_debug_image(
+        const cv::Mat& image,
+        const std::string& suffix,
+        bool auto_clean = true,
+        CoppersDebugImageCategory category = CoppersDebugImageCategory::General) const;
+    void append_debug_image_record(
+        const std::filesystem::path& image_path,
+        const std::string& suffix,
+        CoppersDebugImageCategory category,
+        const cv::Mat& image) const;
 
     mutable asst::CoppersTaskRunMode m_run_mode; // 当前运行模式
 

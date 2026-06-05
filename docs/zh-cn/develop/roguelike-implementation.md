@@ -104,6 +104,7 @@ Core 中的主题和模式定义在 `RoguelikeConfig.h`：
 | `CLP_PDS` | `5` | Sami | 刷隐藏坍缩范式。 |
 | `Squad` | `6` | 通用 | 月度小队。 |
 | `Exploration` | `7` | 通用 | 深入调查。 |
+| `DeepExplorationCollectiblePoolTest` | `8` | 通用 | 深入调查随机藏品池测试，当前初始化同深入调查。 |
 | `FastPass` | `10001` | Sarkaz | Core 支持的快速通过第一层实验模式，当前 WPF/MAAUnified 未作为普通 UI 模式暴露。 |
 | `FindPlaytime` | `20001` | JieGarden | 第一层进洞，寻找指定常乐子节点。 |
 | `DataCollection` | `20002` | JieGarden | 数据收集，避战并优先记录不期而遇等样本。 |
@@ -113,7 +114,7 @@ Core 中的主题和模式定义在 `RoguelikeConfig.h`：
 - 校验 `theme` 和 `mode` 的组合是否合法。
 - 记录难度、分队、投资、刷开局、直升、常乐目标等参数。
 - 把 `{theme}@Roguelike@Stages` 初始化到 `{theme}@Roguelike@Stages_default`。
-- 把 `{theme}@Roguelike@StrategyChange` 指到模式对应的 `StrategyChange_modeN`。没有对应模式节点时退化为 `#none`。
+- 把 `{theme}@Roguelike@StrategyChange` 指到模式对应的 `StrategyChange_modeN`。`DeepExplorationCollectiblePoolTest` 先复用 `Exploration` 的 `StrategyChange_mode7`，没有对应模式节点时退化为 `#none`。
 - 对萨卡兹点刺成锭分队、界园指挥分队、界园 `FindPlaytime/DataCollection` 写入特殊策略基类。
 - 拒绝已废弃的 `investment_enter_second_floor`，要求使用 `investment_with_more_score`。
 - 校验 `find_playTime_target` 必须在 `1..3`。
@@ -385,13 +386,13 @@ WPF 输出的关键参数包括：
 - 月度/深入：`monthly_squad_auto_iterate`、`monthly_squad_check_comms`、`deep_exploration_auto_iterate`。
 - 主题：`first_floor_foldartal`、`start_foldartal_list`、`expected_collapsal_paradigms`、`find_playTime_target`、`refresh_trader_with_dice`、`start_with_seed`。
 
-WPF 的模式枚举暴露 `0/1/4/5/6/7/20001/20002`，没有暴露 Core 中的 `FastPass = 10001`。
+WPF 的模式枚举暴露 `0/1/4/5/6/7/8/20001/20002`，没有暴露 Core 中的 `FastPass = 10001`。
 
 ### MAAUnified
 
 MAAUnified 的参数编译在 `TaskParamCompiler.cs`。
 
-- `RoguelikeModes` 当前为 `[0, 1, 4, 5, 6, 7, 20001, 20002]`。
+- `RoguelikeModes` 当前为 `[0, 1, 4, 5, 6, 7, 8, 20001, 20002]`。
 - `RoguelikeThemes` 包含 `JieGarden`、`Phantom`、`Mizuki`、`Sami`、`Sarkaz`。
 - 兼容读取 `find_playTime_target` 和 `find_playtime_target`。
 - 会校验 `FindPlaytime/DataCollection` 必须为界园主题。

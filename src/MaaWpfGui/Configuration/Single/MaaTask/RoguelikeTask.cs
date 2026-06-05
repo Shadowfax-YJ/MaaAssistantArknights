@@ -235,6 +235,11 @@ public enum RoguelikeMode
     Exploration = 7,
 
     /// <summary>
+    /// 8 - 深入调查随机藏品池测试，初始化同深入调查
+    /// </summary>
+    DeepExplorationCollectiblePoolTest = 8,
+
+    /// <summary>
     /// 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
     /// </summary>
     FindPlaytime = 20001,

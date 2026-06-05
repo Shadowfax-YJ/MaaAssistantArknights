@@ -54,7 +54,12 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
     {
         Task.set_task_base(m_theme + "@Roguelike@Stages", m_theme + "@Roguelike@Stages_default");
         std::string strategy_task = m_theme + "@Roguelike@StrategyChange";
-        std::string strategy_task_with_mode = strategy_task + "_mode" + std::to_string(static_cast<int>(mode));
+        const auto strategy_mode =
+            mode == RoguelikeMode::DeepExplorationCollectiblePoolTest && m_theme != RoguelikeTheme::JieGarden
+                ? RoguelikeMode::Exploration
+                : mode;
+        std::string strategy_task_with_mode =
+            strategy_task + "_mode" + std::to_string(static_cast<int>(strategy_mode));
         if (Task.get(strategy_task_with_mode) == nullptr) {
             strategy_task_with_mode = "#none"; // 没有对应的层数选点策略，使用默认策略（避战）
             Log.warn(__FUNCTION__, "No strategy for mode", static_cast<int>(mode));

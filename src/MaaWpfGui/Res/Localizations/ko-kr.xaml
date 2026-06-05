@@ -197,6 +197,7 @@
     <system:String x:Key="RoguelikeCollectibleModeSquad">전기주전자 획득 분대</system:String>
     <system:String x:Key="RoguelikeStrategyMonthlySquad">월간 분대 파밍, 최대한 많은 구역 클리어</system:String>
     <system:String x:Key="RoguelikeStrategyDeepExploration">심층 조사 파밍, 최대한 많은 구역 클리어</system:String>
+    <system:String x:Key="RoguelikeStrategyDeepExplorationCollectiblePoolTest">심층 조사 랜덤 수집품 풀 테스트</system:String>
     <system:String x:Key="RoguelikeStrategyFindPlaytime">여흥 노드 파밍, 1층 쉐이의 잔식에 진입, 필요한 노드를 찾지 못하면 재시작</system:String>
     <system:String x:Key="RoguelikeStrategyDataCollection">고귀한 MAA님이 데이터를 수집 중</system:String>
     <system:String x:Key="RoguelikeFindPlaytimeTarget">목표 여흥 노드</system:String>
