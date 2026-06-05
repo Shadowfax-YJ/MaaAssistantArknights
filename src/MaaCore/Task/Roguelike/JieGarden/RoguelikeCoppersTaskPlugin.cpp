@@ -495,6 +495,11 @@ asst::CopperTaskResult asst::RoguelikeCoppersTaskPlugin::handle_collectible_pool
 
         if (!run_first_matched_task({ "JieGarden@Roguelike@CoppersRecastCollectiblePoolTest" })) {
             Log.info(__FUNCTION__, "| recast unavailable, collectible pool test finished");
+            ret &= ProcessTask(*this, { "JieGarden@Roguelike@CoppersCloseBox" }).set_retry_times(3).run();
+            if (!ret) {
+                Log.error(__FUNCTION__, "| failed to close coppers box after collectible pool test");
+                return CopperTaskResult::FAILED;
+            }
             return CopperTaskResult::SUCCESS;
         }
 
