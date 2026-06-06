@@ -124,6 +124,50 @@ std::string build_event_title_text(const asst::OCRer::ResultsVec& results)
     return title;
 }
 
+std::string build_ocr_text(asst::OCRer::ResultsVec results)
+{
+    if (results.empty()) {
+        return {};
+    }
+
+    std::ranges::sort(results, [](const auto& lhs, const auto& rhs) {
+        const int y_delta = lhs.rect.y > rhs.rect.y ? lhs.rect.y - rhs.rect.y : rhs.rect.y - lhs.rect.y;
+        const int line_delta = std::max(lhs.rect.height, rhs.rect.height) / 2;
+        if (y_delta <= line_delta) {
+            return lhs.rect.x < rhs.rect.x;
+        }
+        return lhs.rect.y < rhs.rect.y;
+    });
+
+    std::string text;
+    for (const auto& result : results) {
+        text += result.text;
+    }
+    return text;
+}
+
+bool is_jiegarden_target_candle_body(std::string_view text)
+{
+    const std::wstring normalized = normalize_encounter_lookup_text(text);
+    if (normalized.empty()) {
+        return false;
+    }
+
+    const auto contains = [&](std::wstring_view part) {
+        return normalized.find(part) != std::wstring::npos;
+    };
+    const bool has_intro = contains(L"席地而坐") || contains(L"超脱神识");
+    const bool has_candle = contains(L"基础烛火") || contains(L"获得6") || contains(L"6基础");
+    const bool has_bosky = contains(L"岁兽残识");
+    const bool has_explored = contains(L"已探索") || contains(L"探索状态");
+    return has_intro && has_candle && has_bosky && has_explored;
+}
+
+bool is_jiegarden_target_candle_title(std::string_view text)
+{
+    return normalize_encounter_lookup_text(text).find(L"烛火") != std::wstring::npos;
+}
+
 struct EncounterNameMatch
 {
     std::string name;
@@ -819,6 +863,49 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     return true;
 }
 
+std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::read_jiegarden_first_agent_option_body() const
+{
+    if (m_option_list.empty() || m_option_list_image.empty()) {
+        return std::nullopt;
+    }
+
+    const auto first_match =
+        OptionAnalyzer::match_option(m_config->get_theme(), m_option_list_image, m_option_list.front().templ);
+    if (!first_match) {
+        Log.warn(__FUNCTION__, "| Failed to locate first agent option body");
+        return std::nullopt;
+    }
+
+    const Rect& first_rect = first_match->rect;
+    int option_bottom = std::min(first_rect.y + 155, m_option_list_image.rows);
+    if (m_option_list.size() > 1) {
+        const auto second_match =
+            OptionAnalyzer::match_option(m_config->get_theme(), m_option_list_image, m_option_list[1].templ);
+        if (second_match) {
+            option_bottom = std::min(option_bottom, second_match->rect.y - 5);
+        }
+    }
+
+    Rect body_roi { first_rect.x + 60,
+                    first_rect.y + first_rect.height + 5,
+                    m_option_list_image.cols - first_rect.x - 65,
+                    option_bottom - first_rect.y - first_rect.height - 5 };
+    if (body_roi.empty()) {
+        Log.warn(__FUNCTION__, "| Empty first agent option body ROI");
+        return std::nullopt;
+    }
+
+    OCRer body_ocr(m_option_list_image, body_roi);
+    if (!body_ocr.analyze()) {
+        Log.warn(__FUNCTION__, "| Failed to recognize first agent option body");
+        return std::nullopt;
+    }
+
+    const std::string body_text = build_ocr_text(body_ocr.get_result());
+    Log.info(__FUNCTION__, "| First agent option body:", body_text);
+    return body_text;
+}
+
 std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiegarden_agent_event(
     const Config::RoguelikeEvent& event,
     const Config::RoguelikeEvent* treasure_event)
@@ -828,6 +915,20 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiega
     }
 
     const std::string agent_name = m_option_list.front().text;
+    if (is_jiegarden_target_candle_title(agent_name)) {
+        const std::optional<std::string> body_text = read_jiegarden_first_agent_option_body();
+        if (body_text && is_jiegarden_target_candle_body(*body_text)) {
+            auto target_info = basic_info_with_what("RoguelikeJieGardenTargetCandleFound");
+            target_info["details"]["agent_name"] = agent_name;
+            target_info["details"]["option_text"] = *body_text;
+            callback(AsstMsg::SubTaskExtraInfo, target_info);
+
+            Log.info(__FUNCTION__, "| Found target candle option, completing task without selecting option");
+            m_task_ptr->set_enable(false);
+            return std::nullopt;
+        }
+    }
+
     const cv::Mat agent_image = m_option_list_image.clone();
     json::object extra_details;
 
