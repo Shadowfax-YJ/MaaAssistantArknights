@@ -198,9 +198,11 @@
             "JieGarden@RoguelikeMapNode-Scheme.png",
             "JieGarden@RoguelikeMapNode-YiTrader.png",
             "JieGarden@RoguelikeMapNode-Playtime.png",
+            "JieGarden@RoguelikeMapNode-BoonsBosky.png",
             "JieGarden@RoguelikeMapNode-Omissions.png",
             "JieGarden@RoguelikeMapNode-Legend.png",
             "JieGarden@RoguelikeMapNode-Doubts.png",
+            "JieGarden@RoguelikeMapNode-DoubtsGrey.png",
             "JieGarden@RoguelikeMapNode-Disaster.png"
         ],
         "next": ["RoguelikeRoutingAction"]
@@ -209,14 +211,15 @@
         "doc": [
             "界园树洞节点优先级策略配置",
             "按优先级从高到低排列节点类型名称",
-            "传说>易与>拾遗>筹谋>常乐>故肆>杂疑(暂时取消)>灾祸(暂时取消)"
+            "传说>祸乱>拾遗>筹谋>常乐>易与>故肆"
         ],
         "template": [
             "JieGarden@RoguelikeMapNode-Legend.png",
-            "JieGarden@RoguelikeMapNode-YiTrader.png",
+            "JieGarden@RoguelikeMapNode-Disaster.png",
             "JieGarden@RoguelikeMapNode-Omissions.png",
             "JieGarden@RoguelikeMapNode-Scheme.png",
             "JieGarden@RoguelikeMapNode-Playtime.png",
+            "JieGarden@RoguelikeMapNode-YiTrader.png",
             "JieGarden@RoguelikeMapNode-OldShop.png"
         ]
     },
@@ -238,6 +241,13 @@
     "JieGarden@RoguelikeRoutingAction-LeaveBoskyPassage": {
         "algorithm": "JustReturn",
         "next": ["JieGarden@Roguelike@Stages_leaveBoskyPassage#next"]
+    },
+    "JieGarden@RoguelikeRoutingAction-ContinueBoskyPassage": {
+        "algorithm": "JustReturn",
+        "next": [
+            "JieGarden@Roguelike@Routing_BoskyPassage",
+            "JieGarden@Roguelike@Stages_leaveBoskyPassage#next"
+        ]
     },
     "JieGarden@RoguelikeRoutingAction-StageBoskyPassageEnter": {
         "algorithm": "JustReturn",
@@ -368,6 +378,7 @@
             "JieGarden@RoguelikeMapNode-Scheme.png",
             "JieGarden@RoguelikeMapNode-YiTrader.png",
             "JieGarden@RoguelikeMapNode-Playtime.png",
+            "JieGarden@RoguelikeMapNode-BoonsBosky.png",
             "JieGarden@RoguelikeMapNode-Omissions.png",
             "JieGarden@RoguelikeMapNode-OmissionsGrey.png",
             "JieGarden@RoguelikeMapNode-Legend.png",

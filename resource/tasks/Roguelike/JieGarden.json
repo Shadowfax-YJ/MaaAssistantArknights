@@ -748,7 +748,7 @@
         "template": "JieGarden@Roguelike@LeaveBoskyPassage.png",
         "roi": [1051, 317, 158, 148],
         "preDelay": 200,
-        "specificRect": [19, 317, 80, 80]
+        "specificRect": [7, 620, 12, 13]
     },
     "JieGarden@Roguelike@LeaveOperation": {
         "roi": [41, 22, 78, 71],
@@ -1822,7 +1822,7 @@
             "JieGarden@RoguelikeEncounterOptionAnalyzer-OptionHeaderBar-43.png",
             "JieGarden@RoguelikeEncounterOptionAnalyzer-OptionHeaderBar-48.png"
         ],
-        "roi": [835, 50, 40, 585],
+        "roi": [820, 50, 120, 585],
         "maskRange": [1, 255]
     },
     "JieGarden@RoguelikeEncounterOptionAnalyzer-OptionHeaderBar-Enabled": {

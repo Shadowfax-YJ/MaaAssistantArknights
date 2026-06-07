@@ -78,6 +78,10 @@ bool asst::RoguelikeShoppingTaskPlugin::save_data_collection_trader_image()
     const std::string image_path = is_yi_trader ? RoguelikeDataCollector.save_yi_trader_image(image)
                                                 : RoguelikeDataCollector.save_trader_image(image);
     RoguelikeDataCollector.record_trader(is_yi_trader ? "易与" : "诡异行商", image_path, is_yi_trader);
+    if (is_yi_trader) {
+        const std::string bosky_image_path = RoguelikeDataCollector.save_bosky_passage_image(image, "YiTrader");
+        RoguelikeDataCollector.record_bosky_passage_node("YiTrader", bosky_image_path);
+    }
     RoguelikeDataCollector.log_event("trader", json::object {
                                                    { "name", is_yi_trader ? "易与" : "诡异行商" },
                                                    { "image", image_path },

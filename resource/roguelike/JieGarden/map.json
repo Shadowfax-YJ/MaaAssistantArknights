@@ -22,7 +22,11 @@
         },
         {
             "type": "Boons",
-            "template": ["JieGarden@RoguelikeMapNode-Boons.png", "JieGarden@RoguelikeMapNode-BoonsGrey.png"]
+            "template": [
+                "JieGarden@RoguelikeMapNode-Boons.png",
+                "JieGarden@RoguelikeMapNode-BoonsGrey.png",
+                "JieGarden@RoguelikeMapNode-BoonsBosky.png"
+            ]
         },
         {
             "type": "SafeHouse",

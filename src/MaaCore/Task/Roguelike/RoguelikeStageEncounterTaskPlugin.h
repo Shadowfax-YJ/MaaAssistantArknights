@@ -29,6 +29,7 @@ private:
     std::optional<std::string> handle_jiegarden_agent_event(
         const Config::RoguelikeEvent& event,
         const Config::RoguelikeEvent* treasure_event);
+    std::optional<std::string> handle_jiegarden_legend_relieving_event(const Config::RoguelikeEvent& event);
     std::optional<std::string> read_jiegarden_first_agent_option_body() const;
     std::string capture_and_handle_jiegarden_agent_treasure(const Config::RoguelikeEvent& event);
     bool select_analyzed_option(size_t index);

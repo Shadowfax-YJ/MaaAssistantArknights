@@ -528,7 +528,9 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
         reset_option_list_and_view_data();
         if (update_option_list()) {
             json::array option_details;
+            std::vector<std::string> option_names;
             for (const auto& option : m_option_list) {
+                option_names.emplace_back(option.text);
                 option_details.emplace_back(json::object {
                     { "text", option.text },
                     { "enabled", option.enabled },
@@ -541,6 +543,10 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 }
                 return handle_jiegarden_agent_event(event, treasure_event);
             }
+            if (event.name == "禳解") {
+                return handle_jiegarden_legend_relieving_event(event);
+            }
+            RoguelikeDataCollector.record_bosky_passage_event_node(event.name, m_option_list_image, option_names);
             record_agent_event_if_needed(event);
 
             size_t choice = 0; // 以 0 作为 无效 index
@@ -918,13 +924,39 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiega
     if (is_jiegarden_target_candle_title(agent_name)) {
         const std::optional<std::string> body_text = read_jiegarden_first_agent_option_body();
         if (body_text && is_jiegarden_target_candle_body(*body_text)) {
-            auto target_info = basic_info_with_what("RoguelikeJieGardenTargetCandleFound");
+            const cv::Mat agent_image = m_option_list_image.clone();
+            json::object extra_details {
+                { "target_candle", true },
+                { "option_text", *body_text },
+            };
+
+            auto target_info = basic_info_with_what("RoguelikeJieGardenTargetCandleSelected");
             target_info["details"]["agent_name"] = agent_name;
             target_info["details"]["option_text"] = *body_text;
             callback(AsstMsg::SubTaskExtraInfo, target_info);
 
-            Log.info(__FUNCTION__, "| Found target candle option, completing task without selecting option");
-            m_task_ptr->set_enable(false);
+            Log.info(__FUNCTION__, "| Found target candle option, selecting candle option");
+            if (!select_analyzed_option(0)) {
+                record_agent_event(agent_name, agent_image, std::move(extra_details));
+                return std::nullopt;
+            }
+
+            reset_option_list_and_view_data();
+            if (!update_option_list() || m_option_list.empty()) {
+                Log.error(__FUNCTION__, "| Failed to recognize derived candle event option");
+                record_agent_event(agent_name, agent_image, std::move(extra_details));
+                return std::nullopt;
+            }
+
+            extra_details["derived_selected_option"] = m_option_list.front().text;
+            if (!select_analyzed_option(0)) {
+                record_agent_event(agent_name, agent_image, std::move(extra_details));
+                return std::nullopt;
+            }
+
+            RoguelikeBoskyPassageMap::get_instance().request_abandon_on_exit();
+            Log.info(__FUNCTION__, "| Target candle path entered bosky passage; will abandon when leaving bosky passage");
+            record_agent_event(agent_name, agent_image, std::move(extra_details));
             return std::nullopt;
         }
     }
@@ -973,6 +1005,52 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiega
     }
 
     record_agent_event(agent_name, agent_image, std::move(extra_details));
+    return std::nullopt;
+}
+
+std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_jiegarden_legend_relieving_event(
+    const Config::RoguelikeEvent& event)
+{
+    if (event.name != "禳解") {
+        return std::nullopt;
+    }
+
+    std::vector<std::string> image_paths;
+    std::vector<std::vector<std::string>> option_groups;
+
+    size_t loop_count = 0;
+    while (!need_exit()) {
+        if (m_option_list.empty() || m_option_list_image.empty()) {
+            break;
+        }
+
+        std::vector<std::string> option_names;
+        option_names.reserve(m_option_list.size());
+        for (const auto& option : m_option_list) {
+            option_names.emplace_back(option.text);
+        }
+        option_groups.emplace_back(std::move(option_names));
+        image_paths.emplace_back(RoguelikeDataCollector.save_bosky_passage_image(
+            m_option_list_image,
+            "Legend_relieving_options"));
+
+        ++loop_count;
+        Log.info(__FUNCTION__, "| selecting first option in relieving event, loop:", loop_count);
+        if (!select_analyzed_option(0)) {
+            break;
+        }
+
+        if (!advance_to_next_event(event.name)) {
+            break;
+        }
+
+        reset_option_list_and_view_data();
+        if (!update_option_list()) {
+            break;
+        }
+    }
+
+    RoguelikeDataCollector.record_bosky_passage_legend_relieving(image_paths, option_groups);
     return std::nullopt;
 }
 

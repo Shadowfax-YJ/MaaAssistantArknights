@@ -23,6 +23,7 @@ constexpr const char* LegendsDir = "legends";
 constexpr const char* TradersDir = "traders";
 constexpr const char* YiTradersDir = "yi_traders";
 constexpr const char* AgentsDir = "agents";
+constexpr const char* BoskyPassageDir = "bosky_passage";
 
 struct JieGardenFloorRule
 {
@@ -234,6 +235,91 @@ std::string agent_source_node_type(
     }
     return raw_node_type.empty() ? "Unknown" : std::string(raw_node_type);
 }
+
+std::string bosky_passage_node_name(std::string_view node_type)
+{
+    if (node_type == "Legend") {
+        return "传说";
+    }
+    if (node_type == "Disaster") {
+        return "祸乱";
+    }
+    if (node_type == "Scheme") {
+        return "筹谋";
+    }
+    if (node_type == "Omissions") {
+        return "拾遗";
+    }
+    if (node_type == "Boons") {
+        return "抉择";
+    }
+    if (node_type == "Doubts") {
+        return "杂疑";
+    }
+    if (node_type == "Playtime") {
+        return "常乐";
+    }
+    if (node_type == "YiTrader") {
+        return "易与";
+    }
+    if (node_type == "OldShop") {
+        return "故肆";
+    }
+    return node_type.empty() ? "Unknown" : std::string(node_type);
+}
+
+bool is_bosky_passage_event_node(std::string_view node_type)
+{
+    return node_type == "Legend" || node_type == "Playtime" || node_type == "Scheme" || node_type == "OldShop";
+}
+
+bool is_bosky_passage_event_name_node(std::string_view node_type)
+{
+    return node_type == "Legend" || node_type == "Playtime";
+}
+
+bool is_bosky_passage_option_list_node(std::string_view node_type)
+{
+    return node_type == "Scheme" || node_type == "OldShop";
+}
+
+json::array option_names_to_json(const std::vector<std::string>& option_names)
+{
+    json::array options;
+    for (const auto& option_name : option_names) {
+        options.emplace_back(option_name);
+    }
+    return options;
+}
+
+json::array option_groups_to_json(const std::vector<std::vector<std::string>>& option_groups)
+{
+    json::array groups;
+    for (const auto& group : option_groups) {
+        groups.emplace_back(option_names_to_json(group));
+    }
+    return groups;
+}
+
+json::array image_paths_to_json(const std::vector<std::string>& image_paths)
+{
+    json::array images;
+    for (const auto& image_path : image_paths) {
+        images.emplace_back(image_path);
+    }
+    return images;
+}
+}
+
+void asst::RoguelikeDataCollection::reset_bosky_passage_state_locked()
+{
+    m_bosky_passage_route_count = 0;
+    m_last_bosky_passage_route_index = 0;
+    m_last_bosky_passage_grid_x = -1;
+    m_last_bosky_passage_grid_y = -1;
+    m_last_bosky_passage_node_index = -1;
+    m_recorded_bosky_passage_route_indices.clear();
+    m_bosky_passage_record_indices.clear();
 }
 
 void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config, const json::value& params)
@@ -248,6 +334,7 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     std::filesystem::create_directories(m_session_dir / TradersDir);
     std::filesystem::create_directories(m_session_dir / YiTradersDir);
     std::filesystem::create_directories(m_session_dir / AgentsDir);
+    std::filesystem::create_directories(m_session_dir / BoskyPassageDir);
     m_current_floor = "未知层";
     m_floor_index = 0;
     m_run_active = true;
@@ -256,12 +343,14 @@ void asst::RoguelikeDataCollection::start_session(const RoguelikeConfig& config,
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
+    m_bosky_passage_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
     m_last_selected_node_type = "Unknown";
     m_pending_agent_source_node_type = "Unknown";
     m_pending_agent_source_event_name.clear();
     m_pending_agent_source_record_type = "Encounter";
+    reset_bosky_passage_state_locked();
 
     json::object params_summary {
         { "starts_count", params.get("starts_count", -1) },
@@ -294,6 +383,7 @@ void asst::RoguelikeDataCollection::stop_session(std::string_view reason)
     flush_encounter_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
+    flush_bosky_passage_summary(true);
     disable();
 }
 
@@ -303,6 +393,7 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     flush_encounter_summary(true);
     flush_trader_summary(true);
     flush_agent_summary(true);
+    flush_bosky_passage_summary(true);
 
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
@@ -316,6 +407,7 @@ void asst::RoguelikeDataCollection::finish_run(std::string_view reason)
     m_pending_agent_source_node_type = "Unknown";
     m_pending_agent_source_event_name.clear();
     m_pending_agent_source_record_type = "Encounter";
+    reset_bosky_passage_state_locked();
 }
 
 void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason)
@@ -331,6 +423,7 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
     flush_encounter_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
+    flush_bosky_passage_summary(false);
 
     std::lock_guard lock(m_mutex);
     if (!m_enabled || m_session_dir.empty()) {
@@ -347,6 +440,7 @@ void asst::RoguelikeDataCollection::finish_run_if_active(std::string_view reason
     m_pending_agent_source_node_type = "Unknown";
     m_pending_agent_source_event_name.clear();
     m_pending_agent_source_record_type = "Encounter";
+    reset_bosky_passage_state_locked();
 }
 
 void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::string_view reason)
@@ -354,7 +448,8 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     {
         std::lock_guard lock(m_mutex);
         if (!m_enabled || m_session_dir.empty() ||
-            (m_encounter_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty())) {
+            (m_encounter_summary.empty() && m_trader_summary.empty() && m_agent_summary.empty() &&
+             m_bosky_passage_summary.empty())) {
             return;
         }
     }
@@ -363,6 +458,7 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     flush_encounter_summary(false);
     flush_trader_summary(false);
     flush_agent_summary(false);
+    flush_bosky_passage_summary(false);
 
     std::lock_guard lock(m_mutex);
     m_current_floor = "未知层";
@@ -376,6 +472,7 @@ void asst::RoguelikeDataCollection::finish_run_if_has_cached_encounters(std::str
     m_pending_agent_source_node_type = "Unknown";
     m_pending_agent_source_event_name.clear();
     m_pending_agent_source_record_type = "Encounter";
+    reset_bosky_passage_state_locked();
 }
 
 void asst::RoguelikeDataCollection::start_run_if_enabled()
@@ -396,6 +493,7 @@ void asst::RoguelikeDataCollection::start_run_if_enabled()
         m_pending_agent_source_node_type = "Unknown";
         m_pending_agent_source_event_name.clear();
         m_pending_agent_source_record_type = "Encounter";
+        reset_bosky_passage_state_locked();
     }
     m_run_active = true;
 }
@@ -446,6 +544,7 @@ void asst::RoguelikeDataCollection::disable()
     flush_encounter_summary();
     flush_trader_summary();
     flush_agent_summary();
+    flush_bosky_passage_summary();
 
     std::lock_guard lock(m_mutex);
     m_enabled = false;
@@ -458,12 +557,14 @@ void asst::RoguelikeDataCollection::disable()
     m_encounter_summary.clear();
     m_trader_summary.clear();
     m_agent_summary.clear();
+    m_bosky_passage_summary.clear();
     m_record_map_encounters = false;
     m_map_encounter_type = "Encounter";
     m_last_selected_node_type = "Unknown";
     m_pending_agent_source_node_type = "Unknown";
     m_pending_agent_source_event_name.clear();
     m_pending_agent_source_record_type = "Encounter";
+    reset_bosky_passage_state_locked();
 }
 
 bool asst::RoguelikeDataCollection::enabled() const
@@ -538,6 +639,31 @@ std::string asst::RoguelikeDataCollection::save_agent_treasure_image(const cv::M
 std::string asst::RoguelikeDataCollection::save_agent_collectible_image(const cv::Mat& image)
 {
     return save_image(image, "agent_collectible", AgentsDir);
+}
+
+std::string asst::RoguelikeDataCollection::save_bosky_passage_image(const cv::Mat& image, std::string_view suffix)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || image.empty()) {
+        return {};
+    }
+
+    try {
+        const auto filename =
+            utils::path(std::format("{}_{}.png", MAA_NS::format_now_for_filename(), std::string(suffix)));
+        const auto relative_path = utils::path(BoskyPassageDir) / filename;
+        const auto absolute_path = m_session_dir / relative_path;
+        std::filesystem::create_directories(absolute_path.parent_path());
+        if (MAA_NS::imwrite(absolute_path, image)) {
+            link_to_images_dir(absolute_path, filename);
+            return utils::path_to_utf8_string(relative_path);
+        }
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to save bosky passage image:", e.what());
+    }
+
+    return {};
 }
 
 std::string asst::RoguelikeDataCollection::normalize_jiegarden_floor_name(std::string_view ocr_text)
@@ -705,6 +831,27 @@ void asst::RoguelikeDataCollection::note_selected_node_type(std::string_view nod
     m_pending_agent_source_record_type = "Encounter";
 }
 
+int asst::RoguelikeDataCollection::note_bosky_passage_route(
+    std::string_view node_type,
+    int grid_x,
+    int grid_y,
+    size_t node_index)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty()) {
+        return 0;
+    }
+
+    m_run_active = true;
+    ++m_bosky_passage_route_count;
+    m_last_bosky_passage_route_index = m_bosky_passage_route_count;
+    m_last_bosky_passage_grid_x = grid_x;
+    m_last_bosky_passage_grid_y = grid_y;
+    m_last_bosky_passage_node_index = static_cast<int>(node_index);
+    m_last_selected_node_type = node_type.empty() ? "Unknown" : std::string(node_type);
+    return m_last_bosky_passage_route_index;
+}
+
 void asst::RoguelikeDataCollection::note_agent_source(std::string_view event_name, std::string_view record_type)
 {
     std::lock_guard lock(m_mutex);
@@ -843,6 +990,228 @@ json::object asst::RoguelikeDataCollection::record_agent(
     return source_details;
 }
 
+void asst::RoguelikeDataCollection::record_bosky_passage_node(
+    std::string_view node_type,
+    std::string_view image_path,
+    json::object extra_details)
+{
+    json::object event_record;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty()) {
+            return;
+        }
+
+        const int route_index = m_last_bosky_passage_route_index;
+        if (route_index > 0 && m_recorded_bosky_passage_route_indices.contains(route_index)) {
+            return;
+        }
+
+        m_run_active = true;
+        const std::string raw_node_type = node_type.empty() ? m_last_selected_node_type : std::string(node_type);
+        json::object record {
+            { "route_index", route_index },
+            { "node_type", raw_node_type.empty() ? "Unknown" : raw_node_type },
+            { "node_name", bosky_passage_node_name(raw_node_type) },
+            { "image", std::string(image_path) },
+        };
+        if (m_last_bosky_passage_node_index >= 0) {
+            record["map_node_index"] = m_last_bosky_passage_node_index;
+        }
+        if (m_last_bosky_passage_grid_x >= 0 && m_last_bosky_passage_grid_y >= 0) {
+            record["grid"] = json::array { m_last_bosky_passage_grid_x, m_last_bosky_passage_grid_y };
+        }
+        record |= std::move(extra_details);
+
+        event_record = record;
+        const size_t record_index = m_bosky_passage_summary.size();
+        m_bosky_passage_summary.emplace_back(std::move(record));
+        if (route_index > 0) {
+            m_recorded_bosky_passage_route_indices.emplace(route_index);
+            m_bosky_passage_record_indices[route_index] = record_index;
+        }
+    }
+
+    log_event("bosky_passage_node", std::move(event_record));
+}
+
+void asst::RoguelikeDataCollection::record_bosky_passage_map(json::object map_details)
+{
+    json::object event_record;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty()) {
+            return;
+        }
+
+        m_run_active = true;
+        map_details["record_type"] = "map";
+        map_details["floor"] = m_current_floor.empty() ? "是非境" : m_current_floor;
+
+        bool updated = false;
+        for (auto& record_value : m_bosky_passage_summary) {
+            if (!record_value.is_object()) {
+                continue;
+            }
+            auto& record = record_value.as_object();
+            if (!record.contains("record_type") || record.at("record_type").as_string() != "map") {
+                continue;
+            }
+            record = map_details;
+            updated = true;
+            break;
+        }
+
+        if (!updated) {
+            m_bosky_passage_summary.emplace_back(map_details);
+        }
+        event_record = std::move(map_details);
+    }
+
+    log_event("bosky_passage_map", std::move(event_record));
+}
+
+void asst::RoguelikeDataCollection::record_bosky_passage_event_node(
+    std::string_view event_name,
+    const cv::Mat& option_image,
+    const std::vector<std::string>& option_names)
+{
+    std::string node_type;
+    int route_index = 0;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty() || m_current_floor != "是非境") {
+            return;
+        }
+        node_type = m_last_selected_node_type;
+        route_index = m_last_bosky_passage_route_index;
+        if (!is_bosky_passage_event_node(node_type)) {
+            return;
+        }
+    }
+
+    const std::string image_path = save_bosky_passage_image(option_image, node_type + "_options");
+    json::object event_details {
+        { "event_name", std::string(event_name) },
+        { "image", image_path },
+    };
+    if (!option_names.empty()) {
+        event_details["options"] = option_names_to_json(option_names);
+    }
+
+    json::object event_record;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty()) {
+            return;
+        }
+
+        size_t record_index = 0;
+        if (route_index > 0 && m_bosky_passage_record_indices.contains(route_index)) {
+            record_index = m_bosky_passage_record_indices.at(route_index);
+        }
+        else {
+            json::object record {
+                { "route_index", route_index },
+                { "node_type", node_type.empty() ? "Unknown" : node_type },
+                { "node_name", bosky_passage_node_name(node_type) },
+                { "image", image_path },
+            };
+            if (m_last_bosky_passage_node_index >= 0) {
+                record["map_node_index"] = m_last_bosky_passage_node_index;
+            }
+            if (m_last_bosky_passage_grid_x >= 0 && m_last_bosky_passage_grid_y >= 0) {
+                record["grid"] = json::array { m_last_bosky_passage_grid_x, m_last_bosky_passage_grid_y };
+            }
+            record["events"] = json::array {};
+            record_index = m_bosky_passage_summary.size();
+            m_bosky_passage_summary.emplace_back(std::move(record));
+            if (route_index > 0) {
+                m_recorded_bosky_passage_route_indices.emplace(route_index);
+                m_bosky_passage_record_indices[route_index] = record_index;
+            }
+        }
+
+        auto& record = m_bosky_passage_summary[record_index].as_object();
+        if (!record.contains("events")) {
+            record["events"] = json::array {};
+        }
+        record["events"].as_array().emplace_back(event_details);
+
+        if (is_bosky_passage_event_name_node(node_type) && !record.contains("event_name")) {
+            record["event_name"] = std::string(event_name);
+        }
+        if (is_bosky_passage_option_list_node(node_type)) {
+            record["options"] = option_names_to_json(option_names);
+        }
+        event_record = record;
+    }
+
+    log_event("bosky_passage_node", std::move(event_record));
+}
+
+void asst::RoguelikeDataCollection::record_bosky_passage_legend_relieving(
+    const std::vector<std::string>& image_paths,
+    const std::vector<std::vector<std::string>>& option_groups)
+{
+    if (image_paths.empty() && option_groups.empty()) {
+        return;
+    }
+
+    json::object event_record;
+    {
+        std::lock_guard lock(m_mutex);
+        if (!m_enabled || m_session_dir.empty() || m_current_floor != "是非境" || m_last_selected_node_type != "Legend") {
+            return;
+        }
+
+        const int route_index = m_last_bosky_passage_route_index;
+        size_t record_index = 0;
+        if (route_index > 0 && m_bosky_passage_record_indices.contains(route_index)) {
+            record_index = m_bosky_passage_record_indices.at(route_index);
+        }
+        else {
+            json::object record {
+                { "route_index", route_index },
+                { "node_type", "Legend" },
+                { "node_name", bosky_passage_node_name("Legend") },
+                { "image", image_paths.empty() ? "" : image_paths.front() },
+            };
+            if (m_last_bosky_passage_node_index >= 0) {
+                record["map_node_index"] = m_last_bosky_passage_node_index;
+            }
+            if (m_last_bosky_passage_grid_x >= 0 && m_last_bosky_passage_grid_y >= 0) {
+                record["grid"] = json::array { m_last_bosky_passage_grid_x, m_last_bosky_passage_grid_y };
+            }
+            record["events"] = json::array {};
+            record_index = m_bosky_passage_summary.size();
+            m_bosky_passage_summary.emplace_back(std::move(record));
+            if (route_index > 0) {
+                m_recorded_bosky_passage_route_indices.emplace(route_index);
+                m_bosky_passage_record_indices[route_index] = record_index;
+            }
+        }
+
+        auto& record = m_bosky_passage_summary[record_index].as_object();
+        const json::array images = image_paths_to_json(image_paths);
+        const json::array option_groups_json = option_groups_to_json(option_groups);
+        record["event_name"] = "禳解";
+        record["images"] = images;
+        record["option_groups"] = option_groups_json;
+        if (!record.contains("events")) {
+            record["events"] = json::array {};
+        }
+        record["events"].as_array().emplace_back(json::object {
+            { "event_name", "禳解" },
+            { "images", images },
+            { "option_groups", option_groups_json },
+        });
+        event_record = record;
+    }
+
+    log_event("bosky_passage_node", std::move(event_record));
+}
+
 void asst::RoguelikeDataCollection::flush_encounter_summary(bool force)
 {
     std::lock_guard lock(m_mutex);
@@ -894,5 +1263,23 @@ void asst::RoguelikeDataCollection::flush_agent_summary(bool force)
     }
     catch (const std::exception& e) {
         Log.error(__FUNCTION__, "| failed to write agent summary:", e.what());
+    }
+}
+
+void asst::RoguelikeDataCollection::flush_bosky_passage_summary(bool force)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_enabled || m_session_dir.empty() || (!force && m_bosky_passage_summary.empty())) {
+        return;
+    }
+
+    try {
+        std::filesystem::create_directories(m_session_dir);
+        std::ofstream ofs(m_session_dir / "bosky_passage.jsonl", std::ios::app);
+        ofs << json::value(m_bosky_passage_summary).to_string() << '\n';
+        m_bosky_passage_summary.clear();
+    }
+    catch (const std::exception& e) {
+        Log.error(__FUNCTION__, "| failed to write bosky passage summary:", e.what());
     }
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bitset>
 #include <optional>
 #include <vector>
 
@@ -60,6 +61,19 @@ public:
     [[nodiscard]] bool get_node_open(size_t index) const;
     [[nodiscard]] bool get_node_visited(size_t index) const;
 
+    void reset_edges();
+
+    void add_undirected_edge(size_t first, size_t second);
+
+    [[nodiscard]] bool has_edge(size_t first, size_t second) const;
+
+    [[nodiscard]] std::vector<size_t> get_neighbors(size_t index) const;
+
+    [[nodiscard]] std::vector<size_t>
+        get_open_unvisited_neighbors(size_t index, std::optional<RoguelikeNodeType> type_filter = std::nullopt) const;
+
+    [[nodiscard]] size_t get_edge_count() const;
+
     [[nodiscard]] int get_node_x(size_t index) const;
     [[nodiscard]] int get_node_y(size_t index) const;
     // 获得节点像素坐标（左上角）
@@ -118,6 +132,8 @@ public:
         bool is_open,
         RoguelikeNodeType type = RoguelikeNodeType::Unknown);
 
+    void retain_nodes(const std::vector<size_t>& indices);
+
     // 设置子类型
     void set_node_subtype(size_t index, RoguelikeBoskySubNodeType sub_type);
 
@@ -130,6 +146,10 @@ public:
     // 获取目标子类型
     [[nodiscard]] RoguelikeBoskySubNodeType get_target_subtype() const { return m_target_subtype; }
 
+    void request_abandon_on_exit() { m_abandon_on_exit = true; }
+
+    [[nodiscard]] bool consume_abandon_on_exit();
+
     // 中心节点 index
     static constexpr int CENTER_X = 3;
     static constexpr int CENTER_Y = 2;
@@ -140,7 +160,7 @@ private:
     // 固定 5x7 网格；节点总数 ≤ 31
     static constexpr int WIDTH = 7;
     static constexpr int HEIGHT = 5;
-    static constexpr size_t MAX_NODES = 31;
+    static constexpr size_t NODE_COUNT = WIDTH * HEIGHT;
 
     struct Node
     {
@@ -151,14 +171,18 @@ private:
         bool visited = false; // 是否已访问
     };
 
-    std::array<Node, WIDTH * HEIGHT> m_nodes {}; // 直接按 y*WIDTH + x 索引
+    std::array<Node, NODE_COUNT> m_nodes {}; // 直接按 y*WIDTH + x 索引
+    std::array<std::bitset<NODE_COUNT>, NODE_COUNT> m_edges {};
     size_t m_curr_pos = 0;
     size_t m_existing_count = 0;
     RoguelikeBoskySubNodeType m_target_subtype = RoguelikeBoskySubNodeType::Unknown;
+    bool m_abandon_on_exit = false;
 
     // 辅助函数：获取有效的节点引用，如果索引无效或节点不存在则返回 nullptr
     [[nodiscard]] Node* get_valid_node(size_t index);
 
     [[nodiscard]] static constexpr bool in_bounds(int x, int y) { return 0 <= x && x < WIDTH && 0 <= y && y < HEIGHT; }
+
+    [[nodiscard]] bool is_graph_vertex(size_t index) const;
 };
 }

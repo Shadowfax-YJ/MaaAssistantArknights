@@ -39,11 +39,6 @@ std::optional<size_t>
         n.visited = false;
         n.type = type;
         ++m_existing_count;
-
-        // 临时措施，先关闭祸乱节点
-        if (type == RoguelikeNodeType::Disaster) {
-            n.is_open = false;
-        }
         return idx;
     }
     else {
@@ -107,8 +102,17 @@ void RoguelikeBoskyPassageMap::reset()
     for (auto& n : m_nodes) {
         n = Node {}; // reset
     }
+    reset_edges();
     m_curr_pos = 0;
     m_existing_count = 0;
+    m_abandon_on_exit = false;
+}
+
+bool RoguelikeBoskyPassageMap::consume_abandon_on_exit()
+{
+    const bool result = m_abandon_on_exit;
+    m_abandon_on_exit = false;
+    return result;
 }
 
 std::vector<size_t>
@@ -140,6 +144,86 @@ std::vector<size_t> RoguelikeBoskyPassageMap::get_open_nodes(std::optional<Rogue
         }
     }
     return res;
+}
+
+bool RoguelikeBoskyPassageMap::is_graph_vertex(size_t index) const
+{
+    return index < m_nodes.size() && (m_nodes[index].exists || index == center_index());
+}
+
+void RoguelikeBoskyPassageMap::reset_edges()
+{
+    for (auto& edge_set : m_edges) {
+        edge_set.reset();
+    }
+}
+
+void RoguelikeBoskyPassageMap::add_undirected_edge(size_t first, size_t second)
+{
+    if (first >= m_edges.size() || second >= m_edges.size() || first == second) {
+        return;
+    }
+    if (!is_graph_vertex(first) || !is_graph_vertex(second)) {
+        return;
+    }
+    m_edges[first].set(second);
+    m_edges[second].set(first);
+}
+
+bool RoguelikeBoskyPassageMap::has_edge(size_t first, size_t second) const
+{
+    if (first >= m_edges.size() || second >= m_edges.size()) {
+        return false;
+    }
+    return m_edges[first].test(second);
+}
+
+std::vector<size_t> RoguelikeBoskyPassageMap::get_neighbors(size_t index) const
+{
+    std::vector<size_t> res;
+    if (index >= m_edges.size()) {
+        return res;
+    }
+
+    res.reserve(m_edges[index].count());
+    for (size_t i = 0; i < m_edges[index].size(); ++i) {
+        if (m_edges[index].test(i) && is_graph_vertex(i)) {
+            res.push_back(i);
+        }
+    }
+    return res;
+}
+
+std::vector<size_t> RoguelikeBoskyPassageMap::get_open_unvisited_neighbors(
+    size_t index,
+    std::optional<RoguelikeNodeType> type_filter) const
+{
+    std::vector<size_t> res;
+    if (index >= m_edges.size()) {
+        return res;
+    }
+
+    for (size_t node_index = 0; node_index < m_edges[index].size(); ++node_index) {
+        if (!m_edges[index].test(node_index) || node_index == center_index()) {
+            continue;
+        }
+        const Node& n = m_nodes[node_index];
+        if (n.exists && n.is_open && !n.visited) {
+            if (!type_filter.has_value() || n.type == type_filter.value()) {
+                res.push_back(node_index);
+            }
+        }
+    }
+    return res;
+}
+
+size_t RoguelikeBoskyPassageMap::get_edge_count() const
+{
+    size_t count = 0;
+    for (const auto& edge_set : m_edges) {
+        count += edge_set.count();
+    }
+    return count / 2;
 }
 
 RoguelikeNodeType RoguelikeBoskyPassageMap::get_node_type(size_t index) const
@@ -263,7 +347,31 @@ std::optional<size_t> RoguelikeBoskyPassageMap::ensure_node_from_pixel(
         }
         return idx;
     }
+
     // 节点不存在，创建新节点
     return create_and_insert_node(gx, gy, type, is_open);
+}
+
+void RoguelikeBoskyPassageMap::retain_nodes(const std::vector<size_t>& indices)
+{
+    std::bitset<NODE_COUNT> retained;
+    for (const size_t index : indices) {
+        if (index < NODE_COUNT) {
+            retained.set(index);
+        }
+    }
+
+    size_t count = 0;
+    for (size_t index = 0; index < m_nodes.size(); ++index) {
+        if (!m_nodes[index].exists) {
+            continue;
+        }
+        if (!retained.test(index)) {
+            m_nodes[index] = Node {};
+            continue;
+        }
+        ++count;
+    }
+    m_existing_count = count;
 }
 } // namespace asst

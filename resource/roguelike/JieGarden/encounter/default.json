@@ -225,8 +225,8 @@
         {
             "name": "禳解",
             "option_num": 2,
-            "choose": 2,
-            "fallback_choices": [[3, 2]]
+            "choose": 1,
+            "fallback_choices": [[3, 1]]
         },
         {
             "name": "地镇",
@@ -352,10 +352,16 @@
         },
         {
             "name": "天圆地方",
-            "option_text": [
-                "岁兽代理人的援助尽在眼前"
-            ],
-            "next_event": "相随"
+            "option_num": 4,
+            "choose": 2,
+            "fallback_choices": [[5, 2]],
+            "next_event": "天圆地方-1"
+        },
+        {
+            "name": "天圆地方-1",
+            "option_num": 4,
+            "choose": 4,
+            "fallback_choices": [[2, 2]]
         },
         {
             "name": "存形失意",
