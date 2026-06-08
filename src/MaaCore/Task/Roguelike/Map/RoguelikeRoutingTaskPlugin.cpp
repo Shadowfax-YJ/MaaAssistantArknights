@@ -9,6 +9,7 @@
 #include "Controller/Controller.h"
 #include "MaaUtils/ImageIo.h"
 #include "MaaUtils/NoWarningCV.hpp"
+#include "RoguelikeBoskyPassageMap.h"
 #include "Task/ProcessTask.h"
 #include "Task/Roguelike/RoguelikeDataCollection.h"
 #include "Utils/DebugImageHelper.hpp"
@@ -105,6 +106,19 @@ bool asst::RoguelikeRoutingTaskPlugin::verify(const AsstMsg msg, const json::val
 bool asst::RoguelikeRoutingTaskPlugin::_run()
 {
     LogTraceFunction;
+
+    if (m_config->get_theme() == RoguelikeTheme::JieGarden &&
+        RoguelikeBoskyPassageMap::get_instance().consume_abandon_on_exit()) {
+        json::object details {
+            { "floor", "是非境" },
+            { "reason", "target_candle_bosky_auto_exit" },
+        };
+        RoguelikeDataCollector.set_pending_abandon_reason("target_candle_bosky_auto_exit", details);
+        RoguelikeDataCollector.log_event("bosky_auto_exit_abandon", std::move(details));
+        Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-ExitThenAbandon");
+        reset_in_run_variables();
+        return true;
+    }
 
     switch (m_routing_strategy) {
     case RoutingStrategy::Sarkaz_FastInvestment:
@@ -1461,12 +1475,12 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
 
     auto best_it = std::ranges::max_element(candidates, data_collection_score_less);
 
-    const bool has_remaining_encounter_route = std::ranges::any_of(candidates, [](const auto& candidate) {
-        return candidate.valid && candidate.encounter_count > 0;
+    const bool has_remaining_valuable_non_combat_route = std::ranges::any_of(candidates, [](const auto& candidate) {
+        return candidate.valid && candidate.valuable_non_combat_count > 0;
     });
-    if (m_data_collection_floor == 2 && !has_remaining_encounter_route) {
+    if (m_data_collection_floor == 2 && !has_remaining_valuable_non_combat_route) {
         auto details =
-            build_data_collection_route_details(candidates, std::nullopt, "second_floor_no_remaining_encounter");
+            build_data_collection_route_details(candidates, std::nullopt, "second_floor_no_remaining_valuable_non_combat");
         details["floor"] = m_data_collection_floor;
         details["planned_new_floor"] = planned_new_floor;
         if (!image_path.empty()) {
@@ -1475,13 +1489,13 @@ void asst::RoguelikeRoutingTaskPlugin::navigate_data_collection_route()
         auto abandon_details = details;
         RoguelikeDataCollector.log_event("route_exit", std::move(details));
         RoguelikeDataCollector.set_pending_abandon_reason(
-            "second_floor_no_remaining_encounter",
+            "second_floor_no_remaining_valuable_non_combat",
             std::move(abandon_details));
         callback(
             AsstMsg::TaskChainExtraInfo,
             json::object {
                 { "what", "RoguelikeRouteExit" },
-                { "message", "界园数据收集: 山水阁后续路线没有不期而遇，提前退出本局" },
+                { "message", "界园数据收集: 山水阁后续路线没有除得偿所愿外的非作战节点，提前退出本局" },
             });
         Task.set_task_base("RoguelikeRoutingAction", "JieGarden@RoguelikeRoutingAction-ExitThenAbandon");
         reset_in_run_variables();
@@ -1643,6 +1657,7 @@ asst::RoguelikeRoutingTaskPlugin::DataCollectionRouteScore
     score.encounter_count = type == RoguelikeNodeType::Encounter ? 1 : 0;
     score.combat_count = is_data_collection_combat_type(type) ? 1 : 0;
     score.non_combat_count = score.combat_count ? 0 : 1;
+    score.valuable_non_combat_count = is_data_collection_valuable_non_combat_type(type) ? 1 : 0;
     if (type == RoguelikeNodeType::Encounter) {
         score.first_encounter_step = 0;
     }
@@ -1667,6 +1682,7 @@ asst::RoguelikeRoutingTaskPlugin::DataCollectionRouteScore
         score.encounter_count += best_child->encounter_count;
         score.combat_count += best_child->combat_count;
         score.non_combat_count += best_child->non_combat_count;
+        score.valuable_non_combat_count += best_child->valuable_non_combat_count;
         score.vertical_edge_count += best_child->vertical_edge_count;
         score.path_length = best_child->path_length;
         if (type != RoguelikeNodeType::Encounter &&
@@ -1686,14 +1702,17 @@ bool asst::RoguelikeRoutingTaskPlugin::data_collection_score_less(
     if (lhs.valid != rhs.valid) {
         return !lhs.valid && rhs.valid;
     }
-    if (lhs.encounter_count != rhs.encounter_count) {
-        return lhs.encounter_count < rhs.encounter_count;
+    if (lhs.valuable_non_combat_count != rhs.valuable_non_combat_count) {
+        return lhs.valuable_non_combat_count < rhs.valuable_non_combat_count;
     }
     if (lhs.path_length != rhs.path_length) {
         return lhs.path_length > rhs.path_length;
     }
     if (lhs.non_combat_count != rhs.non_combat_count) {
         return lhs.non_combat_count < rhs.non_combat_count;
+    }
+    if (lhs.encounter_count != rhs.encounter_count) {
+        return lhs.encounter_count < rhs.encounter_count;
     }
     if (lhs.first_encounter_step != rhs.first_encounter_step) {
         return lhs.first_encounter_step > rhs.first_encounter_step;
@@ -1768,6 +1787,7 @@ json::object asst::RoguelikeRoutingTaskPlugin::build_data_collection_route_detai
             { "encounter_count", candidate.encounter_count },
             { "combat_count", candidate.combat_count },
             { "non_combat_count", candidate.non_combat_count },
+            { "valuable_non_combat_count", candidate.valuable_non_combat_count },
             { "path_length", candidate.path_length },
             { "vertical_edge_count", candidate.vertical_edge_count },
             { "first_encounter_step",
@@ -1801,6 +1821,11 @@ bool asst::RoguelikeRoutingTaskPlugin::is_data_collection_combat_type(RoguelikeN
 {
     return type == RoguelikeNodeType::CombatOps || type == RoguelikeNodeType::EmergencyOps ||
            type == RoguelikeNodeType::DreadfulFoe;
+}
+
+bool asst::RoguelikeRoutingTaskPlugin::is_data_collection_valuable_non_combat_type(RoguelikeNodeType type)
+{
+    return !is_data_collection_combat_type(type) && type != RoguelikeNodeType::Boons;
 }
 
 bool asst::RoguelikeRoutingTaskPlugin::is_data_collection_vertical_edge(size_t source, size_t target) const

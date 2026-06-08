@@ -168,6 +168,24 @@ bool is_jiegarden_target_candle_title(std::string_view text)
     return normalize_encounter_lookup_text(text).find(L"烛火") != std::wstring::npos;
 }
 
+bool is_jiegarden_relieving_event_body(std::string_view text)
+{
+    const std::wstring normalized = normalize_encounter_lookup_text(text);
+    if (normalized.empty()) {
+        return false;
+    }
+
+    const auto contains = [&](std::wstring_view part) {
+        return normalized.find(part) != std::wstring::npos;
+    };
+    return contains(L"扼腕") && (contains(L"缸中之物") || contains(L"扼腕叹息") || contains(L"背生莲梗"));
+}
+
+bool has_event_name(const std::vector<std::string>& event_names, std::string_view event_name)
+{
+    return std::ranges::find(event_names, event_name) != event_names.end();
+}
+
 struct EncounterNameMatch
 {
     std::string name;
@@ -329,9 +347,10 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
         OCRer raw_name_analyzer(image);
         raw_name_analyzer.set_task_info(event_name_task_ptr);
         if (raw_name_analyzer.analyze()) {
-            raw_event_title = build_event_title_text(raw_name_analyzer.get_result());
+            const auto& raw_results = raw_name_analyzer.get_result();
+            raw_event_title = build_event_title_text(raw_results);
             normalized_event_title = MAA_NS::from_u16(normalize_encounter_lookup_text(raw_event_title));
-            if (auto match = match_event_name_from_raw_ocr(raw_name_analyzer.get_result(), event_names)) {
+            if (auto match = match_event_name_from_raw_ocr(raw_results, event_names)) {
                 Log.info(
                     "Encounter name fallback matched:",
                     match->raw_title,
@@ -342,6 +361,19 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
                     "distance:",
                     match->distance);
                 current_event_name = match->name;
+            }
+            else if (
+                theme == RoguelikeTheme::JieGarden && RoguelikeDataCollector.should_record_map_encounters() &&
+                RoguelikeDataCollector.map_encounter_type() == "Legend" && has_event_name(event_names, "禳解") &&
+                is_jiegarden_relieving_event_body(build_ocr_text(raw_results))) {
+                Log.info(
+                    "Encounter body fallback matched:",
+                    raw_event_title,
+                    "->",
+                    "禳解",
+                    "normalized:",
+                    normalized_event_title);
+                current_event_name = "禳解";
             }
         }
     }
@@ -550,7 +582,13 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             record_agent_event_if_needed(event);
 
             size_t choice = 0; // 以 0 作为 无效 index
-            if (!event.option_text.empty()) {
+            if (event.name == "天圆地方") {
+                choice = m_option_list.size() >= 2 ? 2 : 0;
+            }
+            else if (event.name == "天圆地方-1") {
+                choice = m_option_list.size();
+            }
+            else if (!event.option_text.empty()) {
                 for (const std::string& event_text : event.option_text) {
                     const auto option_it =
                         std::ranges::find_if(m_option_list, [&event_text](const OptionAnalyzer::Option& option) {
@@ -840,6 +878,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     move_to_option_list_head();
 
     cv::Mat image = ctrler()->get_image();
+    const cv::Mat initial_image = image.clone();
     RoguelikeEncounterOptionAnalyzer analyzer(image);
     analyzer.set_theme(theme);
     for (size_t swipe_times = 0; swipe_times < MAX_SWIPE_TIMES && !need_exit(); ++swipe_times) {
@@ -857,7 +896,16 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     }
 
     if (!analyzer.analyze()) {
-        return false;
+        if (!initial_image.empty()) {
+            Log.warn(__FUNCTION__, "| Failed to analyze latest viewport; retry initial option viewport");
+            analyzer.set_image(initial_image);
+            if (!analyzer.analyze()) {
+                return false;
+            }
+        }
+        else {
+            return false;
+        }
     }
 
     m_option_list = analyzer.get_result();
@@ -1216,6 +1264,8 @@ void asst::RoguelikeStageEncounterTaskPlugin::update_view(const cv::Mat& image)
 {
     LogTraceFunction;
 
+    constexpr double OptionInViewThreshold = 0.90;
+
     reset_view();
 
     cv::Mat img = image.empty() ? ctrler()->get_image() : image;
@@ -1224,6 +1274,18 @@ void asst::RoguelikeStageEncounterTaskPlugin::update_view(const cv::Mat& image)
         if (const Matcher::ResultOpt option_match_ret =
                 RoguelikeEncounterOptionAnalyzer::match_option(m_config->get_theme(), img, m_option_list[i].templ);
             option_match_ret) {
+            if (option_match_ret->score < OptionInViewThreshold) {
+                Log.debug(
+                    __FUNCTION__,
+                    "| Ignoring weak option-in-view match",
+                    i + 1,
+                    m_option_list[i].text,
+                    "score:",
+                    option_match_ret->score,
+                    "rect:",
+                    option_match_ret->rect);
+                continue;
+            }
             if (i < m_view_begin) {
                 m_view_begin = i;
             }

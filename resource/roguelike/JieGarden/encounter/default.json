@@ -230,15 +230,10 @@
         },
         {
             "name": "地镇",
-            "option_num": 3,
-            "choose": 1,
-            "fallback_choices": [[4, 1]],
-            "next_event": "地镇-1"
-        },
-        {
-            "name": "地镇-1",
-            "option_num": 2,
-            "choose": 2
+            "option_text": [
+                "岁兽代理人的援助尽在眼前"
+            ],
+            "next_event": "相随"
         },
         {
             "name": "传讯",

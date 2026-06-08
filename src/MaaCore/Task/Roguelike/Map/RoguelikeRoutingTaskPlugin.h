@@ -72,6 +72,7 @@ private:
         int encounter_count = 0;
         int combat_count = 0;
         int non_combat_count = 0;
+        int valuable_non_combat_count = 0;
         int path_length = 0;
         int vertical_edge_count = 0;
         int first_encounter_step = std::numeric_limits<int>::max();
@@ -116,6 +117,7 @@ private:
     json::array build_data_collection_edge_score_json() const;
     static bool is_data_collection_rejected_type(RoguelikeNodeType type);
     static bool is_data_collection_combat_type(RoguelikeNodeType type);
+    static bool is_data_collection_valuable_non_combat_type(RoguelikeNodeType type);
     static int data_collection_type_priority(RoguelikeNodeType type);
     static std::string data_collection_display_name(RoguelikeNodeType type);
     static bool data_collection_score_less(const DataCollectionRouteScore& lhs, const DataCollectionRouteScore& rhs);

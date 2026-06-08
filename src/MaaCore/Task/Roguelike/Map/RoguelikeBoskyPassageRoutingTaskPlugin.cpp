@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <string_view>
 
 #include "Common/AsstTypes.h"
@@ -116,6 +117,13 @@ bool is_bosky_passage_detail_only_node(asst::RoguelikeNodeType type)
 asst::Point bosky_passage_detail_close_point()
 {
     return { 13, 626 };
+}
+
+size_t choose_random_bosky_node(const std::vector<size_t>& nodes)
+{
+    static std::mt19937 engine(std::random_device {}());
+    std::uniform_int_distribution<size_t> dist(0, nodes.size() - 1);
+    return nodes[dist(engine)];
 }
 
 std::string bosky_passage_node_display_name(std::string_view node_type)
@@ -767,9 +775,17 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
     for (const auto& node_type : priority_order) {
         auto nodes_of_type = RoguelikeBoskyPassageMap::get_instance().get_open_unvisited_nodes(node_type);
         if (!nodes_of_type.empty()) {
-            chosen = nodes_of_type.front();
+            chosen = choose_random_bosky_node(nodes_of_type);
             found = true;
-            Log.debug(__FUNCTION__, "| found node of type (", type2name(node_type), ") with index (", chosen, ")");
+            Log.debug(
+                __FUNCTION__,
+                "| found",
+                nodes_of_type.size(),
+                "node(s) of type (",
+                type2name(node_type),
+                "), random index (",
+                chosen,
+                ")");
             break;
         }
     }
@@ -812,7 +828,7 @@ void asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_decide_and_click(
     }
 
     Point click_point(px + m_bosky_view_config.node_width / 2, py + m_bosky_view_config.node_height / 2);
-    sleep(2000);
+    sleep(1000);
     ctrler()->click(click_point);
     RoguelikeBoskyPassageMap::get_instance().set_visited(chosen);
     RoguelikeBoskyPassageMap::get_instance().set_curr_pos(chosen);
