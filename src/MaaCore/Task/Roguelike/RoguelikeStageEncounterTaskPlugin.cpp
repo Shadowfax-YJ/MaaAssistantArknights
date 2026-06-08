@@ -279,6 +279,12 @@ bool is_configured_option_match(std::string_view recognized_text, std::string_vi
         return true;
     }
 
+    if (
+        configured == L"岁兽代理人的援助尽在眼前" &&
+        recognized.find(L"岁兽代理人的援助尽在") != std::wstring::npos) {
+        return true;
+    }
+
     constexpr size_t MinPartialMatchLength = 6;
     if (std::min(recognized.size(), configured.size()) < MinPartialMatchLength) {
         return false;
