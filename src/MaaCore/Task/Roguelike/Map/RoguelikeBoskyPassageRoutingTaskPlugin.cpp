@@ -328,6 +328,42 @@ bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::_run()
 }
 
 // ==================== JieGarden BoskyPassage 平面地图逻辑 ====================
+bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::close_bosky_passage_detail_if_open()
+{
+    LogTraceFunction;
+
+    const cv::Mat image = ctrler()->get_image();
+    if (image.empty()) {
+        Log.warn(__FUNCTION__, "| Failed to get image from controller");
+        return false;
+    }
+
+    const std::array<std::string_view, 3> detail_enter_tasks {
+        "JieGarden@Roguelike@StageEmergencyOpsEnter",
+        "JieGarden@Roguelike@StageCombatOpsEnter",
+        "JieGarden@Roguelike@StageEncounterEnter",
+    };
+
+    for (const auto task_name : detail_enter_tasks) {
+        Matcher matcher(image);
+        matcher.set_task_info(std::string(task_name));
+        if (!matcher.analyze()) {
+            continue;
+        }
+
+        Log.info(__FUNCTION__, "| Closing bosky passage detail panel matched by", task_name);
+        const Point close_point = bosky_passage_detail_close_point();
+        for (int i = 0; i < 3; ++i) {
+            ctrler()->click(close_point);
+            sleep(200);
+        }
+        sleep(500);
+        return true;
+    }
+
+    return false;
+}
+
 bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_update_map()
 {
     LogTraceFunction;
@@ -337,6 +373,7 @@ bool asst::RoguelikeBoskyPassageRoutingTaskPlugin::bosky_update_map()
     // 有时候从不期而遇出来可能会多点一下，点到剩余烛火，导致接下来的一次点击只会把窗口关掉，无法进入节点。而且还遮挡了部分节点
     // 能检测到意识回归的话就点一下边缘，把退出树洞的弹窗关掉
     ProcessTask(*this, { "JieGarden@Roguelike@LeaveBoskyPassageCheck" }).set_retry_times(0).run();
+    close_bosky_passage_detail_if_open();
 
     cv::Mat image;
     MultiMatcher::ResultsVec match_results;

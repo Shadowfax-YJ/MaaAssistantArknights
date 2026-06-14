@@ -1235,6 +1235,7 @@
             "JieGarden@Roguelike@StageEncounterDrawCopperResult",
             "JieGarden@Roguelike@ChooseOperFlag",
             "JieGarden@Roguelike@CoppersTakeFlag",
+            "JieGarden@Roguelike@Routing_BoskyPassage",
             "JieGarden@Roguelike@StageEmergencyOpsEnter",
             "JieGarden@Roguelike@StageCombatOpsEnter",
             "JieGarden@Roguelike@CloseEvent",

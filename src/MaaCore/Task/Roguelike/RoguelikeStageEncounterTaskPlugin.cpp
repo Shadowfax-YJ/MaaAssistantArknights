@@ -18,6 +18,7 @@
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
+#include "Vision/MultiMatcher.h"
 #include "Vision/RegionOCRer.h"
 
 namespace
@@ -184,6 +185,17 @@ bool is_jiegarden_relieving_event_body(std::string_view text)
 bool has_event_name(const std::vector<std::string>& event_names, std::string_view event_name)
 {
     return std::ranges::find(event_names, event_name) != event_names.end();
+}
+
+bool is_jiegarden_bosky_passage_map_visible(const cv::Mat& image)
+{
+    if (image.empty()) {
+        return false;
+    }
+
+    asst::MultiMatcher node_analyzer(image);
+    node_analyzer.set_task_info("JieGarden@RoguelikeRoutingNodeAnalyze_BoskyPassage");
+    return node_analyzer.analyze() && node_analyzer.get_result().size() >= 3;
 }
 
 struct EncounterNameMatch
@@ -1390,12 +1402,21 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(c
 bool asst::RoguelikeStageEncounterTaskPlugin::advance_to_next_event(std::string_view next_event_name)
 {
     const auto& task = Task.get("Roguelike@StageEncounterJudgeClick");
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 2; ++j) {
-            ctrler()->click(task->specific_rect);
-            sleep(500);
-        }
-        if (hp(ctrler()->get_image()) >= 0) {
+    constexpr int MaxClicks = 6;
+    for (int i = 0; i < MaxClicks; ++i) {
+        ctrler()->click(task->specific_rect);
+        sleep(500);
+
+        const cv::Mat image = ctrler()->get_image();
+        if (hp(image) >= 0) {
+            if (m_config->get_theme() == RoguelikeTheme::JieGarden && is_jiegarden_bosky_passage_map_visible(image)) {
+                Log.info(
+                    "Bosky passage map restored before next_event:",
+                    next_event_name,
+                    "; stop encounter chain");
+                return false;
+            }
+
             Log.debug("HP restored, going to next_event:", next_event_name);
             // 多点一次，确保选项恢复
             ctrler()->click(task->specific_rect);

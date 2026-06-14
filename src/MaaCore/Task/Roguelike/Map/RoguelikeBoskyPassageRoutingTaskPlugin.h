@@ -32,6 +32,7 @@ protected:
 
 private:
     bool bosky_update_map(); // 从当前截图识别所有可见节点并更新/创建
+    bool close_bosky_passage_detail_if_open();
     void record_bosky_map_snapshot(std::string_view entry_map_image, std::string_view entry_map_overlay) const;
     void bosky_update_edges(
         const cv::Mat& image,
