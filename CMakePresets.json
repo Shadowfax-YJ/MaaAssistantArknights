@@ -182,7 +182,7 @@
                 "windows-x64"
             ],
             "cacheVariables": {
-                "BUILD_WPF_GUI": "ON"
+                "BUILD_WPF_GUI": "OFF"
             },
             "$comment": [
                 "GitHub Actions windows-2025 images provide Visual Studio 18 2026",
@@ -198,7 +198,7 @@
                 "windows-arm64"
             ],
             "cacheVariables": {
-                "BUILD_WPF_GUI": "ON"
+                "BUILD_WPF_GUI": "OFF"
             },
             "$comment": [
                 "GitHub Actions windows-2025 images provide Visual Studio 18 2026",
