@@ -9,6 +9,35 @@
 #include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/OCRer.h"
 
+namespace
+{
+constexpr int SquadTextSafeLeft = 220;
+constexpr int SquadTextSafeRight = 1060;
+constexpr int SquadFirstCardSafeLeft = 100;
+
+int rect_center_x(const asst::Rect& rect)
+{
+    return rect.x + rect.width / 2;
+}
+
+bool is_squad_clickable(const std::string& squad, const asst::Rect& rect)
+{
+    const int center_x = rect_center_x(rect);
+    if (center_x >= SquadTextSafeLeft && center_x <= SquadTextSafeRight) {
+        return true;
+    }
+
+    // 指挥分队在列表最左端，无法再向左回拉到屏幕中部，但首卡完整露出时可以直接点。
+    return squad == "指挥分队" && center_x >= SquadFirstCardSafeLeft && center_x < SquadTextSafeLeft;
+}
+
+std::string_view squad_edge_nudge_task(const asst::Rect& rect)
+{
+    return rect_center_x(rect) < SquadTextSafeLeft ? "Roguelike@SquadNudgeToTheLeft"
+                                                   : "Roguelike@SquadNudgeToTheRight";
+}
+}
+
 bool asst::RoguelikeCustomStartTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
     if (details.get("subtask", std::string()) != "ProcessTask") {
@@ -137,7 +166,12 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_squad()
             .run();
     }
 
-    constexpr size_t SwipeTimes = 7;
+    auto swipe_and_wait = [this](std::string_view task_name) {
+        ProcessTask(*this, { std::string(task_name) }).run();
+        sleep(Task.get("RoguelikeCustom-HijackSquad")->post_delay);
+    };
+
+    constexpr size_t SwipeTimes = 12;
     for (size_t i = 0; i != SwipeTimes; ++i) {
         if (need_exit()) {
             return false;
@@ -148,11 +182,17 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_squad()
         analyzer.set_required({ squad });
 
         if (!analyzer.analyze()) {
-            ProcessTask(*this, { "Roguelike@SquadSlowlySwipeToTheRight" }).run();
-            sleep(Task.get("RoguelikeCustom-HijackSquad")->post_delay);
+            swipe_and_wait("Roguelike@SquadSlowlySwipeToTheRight");
             continue;
         }
         const auto& rect = analyzer.get_result().front().rect;
+        if (!is_squad_clickable(squad, rect)) {
+            const auto task_name = squad_edge_nudge_task(rect);
+            Log.info("Roguelike squad found near screen edge, nudge before click", squad, rect, task_name);
+            swipe_and_wait(task_name);
+            continue;
+        }
+
         ctrler()->click(rect);
 
         m_config->set_squad(std::move(squad));
