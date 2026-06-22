@@ -38,13 +38,17 @@ if(BUILD_MAA_SCREENCAP)
     add_subdirectory(src/MaaScreencap)
 endif()
 
-if(BUILD_WPF_GUI)
+if(WIN32)
     add_subdirectory(src/MaaUpdater)
+endif()
 
+if(BUILD_WPF_GUI)
     include_external_msproject(MaaWpfGui ${PROJECT_SOURCE_DIR}/src/MaaWpfGui/MaaWpfGui.csproj)
 
     add_dependencies(MaaWpfGui MaaCore)
-    add_dependencies(MaaWpfGui MAA.Updater)
+    if(TARGET MAA.Updater)
+        add_dependencies(MaaWpfGui MAA.Updater)
+    endif()
     if(DEFINED ENV{VSCODE_PID})
         add_custom_target(run-MaaWpfGui
             COMMAND "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/MAA.exe"
