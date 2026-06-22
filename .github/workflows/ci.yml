@@ -120,7 +120,7 @@ jobs:
       matrix:
         arch: [x64]
       fail-fast: false
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
       - name: Checkout repository
@@ -150,6 +150,8 @@ jobs:
 
       - name: Configure, build and install
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           cmake -B build --preset ${{ matrix.arch == 'arm64' && 'windows-publish-arm64' || 'windows-publish-x64' }} -DMAA_HASH_VERSION='${{ needs.meta.outputs.tag }}'
           cmake --build --preset ${{ matrix.arch == 'arm64' && 'windows-publish-arm64' || 'windows-publish-x64' }} --parallel $env:NUMBER_OF_PROCESSORS
           cmake --build build --target MAA.Updater --config RelWithDebInfo --parallel $env:NUMBER_OF_PROCESSORS

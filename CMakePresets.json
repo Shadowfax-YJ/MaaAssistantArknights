@@ -185,10 +185,10 @@
                 "BUILD_WPF_GUI": "ON"
             },
             "$comment": [
-                "github actions only support Visual Studio 17 2022",
-                "see https://github.com/actions/runner-images/issues/13291"
+                "GitHub Actions windows-2025 images provide Visual Studio 18 2026",
+                "keep this generator aligned with .github/workflows/ci.yml"
             ],
-            "generator": "Visual Studio 17 2022",
+            "generator": "Visual Studio 18 2026",
             "displayName": "Windows x64 Publish"
         },
         {
@@ -201,10 +201,10 @@
                 "BUILD_WPF_GUI": "ON"
             },
             "$comment": [
-                "github actions only support Visual Studio 17 2022",
-                "see https://github.com/actions/runner-images/issues/13291"
+                "GitHub Actions windows-2025 images provide Visual Studio 18 2026",
+                "keep this generator aligned with .github/workflows/ci.yml"
             ],
-            "generator": "Visual Studio 17 2022",
+            "generator": "Visual Studio 18 2026",
             "displayName": "Windows arm64 Publish"
         },
         {
