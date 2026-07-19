@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "dataset": "black-flow-store-overviews",
+  "description": "简中国服黑流树海商店总览快照；供商品槽位标定、OCR 与页面稳定性实验复用。",
+  "locale": "zh_cn",
+  "normalized_size": {
+    "width": 1280,
+    "height": 720
+  },
+  "normalization": {
+    "aspect_ratio": "16:9",
+    "already_normalized": "byte-for-byte copy",
+    "downscale": "OpenCV 4.13.0 cv::INTER_AREA, PNG compression 9",
+    "runtime_reference": "src/MaaCore/Controller/Controller.cpp"
+  },
+  "slot_layout": {
+    "rows": [3, 4, 3],
+    "order": "top-to-bottom, left-to-right within each row",
+    "indexes": "1-based",
+    "empty_value": ""
+  },
+  "annotation_policy": "expected_slots preserves manually transcribed visible UI text. Canonical-name normalization and fuzzy matching are deliberately deferred to their Wayfinder tickets.",
+  "samples": [
+    {
+      "id": "e01-p01-runtime",
+      "file": "e01-p01-runtime.png",
+      "exploration": 1,
+      "page": 1,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-03.56.35.67_raw.png",
+        "captured_at_local": "2026-07-20T03:56:35.067+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "d2e9296d0790fdb6a092354e704a61f96cfcad061c0f75a388b063bd56157268"
+      },
+      "normalized_sha256": "d2e9296d0790fdb6a092354e704a61f96cfcad061c0f75a388b063bd56157268",
+      "expected_slots": [
+        "支援起重机",
+        "报废轮子",
+        "近卫招募券",
+        "沙盘β",
+        "悲伤的红",
+        "止痛片",
+        "残弩-新典训",
+        "审天源石虫",
+        "",
+        ""
+      ],
+      "empty_slots": [9, 10]
+    },
+    {
+      "id": "e01-p02-runtime",
+      "file": "e01-p02-runtime.png",
+      "exploration": 1,
+      "page": 2,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-03.57.35.114_raw.png",
+        "captured_at_local": "2026-07-20T03:57:35.114+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "eeefdec0079d923c177742750feb49a79d0cf18a14c4cc5d221f45322e027535"
+      },
+      "normalized_sha256": "eeefdec0079d923c177742750feb49a79d0cf18a14c4cc5d221f45322e027535",
+      "expected_slots": [
+        "支援地雷组",
+        "浪花",
+        "先锋招募券",
+        "热辣可可",
+        "沙盘β",
+        "断枝-波纹",
+        "医者-新典训",
+        "凉拌海草",
+        "",
+        ""
+      ],
+      "empty_slots": [9, 10]
+    },
+    {
+      "id": "e01-p03-runtime",
+      "file": "e01-p03-runtime.png",
+      "exploration": 1,
+      "page": 3,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-03.58.37.85_raw.png",
+        "captured_at_local": "2026-07-20T03:58:37.085+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "e1cf0560079af4b2cceaeb4e5a2fc4fd3f9de63f9c26bc5c5c0177a8bcdbbecb"
+      },
+      "normalized_sha256": "e1cf0560079af4b2cceaeb4e5a2fc4fd3f9de63f9c26bc5c5c0177a8bcdbbecb",
+      "expected_slots": [
+        "支援雾机",
+        "试作外骨骼",
+        "医疗招募券",
+        "竞技场贵宾券",
+        "残弩-神速",
+        "沙盘β",
+        "玻璃小鸟",
+        "锈刃-新典训",
+        "",
+        ""
+      ],
+      "empty_slots": [9, 10]
+    },
+    {
+      "id": "e01-p04-runtime",
+      "file": "e01-p04-runtime.png",
+      "exploration": 1,
+      "page": 4,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-03.59.37.527_raw.png",
+        "captured_at_local": "2026-07-20T03:59:37.527+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "153fe513a459f203247cadf7a2030cd2704bb2ab87a926eadead25e42e116710"
+      },
+      "normalized_sha256": "153fe513a459f203247cadf7a2030cd2704bb2ab87a926eadead25e42e116710",
+      "expected_slots": [
+        "支援轰隆隆",
+        "浪花",
+        "医疗招募券",
+        "热辣可可",
+        "叙拉古人的愤怒",
+        "种植者保单",
+        "三尺万象",
+        "支柱-新典训",
+        "",
+        ""
+      ],
+      "empty_slots": [9, 10],
+      "notes": "历史运行中的第四页；保留用于布局与稳定性覆盖，但目标状态机在第三页后退出。"
+    },
+    {
+      "id": "e01-p04-user",
+      "file": "e01-p04-user.png",
+      "exploration": 1,
+      "page": 4,
+      "capture": 2,
+      "source": {
+        "type": "user_provided_screenshot",
+        "label": "user-provided-01",
+        "observed_at_local": "2026-07-20T04:02:26.661+08:00",
+        "original_size": { "width": 1920, "height": 1080 },
+        "original_sha256": "9558559cae8a1c16db240567714d4d7f9a7d3665d86cbcfe14c5fb367f8f3127"
+      },
+      "normalized_sha256": "1464472817b8cb6ddf8c4cc67b9ce3f7d0607e07374d6fb47416174f63c4bec0",
+      "expected_slots": [
+        "支援轰隆隆",
+        "浪花",
+        "医疗招募券",
+        "热辣可可",
+        "叙拉古人的愤怒",
+        "种植者保单",
+        "三尺万象",
+        "支柱-新典训",
+        "",
+        ""
+      ],
+      "empty_slots": [9, 10],
+      "notes": "与 e01-p04-runtime 商品集合相同；投资余额变化但未刷新，因此仍是同一商店页的分辨率变体。"
+    },
+    {
+      "id": "e02-p01-runtime",
+      "file": "e02-p01-runtime.png",
+      "exploration": 2,
+      "page": 1,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-04.20.28.484_raw.png",
+        "captured_at_local": "2026-07-20T04:20:28.484+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "5a43322b987d45a44e3affa93cc282bc81ca632ae9912f08cae9a0f6d0e355a1"
+      },
+      "normalized_sha256": "5a43322b987d45a44e3affa93cc282bc81ca632ae9912f08cae9a0f6d0e355a1",
+      "expected_slots": [
+        "支援轰隆隆",
+        "白模狗",
+        "术师招募券",
+        "沙盘β",
+        "迷藏",
+        "止痛片",
+        "静谧扩香石",
+        "古怪的长笛",
+        "种植者保单",
+        "医者-新典训"
+      ],
+      "empty_slots": []
+    },
+    {
+      "id": "e02-p02-runtime",
+      "file": "e02-p02-runtime.png",
+      "exploration": 2,
+      "page": 2,
+      "capture": 1,
+      "source": {
+        "type": "runtime_debug_snapshot",
+        "path": "build/bin/Release/debug/roguelike/black_flow_store/2026.07.20-04.21.29.628_raw.png",
+        "captured_at_local": "2026-07-20T04:21:29.628+08:00",
+        "original_size": { "width": 1280, "height": 720 },
+        "original_sha256": "a5e4b6a588dc81e997b579b86a26ed79b05451cc908607c54f97b28627b1c0d4"
+      },
+      "normalized_sha256": "a5e4b6a588dc81e997b579b86a26ed79b05451cc908607c54f97b28627b1c0d4",
+      "expected_slots": [
+        "支援轰隆隆",
+        "种子",
+        "辅助招募券",
+        "万星园之辉",
+        "钝爪-先机",
+        "沙盘β",
+        "活木甲",
+        "“老妈的鼓励”",
+        "医者-新典训",
+        "锈刃-突破"
+      ],
+      "empty_slots": []
+    },
+    {
+      "id": "e02-p03-user",
+      "file": "e02-p03-user.png",
+      "exploration": 2,
+      "page": 3,
+      "capture": 1,
+      "source": {
+        "type": "user_provided_screenshot",
+        "label": "user-provided-02",
+        "observed_at_local": "2026-07-20T04:22:43.641+08:00",
+        "original_size": { "width": 1920, "height": 1080 },
+        "original_sha256": "1e39834b1cd4b80cc9d2fa4682db751dd9a08ac2b57fdff665b0ceb32eb7f90c"
+      },
+      "normalized_sha256": "d80dbe1296e2375effd8a6e8e4845b83f1dfa0f1e211be39f0e929749e13a3e1",
+      "expected_slots": [
+        "支援起重机",
+        "多生苔藓",
+        "先锋招募券",
+        "《归来》",
+        "佣兵的饰物",
+        "沙盘β",
+        "迷藏",
+        "城墙之子",
+        "锈刃-新典训",
+        "医者-地缘策略"
+      ],
+      "empty_slots": []
+    }
+  ]
+}
