@@ -30,8 +30,23 @@ add_executable(maa-algorithm-test
     MaaCore/AlgorithmTest.cpp
 )
 
+add_executable(maa-black-flow-store-screenshot-trigger-test
+    MaaCore/BlackFlowStoreScreenshotTriggerTest.cpp
+)
+
 target_compile_features(maa-algorithm-test PRIVATE cxx_std_20)
 target_link_libraries(maa-algorithm-test PRIVATE Catch2::Catch2WithMain)
 target_include_directories(maa-algorithm-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
 
+target_compile_features(maa-black-flow-store-screenshot-trigger-test PRIVATE cxx_std_20)
+target_link_libraries(maa-black-flow-store-screenshot-trigger-test PRIVATE Catch2::Catch2WithMain)
+target_include_directories(maa-black-flow-store-screenshot-trigger-test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include
+)
+if(MSVC)
+    target_compile_options(maa-black-flow-store-screenshot-trigger-test PRIVATE /utf-8)
+endif()
+
 catch_discover_tests(maa-algorithm-test TEST_PREFIX "algorithm::")
+catch_discover_tests(maa-black-flow-store-screenshot-trigger-test TEST_PREFIX "black-flow-store-screenshot-trigger::")

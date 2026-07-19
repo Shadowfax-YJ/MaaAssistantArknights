@@ -14,6 +14,18 @@
         "src/MaaCore/Utils/Algorithm.hpp",
         "unit_test/MaaCore/AlgorithmTest.cpp"
       ]
+    },
+    {
+      "id": "maa-black-flow-store-screenshot-trigger-test",
+      "name": "Black Flow Store Screenshot Trigger",
+      "buildTarget": "maa-black-flow-store-screenshot-trigger-test",
+      "ctestRegex": "^black-flow-store-screenshot-trigger::",
+      "paths": [
+        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTrigger.hpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.cpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
+        "unit_test/MaaCore/BlackFlowStoreScreenshotTriggerTest.cpp"
+      ]
     }
   ]
 }
