@@ -19,6 +19,8 @@ public:
 protected:
     virtual bool _run() override;
 
+    virtual bool on_run_fails() override { return false; }
+
 private:
     void stop_process_task() const;
 

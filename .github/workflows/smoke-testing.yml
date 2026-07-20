@@ -17,6 +17,7 @@ on:
       - "src/MaaCore/**"
       - "tools/maadeps-download.py"
       - "tools/SmokeTesting/**"
+      - "unit_test/fixtures/black_flow_store/**"
       - "!**/*.md"
   pull_request:
     paths:
@@ -30,6 +31,7 @@ on:
       - "src/MaaCore/**"
       - "tools/maadeps-download.py"
       - "tools/SmokeTesting/**"
+      - "unit_test/fixtures/black_flow_store/**"
       - "!**/*.md"
   workflow_dispatch:
 
@@ -51,7 +53,7 @@ jobs:
         id: cache_key
         continue-on-error: true
         run: |
-          echo "key=Smoke-testing-${{ hashFiles('src/Cpp/**', 'src/MaaCore/**', '3rdparty/include/**', 'include/**', 'cmake/**', 'CMakeLists.txt', 'tools/maadeps-download.py', 'tools/linux-toolchain-download.py') }}" >> $GITHUB_OUTPUT
+          echo "key=Smoke-testing-${{ hashFiles('src/Cpp/**', 'src/MaaCore/**', 'unit_test/fixtures/black_flow_store/**', '3rdparty/include/**', 'include/**', 'cmake/**', 'CMakeLists.txt', 'tools/maadeps-download.py', 'tools/linux-toolchain-download.py') }}" >> $GITHUB_OUTPUT
 
       - name: Restore cache for Smoke Test
         if: ${{ steps.cache_key.outputs.key != '' }}
@@ -67,6 +69,7 @@ jobs:
             ./install/libonnxruntime.1.19.2.dylib
             ./install/libopencv_world4.4.11.0.dylib
             ./install/smoke_test
+            ./install/black_flow_store_fixtures
 
       - name: Fetch submodules
         if: steps.smoke-cache.outputs.cache-hit != 'true'
@@ -118,6 +121,7 @@ jobs:
             ./install/libonnxruntime.1.19.2.dylib
             ./install/libopencv_world4.4.11.0.dylib
             ./install/smoke_test
+            ./install/black_flow_store_fixtures
 
       - name: Upload logs
         if: always()

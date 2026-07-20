@@ -6,6 +6,10 @@
 #include <string>
 #include <thread>
 
+#ifdef SMOKE_TESTING
+#include "Vision/Roguelike/BlackFlowStoreImageAnalyzer.h"
+#endif
+
 int main([[maybe_unused]] int argc, char** argv)
 {
     auto working_path = std::filesystem::path(argv[0]).parent_path();
@@ -50,6 +54,11 @@ int main([[maybe_unused]] int argc, char** argv)
     }
 
 #ifdef SMOKE_TESTING
+    if (argc > 1 && std::string_view(argv[1]) == "Official" &&
+        !asst::run_black_flow_store_fixture_smoke_test(working_path / "black_flow_store_fixtures")) {
+        std::cerr << "-------- BlackFlow fixture smoke test failed --------" << std::endl;
+        return -1;
+    }
     std::cout << "Ended early for smoke testing." << std::endl;
     AsstDestroy(ptr);
     return 0;
