@@ -3,7 +3,7 @@
 #include "Config/TaskData.h"
 #include "Task/MiniGame/SecretFrontTaskPlugin.h"
 #include "Task/Miscellaneous/BlackFlowClientGuard.hpp"
-#include "Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h"
+#include "Task/Miscellaneous/BlackFlowStoreTaskPlugin.h"
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
@@ -14,9 +14,8 @@ asst::CustomTask::CustomTask(const AsstCallback& callback, Assistant* inst) :
 {
     LogTraceFunction;
     m_custom_task_ptr->register_plugin<ScreenshotTaskPlugin>();
-    m_black_flow_store_screenshot_task_plugin =
-        m_custom_task_ptr->register_plugin<BlackFlowStoreScreenshotTaskPlugin>();
-    m_black_flow_store_screenshot_task_plugin->set_retry_times(0);
+    m_black_flow_store_task_plugin = m_custom_task_ptr->register_plugin<BlackFlowStoreTaskPlugin>();
+    m_black_flow_store_task_plugin->set_retry_times(0);
 }
 
 bool asst::CustomTask::set_params(const json::value& params)
@@ -46,7 +45,7 @@ bool asst::CustomTask::set_params(const json::value& params)
         Log.error("set_params failed, unsupported BlackFlow client_type: ", client_type_name);
         return false;
     }
-    m_black_flow_store_screenshot_task_plugin->set_client_type(
+    m_black_flow_store_task_plugin->set_client_type(
         black_flow_admission == BlackFlowTaskAdmission::Accepted ? client_type : std::nullopt);
 
     std::vector<std::string> tasks;

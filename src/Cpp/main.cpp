@@ -7,6 +7,7 @@
 #include <thread>
 
 #ifdef SMOKE_TESTING
+#include "Task/Miscellaneous/BlackFlowStoreTaskGraph.h"
 #include "Vision/Roguelike/BlackFlowStoreImageAnalyzer.h"
 #endif
 
@@ -54,6 +55,10 @@ int main([[maybe_unused]] int argc, char** argv)
     }
 
 #ifdef SMOKE_TESTING
+    if (argc > 1 && std::string_view(argv[1]) == "Official" && !asst::run_black_flow_store_task_graph_smoke_test()) {
+        std::cerr << "-------- BlackFlow TaskData smoke test failed --------" << std::endl;
+        return -1;
+    }
     if (argc > 1 && std::string_view(argv[1]) == "Official" &&
         !asst::run_black_flow_store_fixture_smoke_test(working_path / "black_flow_store_fixtures")) {
         std::cerr << "-------- BlackFlow fixture smoke test failed --------" << std::endl;

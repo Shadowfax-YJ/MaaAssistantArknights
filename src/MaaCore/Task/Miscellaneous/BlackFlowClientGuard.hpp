@@ -43,20 +43,26 @@ inline std::optional<BlackFlowClientType> parse_black_flow_client_type(std::stri
     return utils::parse_enum(client_type, black_flow_client_detail::ClientTypeNames);
 }
 
-inline bool is_black_flow_task_name(std::string_view task_name) noexcept
+inline bool is_stable_black_flow_task_name(std::string_view task_name) noexcept
 {
     constexpr std::string_view MiniGamePrefix = "MiniGame@BlackFlow@";
+    return task_name == "MiniGame@BlackFlow" || task_name.starts_with(MiniGamePrefix);
+}
+
+inline bool is_legacy_black_flow_task_name(std::string_view task_name) noexcept
+{
     constexpr std::string_view LegacyPrefix = "BlackFlowTemporary@";
-    return task_name == "MiniGame@BlackFlow" || task_name.starts_with(MiniGamePrefix) ||
-           task_name == "BlackFlowTemporary" || task_name.starts_with(LegacyPrefix);
+    return task_name == "BlackFlowTemporary" || task_name.starts_with(LegacyPrefix);
 }
 
 inline BlackFlowTaskAdmission check_black_flow_task_admission(
     std::span<const std::string> task_names,
     std::optional<BlackFlowClientType> client_type) noexcept
 {
-    const bool contains_black_flow_task = std::ranges::any_of(task_names, is_black_flow_task_name);
-    if (!contains_black_flow_task) {
+    if (std::ranges::any_of(task_names, is_legacy_black_flow_task_name)) {
+        return BlackFlowTaskAdmission::Rejected;
+    }
+    if (!std::ranges::any_of(task_names, is_stable_black_flow_task_name)) {
         return BlackFlowTaskAdmission::NotBlackFlow;
     }
     return client_type ? BlackFlowTaskAdmission::Accepted : BlackFlowTaskAdmission::Rejected;

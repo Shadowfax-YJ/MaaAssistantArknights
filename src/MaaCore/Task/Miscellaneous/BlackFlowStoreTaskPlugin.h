@@ -7,14 +7,14 @@
 
 namespace asst
 {
-class BlackFlowStoreScreenshotTaskPlugin final : public AbstractTaskPlugin
+class BlackFlowStoreTaskPlugin final : public AbstractTaskPlugin
 {
 public:
     using AbstractTaskPlugin::AbstractTaskPlugin;
-    virtual ~BlackFlowStoreScreenshotTaskPlugin() override = default;
+    virtual ~BlackFlowStoreTaskPlugin() override = default;
 
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
-    BlackFlowStoreScreenshotTaskPlugin& set_client_type(std::optional<BlackFlowClientType> client_type) noexcept;
+    BlackFlowStoreTaskPlugin& set_client_type(std::optional<BlackFlowClientType> client_type) noexcept;
 
 protected:
     virtual bool _run() override;

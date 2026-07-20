@@ -1,0 +1,328 @@
+{
+    "MiniGame@BlackFlow@Begin": {
+        "Doc": "Stable Custom-task entry intercepted by BlackFlowStoreTaskPlugin.",
+        "algorithm": "JustReturn"
+    },
+    "MiniGame@BlackFlow@EnterFreshExploration": {
+        "Doc": "Normal-path entry composed only from short UI actions and facts.",
+        "algorithm": "JustReturn",
+        "next": ["MiniGame@BlackFlow@StartExploreAction"]
+    },
+    "MiniGame@BlackFlow@StartExploreAction": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["开始探索"],
+        "roi": [1000, 560, 200, 100],
+        "next": [
+            "MiniGame@BlackFlow@SpecialMissionVideo",
+            "MiniGame@BlackFlow@ChooseSpecialSquad",
+            "#self"
+        ]
+    },
+    "MiniGame@BlackFlow@SpecialMissionVideo": {
+        "algorithm": "OcrDetect",
+        "action": "ClickRect",
+        "text": ["特勤任务影像"],
+        "roi": [560, 300, 170, 50],
+        "specificRect": [640, 655, 1, 1],
+        "postDelay": 500,
+        "next": ["MiniGame@BlackFlow@ChooseSpecialSquad", "#self"]
+    },
+    "MiniGame@BlackFlow@ChooseSpecialSquad": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["特勤分队"],
+        "roi": [0, 385, 1280, 110],
+        "next": [
+            "MiniGame@BlackFlow@ChooseSpecialSquadConfirm",
+            "#self",
+            "MiniGame@BlackFlow@ChooseStrategy",
+            "MiniGame@BlackFlow@ChooseRecruitVoucher",
+            "MiniGame@BlackFlow@ChooseMechanic"
+        ]
+    },
+    "MiniGame@BlackFlow@ChooseSpecialSquadConfirm": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["你确定要这么做"],
+        "roi": [380, 535, 150, 30],
+        "postDelay": 1000,
+        "next": [
+            "MiniGame@BlackFlow@ChooseStrategy",
+            "MiniGame@BlackFlow@ChooseSpecialSquad",
+            "MiniGame@BlackFlow@ChooseRecruitVoucher",
+            "MiniGame@BlackFlow@ChooseMechanic"
+        ]
+    },
+    "MiniGame@BlackFlow@ChooseStrategy": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["稳扎稳打"],
+        "roi": [0, 385, 1280, 110],
+        "next": [
+            "MiniGame@BlackFlow@ChooseStrategyConfirm",
+            "#self",
+            "MiniGame@BlackFlow@ChooseRecruitVoucher",
+            "MiniGame@BlackFlow@ChooseMechanic"
+        ]
+    },
+    "MiniGame@BlackFlow@ChooseStrategyConfirm": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["你确定要这么做"],
+        "roi": [380, 535, 150, 30],
+        "postDelay": 1000,
+        "next": [
+            "MiniGame@BlackFlow@ChooseRecruitVoucher",
+            "MiniGame@BlackFlow@ChooseStrategy",
+            "MiniGame@BlackFlow@ChooseMechanic"
+        ]
+    },
+    "MiniGame@BlackFlow@ChooseRecruitVoucher": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["重装招募券"],
+        "roi": [270, 300, 160, 50],
+        "next": ["MiniGame@BlackFlow@ChooseMechanic", "#self"]
+    },
+    "MiniGame@BlackFlow@ChooseMechanic": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["机械师"],
+        "roi": [610, 0, 80, 720],
+        "next": ["MiniGame@BlackFlow@ConfirmRecruit", "#self"]
+    },
+    "MiniGame@BlackFlow@ConfirmRecruit": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["确认招募"],
+        "roi": [1080, 650, 150, 50],
+        "next": ["#self", "MiniGame@BlackFlow@WaitInitialRecruit"]
+    },
+    "MiniGame@BlackFlow@WaitInitialRecruit": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [670, 40, 1, 1],
+        "next": ["MiniGame@BlackFlow@InitialRecruitVisible", "#self"]
+    },
+    "MiniGame@BlackFlow@InitialRecruitVisible": {
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["初始招募"],
+        "roi": [610, 0, 120, 60],
+        "next": ["MiniGame@BlackFlow@ChooseCasterVoucher", "#self"]
+    },
+    "MiniGame@BlackFlow@ChooseCasterVoucher": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["术师招募券"],
+        "roi": [570, 300, 160, 50],
+        "next": ["MiniGame@BlackFlow@GiveUpCasterRecruit", "#self"]
+    },
+    "MiniGame@BlackFlow@GiveUpCasterRecruit": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["放弃"],
+        "roi": [930, 650, 80, 50],
+        "next": ["MiniGame@BlackFlow@GiveUpCasterRecruitConfirm", "#self"]
+    },
+    "MiniGame@BlackFlow@GiveUpCasterRecruitConfirm": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
+        "roi": [613, 410, 424, 171],
+        "next": ["MiniGame@BlackFlow@ChooseSniperVoucher", "#self"]
+    },
+    "MiniGame@BlackFlow@ChooseSniperVoucher": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["狙击招募券"],
+        "roi": [850, 300, 160, 50],
+        "next": ["MiniGame@BlackFlow@GiveUpSniperRecruit", "#self"]
+    },
+    "MiniGame@BlackFlow@GiveUpSniperRecruit": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["放弃"],
+        "roi": [930, 650, 80, 50],
+        "next": ["MiniGame@BlackFlow@GiveUpSniperRecruitConfirm", "#self"]
+    },
+    "MiniGame@BlackFlow@GiveUpSniperRecruitConfirm": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
+        "roi": [613, 410, 424, 171],
+        "next": ["MiniGame@BlackFlow@ChooseTreeSea", "#self"]
+    },
+    "MiniGame@BlackFlow@ChooseTreeSea": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["沉沦于树海"],
+        "roi": [1060, 395, 160, 55],
+        "postDelay": 5000,
+        "next": ["MiniGame@BlackFlow@ActionPoint", "#self"]
+    },
+    "MiniGame@BlackFlow@ActionPoint": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["行动力", "行动", "动力"],
+        "roi": [1125, 70, 60, 40],
+        "next": ["MiniGame@BlackFlow@StructuralPrinciple", "#self"]
+    },
+    "MiniGame@BlackFlow@StructuralPrinciple": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["结构性原理"],
+        "roi": [1130, 200, 125, 500],
+        "next": ["MiniGame@BlackFlow@BolivarSkin", "#self"]
+    },
+    "MiniGame@BlackFlow@BolivarSkin": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["玻利", "瓦尔", "肤层"],
+        "roi": [555, 0, 250, 35],
+        "postDelay": 1000,
+        "next": ["MiniGame@BlackFlow@UnknownMystery", "#self"]
+    },
+    "MiniGame@BlackFlow@UnknownMystery": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["未知的诡秘"],
+        "roi": [888, 380, 200, 45],
+        "next": ["MiniGame@BlackFlow@DepartFor", "#self"]
+    },
+    "MiniGame@BlackFlow@DepartFor": {
+        "algorithm": "OcrDetect",
+        "action": "ClickSelf",
+        "text": ["出发前往"],
+        "roi": [1140, 520, 120, 55],
+        "postDelay": 2000,
+        "next": ["MiniGame@BlackFlow@RefreshControlVisible", "#self"]
+    },
+    "MiniGame@BlackFlow@ObserveStorePage": {
+        "Doc": "Read-only store-overview observation entry.",
+        "algorithm": "JustReturn",
+        "next": ["MiniGame@BlackFlow@RefreshControlVisible"]
+    },
+    "MiniGame@BlackFlow@RefreshControlVisible": {
+        "algorithm": "MatchTemplate",
+        "action": "DoNothing",
+        "template": "Roguelike@StageTraderRefresh.png",
+        "roi": [230, 47, 211, 182],
+        "next": ["MiniGame@BlackFlow@StorePageReady"]
+    },
+    "MiniGame@BlackFlow@StorePageReady": {
+        "algorithm": "MatchTemplate",
+        "action": "DoNothing",
+        "template": "Roguelike@StageTraderLeave.png",
+        "roi": [1046, 443, 234, 204]
+    },
+    "MiniGame@BlackFlow@OpenRefreshDialog": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@StageTraderRefresh.png",
+        "roi": [230, 47, 211, 182],
+        "maxTimes": 1,
+        "postDelay": 500,
+        "next": ["MiniGame@BlackFlow@RefreshDialogVisible"]
+    },
+    "MiniGame@BlackFlow@RefreshDialogVisible": {
+        "algorithm": "MatchTemplate",
+        "action": "DoNothing",
+        "template": [
+            "Roguelike@StageTraderRefreshWithDiceConfirm.png",
+            "Roguelike@StageTraderRefreshConfirmNew.png",
+            "Roguelike@StageTraderRefreshConfirm.png"
+        ],
+        "roi": [580, 375, 700, 230]
+    },
+    "MiniGame@BlackFlow@ConfirmRefresh": {
+        "Doc": "One-shot refresh confirmation; retry policy is fixed by the production adapter.",
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": [
+            "Roguelike@StageTraderRefreshWithDiceConfirm.png",
+            "Roguelike@StageTraderRefreshConfirmNew.png",
+            "Roguelike@StageTraderRefreshConfirm.png"
+        ],
+        "roi": [580, 375, 700, 230],
+        "maxTimes": 1,
+        "postDelay": 500
+    },
+    "MiniGame@BlackFlow@SafeExit": {
+        "Doc": "Safe exit starts at the store and finishes only on the Start Exploration fact.",
+        "algorithm": "JustReturn",
+        "next": ["MiniGame@BlackFlow@LeaveStore"]
+    },
+    "MiniGame@BlackFlow@LeaveStore": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@StageTraderLeave.png",
+        "roi": [1046, 443, 234, 204],
+        "next": ["MiniGame@BlackFlow@LeaveStoreConfirm", "#self"]
+    },
+    "MiniGame@BlackFlow@LeaveStoreConfirm": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@StageTraderLeaveConfirm.png",
+        "roi": [985, 447, 295, 203],
+        "next": ["MiniGame@BlackFlow@ExitExploration", "#self"]
+    },
+    "MiniGame@BlackFlow@ExitExploration": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@ExitThenAbandon.png",
+        "roi": [0, 0, 90, 90],
+        "next": ["MiniGame@BlackFlow@AbandonEntry", "#self"]
+    },
+    "MiniGame@BlackFlow@AbandonEntry": {
+        "algorithm": "OcrDetect",
+        "action": "ClickRect",
+        "text": ["驻足于"],
+        "roi": [1010, 420, 90, 40],
+        "specificRect": [1140, 325, 1, 1],
+        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"]
+    },
+    "MiniGame@BlackFlow@AbandonConfirm": {
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@AbandonConfirm.png",
+        "roi": [0, 0, 1280, 720],
+        "next": ["#self", "MiniGame@BlackFlow@WaitForExploreEntry"]
+    },
+    "MiniGame@BlackFlow@WaitForExploreEntry": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [600, 610, 1, 1],
+        "postDelay": 1500,
+        "maxTimes": 20,
+        "next": [
+            "MiniGame@BlackFlow@StartExploreEntryVisible",
+            "MiniGame@BlackFlow@WaitInitializing",
+            "#self"
+        ],
+        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
+    },
+    "MiniGame@BlackFlow@WaitInitializing": {
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["正在初始化"],
+        "roi": [1075, 590, 120, 45],
+        "postDelay": 1000,
+        "next": [
+            "MiniGame@BlackFlow@StartExploreEntryVisible",
+            "#self",
+            "MiniGame@BlackFlow@WaitForExploreEntry"
+        ]
+    },
+    "MiniGame@BlackFlow@StartExploreEntryVisible": {
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["开始探索"],
+        "roi": [1000, 560, 200, 100]
+    },
+    "MiniGame@BlackFlow@SafeExitFailed": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing"
+    }
+}

@@ -9,15 +9,15 @@
             "paths": ["src/MaaCore/Utils/Algorithm.hpp", "unit_test/MaaCore/AlgorithmTest.cpp"]
         },
         {
-            "id": "maa-black-flow-store-screenshot-trigger-test",
-            "name": "Black Flow Store Screenshot Trigger",
-            "buildTarget": "maa-black-flow-store-screenshot-trigger-test",
-            "ctestRegex": "^black-flow-store-screenshot-trigger::",
+            "id": "maa-black-flow-store-trigger-test",
+            "name": "Black Flow Store Trigger",
+            "buildTarget": "maa-black-flow-store-trigger-test",
+            "ctestRegex": "^black-flow-store-trigger::",
             "paths": [
-                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTrigger.hpp",
-                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.cpp",
-                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
-                "unit_test/MaaCore/BlackFlowStoreScreenshotTriggerTest.cpp"
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTrigger.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.h",
+                "unit_test/MaaCore/BlackFlowStoreTriggerTest.cpp"
             ]
         },
         {
@@ -35,8 +35,8 @@
                 "src/MaaCore/Task/Interface/CustomTask.h",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowOcrSidecar.hpp",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowClientGuard.hpp",
-                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.cpp",
-                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.h",
                 "src/MaaCore/Utils/EnumMapping.hpp",
                 "src/MaaCore/Utils/JsonContract.hpp",
                 "src/MaaCore/Utils/Sha256.hpp",
@@ -59,6 +59,29 @@
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStorePageRepository.cpp",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStorePageRepository.hpp",
                 "unit_test/MaaCore/BlackFlowStorePageTest.cpp"
+            ]
+        },
+        {
+            "id": "maa-black-flow-store-cycle-test",
+            "name": "Black Flow Store Cycle",
+            "buildTarget": "maa-black-flow-store-cycle-test",
+            "ctestRegex": "^black-flow-store-cycle::",
+            "paths": [
+                "resource/tasks/MiniGame/BlackFlow.json",
+                "src/MaaCore/Task/Interface/CustomTask.cpp",
+                "src/MaaCore/Task/Interface/CustomTask.h",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreCycleAdapter.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreCycleAdapter.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreOrchestrator.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreOrchestrator.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStorePageRepository.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStorePageRepository.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreStateMachine.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreStateMachine.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.h",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPolicy.hpp",
+                "unit_test/MaaCore/BlackFlowStoreCycleTest.cpp"
             ]
         }
     ]

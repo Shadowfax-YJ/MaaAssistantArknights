@@ -196,22 +196,27 @@ TEST_CASE("Schema v1 and the typed model enforce the same strict sidecar boundar
 
 TEST_CASE("Custom task admission rejects unsupported BlackFlow clients before UI takeover")
 {
-    for (const std::string task_name : { "MiniGame@BlackFlow@Begin", "BlackFlowTemporary@InvestSystem" }) {
-        const std::vector black_flow_tasks { task_name };
+    const std::vector stable_black_flow_tasks { std::string("MiniGame@BlackFlow@Begin") };
 
-        for (const std::string_view supported : { "Official", "Bilibili" }) {
-            CHECK(
-                asst::check_black_flow_task_admission(
-                    black_flow_tasks,
-                    asst::parse_black_flow_client_type(supported)) == asst::BlackFlowTaskAdmission::Accepted);
-        }
+    for (const std::string_view supported : { "Official", "Bilibili" }) {
+        CHECK(
+            asst::check_black_flow_task_admission(
+                stable_black_flow_tasks,
+                asst::parse_black_flow_client_type(supported)) == asst::BlackFlowTaskAdmission::Accepted);
+    }
 
-        for (const std::string_view unsupported : { "txwy", "YoStarEN", "YoStarJP", "YoStarKR", "" }) {
-            CHECK(
-                asst::check_black_flow_task_admission(
-                    black_flow_tasks,
-                    asst::parse_black_flow_client_type(unsupported)) == asst::BlackFlowTaskAdmission::Rejected);
-        }
+    for (const std::string_view unsupported : { "txwy", "YoStarEN", "YoStarJP", "YoStarKR", "" }) {
+        CHECK(
+            asst::check_black_flow_task_admission(
+                stable_black_flow_tasks,
+                asst::parse_black_flow_client_type(unsupported)) == asst::BlackFlowTaskAdmission::Rejected);
+    }
+
+    const std::vector legacy_investment_task { std::string("BlackFlowTemporary@InvestSystem") };
+    for (const std::string_view client : { "Official", "Bilibili", "txwy", "YoStarEN", "" }) {
+        CHECK(
+            asst::check_black_flow_task_admission(legacy_investment_task, asst::parse_black_flow_client_type(client)) ==
+            asst::BlackFlowTaskAdmission::Rejected);
     }
 
     CHECK(
