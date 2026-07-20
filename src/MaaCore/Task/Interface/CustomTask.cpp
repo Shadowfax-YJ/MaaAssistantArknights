@@ -2,6 +2,7 @@
 
 #include "Config/TaskData.h"
 #include "Task/MiniGame/SecretFrontTaskPlugin.h"
+#include "Task/Miscellaneous/BlackFlowClientGuard.hpp"
 #include "Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h"
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
 #include "Task/ProcessTask.h"
@@ -13,7 +14,9 @@ asst::CustomTask::CustomTask(const AsstCallback& callback, Assistant* inst) :
 {
     LogTraceFunction;
     m_custom_task_ptr->register_plugin<ScreenshotTaskPlugin>();
-    m_custom_task_ptr->register_plugin<BlackFlowStoreScreenshotTaskPlugin>()->set_retry_times(0);
+    m_black_flow_store_screenshot_task_plugin =
+        m_custom_task_ptr->register_plugin<BlackFlowStoreScreenshotTaskPlugin>();
+    m_black_flow_store_screenshot_task_plugin->set_retry_times(0);
 }
 
 bool asst::CustomTask::set_params(const json::value& params)
@@ -25,7 +28,7 @@ bool asst::CustomTask::set_params(const json::value& params)
         Log.error("set_params failed, task_names not found");
         return false;
     }
-    std::vector<std::string> tasks;
+    std::vector<std::string> task_names;
 
     for (const auto& t : *tasks_opt) {
         if (!t.is_string()) {
@@ -33,7 +36,21 @@ bool asst::CustomTask::set_params(const json::value& params)
             return false;
         }
 
-        std::string task_name = t.as_string();
+        task_names.emplace_back(t.as_string());
+    }
+
+    const std::string client_type_name = params.get("client_type", std::string());
+    const auto client_type = parse_black_flow_client_type(client_type_name);
+    const auto black_flow_admission = check_black_flow_task_admission(task_names, client_type);
+    if (black_flow_admission == BlackFlowTaskAdmission::Rejected) {
+        Log.error("set_params failed, unsupported BlackFlow client_type: ", client_type_name);
+        return false;
+    }
+    m_black_flow_store_screenshot_task_plugin->set_client_type(
+        black_flow_admission == BlackFlowTaskAdmission::Accepted ? client_type : std::nullopt);
+
+    std::vector<std::string> tasks;
+    for (const auto& task_name : task_names) {
         std::string resolved_task = task_name;
 
         if (parse_and_register_secretfront(task_name, resolved_task)) {

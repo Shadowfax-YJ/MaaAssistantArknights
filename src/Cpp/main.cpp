@@ -28,8 +28,8 @@ int main([[maybe_unused]] int argc, char** argv)
     if (argc > 1) {
         const std::string arg(argv[1]);
 
-        if (arg == "Official") {
-            std::cout << "Official type detected, using default resources." << std::endl;
+        if (arg == "Official" || arg == "Bilibili") {
+            std::cout << arg << " type detected, using default resources." << std::endl;
         }
         else {
             std::cout << "load overseas_type: " << arg << std::endl;

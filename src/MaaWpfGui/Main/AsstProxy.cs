@@ -3008,6 +3008,7 @@ public class AsstProxy
     {
         var task = new AsstCustomTask() {
             CustomTasks = [taskName],
+            ClientType = SettingsViewModel.GameSettings.ClientType,
         };
         var (type, param) = task.Serialize();
         return AsstAppendTaskWithEncoding(TaskType.MiniGame, type, param) && AsstStart();

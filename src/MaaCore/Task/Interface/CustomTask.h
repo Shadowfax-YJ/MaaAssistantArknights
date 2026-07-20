@@ -3,6 +3,7 @@
 
 namespace asst
 {
+class BlackFlowStoreScreenshotTaskPlugin;
 class ProcessTask;
 
 class CustomTask final : public InterfaceTask
@@ -18,5 +19,6 @@ public:
 
 private:
     std::shared_ptr<ProcessTask> m_custom_task_ptr = nullptr;
+    std::shared_ptr<BlackFlowStoreScreenshotTaskPlugin> m_black_flow_store_screenshot_task_plugin = nullptr;
 };
 }

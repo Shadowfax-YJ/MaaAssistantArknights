@@ -26,6 +26,29 @@
         "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
         "unit_test/MaaCore/BlackFlowStoreScreenshotTriggerTest.cpp"
       ]
+    },
+    {
+      "id": "maa-black-flow-store-contract-test",
+      "name": "Black Flow Store Contract",
+      "buildTarget": "maa-black-flow-store-contract-test",
+      "ctestRegex": "^black-flow-store-contract::",
+      "paths": [
+        "resource/black_flow/standard_product_names.json",
+        "resource/black_flow/ocr_sidecar.schema.v1.json",
+        "src/MaaCore/Config/Miscellaneous/BlackFlowStoreConfig.h",
+        "src/MaaCore/Config/Miscellaneous/BlackFlowStoreConfigContract.hpp",
+        "src/MaaCore/Config/ResourceLoader.cpp",
+        "src/MaaCore/Task/Interface/CustomTask.cpp",
+        "src/MaaCore/Task/Interface/CustomTask.h",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowOcrSidecar.hpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowClientGuard.hpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.cpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
+        "src/MaaCore/Utils/EnumMapping.hpp",
+        "src/MaaCore/Utils/JsonContract.hpp",
+        "src/MaaCore/Utils/Sha256.hpp",
+        "unit_test/MaaCore/BlackFlowStoreContractTest.cpp"
+      ]
     }
   ]
 }

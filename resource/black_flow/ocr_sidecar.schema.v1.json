@@ -1,0 +1,388 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://maa.plus/schemas/black-flow/ocr-sidecar.v1.json",
+    "title": "MAA BlackFlow OCR sidecar v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema",
+        "version",
+        "exploration_id",
+        "page_index",
+        "captured_at",
+        "client_type",
+        "language",
+        "image",
+        "page_status",
+        "provenance",
+        "slots",
+        "errors"
+    ],
+    "properties": {
+        "schema": {
+            "const": "maa.black_flow.ocr_sidecar"
+        },
+        "version": {
+            "type": "integer",
+            "const": 1
+        },
+        "exploration_id": {
+            "type": "string",
+            "minLength": 1
+        },
+        "page_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+        },
+        "captured_at": {
+            "type": "string",
+            "minLength": 1
+        },
+        "client_type": {
+            "type": "string",
+            "enum": [
+                "Official",
+                "Bilibili"
+            ]
+        },
+        "language": {
+            "const": "zh_cn"
+        },
+        "image": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "file_name",
+                "width",
+                "height",
+                "sha256"
+            ],
+            "properties": {
+                "file_name": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "width": {
+                    "type": "integer",
+                    "const": 1280
+                },
+                "height": {
+                    "type": "integer",
+                    "const": 720
+                },
+                "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                }
+            }
+        },
+        "page_status": {
+            "type": "string",
+            "enum": [
+                "complete",
+                "partial",
+                "failed"
+            ]
+        },
+        "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "config_schema",
+                "config_version",
+                "standard_product_names_count",
+                "standard_product_names_sha256",
+                "source_product_names_count",
+                "source_product_names_sha256",
+                "client_data_commit",
+                "prts_synthetic_substances_revision",
+                "prts_engine_accessories_revision"
+            ],
+            "properties": {
+                "config_schema": {
+                    "const": "maa.black_flow.standard_product_names"
+                },
+                "config_version": {
+                    "type": "integer",
+                    "const": 1
+                },
+                "standard_product_names_count": {
+                    "type": "integer",
+                    "const": 326
+                },
+                "standard_product_names_sha256": {
+                    "const": "48972fc3a5b40a6586b2707f14c5e73ccf23dfaf0a25cea121b5e273684f7a50"
+                },
+                "source_product_names_count": {
+                    "type": "integer",
+                    "const": 365
+                },
+                "source_product_names_sha256": {
+                    "const": "8981c39f89d6e074f02c395cdf7707c3c26796357527b78b42aff970c7cfb9fa"
+                },
+                "client_data_commit": {
+                    "const": "6b6ac60fc30a16ff2c2aefc0889e94112dda8ed4"
+                },
+                "prts_synthetic_substances_revision": {
+                    "type": "integer",
+                    "const": 409595
+                },
+                "prts_engine_accessories_revision": {
+                    "type": "integer",
+                    "const": 409409
+                }
+            }
+        },
+        "slots": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "prefixItems": [
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 2
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 3
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 5
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 6
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 7
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 8
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 9
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/slot"
+                        },
+                        {
+                            "properties": {
+                                "index": {
+                                    "const": 10
+                                }
+                            }
+                        }
+                    ]
+                }
+            ],
+            "items": false
+        },
+        "errors": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/error"
+            }
+        }
+    },
+    "$defs": {
+        "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "stage",
+                "code",
+                "message",
+                "retryable",
+                "slot_index"
+            ],
+            "properties": {
+                "stage": {
+                    "type": "string",
+                    "enum": [
+                        "capture",
+                        "ocr",
+                        "match",
+                        "persist"
+                    ]
+                },
+                "code": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "message": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "retryable": {
+                    "type": "boolean"
+                },
+                "slot_index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10
+                }
+            }
+        },
+        "slot": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "index",
+                "status",
+                "ocr_text",
+                "ocr_score",
+                "standard_product_name",
+                "match_kind",
+                "errors"
+            ],
+            "properties": {
+                "index": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "matched",
+                        "empty",
+                        "unmatched",
+                        "ocr_error",
+                        "match_error",
+                        "not_processed"
+                    ]
+                },
+                "ocr_text": {
+                    "type": "string"
+                },
+                "ocr_score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "standard_product_name": {
+                    "type": "string"
+                },
+                "match_kind": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "exact",
+                        "fuzzy"
+                    ]
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/error"
+                    }
+                }
+            }
+        }
+    }
+}

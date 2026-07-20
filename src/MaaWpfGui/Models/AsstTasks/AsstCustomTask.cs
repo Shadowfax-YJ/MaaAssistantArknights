@@ -26,5 +26,8 @@ public class AsstCustomTask : AsstBaseTask
     [JsonProperty("task_names")]
     public List<string> CustomTasks { get; set; } = [];
 
+    [JsonProperty("client_type", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ClientType { get; set; }
+
     public override (AsstTaskType TaskType, JObject Params) Serialize() => (TaskType, JObject.FromObject(this));
 }

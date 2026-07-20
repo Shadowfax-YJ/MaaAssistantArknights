@@ -13,6 +13,12 @@ bool asst::BlackFlowStoreScreenshotTaskPlugin::verify(AsstMsg msg, const json::v
 
 bool asst::BlackFlowStoreScreenshotTaskPlugin::_run()
 {
+    if (!m_client_type) {
+        Log.error(__FUNCTION__, "| missing admitted BlackFlow client; refusing capture before artifact creation");
+        stop_process_task();
+        return false;
+    }
+
     const auto image = get_hit_image();
     if (!image) {
         Log.error(__FUNCTION__, "| store overview image is unavailable; stopping before investment");
@@ -39,6 +45,13 @@ bool asst::BlackFlowStoreScreenshotTaskPlugin::_run()
     Log.error(__FUNCTION__, "| failed to save store overview; stopping before investment at", relative_dir);
     stop_process_task();
     return false;
+}
+
+asst::BlackFlowStoreScreenshotTaskPlugin&
+    asst::BlackFlowStoreScreenshotTaskPlugin::set_client_type(std::optional<BlackFlowClientType> client_type) noexcept
+{
+    m_client_type = std::move(client_type);
+    return *this;
 }
 
 void asst::BlackFlowStoreScreenshotTaskPlugin::stop_process_task() const
