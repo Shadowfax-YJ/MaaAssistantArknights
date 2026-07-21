@@ -15,6 +15,7 @@ on:
       - "include/**"
       - "src/**"
       - "tools/maadeps-download.py"
+      - "unit_test/MaaWpfGui/**"
       - "!**/*.md"
   pull_request:
     paths:
@@ -26,6 +27,7 @@ on:
       - "include/**"
       - "src/**"
       - "tools/maadeps-download.py"
+      - "unit_test/MaaWpfGui/**"
       - "!**/*.md"
   workflow_dispatch:
 
@@ -185,6 +187,10 @@ jobs:
       - name: Restore dependencies
         if: steps.cache-nuget.outputs.cache-hit != 'true'
         run: dotnet restore src/MaaWpfGui/MaaWpfGui.csproj
+
+      - name: Run WPF GUI policy tests
+        if: matrix.arch == 'x64'
+        run: dotnet test unit_test/MaaWpfGui/MaaWpfGui.Tests.csproj -c Release --disable-build-servers -m:1
 
       - name: Taggify version for csproj
         run: |

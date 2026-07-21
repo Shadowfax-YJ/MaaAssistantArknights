@@ -20,6 +20,7 @@ using System.Threading.Tasks;
 using MaaWpfGui.Constants;
 using MaaWpfGui.Extensions;
 using MaaWpfGui.Helper;
+using MaaWpfGui.Services;
 using MaaWpfGui.States;
 using MaaWpfGui.Utilities;
 using MaaWpfGui.Utilities.ValueType;
@@ -92,8 +93,9 @@ public class GameSettingsUserControlModel : PropertyChangedBase
 
             ConfigurationHelper.SetValue(ConfigurationKeys.ClientType, value);
             VersionUpdateSettings.ResourceInfoUpdate();
-            Instances.StageManager.UpdateStageLocal();
-            Instances.TaskQueueViewModel.UpdateDatePromptAndStagesLocally();
+            ClientTypeChangeRefresh.Execute(
+                Instances.StageManager.UpdateStageLocal,
+                () => Instances.TaskQueueViewModel.UpdateDatePromptAndStagesLocally());
 
             if (!NeedRestartAfterClientTypeChange(oldValue, value))
             {
