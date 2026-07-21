@@ -5,6 +5,7 @@
 #include "BlackFlowStoreOrchestrator.hpp"
 #include "Config/TaskData.h"
 
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <limits>
@@ -18,15 +19,29 @@ namespace
 {
 constexpr std::string_view StablePrefix = "MiniGame@BlackFlow@";
 constexpr std::string_view Begin = "MiniGame@BlackFlow@Begin";
+constexpr std::string_view InitialRecruitSkipVisible = "MiniGame@BlackFlow@InitialRecruitSkipVisible";
+constexpr std::string_view AdvanceInitialRecruitPortrait = "MiniGame@BlackFlow@AdvanceInitialRecruitPortrait";
+constexpr std::string_view InitialRecruitVisible = "MiniGame@BlackFlow@InitialRecruitVisible";
+constexpr std::string_view WaitInitialRecruit = "MiniGame@BlackFlow@WaitInitialRecruit";
+constexpr std::string_view RefreshControlVisible = "MiniGame@BlackFlow@RefreshControlVisible";
+constexpr std::string_view RefreshControlExhausted = "MiniGame@BlackFlow@RefreshControlExhausted";
 constexpr std::string_view DismissRefreshDialog = "MiniGame@BlackFlow@DismissRefreshDialog";
+constexpr std::string_view LeaveStore = "MiniGame@BlackFlow@LeaveStore";
+constexpr std::string_view LeaveStoreConfirm = "MiniGame@BlackFlow@LeaveStoreConfirm";
+constexpr std::string_view ExitExploration = "MiniGame@BlackFlow@ExitExploration";
+constexpr std::string_view AbandonEntry = "MiniGame@BlackFlow@AbandonEntry";
+constexpr std::string_view AbandonConfirm = "MiniGame@BlackFlow@AbandonConfirm";
 constexpr std::string_view ContinueSafeExit = "MiniGame@BlackFlow@ContinueSafeExit";
 constexpr std::string_view WaitForExploreEntry = "MiniGame@BlackFlow@WaitForExploreEntry";
 constexpr std::string_view SafeExitFailed = "MiniGame@BlackFlow@SafeExitFailed";
 constexpr std::array WaitingTasks {
-    std::string_view { "MiniGame@BlackFlow@WaitInitialRecruit" },
+    WaitInitialRecruit,
     std::string_view { "MiniGame@BlackFlow@WaitInitializing" },
     WaitForExploreEntry,
     ContinueSafeExit,
+};
+constexpr std::array StateChangingSafeExitTasks {
+    DismissRefreshDialog, LeaveStore, LeaveStoreConfirm, ExitExploration, AbandonEntry, AbandonConfirm,
 };
 
 bool has_stable_name(std::string_view task_name) noexcept
@@ -76,6 +91,26 @@ bool is_waiting_task(std::string_view task_name) noexcept
     return false;
 }
 
+bool has_safe_exit_transition_barrier(std::string_view task_name)
+{
+    constexpr int MinimumTransitionDelay = 500;
+    const auto task = asst::Task.get(task_name);
+    if (!task) {
+        return false;
+    }
+    if (task->post_delay >= MinimumTransitionDelay) {
+        return true;
+    }
+    if (task->next.empty() || task->next.front() == ContinueSafeExit) {
+        return false;
+    }
+
+    const auto successor = asst::Task.get(task->next.front());
+    return successor && successor->action == asst::ProcessTaskAction::DoNothing &&
+           (successor->pre_delay >= MinimumTransitionDelay || successor->post_delay >= MinimumTransitionDelay ||
+            is_recognition_algorithm(successor->algorithm));
+}
+
 bool control_flow_reaches(std::string_view root, std::string_view target)
 {
     std::queue<std::string> pending;
@@ -102,6 +137,23 @@ bool control_flow_reaches(std::string_view root, std::string_view target)
     return false;
 }
 
+bool has_explicit_recruit_fallback_exhaustion(const asst::TaskInfo& fallback, std::string_view terminal)
+{
+    if (fallback.exceeded_next.empty()) {
+        return false;
+    }
+
+    bool reaches_terminal = false;
+    for (const auto& edge : fallback.exceeded_next) {
+        const auto task = asst::Task.get(edge);
+        if (!task || !is_recognition_algorithm(task->algorithm)) {
+            return false;
+        }
+        reaches_terminal = reaches_terminal || control_flow_reaches(edge, terminal);
+    }
+    return reaches_terminal;
+}
+
 struct FactContract
 {
     std::string_view name;
@@ -109,8 +161,9 @@ struct FactContract
 };
 
 constexpr std::array CoreFacts {
-    FactContract { "MiniGame@BlackFlow@InitialRecruitVisible", asst::AlgorithmType::OcrDetect },
-    FactContract { "MiniGame@BlackFlow@RefreshControlVisible", asst::AlgorithmType::MatchTemplate },
+    FactContract { InitialRecruitVisible, asst::AlgorithmType::OcrDetect },
+    FactContract { RefreshControlVisible, asst::AlgorithmType::MatchTemplate },
+    FactContract { RefreshControlExhausted, asst::AlgorithmType::OcrDetect },
     FactContract { asst::black_flow_store_tasks::StorePageReady, asst::AlgorithmType::MatchTemplate },
     FactContract { asst::black_flow_store_tasks::RefreshDialogVisible, asst::AlgorithmType::MatchTemplate },
     FactContract { "MiniGame@BlackFlow@WaitInitializing", asst::AlgorithmType::OcrDetect },
@@ -126,8 +179,11 @@ struct RequiredPath
 
 bool asst::run_black_flow_store_task_graph_smoke_test()
 {
-    constexpr std::array<std::string_view, 14> RequiredTasks {
+    constexpr std::array<std::string_view, 17> RequiredTasks {
         Begin,
+        InitialRecruitSkipVisible,
+        AdvanceInitialRecruitPortrait,
+        RefreshControlExhausted,
         black_flow_store_tasks::PrepareFreshEntry,
         black_flow_store_tasks::EnterFreshExploration,
         black_flow_store_tasks::StartExploreEntryVisible,
@@ -176,6 +232,38 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         return false;
     }
 
+    const auto recruit_fallback = Task.get(AdvanceInitialRecruitPortrait);
+    const auto established_recruit_fallback = Task.get("Roguelike@RecruitWithoutButton");
+    if (recruit_fallback->algorithm != AlgorithmType::JustReturn ||
+        recruit_fallback->action != ProcessTaskAction::ClickRect || recruit_fallback->specific_rect.empty() ||
+        recruit_fallback->max_times <= 0 || recruit_fallback->max_times == std::numeric_limits<int>::max() ||
+        !established_recruit_fallback ||
+        recruit_fallback->specific_rect != established_recruit_fallback->specific_rect ||
+        !has_explicit_recruit_fallback_exhaustion(*recruit_fallback, InitialRecruitVisible) ||
+        !control_flow_reaches(InitialRecruitSkipVisible, AdvanceInitialRecruitPortrait) ||
+        !control_flow_reaches(AdvanceInitialRecruitPortrait, InitialRecruitVisible)) {
+        std::cerr << "BlackFlow initial recruitment lacks the established bounded portrait-advance fallback"
+                  << std::endl;
+        return false;
+    }
+
+    const auto available_refresh_fact = Task.get<MatchTaskInfo>(RefreshControlVisible);
+    const auto exhausted_refresh_fact = Task.get<OcrTaskInfo>(RefreshControlExhausted);
+    if (!available_refresh_fact ||
+        std::ranges::find(available_refresh_fact->templ_names, "Roguelike@StageTraderRefresh.png") ==
+            available_refresh_fact->templ_names.end() ||
+        !exhausted_refresh_fact ||
+        std::ranges::find(exhausted_refresh_fact->text, "已用完") == exhausted_refresh_fact->text.end() ||
+        !control_flow_reaches(black_flow_store_tasks::ObserveStorePage, RefreshControlVisible) ||
+        !control_flow_reaches(RefreshControlVisible, black_flow_store_tasks::StorePageReady) ||
+        !control_flow_reaches(black_flow_store_tasks::ObserveStorePage, RefreshControlExhausted) ||
+        !control_flow_reaches(RefreshControlExhausted, black_flow_store_tasks::StorePageReady)) {
+        std::cerr << "BlackFlow store-page observation cannot become ready after two successful refreshes exhaust "
+                     "the refresh allowance"
+                  << std::endl;
+        return false;
+    }
+
     const auto continue_exit = Task.get(ContinueSafeExit);
     if (continue_exit->algorithm != AlgorithmType::JustReturn ||
         continue_exit->action != ProcessTaskAction::DoNothing || continue_exit->max_times <= 0 ||
@@ -185,6 +273,14 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         continue_exit->exceeded_next.front() != SafeExitFailed) {
         std::cerr << "BlackFlow safe-exit polling does not prioritize facts or reach its inert bound" << std::endl;
         return false;
+    }
+
+    for (const std::string_view task_name : StateChangingSafeExitTasks) {
+        if (!has_safe_exit_transition_barrier(task_name)) {
+            std::cerr << "BlackFlow safe-exit action can immediately redispatch on a stale transition frame: "
+                      << task_name << std::endl;
+            return false;
+        }
     }
 
     const auto confirm = Task.get(black_flow_store_tasks::ConfirmRefresh);
@@ -247,7 +343,8 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
             std::cerr << "BlackFlow TaskData contains a non-short action: " << name << std::endl;
             return false;
         }
-        if (task->action == ProcessTaskAction::ClickRect && !is_recognition_algorithm(task->algorithm)) {
+        if (task->action == ProcessTaskAction::ClickRect && !is_recognition_algorithm(task->algorithm) &&
+            name != AdvanceInitialRecruitPortrait) {
             std::cerr << "BlackFlow TaskData contains an unrecognized fixed-coordinate click: " << name << std::endl;
             return false;
         }

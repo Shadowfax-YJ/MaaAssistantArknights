@@ -113,7 +113,21 @@
         "action": "DoNothing",
         "postDelay": 500,
         "maxTimes": 20,
-        "next": ["MiniGame@BlackFlow@InitialRecruitVisible", "MiniGame@BlackFlow@InitialRecruitSkipVisible", "#self"]
+        "next": [
+            "MiniGame@BlackFlow@InitialRecruitVisible",
+            "MiniGame@BlackFlow@InitialRecruitSkipVisible",
+            "MiniGame@BlackFlow@AdvanceInitialRecruitPortrait"
+        ]
+    },
+    "MiniGame@BlackFlow@AdvanceInitialRecruitPortrait": {
+        "Doc": "Use the established Roguelike fallback to advance a recruited-operator portrait without a visible button.",
+        "baseTask": "Roguelike@RecruitWithoutButton",
+        "next": [
+            "MiniGame@BlackFlow@InitialRecruitVisible",
+            "MiniGame@BlackFlow@InitialRecruitSkipVisible",
+            "#self"
+        ],
+        "exceededNext": ["MiniGame@BlackFlow@InitialRecruitVisible"]
     },
     "MiniGame@BlackFlow@InitialRecruitVisible": {
         "algorithm": "OcrDetect",
@@ -212,13 +226,22 @@
     "MiniGame@BlackFlow@ObserveStorePage": {
         "Doc": "Read-only store-overview observation entry.",
         "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@RefreshControlVisible"]
+        "next": [
+            "MiniGame@BlackFlow@RefreshControlVisible",
+            "MiniGame@BlackFlow@RefreshControlExhausted"
+        ]
     },
     "MiniGame@BlackFlow@RefreshControlVisible": {
         "algorithm": "MatchTemplate",
         "action": "DoNothing",
         "template": "Roguelike@StageTraderRefresh.png",
         "roi": [230, 47, 211, 182],
+        "next": ["MiniGame@BlackFlow@StorePageReady"]
+    },
+    "MiniGame@BlackFlow@RefreshControlExhausted": {
+        "Doc": "Store-page observation remains available after two successful refreshes exhaust the refresh allowance.",
+        "baseTask": "Roguelike@StageTraderRefreshWithDiceNotAvaiable",
+        "action": "DoNothing",
         "next": ["MiniGame@BlackFlow@StorePageReady"]
     },
     "MiniGame@BlackFlow@StorePageReady": {
@@ -291,6 +314,7 @@
         "template": "Roguelike@StageTraderLeave.png",
         "roi": [1046, 443, 234, 204],
         "maxTimes": 3,
+        "postDelay": 1000,
         "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
@@ -300,6 +324,7 @@
         "template": "Roguelike@StageTraderLeaveConfirm.png",
         "roi": [985, 447, 295, 203],
         "maxTimes": 3,
+        "postDelay": 1000,
         "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
@@ -309,6 +334,7 @@
         "template": "Roguelike@ExitThenAbandon.png",
         "roi": [0, 0, 90, 90],
         "maxTimes": 3,
+        "postDelay": 1000,
         "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
@@ -319,6 +345,7 @@
         "roi": [1010, 420, 90, 40],
         "specificRect": [1140, 325, 1, 1],
         "maxTimes": 3,
+        "postDelay": 1000,
         "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
