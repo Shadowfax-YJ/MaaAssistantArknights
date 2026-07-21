@@ -226,22 +226,13 @@
     "MiniGame@BlackFlow@ObserveStorePage": {
         "Doc": "Read-only store-overview observation entry.",
         "algorithm": "JustReturn",
-        "next": [
-            "MiniGame@BlackFlow@RefreshControlVisible",
-            "MiniGame@BlackFlow@RefreshControlExhausted"
-        ]
+        "next": ["MiniGame@BlackFlow@StorePageReady"]
     },
     "MiniGame@BlackFlow@RefreshControlVisible": {
         "algorithm": "MatchTemplate",
         "action": "DoNothing",
         "template": "Roguelike@StageTraderRefresh.png",
         "roi": [230, 47, 211, 182],
-        "next": ["MiniGame@BlackFlow@StorePageReady"]
-    },
-    "MiniGame@BlackFlow@RefreshControlExhausted": {
-        "Doc": "Store-page observation remains available after two successful refreshes exhaust the refresh allowance.",
-        "baseTask": "Roguelike@StageTraderRefreshWithDiceNotAvaiable",
-        "action": "DoNothing",
         "next": ["MiniGame@BlackFlow@StorePageReady"]
     },
     "MiniGame@BlackFlow@StorePageReady": {
@@ -338,26 +329,70 @@
         "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
-    "MiniGame@BlackFlow@AbandonEntry": {
+    "MiniGame@BlackFlow@AbandonEntryVisible": {
+        "Doc": "Recognize the exploration summary before entering the established abandon action.",
         "algorithm": "OcrDetect",
-        "action": "ClickRect",
+        "action": "DoNothing",
         "text": ["驻足于"],
         "roi": [1010, 420, 90, 40],
-        "specificRect": [1140, 325, 1, 1],
+        "next": ["MiniGame@BlackFlow@AbandonEntry"]
+    },
+    "MiniGame@BlackFlow@AbandonEntry": {
+        "Doc": "Stage-local use of the established Roguelike abandon action.",
+        "baseTask": "Roguelike@Abandon",
+        "template": "empty.png",
         "maxTimes": 3,
         "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
+        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
     },
+    "MiniGame@BlackFlow@AbandonConfirmVisible": {
+        "Doc": "Uniquely identify an abandon confirmation before any refresh-dialog recovery is considered.",
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["确认放弃本次探索"],
+        "roi": [450, 230, 400, 100],
+        "next": ["MiniGame@BlackFlow@AbandonConfirm"]
+    },
     "MiniGame@BlackFlow@AbandonConfirm": {
-        "algorithm": "MatchTemplate",
-        "action": "ClickSelf",
+        "Doc": "Stage-local use of the established Roguelike abandon-confirm action.",
+        "baseTask": "Roguelike@AbandonConfirm",
         "template": "Roguelike@AbandonConfirm.png",
-        "roi": [0, 0, 1280, 720],
         "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
+        "next": [
+            "MiniGame@BlackFlow@StartExploreEntryVisible",
+            "MiniGame@BlackFlow@AbandonConfirm",
+            "MiniGame@BlackFlow@WaitAfterAbandonInitializing",
+            "MiniGame@BlackFlow@RetryAfterAbandonDelay"
+        ],
         "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
+    },
+    "MiniGame@BlackFlow@ContinueAfterAbandon": {
+        "Doc": "Poll only post-abandon states; refresh-dialog recovery is intentionally unreachable.",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "maxTimes": 20,
+        "next": [
+            "MiniGame@BlackFlow@StartExploreEntryVisible",
+            "MiniGame@BlackFlow@AbandonConfirm",
+            "MiniGame@BlackFlow@WaitAfterAbandonInitializing",
+            "MiniGame@BlackFlow@RetryAfterAbandonDelay"
+        ],
+        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
+    },
+    "MiniGame@BlackFlow@WaitAfterAbandonInitializing": {
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["正在初始化"],
+        "roi": [1075, 590, 120, 45],
+        "postDelay": 1000,
+        "next": ["MiniGame@BlackFlow@ContinueAfterAbandon"]
+    },
+    "MiniGame@BlackFlow@RetryAfterAbandonDelay": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 1000,
+        "next": ["MiniGame@BlackFlow@ContinueAfterAbandon"]
     },
     "MiniGame@BlackFlow@WaitInitializing": {
         "algorithm": "OcrDetect",
@@ -379,12 +414,12 @@
         "maxTimes": 20,
         "next": [
             "MiniGame@BlackFlow@StartExploreEntryVisible",
+            "MiniGame@BlackFlow@AbandonConfirmVisible",
             "MiniGame@BlackFlow@DismissRefreshDialog",
             "MiniGame@BlackFlow@LeaveStore",
             "MiniGame@BlackFlow@LeaveStoreConfirm",
             "MiniGame@BlackFlow@ExitExploration",
-            "MiniGame@BlackFlow@AbandonEntry",
-            "MiniGame@BlackFlow@AbandonConfirm",
+            "MiniGame@BlackFlow@AbandonEntryVisible",
             "MiniGame@BlackFlow@WaitInitializing",
             "MiniGame@BlackFlow@WaitForExploreEntry"
         ],

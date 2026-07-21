@@ -24,19 +24,26 @@ constexpr std::string_view AdvanceInitialRecruitPortrait = "MiniGame@BlackFlow@A
 constexpr std::string_view InitialRecruitVisible = "MiniGame@BlackFlow@InitialRecruitVisible";
 constexpr std::string_view WaitInitialRecruit = "MiniGame@BlackFlow@WaitInitialRecruit";
 constexpr std::string_view RefreshControlVisible = "MiniGame@BlackFlow@RefreshControlVisible";
-constexpr std::string_view RefreshControlExhausted = "MiniGame@BlackFlow@RefreshControlExhausted";
 constexpr std::string_view DismissRefreshDialog = "MiniGame@BlackFlow@DismissRefreshDialog";
 constexpr std::string_view LeaveStore = "MiniGame@BlackFlow@LeaveStore";
 constexpr std::string_view LeaveStoreConfirm = "MiniGame@BlackFlow@LeaveStoreConfirm";
 constexpr std::string_view ExitExploration = "MiniGame@BlackFlow@ExitExploration";
+constexpr std::string_view AbandonEntryVisible = "MiniGame@BlackFlow@AbandonEntryVisible";
 constexpr std::string_view AbandonEntry = "MiniGame@BlackFlow@AbandonEntry";
+constexpr std::string_view AbandonConfirmVisible = "MiniGame@BlackFlow@AbandonConfirmVisible";
 constexpr std::string_view AbandonConfirm = "MiniGame@BlackFlow@AbandonConfirm";
+constexpr std::string_view ContinueAfterAbandon = "MiniGame@BlackFlow@ContinueAfterAbandon";
+constexpr std::string_view WaitAfterAbandonInitializing = "MiniGame@BlackFlow@WaitAfterAbandonInitializing";
+constexpr std::string_view RetryAfterAbandonDelay = "MiniGame@BlackFlow@RetryAfterAbandonDelay";
 constexpr std::string_view ContinueSafeExit = "MiniGame@BlackFlow@ContinueSafeExit";
 constexpr std::string_view WaitForExploreEntry = "MiniGame@BlackFlow@WaitForExploreEntry";
 constexpr std::string_view SafeExitFailed = "MiniGame@BlackFlow@SafeExitFailed";
 constexpr std::array WaitingTasks {
     WaitInitialRecruit,
     std::string_view { "MiniGame@BlackFlow@WaitInitializing" },
+    WaitAfterAbandonInitializing,
+    RetryAfterAbandonDelay,
+    ContinueAfterAbandon,
     WaitForExploreEntry,
     ContinueSafeExit,
 };
@@ -163,7 +170,8 @@ struct FactContract
 constexpr std::array CoreFacts {
     FactContract { InitialRecruitVisible, asst::AlgorithmType::OcrDetect },
     FactContract { RefreshControlVisible, asst::AlgorithmType::MatchTemplate },
-    FactContract { RefreshControlExhausted, asst::AlgorithmType::OcrDetect },
+    FactContract { AbandonEntryVisible, asst::AlgorithmType::OcrDetect },
+    FactContract { AbandonConfirmVisible, asst::AlgorithmType::OcrDetect },
     FactContract { asst::black_flow_store_tasks::StorePageReady, asst::AlgorithmType::MatchTemplate },
     FactContract { asst::black_flow_store_tasks::RefreshDialogVisible, asst::AlgorithmType::MatchTemplate },
     FactContract { "MiniGame@BlackFlow@WaitInitializing", asst::AlgorithmType::OcrDetect },
@@ -179,11 +187,10 @@ struct RequiredPath
 
 bool asst::run_black_flow_store_task_graph_smoke_test()
 {
-    constexpr std::array<std::string_view, 17> RequiredTasks {
+    constexpr std::array<std::string_view, 18> RequiredTasks {
         Begin,
         InitialRecruitSkipVisible,
         AdvanceInitialRecruitPortrait,
-        RefreshControlExhausted,
         black_flow_store_tasks::PrepareFreshEntry,
         black_flow_store_tasks::EnterFreshExploration,
         black_flow_store_tasks::StartExploreEntryVisible,
@@ -194,6 +201,8 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         black_flow_store_tasks::ConfirmRefresh,
         black_flow_store_tasks::SafeExit,
         DismissRefreshDialog,
+        AbandonEntry,
+        AbandonConfirm,
         ContinueSafeExit,
         WaitForExploreEntry,
         SafeExitFailed,
@@ -247,31 +256,93 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         return false;
     }
 
-    const auto available_refresh_fact = Task.get<MatchTaskInfo>(RefreshControlVisible);
-    const auto exhausted_refresh_fact = Task.get<OcrTaskInfo>(RefreshControlExhausted);
-    if (!available_refresh_fact ||
-        std::ranges::find(available_refresh_fact->templ_names, "Roguelike@StageTraderRefresh.png") ==
-            available_refresh_fact->templ_names.end() ||
-        !exhausted_refresh_fact ||
-        std::ranges::find(exhausted_refresh_fact->text, "已用完") == exhausted_refresh_fact->text.end() ||
-        !control_flow_reaches(black_flow_store_tasks::ObserveStorePage, RefreshControlVisible) ||
-        !control_flow_reaches(RefreshControlVisible, black_flow_store_tasks::StorePageReady) ||
-        !control_flow_reaches(black_flow_store_tasks::ObserveStorePage, RefreshControlExhausted) ||
-        !control_flow_reaches(RefreshControlExhausted, black_flow_store_tasks::StorePageReady)) {
-        std::cerr << "BlackFlow store-page observation cannot become ready after two successful refreshes exhaust "
-                     "the refresh allowance"
+    const auto established_abandon_entry = Task.get<MatchTaskInfo>("Roguelike@Abandon");
+    const auto abandon_entry = Task.get<MatchTaskInfo>(AbandonEntry);
+    const auto established_abandon_confirm = Task.get<MatchTaskInfo>("Roguelike@AbandonConfirm");
+    const auto abandon_confirm = Task.get<MatchTaskInfo>(AbandonConfirm);
+    if (!established_abandon_entry || !abandon_entry || abandon_entry->action != established_abandon_entry->action ||
+        abandon_entry->roi != established_abandon_entry->roi ||
+        abandon_entry->templ_names != established_abandon_entry->templ_names || abandon_entry->post_delay < 500 ||
+        abandon_entry->next.empty() || abandon_entry->next.front() != AbandonConfirm || !established_abandon_confirm ||
+        !abandon_confirm || abandon_confirm->action != established_abandon_confirm->action ||
+        abandon_confirm->roi != established_abandon_confirm->roi ||
+        abandon_confirm->post_delay != established_abandon_confirm->post_delay ||
+        abandon_confirm->templ_names != established_abandon_confirm->templ_names || abandon_confirm->next.empty() ||
+        abandon_confirm->next.front() == ContinueSafeExit ||
+        !control_flow_reaches(AbandonEntry, black_flow_store_tasks::StartExploreEntryVisible) ||
+        control_flow_reaches(AbandonEntry, DismissRefreshDialog)) {
+        std::cerr << "BlackFlow abandon stages do not reuse the established Roguelike actions in sequence" << std::endl;
+        return false;
+    }
+
+    const auto abandon_entry_fact = Task.get<OcrTaskInfo>(AbandonEntryVisible);
+    const auto abandon_confirm_fact = Task.get<OcrTaskInfo>(AbandonConfirmVisible);
+    if (!abandon_entry_fact || abandon_entry_fact->action != ProcessTaskAction::DoNothing ||
+        std::ranges::find(abandon_entry_fact->text, "驻足于") == abandon_entry_fact->text.end() ||
+        abandon_entry_fact->next.size() != 1 || abandon_entry_fact->next.front() != AbandonEntry ||
+        !abandon_confirm_fact || abandon_confirm_fact->action != ProcessTaskAction::DoNothing ||
+        std::ranges::find(abandon_confirm_fact->text, "确认放弃本次探索") == abandon_confirm_fact->text.end() ||
+        abandon_confirm_fact->next.size() != 1 || abandon_confirm_fact->next.front() != AbandonConfirm) {
+        std::cerr << "BlackFlow abandon actions are not guarded by their stage-specific screen facts" << std::endl;
+        return false;
+    }
+
+    const auto continue_after_abandon = Task.get(ContinueAfterAbandon);
+    const auto wait_after_abandon_initializing = Task.get(WaitAfterAbandonInitializing);
+    const auto retry_after_abandon_delay = Task.get(RetryAfterAbandonDelay);
+    if (!continue_after_abandon || continue_after_abandon->algorithm != AlgorithmType::JustReturn ||
+        continue_after_abandon->action != ProcessTaskAction::DoNothing || continue_after_abandon->max_times <= 0 ||
+        continue_after_abandon->max_times == std::numeric_limits<int>::max() || continue_after_abandon->next.empty() ||
+        continue_after_abandon->next.front() != black_flow_store_tasks::StartExploreEntryVisible ||
+        std::ranges::find(continue_after_abandon->next, AbandonConfirm) == continue_after_abandon->next.end() ||
+        control_flow_reaches(ContinueAfterAbandon, DismissRefreshDialog) ||
+        continue_after_abandon->exceeded_next.size() != 1 ||
+        continue_after_abandon->exceeded_next.front() != SafeExitFailed || !wait_after_abandon_initializing ||
+        wait_after_abandon_initializing->action != ProcessTaskAction::DoNothing ||
+        wait_after_abandon_initializing->post_delay < 500 || wait_after_abandon_initializing->next.size() != 1 ||
+        wait_after_abandon_initializing->next.front() != ContinueAfterAbandon || !retry_after_abandon_delay ||
+        retry_after_abandon_delay->algorithm != AlgorithmType::JustReturn ||
+        retry_after_abandon_delay->action != ProcessTaskAction::DoNothing ||
+        retry_after_abandon_delay->post_delay < 500 || retry_after_abandon_delay->next.size() != 1 ||
+        retry_after_abandon_delay->next.front() != ContinueAfterAbandon) {
+        std::cerr << "BlackFlow post-abandon polling can re-enter the refresh-dialog recovery stage" << std::endl;
+        return false;
+    }
+
+    const auto observe_store_page = Task.get(black_flow_store_tasks::ObserveStorePage);
+    if (observe_store_page->algorithm != AlgorithmType::JustReturn ||
+        observe_store_page->action != ProcessTaskAction::DoNothing || observe_store_page->next.size() != 1 ||
+        observe_store_page->next.front() != black_flow_store_tasks::StorePageReady ||
+        control_flow_reaches(black_flow_store_tasks::ObserveStorePage, RefreshControlVisible)) {
+        std::cerr << "BlackFlow store-page observation is coupled to refresh availability" << std::endl;
+        return false;
+    }
+
+    const auto open_refresh = Task.get<MatchTaskInfo>(black_flow_store_tasks::OpenRefreshDialog);
+    if (!open_refresh || open_refresh->action != ProcessTaskAction::ClickSelf ||
+        std::ranges::find(open_refresh->templ_names, "Roguelike@StageTraderRefresh.png") ==
+            open_refresh->templ_names.end()) {
+        std::cerr << "BlackFlow refresh command does not independently require the available refresh control"
                   << std::endl;
         return false;
     }
 
     const auto continue_exit = Task.get(ContinueSafeExit);
+    const auto abandon_entry_action = std::ranges::find(continue_exit->next, AbandonEntry);
+    const auto abandon_confirm_action = std::ranges::find(continue_exit->next, AbandonConfirm);
+    const auto abandon_entry_guard = std::ranges::find(continue_exit->next, AbandonEntryVisible);
+    const auto abandon_confirm_guard = std::ranges::find(continue_exit->next, AbandonConfirmVisible);
+    const auto dismiss_refresh = std::ranges::find(continue_exit->next, DismissRefreshDialog);
     if (continue_exit->algorithm != AlgorithmType::JustReturn ||
         continue_exit->action != ProcessTaskAction::DoNothing || continue_exit->max_times <= 0 ||
         continue_exit->max_times == std::numeric_limits<int>::max() || continue_exit->next.size() < 2 ||
         continue_exit->next[0] != black_flow_store_tasks::StartExploreEntryVisible ||
-        continue_exit->next[1] != DismissRefreshDialog || continue_exit->exceeded_next.size() != 1 ||
-        continue_exit->exceeded_next.front() != SafeExitFailed) {
-        std::cerr << "BlackFlow safe-exit polling does not prioritize facts or reach its inert bound" << std::endl;
+        abandon_entry_action != continue_exit->next.end() || abandon_confirm_action != continue_exit->next.end() ||
+        abandon_entry_guard == continue_exit->next.end() || abandon_confirm_guard == continue_exit->next.end() ||
+        dismiss_refresh == continue_exit->next.end() || abandon_confirm_guard > dismiss_refresh ||
+        continue_exit->exceeded_next.size() != 1 || continue_exit->exceeded_next.front() != SafeExitFailed) {
+        std::cerr << "BlackFlow safe-exit polling exposes abandon actions to the refresh-dialog dispatcher"
+                  << std::endl;
         return false;
     }
 
