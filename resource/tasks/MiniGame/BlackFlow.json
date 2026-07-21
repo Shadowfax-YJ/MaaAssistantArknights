@@ -335,12 +335,25 @@
         "action": "DoNothing",
         "text": ["驻足于"],
         "roi": [1010, 420, 90, 40],
-        "next": ["MiniGame@BlackFlow@AbandonEntry"]
+        "next": [
+            "MiniGame@BlackFlow@AbandonEntry",
+            "MiniGame@BlackFlow@AbandonEntryFallback"
+        ]
     },
     "MiniGame@BlackFlow@AbandonEntry": {
-        "Doc": "Stage-local use of the established Roguelike abandon action.",
-        "baseTask": "Roguelike@Abandon",
-        "template": "empty.png",
+        "Doc": "Stage-local use of the JieGarden abandon recognition after its OCR guard.",
+        "baseTask": "JieGarden@Roguelike@Abandon",
+        "template": ["JieGarden@Roguelike@Abandon.png", "JieGarden@Roguelike@Abandon2.png"],
+        "maxTimes": 3,
+        "postDelay": 1000,
+        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"],
+        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
+    },
+    "MiniGame@BlackFlow@AbandonEntryFallback": {
+        "Doc": "Click the verified abandon-control center when the dim summary frame defeats the upstream matcher.",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [1140, 325, 1, 1],
         "maxTimes": 3,
         "postDelay": 1000,
         "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"],

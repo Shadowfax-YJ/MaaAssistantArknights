@@ -30,6 +30,7 @@ constexpr std::string_view LeaveStoreConfirm = "MiniGame@BlackFlow@LeaveStoreCon
 constexpr std::string_view ExitExploration = "MiniGame@BlackFlow@ExitExploration";
 constexpr std::string_view AbandonEntryVisible = "MiniGame@BlackFlow@AbandonEntryVisible";
 constexpr std::string_view AbandonEntry = "MiniGame@BlackFlow@AbandonEntry";
+constexpr std::string_view AbandonEntryFallback = "MiniGame@BlackFlow@AbandonEntryFallback";
 constexpr std::string_view AbandonConfirmVisible = "MiniGame@BlackFlow@AbandonConfirmVisible";
 constexpr std::string_view AbandonConfirm = "MiniGame@BlackFlow@AbandonConfirm";
 constexpr std::string_view ContinueAfterAbandon = "MiniGame@BlackFlow@ContinueAfterAbandon";
@@ -48,7 +49,8 @@ constexpr std::array WaitingTasks {
     ContinueSafeExit,
 };
 constexpr std::array StateChangingSafeExitTasks {
-    DismissRefreshDialog, LeaveStore, LeaveStoreConfirm, ExitExploration, AbandonEntry, AbandonConfirm,
+    DismissRefreshDialog, LeaveStore,           LeaveStoreConfirm, ExitExploration,
+    AbandonEntry,         AbandonEntryFallback, AbandonConfirm,
 };
 
 bool has_stable_name(std::string_view task_name) noexcept
@@ -187,7 +189,7 @@ struct RequiredPath
 
 bool asst::run_black_flow_store_task_graph_smoke_test()
 {
-    constexpr std::array<std::string_view, 18> RequiredTasks {
+    constexpr std::array<std::string_view, 19> RequiredTasks {
         Begin,
         InitialRecruitSkipVisible,
         AdvanceInitialRecruitPortrait,
@@ -202,6 +204,7 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         black_flow_store_tasks::SafeExit,
         DismissRefreshDialog,
         AbandonEntry,
+        AbandonEntryFallback,
         AbandonConfirm,
         ContinueSafeExit,
         WaitForExploreEntry,
@@ -256,22 +259,43 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         return false;
     }
 
-    const auto established_abandon_entry = Task.get<MatchTaskInfo>("Roguelike@Abandon");
+    const auto established_abandon_entry = Task.get<MatchTaskInfo>("JieGarden@Roguelike@Abandon");
     const auto abandon_entry = Task.get<MatchTaskInfo>(AbandonEntry);
+    const auto abandon_entry_fallback = Task.get(AbandonEntryFallback);
     const auto established_abandon_confirm = Task.get<MatchTaskInfo>("Roguelike@AbandonConfirm");
     const auto abandon_confirm = Task.get<MatchTaskInfo>(AbandonConfirm);
-    if (!established_abandon_entry || !abandon_entry || abandon_entry->action != established_abandon_entry->action ||
+    if (!established_abandon_entry || !abandon_entry ||
+        abandon_entry->algorithm != established_abandon_entry->algorithm ||
+        abandon_entry->action != established_abandon_entry->action ||
         abandon_entry->roi != established_abandon_entry->roi ||
-        abandon_entry->templ_names != established_abandon_entry->templ_names || abandon_entry->post_delay < 500 ||
-        abandon_entry->next.empty() || abandon_entry->next.front() != AbandonConfirm || !established_abandon_confirm ||
-        !abandon_confirm || abandon_confirm->action != established_abandon_confirm->action ||
+        abandon_entry->templ_names != established_abandon_entry->templ_names ||
+        abandon_entry->templ_thresholds != established_abandon_entry->templ_thresholds ||
+        abandon_entry->methods != established_abandon_entry->methods ||
+        abandon_entry->mask_ranges != established_abandon_entry->mask_ranges ||
+        abandon_entry->color_scales != established_abandon_entry->color_scales ||
+        abandon_entry->color_close != established_abandon_entry->color_close ||
+        abandon_entry->pure_color != established_abandon_entry->pure_color || abandon_entry->max_times != 3 ||
+        abandon_entry->post_delay < 500 || abandon_entry->next.size() != 2 ||
+        abandon_entry->next[0] != AbandonConfirm || abandon_entry->next[1] != AbandonEntry ||
+        !established_abandon_confirm || !abandon_entry_fallback ||
+        abandon_entry_fallback->algorithm != AlgorithmType::JustReturn ||
+        abandon_entry_fallback->action != ProcessTaskAction::ClickRect ||
+        abandon_entry_fallback->specific_rect != Rect { 1140, 325, 1, 1 } || abandon_entry_fallback->max_times != 3 ||
+        abandon_entry_fallback->post_delay < 500 || abandon_entry_fallback->next.size() != 2 ||
+        abandon_entry_fallback->next[0] != AbandonConfirm || abandon_entry_fallback->next[1] != AbandonEntryFallback ||
+        abandon_entry_fallback->exceeded_next.size() != 1 ||
+        abandon_entry_fallback->exceeded_next.front() != SafeExitFailed || !abandon_confirm ||
+        abandon_confirm->action != established_abandon_confirm->action ||
         abandon_confirm->roi != established_abandon_confirm->roi ||
         abandon_confirm->post_delay != established_abandon_confirm->post_delay ||
         abandon_confirm->templ_names != established_abandon_confirm->templ_names || abandon_confirm->next.empty() ||
         abandon_confirm->next.front() == ContinueSafeExit ||
         !control_flow_reaches(AbandonEntry, black_flow_store_tasks::StartExploreEntryVisible) ||
-        control_flow_reaches(AbandonEntry, DismissRefreshDialog)) {
-        std::cerr << "BlackFlow abandon stages do not reuse the established Roguelike actions in sequence" << std::endl;
+        control_flow_reaches(AbandonEntry, DismissRefreshDialog) ||
+        !control_flow_reaches(AbandonEntryFallback, black_flow_store_tasks::StartExploreEntryVisible) ||
+        control_flow_reaches(AbandonEntryFallback, DismissRefreshDialog)) {
+        std::cerr << "BlackFlow abandon stages do not combine JieGarden recognition with the guarded fallback"
+                  << std::endl;
         return false;
     }
 
@@ -279,8 +303,9 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
     const auto abandon_confirm_fact = Task.get<OcrTaskInfo>(AbandonConfirmVisible);
     if (!abandon_entry_fact || abandon_entry_fact->action != ProcessTaskAction::DoNothing ||
         std::ranges::find(abandon_entry_fact->text, "驻足于") == abandon_entry_fact->text.end() ||
-        abandon_entry_fact->next.size() != 1 || abandon_entry_fact->next.front() != AbandonEntry ||
-        !abandon_confirm_fact || abandon_confirm_fact->action != ProcessTaskAction::DoNothing ||
+        abandon_entry_fact->next.size() != 2 || abandon_entry_fact->next[0] != AbandonEntry ||
+        abandon_entry_fact->next[1] != AbandonEntryFallback || !abandon_confirm_fact ||
+        abandon_confirm_fact->action != ProcessTaskAction::DoNothing ||
         std::ranges::find(abandon_confirm_fact->text, "确认放弃本次探索") == abandon_confirm_fact->text.end() ||
         abandon_confirm_fact->next.size() != 1 || abandon_confirm_fact->next.front() != AbandonConfirm) {
         std::cerr << "BlackFlow abandon actions are not guarded by their stage-specific screen facts" << std::endl;
@@ -329,6 +354,7 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
 
     const auto continue_exit = Task.get(ContinueSafeExit);
     const auto abandon_entry_action = std::ranges::find(continue_exit->next, AbandonEntry);
+    const auto abandon_entry_fallback_action = std::ranges::find(continue_exit->next, AbandonEntryFallback);
     const auto abandon_confirm_action = std::ranges::find(continue_exit->next, AbandonConfirm);
     const auto abandon_entry_guard = std::ranges::find(continue_exit->next, AbandonEntryVisible);
     const auto abandon_confirm_guard = std::ranges::find(continue_exit->next, AbandonConfirmVisible);
@@ -337,10 +363,12 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         continue_exit->action != ProcessTaskAction::DoNothing || continue_exit->max_times <= 0 ||
         continue_exit->max_times == std::numeric_limits<int>::max() || continue_exit->next.size() < 2 ||
         continue_exit->next[0] != black_flow_store_tasks::StartExploreEntryVisible ||
-        abandon_entry_action != continue_exit->next.end() || abandon_confirm_action != continue_exit->next.end() ||
-        abandon_entry_guard == continue_exit->next.end() || abandon_confirm_guard == continue_exit->next.end() ||
-        dismiss_refresh == continue_exit->next.end() || abandon_confirm_guard > dismiss_refresh ||
-        continue_exit->exceeded_next.size() != 1 || continue_exit->exceeded_next.front() != SafeExitFailed) {
+        abandon_entry_action != continue_exit->next.end() ||
+        abandon_entry_fallback_action != continue_exit->next.end() ||
+        abandon_confirm_action != continue_exit->next.end() || abandon_entry_guard == continue_exit->next.end() ||
+        abandon_confirm_guard == continue_exit->next.end() || dismiss_refresh == continue_exit->next.end() ||
+        abandon_confirm_guard > dismiss_refresh || continue_exit->exceeded_next.size() != 1 ||
+        continue_exit->exceeded_next.front() != SafeExitFailed) {
         std::cerr << "BlackFlow safe-exit polling exposes abandon actions to the refresh-dialog dispatcher"
                   << std::endl;
         return false;
@@ -415,7 +443,7 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
             return false;
         }
         if (task->action == ProcessTaskAction::ClickRect && !is_recognition_algorithm(task->algorithm) &&
-            name != AdvanceInitialRecruitPortrait) {
+            name != AdvanceInitialRecruitPortrait && name != AbandonEntryFallback) {
             std::cerr << "BlackFlow TaskData contains an unrecognized fixed-coordinate click: " << name << std::endl;
             return false;
         }
