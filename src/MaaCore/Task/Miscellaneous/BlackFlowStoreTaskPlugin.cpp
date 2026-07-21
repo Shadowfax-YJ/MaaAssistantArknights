@@ -14,6 +14,7 @@
 #include "Utils/WorkingDir.hpp"
 #include "Vision/Roguelike/BlackFlowStoreImageAnalyzer.h"
 
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -104,6 +105,20 @@ public:
         return m_analyzer.analyze_slots(MAA_NS::imread(path));
     }
 
+    asst::BlackFlowStoreSlotsAnalysis analyze_recovery_page(
+        const std::filesystem::path& path,
+        const asst::BlackFlowStoreStopRequested& cancel_requested) override
+    {
+        if (cancel_requested && cancel_requested()) {
+            return { };
+        }
+        const auto image = MAA_NS::imread(path);
+        if (cancel_requested && cancel_requested()) {
+            return { };
+        }
+        return m_analyzer.analyze_slots(image, cancel_requested);
+    }
+
     void snapshot_committed(const asst::BlackFlowStoreSnapshot& snapshot) override { m_snapshot_callback(snapshot); }
 
     void exploration_ended(const asst::BlackFlowStoreExplorationSummary& summary, std::string_view exploration_id)
@@ -112,7 +127,14 @@ public:
         m_exploration_ended_callback(summary, exploration_id);
     }
 
+    bool wait_for(std::chrono::milliseconds duration) override
+    {
+        return m_pause(static_cast<unsigned>(duration.count()));
+    }
+
     bool stop_requested() const noexcept override { return m_stop_requested(); }
+
+    std::chrono::steady_clock::time_point now() const noexcept override { return std::chrono::steady_clock::now(); }
 
 private:
     asst::BlackFlowStoreImageAnalyzer& m_analyzer;
@@ -184,7 +206,7 @@ bool asst::BlackFlowStoreTaskPlugin::_run()
                     { "page_index", snapshot.page_index },
                     { "attempt", snapshot.attempt },
                     { "page_status", snapshot.page_status },
-                    { "origin", "live" },
+                    { "origin", std::string(black_flow_store_snapshot_origin_name(snapshot.origin)) },
                     { "png_path", snapshot.png_relative_path },
                     { "json_path", snapshot.json_relative_path },
                 };
@@ -205,23 +227,18 @@ bool asst::BlackFlowStoreTaskPlugin::_run()
             });
         BlackFlowStoreCycleAdapter port(repository, m_client_type.value(), callback_relative_root, runtime);
 
-        const auto result = run_black_flow_store_cycle(port);
-        if (result.status != BlackFlowStoreCycleStatus::Completed ||
-            result.failure != BlackFlowStoreCycleFailure::None || result.completed_pages != BlackFlowStorePageLimit ||
-            result.successful_refreshes != BlackFlowStoreSuccessfulRefreshLimit) {
+        const auto result = run_black_flow_store_session(port);
+        if (result.status == BlackFlowStoreSessionStatus::Failed) {
             Log.error(
                 __FUNCTION__,
-                "| BlackFlow cycle failed safely; status=",
+                "| BlackFlow session stopped after a fatal recovery failure; status=",
                 static_cast<int>(result.status),
                 "failure=",
                 static_cast<int>(result.failure),
-                "pages=",
-                result.completed_pages,
-                "refreshes=",
-                result.successful_refreshes);
-            return false;
+                "safely_exited_cycles=",
+                result.safely_exited_cycles);
         }
-        return true;
+        return false;
     }
     catch (const std::exception&) {
         Log.error(__FUNCTION__, "| BlackFlow production cycle failed without exposing internal details");

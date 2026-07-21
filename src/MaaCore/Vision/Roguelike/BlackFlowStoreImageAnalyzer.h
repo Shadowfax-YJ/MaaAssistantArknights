@@ -26,16 +26,19 @@ struct BlackFlowStoreReadiness
 };
 
 using BlackFlowWordOcr = std::function<BlackFlowStoreSlotOcr(const cv::Mat&, const BlackFlowStoreTitleRoi&)>;
+using BlackFlowStoreCancellationRequested = std::function<bool()>;
 
 class BlackFlowStoreImageAnalyzer final
 {
 public:
-    explicit BlackFlowStoreImageAnalyzer(const BlackFlowStoreConfigContract& config, BlackFlowWordOcr word_ocr = {});
+    explicit BlackFlowStoreImageAnalyzer(const BlackFlowStoreConfigContract& config, BlackFlowWordOcr word_ocr = { });
 
     std::optional<BlackFlowStoreFrameObservation>
         observe(const cv::Mat& normalized_frame, BlackFlowStoreReadiness readiness) const;
 
     BlackFlowStoreSlotsAnalysis analyze_slots(const cv::Mat& stable_frame) const;
+    BlackFlowStoreSlotsAnalysis
+        analyze_slots(const cv::Mat& stable_frame, const BlackFlowStoreCancellationRequested& cancel_requested) const;
 
 private:
     BlackFlowProductNameMatcher m_matcher;

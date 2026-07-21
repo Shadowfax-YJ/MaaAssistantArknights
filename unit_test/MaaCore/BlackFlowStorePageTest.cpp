@@ -207,7 +207,7 @@ TEST_CASE("BlackFlow slot analysis preserves fixed order raw OCR and empty-unmat
     const std::array<std::string, 1> standard_product_names { "支援起重机" };
     const asst::BlackFlowProductNameMatcher matcher(standard_product_names);
     std::array<asst::BlackFlowStoreSlotOcr, 10> ocr;
-    std::array<bool, 10> foreground {};
+    std::array<bool, 10> foreground { };
 
     foreground[0] = true;
     ocr[0].fragments = {
@@ -716,4 +716,215 @@ TEST_CASE("BlackFlow page repository cleans or reconciles every initial commit c
             CHECK_FALSE(result.should_notify);
         }
     }
+}
+
+TEST_CASE("BlackFlow startup recovery processes retryable pages from oldest to newest")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
+        return read_bytes(path) == "valid-png"
+                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
+                   : std::nullopt;
+    };
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+
+    const auto retryable_analysis = [](size_t error_count) {
+        asst::BlackFlowStoreSlotsAnalysis analysis;
+        analysis.page_status = asst::BlackFlowAnalyzedPageStatus::Partial;
+        for (auto& slot : analysis.slots) {
+            slot.status = asst::BlackFlowAnalyzedSlotStatus::Empty;
+        }
+        for (size_t index = 0; index < error_count; ++index) {
+            analysis.slots[index].status = asst::BlackFlowAnalyzedSlotStatus::OcrError;
+            analysis.slots[index].error_message = "retryable OCR error";
+        }
+        return analysis;
+    };
+
+    const auto newer = repository.begin_exploration(asst::BlackFlowClientType::Official);
+    const auto older = repository.begin_exploration(asst::BlackFlowClientType::Bilibili);
+    REQUIRE(newer.has_value());
+    REQUIRE(older.has_value());
+    const std::string png = "valid-png";
+    const auto newer_page =
+        repository.capture_page(newer.value(), 1, 1, std::as_bytes(std::span(png)), [&](const std::filesystem::path&) {
+            return retryable_analysis(2);
+        });
+    const auto older_page =
+        repository.capture_page(older.value(), 1, 1, std::as_bytes(std::span(png)), [&](const std::filesystem::path&) {
+            return retryable_analysis(3);
+        });
+    REQUIRE(newer_page.disposition == asst::BlackFlowJsonDisposition::FirstCommit);
+    REQUIRE(older_page.disposition == asst::BlackFlowJsonDisposition::FirstCommit);
+
+    const auto set_captured_at = [&](const std::filesystem::path& relative_path, std::string_view captured_at) {
+        const auto path = temporary.path() / relative_path;
+        auto document = json::open(path, true, true);
+        REQUIRE(document.has_value());
+        document.value()["captured_at"] = std::string(captured_at);
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        REQUIRE(output.good());
+        output << document->format() << '\n';
+    };
+    set_captured_at(newer_page.json_relative_path, "2026-07-21T00:00:02.000Z");
+    set_captured_at(older_page.json_relative_path, "2026-07-21T00:00:01.000Z");
+
+    std::vector<std::string> analyzed_explorations;
+    std::vector<asst::BlackFlowStoreRecoveryCommit> commits;
+    const auto summary = repository.recover_pending_pages(
+        [&](const std::filesystem::path& path, const asst::BlackFlowStoreStopRequested&) {
+            analyzed_explorations.push_back(path.parent_path().filename().string());
+            return retryable_analysis(1);
+        },
+        [] { return std::chrono::steady_clock::time_point { }; },
+        [] { return false; },
+        [&](const asst::BlackFlowStoreRecoveryCommit& commit) { commits.push_back(commit); });
+
+    CHECK(analyzed_explorations == std::vector<std::string> { older->id(), newer->id() });
+    CHECK(summary.candidates_found == 2);
+    CHECK(summary.candidates_processed == 2);
+    CHECK(summary.commits_published == 2);
+    CHECK(summary.candidates_failed == 0);
+    REQUIRE(commits.size() == 2);
+    CHECK(commits[0].exploration_id == older->id());
+    CHECK(commits[0].result.disposition == asst::BlackFlowJsonDisposition::Improved);
+    CHECK(commits[1].exploration_id == newer->id());
+    CHECK(commits[1].result.disposition == asst::BlackFlowJsonDisposition::Improved);
+}
+
+TEST_CASE("BlackFlow startup recovery processes at most twenty candidates")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
+        return read_bytes(path) == "valid-png"
+                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
+                   : std::nullopt;
+    };
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+
+    asst::BlackFlowStoreSlotsAnalysis retryable;
+    retryable.page_status = asst::BlackFlowAnalyzedPageStatus::Partial;
+    for (auto& slot : retryable.slots) {
+        slot.status = asst::BlackFlowAnalyzedSlotStatus::Empty;
+    }
+    retryable.slots.front().status = asst::BlackFlowAnalyzedSlotStatus::OcrError;
+    retryable.slots.front().error_message = "retryable OCR error";
+    const std::string png = "valid-png";
+
+    for (size_t exploration_index = 0; exploration_index < 7; ++exploration_index) {
+        const auto exploration = repository.begin_exploration(asst::BlackFlowClientType::Official);
+        REQUIRE(exploration.has_value());
+        for (int page_index = 1; page_index <= 3; ++page_index) {
+            const auto committed = repository.capture_page(
+                exploration.value(),
+                page_index,
+                1,
+                std::as_bytes(std::span(png)),
+                [&](const std::filesystem::path&) { return retryable; });
+            REQUIRE(committed.disposition == asst::BlackFlowJsonDisposition::FirstCommit);
+        }
+    }
+
+    asst::BlackFlowStoreSlotsAnalysis complete;
+    complete.page_status = asst::BlackFlowAnalyzedPageStatus::Complete;
+    for (auto& slot : complete.slots) {
+        slot.status = asst::BlackFlowAnalyzedSlotStatus::Empty;
+    }
+    size_t analyzed = 0;
+    const auto summary = repository.recover_pending_pages(
+        [&](const std::filesystem::path&, const asst::BlackFlowStoreStopRequested&) {
+            ++analyzed;
+            return complete;
+        },
+        [] { return std::chrono::steady_clock::time_point { }; },
+        [] { return false; },
+        { });
+
+    CHECK(summary.candidates_found == 21);
+    CHECK(summary.candidates_processed == 20);
+    CHECK(summary.commits_published == 20);
+    CHECK(summary.candidates_failed == 0);
+    CHECK(summary.candidate_limit_reached);
+    CHECK_FALSE(summary.time_limit_reached);
+    CHECK(analyzed == 20);
+}
+
+TEST_CASE("BlackFlow startup recovery isolates a bad candidate and cancels analysis at thirty seconds")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
+        return read_bytes(path) == "valid-png"
+                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
+                   : std::nullopt;
+    };
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    const auto exploration = repository.begin_exploration(asst::BlackFlowClientType::Official);
+    REQUIRE(exploration.has_value());
+
+    asst::BlackFlowStoreSlotsAnalysis retryable;
+    retryable.page_status = asst::BlackFlowAnalyzedPageStatus::Partial;
+    for (auto& slot : retryable.slots) {
+        slot.status = asst::BlackFlowAnalyzedSlotStatus::Empty;
+    }
+    retryable.slots.front().status = asst::BlackFlowAnalyzedSlotStatus::OcrError;
+    retryable.slots.front().error_message = "retryable OCR error";
+    const std::string png = "valid-png";
+    for (int page_index = 1; page_index <= 3; ++page_index) {
+        const auto committed = repository.capture_page(
+            exploration.value(),
+            page_index,
+            1,
+            std::as_bytes(std::span(png)),
+            [&](const std::filesystem::path&) { return retryable; });
+        REQUIRE(committed.disposition == asst::BlackFlowJsonDisposition::FirstCommit);
+    }
+
+    asst::BlackFlowStoreSlotsAnalysis complete;
+    complete.page_status = asst::BlackFlowAnalyzedPageStatus::Complete;
+    for (auto& slot : complete.slots) {
+        slot.status = asst::BlackFlowAnalyzedSlotStatus::Empty;
+    }
+    auto current_time = std::chrono::steady_clock::time_point { };
+    size_t analyzed = 0;
+    bool cancellation_observed = false;
+    std::vector<int> committed_pages;
+    const auto page_two_path = temporary.path() / exploration->id() / "page-02.json";
+    const auto original_page_two_sidecar = read_bytes(page_two_path);
+    const auto summary = repository.recover_pending_pages(
+        [&](const std::filesystem::path&, const asst::BlackFlowStoreStopRequested& cancel_requested) {
+            ++analyzed;
+            if (analyzed == 1U) {
+                current_time += std::chrono::seconds(1);
+                throw std::runtime_error("isolated analyzer failure");
+            }
+            for (size_t elapsed_seconds = 0; elapsed_seconds < 60U; ++elapsed_seconds) {
+                if (cancel_requested()) {
+                    cancellation_observed = true;
+                    break;
+                }
+                current_time += std::chrono::seconds(1);
+            }
+            return complete;
+        },
+        [&] { return current_time; },
+        [] { return false; },
+        [&](const asst::BlackFlowStoreRecoveryCommit& commit) { committed_pages.push_back(commit.page_index); });
+
+    CHECK(summary.candidates_found == 3);
+    CHECK(summary.candidates_processed == 2);
+    CHECK(summary.commits_published == 0);
+    CHECK(summary.candidates_failed == 2);
+    CHECK_FALSE(summary.candidate_limit_reached);
+    CHECK(summary.time_limit_reached);
+    CHECK(analyzed == 2);
+    CHECK(cancellation_observed);
+    CHECK(committed_pages.empty());
+    CHECK(current_time == std::chrono::steady_clock::time_point { } + std::chrono::seconds(30));
+    CHECK(read_bytes(page_two_path) == original_page_two_sidecar);
+    const auto page_two = json::open(page_two_path, true, true);
+    REQUIRE(page_two.has_value());
+    CHECK(page_two->at("page_status").as_string() == "partial");
 }

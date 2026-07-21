@@ -45,7 +45,7 @@ std::string utc_timestamp(bool compact)
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(milliseconds);
     const auto fractional = static_cast<int>((milliseconds - seconds).count());
     const std::time_t value = std::chrono::system_clock::to_time_t(std::chrono::system_clock::time_point(seconds));
-    std::tm utc {};
+    std::tm utc { };
 #ifdef _WIN32
     gmtime_s(&utc, &value);
 #else
@@ -365,10 +365,109 @@ std::optional<CaptureContext> read_capture_context(const std::filesystem::path& 
     };
 }
 
+struct RecoveryCandidate
+{
+    std::string exploration_id;
+    BlackFlowClientType client_type = BlackFlowClientType::Official;
+    std::filesystem::path relative_directory;
+    int page_index = 0;
+    std::string captured_at;
+};
+
+bool is_plain_regular_file(const std::filesystem::path& path)
+{
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(path, error);
+    return !error && std::filesystem::is_regular_file(status);
+}
+
+bool has_retryable_error(const BlackFlowOcrSidecar& sidecar)
+{
+    if (std::ranges::any_of(sidecar.errors, [](const auto& error) { return error.retryable; })) {
+        return true;
+    }
+    return std::ranges::any_of(sidecar.slots, [](const auto& slot) {
+        return std::ranges::any_of(slot.errors, [](const auto& error) { return error.retryable; });
+    });
+}
+
+std::optional<RecoveryCandidate> recovery_candidate(const std::filesystem::path& directory, int page_index)
+{
+    const auto exploration_id = directory.filename().string();
+    if (exploration_id.empty()) {
+        return std::nullopt;
+    }
+
+    const auto stem = page_stem(page_index);
+    const auto png_path = directory / (stem + ".png");
+    const auto json_path = directory / (stem + ".json");
+    const auto context_path = directory / ('.' + stem + ".capture-context.json");
+    if (!is_plain_regular_file(png_path)) {
+        return std::nullopt;
+    }
+
+    std::error_code status_error;
+    const auto json_status = std::filesystem::symlink_status(json_path, status_error);
+    if (status_error && status_error != std::errc::no_such_file_or_directory) {
+        return std::nullopt;
+    }
+    if (!status_error && std::filesystem::exists(json_status)) {
+        if (!std::filesystem::is_regular_file(json_status)) {
+            return std::nullopt;
+        }
+        const auto document = json::parse(byte_string(read_binary_file(json_path)));
+        const auto sidecar = document ? parse_black_flow_ocr_sidecar(document.value()) : std::nullopt;
+        if (!sidecar || sidecar->exploration_id != exploration_id || sidecar->page_index != page_index ||
+            sidecar->image.file_name != png_path.filename().string() ||
+            (sidecar->page_status != BlackFlowPageStatus::Partial &&
+             sidecar->page_status != BlackFlowPageStatus::Failed) ||
+            !has_retryable_error(sidecar.value())) {
+            return std::nullopt;
+        }
+        return RecoveryCandidate {
+            .exploration_id = sidecar->exploration_id,
+            .client_type = sidecar->client_type,
+            .relative_directory = directory.filename(),
+            .page_index = page_index,
+            .captured_at = sidecar->captured_at,
+        };
+    }
+
+    if (!is_plain_regular_file(context_path)) {
+        return std::nullopt;
+    }
+    const auto context = read_capture_context(context_path);
+    if (!context || context->exploration_id != exploration_id || context->page_index != page_index) {
+        return std::nullopt;
+    }
+    return RecoveryCandidate {
+        .exploration_id = context->exploration_id,
+        .client_type = context->client_type,
+        .relative_directory = directory.filename(),
+        .page_index = page_index,
+        .captured_at = context->captured_at,
+    };
+}
+
 void remove_if_exists(const std::filesystem::path& path) noexcept
 {
     std::error_code error;
     std::filesystem::remove(path, error);
+}
+
+void ensure_not_cancelled(const BlackFlowStoreStopRequested& cancel_requested)
+{
+    if (!cancel_requested) {
+        return;
+    }
+    try {
+        if (!cancel_requested()) {
+            return;
+        }
+    }
+    catch (...) {
+    }
+    throw std::runtime_error("recovery cancelled during page reprocessing");
 }
 } // namespace
 
@@ -419,7 +518,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::capture
 {
     std::scoped_lock operation_lock(repository_operation_mutex());
     BlackFlowStorePageCommitResult result { .attempt = attempt };
-    if (page_index < 1 || page_index > 3 || attempt < 1 || exploration.m_id.empty() || !m_png_verifier || !analyzer) {
+    if (page_index < 1 || page_index > 3 || exploration.m_id.empty()) {
         result.error_code = "invalid_capture_context";
         result.error_message = "BlackFlow capture context is invalid";
         return result;
@@ -432,6 +531,12 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::capture
     const auto context_final = directory / ('.' + stem + ".capture-context.json");
     result.png_relative_path = exploration.m_relative_directory / png_final.filename();
     result.json_relative_path = exploration.m_relative_directory / json_final.filename();
+    result.png_committed = is_plain_regular_file(png_final);
+    if (attempt < 1 || !m_png_verifier || !analyzer) {
+        result.error_code = "invalid_capture_context";
+        result.error_message = "BlackFlow capture context is invalid";
+        return result;
+    }
 
     if (std::filesystem::exists(png_final) || std::filesystem::exists(json_final)) {
         result.disposition = BlackFlowJsonDisposition::Conflict;
@@ -474,6 +579,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::capture
             m_fault_injector(BlackFlowStoreCommitCheckpoint::PngValidated);
         }
         publish_without_replacement(png_staged, png_final);
+        result.png_committed = true;
         if (m_fault_injector) {
             m_fault_injector(BlackFlowStoreCommitCheckpoint::PngCommitted);
         }
@@ -526,6 +632,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::capture
         remove_if_exists(context_staged);
         remove_if_exists(png_staged);
         remove_if_exists(json_staged);
+        result.png_committed = is_plain_regular_file(png_final);
         if (std::filesystem::exists(json_final)) {
             remove_if_exists(context_final);
             result.disposition = BlackFlowJsonDisposition::FirstCommit;
@@ -553,9 +660,19 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
     int attempt,
     const BlackFlowCommittedPageAnalyzer& analyzer)
 {
+    return reprocess_page_if_allowed(exploration, page_index, attempt, analyzer, { });
+}
+
+asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reprocess_page_if_allowed(
+    const BlackFlowStoreExploration& exploration,
+    int page_index,
+    int attempt,
+    const BlackFlowCommittedPageAnalyzer& analyzer,
+    const BlackFlowStoreStopRequested& cancel_requested)
+{
     std::scoped_lock operation_lock(repository_operation_mutex());
     BlackFlowStorePageCommitResult result { .attempt = attempt };
-    if (page_index < 1 || page_index > 3 || attempt < 1 || exploration.m_id.empty() || !m_png_verifier || !analyzer) {
+    if (page_index < 1 || page_index > 3 || exploration.m_id.empty()) {
         result.error_code = "invalid_reprocess_context";
         result.error_message = "BlackFlow reprocessing context is invalid";
         return result;
@@ -568,7 +685,13 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
     const auto context_final = directory / ('.' + stem + ".capture-context.json");
     result.png_relative_path = exploration.m_relative_directory / png_final.filename();
     result.json_relative_path = exploration.m_relative_directory / json_final.filename();
-    if (!std::filesystem::exists(png_final)) {
+    result.png_committed = is_plain_regular_file(png_final);
+    if (attempt < 1 || !m_png_verifier || !analyzer) {
+        result.error_code = "invalid_reprocess_context";
+        result.error_message = "BlackFlow reprocessing context is invalid";
+        return result;
+    }
+    if (!result.png_committed) {
         result.error_code = "reprocess_artifact_missing";
         result.error_message = "Committed BlackFlow PNG is missing";
         return result;
@@ -594,7 +717,9 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
                 throw std::runtime_error("committed PNG did not decode as 1280x720");
             }
             const auto committed_png = read_binary_file(png_final);
+            ensure_not_cancelled(cancel_requested);
             const auto analysis = analyzer(png_final);
+            ensure_not_cancelled(cancel_requested);
             if (m_fault_injector) {
                 m_fault_injector(BlackFlowStoreCommitCheckpoint::PageAnalyzed);
             }
@@ -619,6 +744,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
             if (m_fault_injector) {
                 m_fault_injector(BlackFlowStoreCommitCheckpoint::JsonValidated);
             }
+            ensure_not_cancelled(cancel_requested);
             publish_without_replacement(json_staged, json_final);
             published_disposition = BlackFlowJsonDisposition::FirstCommit;
             if (m_fault_injector) {
@@ -653,7 +779,9 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
             throw std::runtime_error("committed PNG hash no longer matches its sidecar");
         }
 
+        ensure_not_cancelled(cancel_requested);
         const auto analysis = analyzer(png_final);
+        ensure_not_cancelled(cancel_requested);
         if (m_fault_injector) {
             m_fault_injector(BlackFlowStoreCommitCheckpoint::PageAnalyzed);
         }
@@ -686,6 +814,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
         if (m_fault_injector) {
             m_fault_injector(BlackFlowStoreCommitCheckpoint::JsonValidated);
         }
+        ensure_not_cancelled(cancel_requested);
         publish_with_replacement(json_staged, json_final);
         published_disposition = BlackFlowJsonDisposition::Improved;
         if (m_fault_injector) {
@@ -699,6 +828,7 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
     }
     catch (const std::exception& exception) {
         remove_if_exists(json_staged);
+        result.png_committed = is_plain_regular_file(png_final);
         if (published_disposition != BlackFlowJsonDisposition::None) {
             const auto final_document = json::parse(byte_string(read_binary_file(json_final)));
             const auto final_sidecar =
@@ -721,4 +851,148 @@ asst::BlackFlowStorePageCommitResult asst::BlackFlowStorePageRepository::reproce
         result.error_message = exception.what();
         return result;
     }
+}
+
+asst::BlackFlowStoreRecoverySummary asst::BlackFlowStorePageRepository::recover_pending_pages(
+    const BlackFlowRecoveryPageAnalyzer& analyzer,
+    const BlackFlowStoreRecoveryClock& clock,
+    const BlackFlowStoreStopRequested& stop_requested,
+    const BlackFlowStoreRecoveryObserver& observer)
+{
+    const auto started_at = clock ? clock() : std::chrono::steady_clock::now();
+    const auto time_limit_expired = [&] {
+        const auto current = clock ? clock() : std::chrono::steady_clock::now();
+        return current - started_at >= BlackFlowStoreRecoveryTimeLimit;
+    };
+    const auto user_stop_requested = [&] {
+        if (!stop_requested) {
+            return false;
+        }
+        try {
+            return stop_requested();
+        }
+        catch (...) {
+            return true;
+        }
+    };
+    const auto recovery_cancelled = [&] {
+        return time_limit_expired() || user_stop_requested();
+    };
+    std::vector<RecoveryCandidate> candidates;
+    bool scan_time_limit_reached = false;
+    std::error_code iterator_error;
+    std::filesystem::directory_iterator iterator(
+        m_root,
+        std::filesystem::directory_options::skip_permission_denied,
+        iterator_error);
+    const std::filesystem::directory_iterator end;
+    while (!iterator_error && iterator != end) {
+        if (time_limit_expired()) {
+            scan_time_limit_reached = true;
+            break;
+        }
+        if (user_stop_requested()) {
+            break;
+        }
+        const auto entry = *iterator;
+        iterator.increment(iterator_error);
+
+        std::error_code status_error;
+        const auto status = entry.symlink_status(status_error);
+        if (status_error || !std::filesystem::is_directory(status)) {
+            continue;
+        }
+        for (int page_index = 1; page_index <= 3; ++page_index) {
+            if (time_limit_expired()) {
+                scan_time_limit_reached = true;
+                break;
+            }
+            if (user_stop_requested()) {
+                break;
+            }
+            try {
+                if (auto candidate = recovery_candidate(entry.path(), page_index)) {
+                    candidates.emplace_back(std::move(candidate.value()));
+                }
+            }
+            catch (const std::exception&) {
+                // A corrupt or concurrently modified page must not prevent recovery of the others.
+            }
+        }
+    }
+
+    std::stable_sort(candidates.begin(), candidates.end(), [](const auto& left, const auto& right) {
+        if (left.captured_at != right.captured_at) {
+            return left.captured_at < right.captured_at;
+        }
+        const auto left_directory = left.relative_directory.generic_string();
+        const auto right_directory = right.relative_directory.generic_string();
+        if (left_directory != right_directory) {
+            return left_directory < right_directory;
+        }
+        return left.page_index < right.page_index;
+    });
+
+    BlackFlowStoreRecoverySummary summary {
+        .candidates_found = candidates.size(),
+        .candidate_limit_reached = candidates.size() > BlackFlowStoreRecoveryCandidateLimit,
+        .time_limit_reached = scan_time_limit_reached,
+    };
+    for (const auto& candidate : candidates) {
+        if (time_limit_expired()) {
+            summary.time_limit_reached = true;
+            break;
+        }
+        if (summary.candidates_processed == BlackFlowStoreRecoveryCandidateLimit) {
+            break;
+        }
+        if (user_stop_requested()) {
+            break;
+        }
+
+        ++summary.candidates_processed;
+        try {
+            BlackFlowStoreExploration exploration;
+            exploration.m_id = candidate.exploration_id;
+            exploration.m_client_type = candidate.client_type;
+            exploration.m_relative_directory = candidate.relative_directory;
+            const BlackFlowCommittedPageAnalyzer cancellable_analyzer = [&](const std::filesystem::path& path) {
+                return analyzer(path, recovery_cancelled);
+            };
+            auto result = reprocess_page_if_allowed(
+                exploration,
+                candidate.page_index,
+                1,
+                cancellable_analyzer,
+                recovery_cancelled);
+            if (time_limit_expired()) {
+                summary.time_limit_reached = true;
+            }
+            if (!result.error_code.empty()) {
+                ++summary.candidates_failed;
+            }
+            if (!result.should_notify) {
+                continue;
+            }
+
+            ++summary.commits_published;
+            if (observer) {
+                try {
+                    observer(
+                        BlackFlowStoreRecoveryCommit {
+                            .exploration_id = candidate.exploration_id,
+                            .page_index = candidate.page_index,
+                            .result = std::move(result),
+                        });
+                }
+                catch (const std::exception&) {
+                    // Notification failures cannot undo a durable commit or block later candidates.
+                }
+            }
+        }
+        catch (const std::exception&) {
+            ++summary.candidates_failed;
+        }
+    }
+    return summary;
 }

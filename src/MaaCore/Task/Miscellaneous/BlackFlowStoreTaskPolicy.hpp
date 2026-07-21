@@ -18,11 +18,17 @@ inline constexpr std::optional<BlackFlowStoreTaskPolicy>
     black_flow_store_task_policy(std::string_view task_name) noexcept
 {
     using namespace black_flow_store_tasks;
-    if (task_name == EnterFreshExploration || task_name == ObserveStorePage) {
+    if (task_name == PrepareFreshEntry) {
+        return BlackFlowStoreTaskPolicy { .expected_terminal = StartExploreEntryVisible, .retry_times = 0 };
+    }
+    if (task_name == EnterFreshExploration) {
         return BlackFlowStoreTaskPolicy { .expected_terminal = StorePageReady };
     }
+    if (task_name == ObserveStorePage) {
+        return BlackFlowStoreTaskPolicy { .expected_terminal = StorePageReady, .retry_times = 0 };
+    }
     if (task_name == OpenRefreshDialog) {
-        return BlackFlowStoreTaskPolicy { .expected_terminal = RefreshDialogVisible };
+        return BlackFlowStoreTaskPolicy { .expected_terminal = RefreshDialogVisible, .retry_times = 0 };
     }
     if (task_name == ConfirmRefresh) {
         return BlackFlowStoreTaskPolicy {

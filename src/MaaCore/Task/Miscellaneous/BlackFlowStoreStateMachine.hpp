@@ -65,6 +65,7 @@ enum class BlackFlowStoreEventKind
     RefreshConfirmationFailed,
     SafeExitSucceeded,
     SafeExitFailed,
+    StepLimitReached,
     StopRequested,
 };
 
@@ -72,7 +73,7 @@ struct BlackFlowStoreEvent
 {
     BlackFlowStoreEventKind kind = BlackFlowStoreEventKind::StopRequested;
     BlackFlowStorePageClassification page_classification = BlackFlowStorePageClassification::NotReady;
-    BlackFlowStoreTitleFingerprint title_fingerprint {};
+    BlackFlowStoreTitleFingerprint title_fingerprint { };
 
     static BlackFlowStoreEvent fresh_exploration_entered() noexcept;
     static BlackFlowStoreEvent fresh_exploration_failed() noexcept;
@@ -90,6 +91,7 @@ struct BlackFlowStoreEvent
     static BlackFlowStoreEvent refresh_confirmation_failed() noexcept;
     static BlackFlowStoreEvent safe_exit_succeeded() noexcept;
     static BlackFlowStoreEvent safe_exit_failed() noexcept;
+    static BlackFlowStoreEvent step_limit_reached() noexcept;
     static BlackFlowStoreEvent stop_requested() noexcept;
 };
 

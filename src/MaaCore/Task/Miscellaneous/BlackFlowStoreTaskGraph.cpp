@@ -7,6 +7,7 @@
 
 #include <array>
 #include <iostream>
+#include <limits>
 #include <queue>
 #include <string>
 #include <string_view>
@@ -17,6 +18,16 @@ namespace
 {
 constexpr std::string_view StablePrefix = "MiniGame@BlackFlow@";
 constexpr std::string_view Begin = "MiniGame@BlackFlow@Begin";
+constexpr std::string_view DismissRefreshDialog = "MiniGame@BlackFlow@DismissRefreshDialog";
+constexpr std::string_view ContinueSafeExit = "MiniGame@BlackFlow@ContinueSafeExit";
+constexpr std::string_view WaitForExploreEntry = "MiniGame@BlackFlow@WaitForExploreEntry";
+constexpr std::string_view SafeExitFailed = "MiniGame@BlackFlow@SafeExitFailed";
+constexpr std::array WaitingTasks {
+    std::string_view { "MiniGame@BlackFlow@WaitInitialRecruit" },
+    std::string_view { "MiniGame@BlackFlow@WaitInitializing" },
+    WaitForExploreEntry,
+    ContinueSafeExit,
+};
 
 bool has_stable_name(std::string_view task_name) noexcept
 {
@@ -48,6 +59,21 @@ bool has_allowed_action(asst::ProcessTaskAction action) noexcept
 {
     return action == asst::ProcessTaskAction::DoNothing || action == asst::ProcessTaskAction::ClickSelf ||
            action == asst::ProcessTaskAction::ClickRect;
+}
+
+bool is_recognition_algorithm(asst::AlgorithmType algorithm) noexcept
+{
+    return algorithm == asst::AlgorithmType::MatchTemplate || algorithm == asst::AlgorithmType::OcrDetect;
+}
+
+bool is_waiting_task(std::string_view task_name) noexcept
+{
+    for (const std::string_view waiting_task : WaitingTasks) {
+        if (task_name == waiting_task) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool control_flow_reaches(std::string_view root, std::string_view target)
@@ -100,8 +126,9 @@ struct RequiredPath
 
 bool asst::run_black_flow_store_task_graph_smoke_test()
 {
-    constexpr std::array<std::string_view, 9> RequiredTasks {
+    constexpr std::array<std::string_view, 14> RequiredTasks {
         Begin,
+        black_flow_store_tasks::PrepareFreshEntry,
         black_flow_store_tasks::EnterFreshExploration,
         black_flow_store_tasks::StartExploreEntryVisible,
         black_flow_store_tasks::StorePageReady,
@@ -110,6 +137,10 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         black_flow_store_tasks::RefreshDialogVisible,
         black_flow_store_tasks::ConfirmRefresh,
         black_flow_store_tasks::SafeExit,
+        DismissRefreshDialog,
+        ContinueSafeExit,
+        WaitForExploreEntry,
+        SafeExitFailed,
     };
     for (const std::string_view name : RequiredTasks) {
         if (!Task.get(name)) {
@@ -122,6 +153,37 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
     if (begin->algorithm != AlgorithmType::JustReturn || begin->action != ProcessTaskAction::DoNothing ||
         !has_no_task_references(*begin)) {
         std::cerr << "BlackFlow stable entry is not an inert JustReturn leaf" << std::endl;
+        return false;
+    }
+
+    for (const std::string_view root : {
+             black_flow_store_tasks::PrepareFreshEntry,
+             black_flow_store_tasks::SafeExit,
+         }) {
+        const auto task = Task.get(root);
+        if (task->algorithm != AlgorithmType::JustReturn || task->action != ProcessTaskAction::DoNothing ||
+            task->next.size() != 1 || task->next.front() != ContinueSafeExit) {
+            std::cerr << "BlackFlow takeover entry is not an inert handoff to the shared recovery dispatcher: " << root
+                      << std::endl;
+            return false;
+        }
+    }
+
+    const auto failed_exit = Task.get(SafeExitFailed);
+    if (failed_exit->algorithm != AlgorithmType::JustReturn || failed_exit->action != ProcessTaskAction::DoNothing ||
+        !has_no_task_references(*failed_exit)) {
+        std::cerr << "BlackFlow safe-exit failure terminal is not an inert leaf" << std::endl;
+        return false;
+    }
+
+    const auto continue_exit = Task.get(ContinueSafeExit);
+    if (continue_exit->algorithm != AlgorithmType::JustReturn ||
+        continue_exit->action != ProcessTaskAction::DoNothing || continue_exit->max_times <= 0 ||
+        continue_exit->max_times == std::numeric_limits<int>::max() || continue_exit->next.size() < 2 ||
+        continue_exit->next[0] != black_flow_store_tasks::StartExploreEntryVisible ||
+        continue_exit->next[1] != DismissRefreshDialog || continue_exit->exceeded_next.size() != 1 ||
+        continue_exit->exceeded_next.front() != SafeExitFailed) {
+        std::cerr << "BlackFlow safe-exit polling does not prioritize facts or reach its inert bound" << std::endl;
         return false;
     }
 
@@ -151,8 +213,9 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
         }
     }
 
-    constexpr std::array<std::string_view, 6> Roots {
+    constexpr std::array<std::string_view, 7> Roots {
         Begin,
+        black_flow_store_tasks::PrepareFreshEntry,
         black_flow_store_tasks::EnterFreshExploration,
         black_flow_store_tasks::ObserveStorePage,
         black_flow_store_tasks::OpenRefreshDialog,
@@ -184,6 +247,14 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
             std::cerr << "BlackFlow TaskData contains a non-short action: " << name << std::endl;
             return false;
         }
+        if (task->action == ProcessTaskAction::ClickRect && !is_recognition_algorithm(task->algorithm)) {
+            std::cerr << "BlackFlow TaskData contains an unrecognized fixed-coordinate click: " << name << std::endl;
+            return false;
+        }
+        if (is_waiting_task(name) && task->action != ProcessTaskAction::DoNothing) {
+            std::cerr << "BlackFlow TaskData waiting node performs an action: " << name << std::endl;
+            return false;
+        }
         bool valid_edges = true;
         visit_control_flow_edges(*task, [&](const std::string& edge) {
             if (!has_stable_name(edge) || has_investment_name(edge)) {
@@ -206,9 +277,14 @@ bool asst::run_black_flow_store_task_graph_smoke_test()
     }
 
     constexpr std::array ExpectedPaths {
+        RequiredPath {
+            black_flow_store_tasks::PrepareFreshEntry,
+            black_flow_store_tasks::StartExploreEntryVisible,
+        },
         RequiredPath { black_flow_store_tasks::EnterFreshExploration, black_flow_store_tasks::StorePageReady },
         RequiredPath { black_flow_store_tasks::ObserveStorePage, black_flow_store_tasks::StorePageReady },
         RequiredPath { black_flow_store_tasks::OpenRefreshDialog, black_flow_store_tasks::RefreshDialogVisible },
+        RequiredPath { DismissRefreshDialog, black_flow_store_tasks::StartExploreEntryVisible },
         RequiredPath { black_flow_store_tasks::SafeExit, black_flow_store_tasks::StartExploreEntryVisible },
     };
     for (const auto& path : ExpectedPaths) {

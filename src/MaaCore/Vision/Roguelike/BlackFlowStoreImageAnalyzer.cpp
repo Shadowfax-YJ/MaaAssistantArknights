@@ -46,6 +46,19 @@ bool has_normalized_size(const cv::Mat& image)
     return !image.empty() && image.cols == 1280 && image.rows == 720;
 }
 
+bool cancellation_requested(const asst::BlackFlowStoreCancellationRequested& predicate) noexcept
+{
+    if (!predicate) {
+        return false;
+    }
+    try {
+        return predicate();
+    }
+    catch (...) {
+        return true;
+    }
+}
+
 #ifdef ASST_BUILD_SMOKE_TEST
 using ExpectedSlots = std::array<std::string_view, 10>;
 
@@ -230,13 +243,26 @@ std::optional<asst::BlackFlowStoreFrameObservation>
 
 asst::BlackFlowStoreSlotsAnalysis asst::BlackFlowStoreImageAnalyzer::analyze_slots(const cv::Mat& stable_frame) const
 {
-    const auto observation = observe(stable_frame, {});
-    if (!observation) {
-        return {};
+    return analyze_slots(stable_frame, { });
+}
+
+asst::BlackFlowStoreSlotsAnalysis asst::BlackFlowStoreImageAnalyzer::analyze_slots(
+    const cv::Mat& stable_frame,
+    const BlackFlowStoreCancellationRequested& cancel_requested) const
+{
+    if (cancellation_requested(cancel_requested)) {
+        return { };
+    }
+    const auto observation = observe(stable_frame, { });
+    if (!observation || cancellation_requested(cancel_requested)) {
+        return { };
     }
 
     std::array<BlackFlowStoreSlotOcr, 10> ocr;
     for (size_t index = 0; index < ocr.size(); ++index) {
+        if (cancellation_requested(cancel_requested)) {
+            return { };
+        }
         try {
             ocr[index] = m_word_ocr(stable_frame, BlackFlowStoreTitleRois[index]);
         }
@@ -245,9 +271,12 @@ asst::BlackFlowStoreSlotsAnalysis asst::BlackFlowStoreImageAnalyzer::analyze_slo
             ocr[index].error_message = exception.what();
         }
     }
+    if (cancellation_requested(cancel_requested)) {
+        return { };
+    }
 
     auto result = analyze_black_flow_store_slots(observation->title_foreground, ocr, m_matcher);
-    const bool has_foreground = std::ranges::any_of(observation->title_foreground, std::identity {});
+    const bool has_foreground = std::ranges::any_of(observation->title_foreground, std::identity { });
     const bool has_ocr_fragment = std::ranges::any_of(ocr, [](const auto& slot) { return !slot.fragments.empty(); });
     if (has_foreground && !has_ocr_fragment) {
         result.page_status = BlackFlowAnalyzedPageStatus::Failed;

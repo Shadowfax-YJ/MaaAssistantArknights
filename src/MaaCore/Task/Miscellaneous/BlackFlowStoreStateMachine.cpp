@@ -86,6 +86,11 @@ asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::safe_exit_failed() noexcept
     return event(BlackFlowStoreEventKind::SafeExitFailed);
 }
 
+asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::step_limit_reached() noexcept
+{
+    return event(BlackFlowStoreEventKind::StepLimitReached);
+}
+
 asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::stop_requested() noexcept
 {
     return event(BlackFlowStoreEventKind::StopRequested);
@@ -105,12 +110,28 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
     if (event.kind == BlackFlowStoreEventKind::StopRequested) {
         return stop();
     }
+    if (event.kind == BlackFlowStoreEventKind::StepLimitReached) {
+        if (m_state.phase >= BlackFlowStorePhase::EnteringFreshExploration &&
+            m_state.phase < BlackFlowStorePhase::SafelyExiting) {
+            return begin_safe_exit();
+        }
+        if (m_state.phase == BlackFlowStorePhase::SafelyExiting) {
+            return { BlackFlowStoreCommandKind::SafeExit };
+        }
+        if (m_state.phase == BlackFlowStorePhase::Finished) {
+            return { BlackFlowStoreCommandKind::Finish };
+        }
+        return stop();
+    }
 
     switch (m_state.phase) {
     case BlackFlowStorePhase::EnteringFreshExploration:
         if (event.kind == BlackFlowStoreEventKind::FreshExplorationEntered) {
             m_state.phase = BlackFlowStorePhase::BeginningExploration;
             return { BlackFlowStoreCommandKind::BeginExploration };
+        }
+        if (event.kind == BlackFlowStoreEventKind::FreshExplorationFailed) {
+            return begin_safe_exit();
         }
         break;
 
@@ -151,7 +172,10 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
         break;
 
     case BlackFlowStorePhase::AwaitingCaptureRetry:
-        if (event.kind == BlackFlowStoreEventKind::StorePageObserved && m_pending_fingerprint &&
+        if (event.kind == BlackFlowStoreEventKind::StorePageObserved &&
+            (event.page_classification == BlackFlowStorePageClassification::StableInitial ||
+             event.page_classification == BlackFlowStorePageClassification::StableNew) &&
+            m_pending_fingerprint &&
             black_flow_store_fingerprint_distance(event.title_fingerprint, m_pending_fingerprint.value()) <=
                 BlackFlowStoreStableFingerprintDistance) {
             ++m_state.current_page_attempts;

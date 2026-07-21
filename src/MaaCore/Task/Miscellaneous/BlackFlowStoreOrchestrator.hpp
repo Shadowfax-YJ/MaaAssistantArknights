@@ -2,6 +2,7 @@
 
 #include "BlackFlowStoreStateMachine.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -11,6 +12,7 @@ namespace asst
 {
 namespace black_flow_store_tasks
 {
+inline constexpr std::string_view PrepareFreshEntry = "MiniGame@BlackFlow@PrepareFreshEntry";
 inline constexpr std::string_view EnterFreshExploration = "MiniGame@BlackFlow@EnterFreshExploration";
 inline constexpr std::string_view ObserveStorePage = "MiniGame@BlackFlow@ObserveStorePage";
 inline constexpr std::string_view OpenRefreshDialog = "MiniGame@BlackFlow@OpenRefreshDialog";
@@ -24,8 +26,25 @@ inline constexpr std::string_view StartExploreEntryVisible = "MiniGame@BlackFlow
 struct BlackFlowStoreObservedPage
 {
     BlackFlowStorePageClassification classification = BlackFlowStorePageClassification::NotReady;
-    BlackFlowStoreTitleFingerprint title_fingerprint {};
+    BlackFlowStoreTitleFingerprint title_fingerprint { };
 };
+
+enum class BlackFlowStoreSnapshotOrigin
+{
+    Live,
+    Recovery,
+};
+
+inline constexpr std::string_view black_flow_store_snapshot_origin_name(BlackFlowStoreSnapshotOrigin origin) noexcept
+{
+    switch (origin) {
+    case BlackFlowStoreSnapshotOrigin::Live:
+        return "live";
+    case BlackFlowStoreSnapshotOrigin::Recovery:
+        return "recovery";
+    }
+    return "live";
+}
 
 struct BlackFlowStoreSnapshot
 {
@@ -35,6 +54,7 @@ struct BlackFlowStoreSnapshot
     std::string page_status;
     std::string png_relative_path;
     std::string json_relative_path;
+    BlackFlowStoreSnapshotOrigin origin = BlackFlowStoreSnapshotOrigin::Live;
 };
 
 struct BlackFlowStoreCaptureResult
@@ -57,13 +77,16 @@ public:
     virtual ~BlackFlowStoreCyclePort() = default;
 
     virtual bool run_named_task(std::string_view task_name) = 0;
+    virtual void recover_pending_pages() = 0;
     virtual bool begin_exploration() = 0;
     virtual std::optional<BlackFlowStoreObservedPage>
         observe_store_page(const std::optional<BlackFlowStoreTitleFingerprint>& last_committed_fingerprint) = 0;
     virtual BlackFlowStoreCaptureResult capture_store_page(size_t page_index, size_t attempt) = 0;
     virtual void snapshot_committed(const BlackFlowStoreSnapshot& snapshot) = 0;
     virtual void exploration_ended(const BlackFlowStoreExplorationSummary& summary) = 0;
+    virtual bool wait_for(std::chrono::milliseconds duration) = 0;
     virtual bool stop_requested() const noexcept = 0;
+    virtual std::chrono::steady_clock::time_point now() const noexcept = 0;
 };
 
 enum class BlackFlowStoreCycleStatus
@@ -96,4 +119,26 @@ struct BlackFlowStoreCycleOutcome
 };
 
 BlackFlowStoreCycleOutcome run_black_flow_store_cycle(BlackFlowStoreCyclePort& port);
+
+enum class BlackFlowStoreSessionStatus
+{
+    Stopped,
+    Failed,
+};
+
+enum class BlackFlowStoreSessionFailure
+{
+    None,
+    PrepareFreshEntry,
+    Cycle,
+};
+
+struct BlackFlowStoreSessionOutcome
+{
+    BlackFlowStoreSessionStatus status = BlackFlowStoreSessionStatus::Failed;
+    BlackFlowStoreSessionFailure failure = BlackFlowStoreSessionFailure::None;
+    size_t safely_exited_cycles = 0;
+};
+
+BlackFlowStoreSessionOutcome run_black_flow_store_session(BlackFlowStoreCyclePort& port);
 } // namespace asst
