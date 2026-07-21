@@ -18,7 +18,6 @@
   <ItemGroup>
     <Compile Include="..\..\src\MaaWpfGui\Constants\Enums\ClientType.cs" Link="Production\ClientType.cs" />
     <Compile Include="..\..\src\MaaWpfGui\Models\MiniGameEntry.cs" Link="Production\MiniGameEntry.cs" />
-    <Compile Include="..\..\src\MaaWpfGui\Services\ClientTypeChangeRefresh.cs" Link="Production\ClientTypeChangeRefresh.cs" />
     <Compile Include="..\..\src\MaaWpfGui\Services\MiniGameEntryPolicy.cs" Link="Production\MiniGameEntryPolicy.cs" />
   </ItemGroup>
 </Project>
