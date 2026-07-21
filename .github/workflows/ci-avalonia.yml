@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/ci-avalonia.yml"
+      - "src/MAAUnified"
       - "src/MAAUnified/**"
       - "!**/*.md"
   push:
@@ -12,6 +13,7 @@ on:
       - dev-v2
     paths:
       - ".github/workflows/ci-avalonia.yml"
+      - "src/MAAUnified"
       - "src/MAAUnified/**"
       - "!**/*.md"
 

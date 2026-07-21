@@ -92,8 +92,8 @@ public class GameSettingsUserControlModel : PropertyChangedBase
 
             ConfigurationHelper.SetValue(ConfigurationKeys.ClientType, value);
             VersionUpdateSettings.ResourceInfoUpdate();
-            FightSettingsUserControlModel.Instance.UpdateStageList();
-            Instances.TaskQueueViewModel.UpdateDatePrompt();
+            Instances.StageManager.UpdateStageLocal();
+            Instances.TaskQueueViewModel.UpdateDatePromptAndStagesLocally();
 
             if (!NeedRestartAfterClientTypeChange(oldValue, value))
             {

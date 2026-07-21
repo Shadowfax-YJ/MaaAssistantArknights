@@ -1,5 +1,11 @@
 {
-    "runAllOnChanges": ["unit_test/CMakeLists.txt", "unit_test/test-suites.json", ".github/workflows/unit-tests.yml"],
+    "runAllOnChanges": [
+        "unit_test/CMakeLists.txt",
+        "unit_test/test-suites.json",
+        ".github/workflows/unit-tests.yml",
+        ".github/scripts/sync-optional-submodules.sh",
+        "src/MaaUtils"
+    ],
     "suites": [
         {
             "id": "maa-algorithm-test",
@@ -78,6 +84,8 @@
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStorePageRepository.hpp",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStoreStateMachine.cpp",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStoreStateMachine.hpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskGraph.cpp",
+                "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskGraph.h",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.cpp",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPlugin.h",
                 "src/MaaCore/Task/Miscellaneous/BlackFlowStoreTaskPolicy.hpp",

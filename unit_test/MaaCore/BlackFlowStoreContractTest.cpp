@@ -212,11 +212,13 @@ TEST_CASE("Custom task admission rejects unsupported BlackFlow clients before UI
                 asst::parse_black_flow_client_type(unsupported)) == asst::BlackFlowTaskAdmission::Rejected);
     }
 
-    const std::vector legacy_investment_task { std::string("BlackFlowTemporary@InvestSystem") };
-    for (const std::string_view client : { "Official", "Bilibili", "txwy", "YoStarEN", "" }) {
-        CHECK(
-            asst::check_black_flow_task_admission(legacy_investment_task, asst::parse_black_flow_client_type(client)) ==
-            asst::BlackFlowTaskAdmission::Rejected);
+    for (const std::string_view legacy_task : { "BlackFlowTemporary@Begin", "BlackFlowTemporary@InvestSystem" }) {
+        const std::vector legacy_tasks { std::string(legacy_task) };
+        for (const std::string_view client : { "Official", "Bilibili", "txwy", "YoStarEN", "" }) {
+            CHECK(
+                asst::check_black_flow_task_admission(legacy_tasks, asst::parse_black_flow_client_type(client)) ==
+                asst::BlackFlowTaskAdmission::Rejected);
+        }
     }
 
     CHECK(

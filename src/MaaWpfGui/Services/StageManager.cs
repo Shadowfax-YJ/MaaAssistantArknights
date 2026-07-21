@@ -42,6 +42,7 @@ public class StageManager
 {
     private const string StageApi = "gui/StageActivityV2.json";
     private const string TasksApi = "resource/tasks.json";
+    private const string StableBlackFlowTask = "MiniGame@BlackFlow@Begin";
 
     private static readonly ILogger _logger = Log.ForContext<StageManager>();
 
@@ -77,7 +78,7 @@ public class StageManager
     public IReadOnlyDictionary<string, SideStoryActivity> ActivityList => _activityList.AsReadOnly();
 
     // mini game entries exposed from StageActivityV2 (richer model including Tip/TipKey)
-    private List<MiniGameEntry> _miniGameEntries = InitializeDefaultMiniGameEntries();
+    private List<MiniGameEntry> _miniGameEntries = [];
 
     /// <summary>
     /// 刷新小游戏条目的本地化文本。
@@ -270,7 +271,7 @@ public class StageManager
         _stages = tempStage;
 
         // parse mini-game tasks from activity json if provided (use helper to populate temp list)
-        var tempMiniGames = InitializeDefaultMiniGameEntries();
+        var tempMiniGames = InitializeDefaultMiniGameEntries(clientType);
         ParseMiniGameEntries(activity?[clientType], tempMiniGames, curVerParsed, curVersionObj, isDebugVersion);
         _miniGameEntries = tempMiniGames;
     }
@@ -297,7 +298,7 @@ public class StageManager
         RefreshMiniGameLocalization();
     }
 
-    private static List<MiniGameEntry> InitializeDefaultMiniGameEntries()
+    private static List<MiniGameEntry> InitializeDefaultMiniGameEntries(string clientType)
     {
         var entries = new List<MiniGameEntry>
         {
@@ -308,7 +309,26 @@ public class StageManager
             new() { Display = LocalizationHelper.GetString("MiniGame@SecretFront"), DisplayKey = "MiniGame@SecretFront", Value = "MiniGame@SecretFront", TipKey = "MiniGame@SecretFrontTip" },
         };
 
+        if (string.Equals(clientType, ClientType.Official, StringComparison.Ordinal))
+        {
+            entries.Add(new MiniGameEntry {
+                Display = LocalizationHelper.GetString("MiniGame@BlackFlow"),
+                DisplayKey = "MiniGame@BlackFlow",
+                Value = StableBlackFlowTask,
+                TipKey = "MiniGame@BlackFlowTip",
+            });
+        }
+
         return entries;
+    }
+
+    private static bool IsReservedBlackFlowTaskName(string? taskName)
+    {
+        var normalized = taskName?.Trim() ?? string.Empty;
+        return string.Equals(normalized, "MiniGame@BlackFlow", StringComparison.Ordinal)
+            || normalized.StartsWith("MiniGame@BlackFlow@", StringComparison.Ordinal)
+            || string.Equals(normalized, "BlackFlowTemporary", StringComparison.Ordinal)
+            || normalized.StartsWith("BlackFlowTemporary@", StringComparison.Ordinal);
     }
 
     private static MiniGameEntry? ParseMiniGameEntry(JToken? token)
@@ -514,6 +534,11 @@ public class StageManager
                     continue;
                 }
 
+                if (IsReservedBlackFlowTaskName(entry.Value))
+                {
+                    continue;
+                }
+
                 var minReqStr = entry.MinimumRequired;
                 if (!string.IsNullOrEmpty(minReqStr))
                 {
@@ -544,6 +569,11 @@ public class StageManager
             var entry = ParseMiniGameEntry(miniGameToken);
             if (entry != null)
             {
+                if (IsReservedBlackFlowTaskName(entry.Value))
+                {
+                    return;
+                }
+
                 var minReqStr = entry.MinimumRequired;
                 if (!string.IsNullOrEmpty(minReqStr))
                 {

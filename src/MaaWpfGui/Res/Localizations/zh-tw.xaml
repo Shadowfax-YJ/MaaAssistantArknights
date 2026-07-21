@@ -1044,6 +1044,8 @@ C:\\leidian\\LDPlayer9\n
     <system:String x:Key="MiniGame@SecretFront@Event3">詭影迷蹤</system:String>
     <system:String x:Key="MiniGame@SecretFront">隱秘戰線</system:String>
     <system:String x:Key="MiniGame@SecretFrontTip">在選擇小隊介面開始，如有存檔須手動刪除。&#10;第一次打請先看完教學後關閉。&#10;推薦勾選遊戲內 ｢繼承上一支隊伍發回的資料｣ 。</system:String>
+    <system:String x:Key="MiniGame@BlackFlow">黑流樹海商店採集</system:String>
+    <system:String x:Key="MiniGame@BlackFlowTip">僅支援官服與 B 服。每次探索採集最多三個商店總覽快照及 OCR sidecar；不會購買商品或進入投資。</system:String>
     <system:String x:Key="MiniGameNameGreenTicketStore">綠票商店</system:String>
     <system:String x:Key="MiniGameNameGreenTicketStoreTip" xml:space="preserve">第 1 層全買。&#10;第 2 層買 ｢尋訪憑證｣ 和 ｢招聘許可｣ 。</system:String>
     <system:String x:Key="MiniGameNameYellowTicketStore">黃票商店</system:String>
