@@ -1,21 +1,20 @@
 {
     "MiniGame@BlackFlow@Begin": {
-        "Doc": "Stable Custom-task entry intercepted by BlackFlowStoreTaskPlugin.",
-        "algorithm": "JustReturn"
-    },
-    "MiniGame@BlackFlow@EnterFreshExploration": {
-        "Doc": "Normal-path entry composed only from short UI actions and facts.",
+        "doc": "入口任务：根据当前界面选择从 <开始探索> 或 <驻足于> 开始",
         "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@StartExploreAction"]
+        "next": ["MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@StopAt"]
     },
-    "MiniGame@BlackFlow@StartExploreAction": {
+    "MiniGame@BlackFlow@StartExplore": {
+        "doc": "识别 <开始探索> 并点击，进入肉鸽流程；点击后将 WaitForExploreRestart 的剩余次数重置回 10",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["开始探索"],
         "roi": [1000, 560, 200, 100],
+        "reduceOtherTimes": ["MiniGame@BlackFlow@WaitForExploreRestart*20"],
         "next": ["MiniGame@BlackFlow@SpecialMissionVideo", "MiniGame@BlackFlow@ChooseSpecialSquad", "#self"]
     },
     "MiniGame@BlackFlow@SpecialMissionVideo": {
+        "doc": "识别 <特勤任务影像> 弹窗，存在则点击 [640,655] 关闭",
         "algorithm": "OcrDetect",
         "action": "ClickRect",
         "text": ["特勤任务影像"],
@@ -25,19 +24,21 @@
         "next": ["MiniGame@BlackFlow@ChooseSpecialSquad", "#self"]
     },
     "MiniGame@BlackFlow@ChooseSpecialSquad": {
+        "doc": "识别 <特勤分队> 并点击，进入特勤选择界面；未出现确认弹窗则重复点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["特勤分队"],
         "roi": [0, 385, 1280, 110],
         "next": [
-            "MiniGame@BlackFlow@ChooseSpecialSquadConfirm",
+            "MiniGame@BlackFlow@ChooseSpecialSquad-Confirm",
             "#self",
             "MiniGame@BlackFlow@ChooseStrategy",
             "MiniGame@BlackFlow@ChooseRecruitVoucher",
             "MiniGame@BlackFlow@ChooseMechanic"
         ]
     },
-    "MiniGame@BlackFlow@ChooseSpecialSquadConfirm": {
+    "MiniGame@BlackFlow@ChooseSpecialSquad-Confirm": {
+        "doc": "识别 <你确定要这么做> 确认弹窗并点击；如果网络卡顿可能存在二次点击触发分队的选择界面，而且两个确认按钮是相同的，扩大识别范围并回到识别上一步骤",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["你确定要这么做"],
@@ -51,18 +52,20 @@
         ]
     },
     "MiniGame@BlackFlow@ChooseStrategy": {
+        "doc": "识别 <稳扎稳打> 并点击；未出现确认弹窗则重复点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["稳扎稳打"],
         "roi": [0, 385, 1280, 110],
         "next": [
-            "MiniGame@BlackFlow@ChooseStrategyConfirm",
+            "MiniGame@BlackFlow@ChooseStrategy-Confirm",
             "#self",
             "MiniGame@BlackFlow@ChooseRecruitVoucher",
             "MiniGame@BlackFlow@ChooseMechanic"
         ]
     },
-    "MiniGame@BlackFlow@ChooseStrategyConfirm": {
+    "MiniGame@BlackFlow@ChooseStrategy-Confirm": {
+        "doc": "识别 <你确定要这么做> 确认弹窗并点击；同理，如果网络卡顿可能直接点进招募券，但重装的位置刚好在这里，因为该模式为临时使用所以不考虑后续兼容",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["你确定要这么做"],
@@ -75,6 +78,7 @@
         ]
     },
     "MiniGame@BlackFlow@ChooseRecruitVoucher": {
+        "doc": "识别 <重装招募券> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["重装招募券"],
@@ -82,6 +86,7 @@
         "next": ["MiniGame@BlackFlow@ChooseMechanic", "#self"]
     },
     "MiniGame@BlackFlow@ChooseMechanic": {
+        "doc": "识别 <机械师> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["机械师"],
@@ -89,47 +94,22 @@
         "next": ["MiniGame@BlackFlow@ConfirmRecruit", "#self"]
     },
     "MiniGame@BlackFlow@ConfirmRecruit": {
+        "doc": "识别 <确认招募> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["确认招募"],
         "roi": [1080, 650, 150, 50],
-        "next": [
-            "#self",
-            "MiniGame@BlackFlow@InitialRecruitSkipVisible",
-            "MiniGame@BlackFlow@InitialRecruitVisible",
-            "MiniGame@BlackFlow@WaitInitialRecruit"
-        ]
-    },
-    "MiniGame@BlackFlow@InitialRecruitSkipVisible": {
-        "algorithm": "MatchTemplate",
-        "action": "ClickSelf",
-        "template": "RecruitSkip.png",
-        "roi": [1100, 0, 180, 150],
-        "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@InitialRecruitVisible", "#self", "MiniGame@BlackFlow@WaitInitialRecruit"]
+        "next": ["#self", "MiniGame@BlackFlow@WaitInitialRecruit"]
     },
     "MiniGame@BlackFlow@WaitInitialRecruit": {
+        "doc": "持续点击 [670,40]，直到识别到 <初始招募>",
         "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "postDelay": 500,
-        "maxTimes": 20,
-        "next": [
-            "MiniGame@BlackFlow@InitialRecruitVisible",
-            "MiniGame@BlackFlow@InitialRecruitSkipVisible",
-            "MiniGame@BlackFlow@AdvanceInitialRecruitPortrait"
-        ]
+        "action": "ClickRect",
+        "specificRect": [670, 40, 1, 1],
+        "next": ["MiniGame@BlackFlow@InitialRecruit", "#self"]
     },
-    "MiniGame@BlackFlow@AdvanceInitialRecruitPortrait": {
-        "Doc": "Use the established Roguelike fallback to advance a recruited-operator portrait without a visible button.",
-        "baseTask": "Roguelike@RecruitWithoutButton",
-        "next": [
-            "MiniGame@BlackFlow@InitialRecruitVisible",
-            "MiniGame@BlackFlow@InitialRecruitSkipVisible",
-            "#self"
-        ],
-        "exceededNext": ["MiniGame@BlackFlow@InitialRecruitVisible"]
-    },
-    "MiniGame@BlackFlow@InitialRecruitVisible": {
+    "MiniGame@BlackFlow@InitialRecruit": {
+        "doc": "识别到 <初始招募> 即结束本步",
         "algorithm": "OcrDetect",
         "action": "DoNothing",
         "text": ["初始招募"],
@@ -137,20 +117,23 @@
         "next": ["MiniGame@BlackFlow@ChooseCasterVoucher", "#self"]
     },
     "MiniGame@BlackFlow@ChooseCasterVoucher": {
+        "doc": "识别 <术师招募券> 并点击（范围同重装招募券）",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["术师招募券"],
         "roi": [570, 300, 160, 50],
-        "next": ["MiniGame@BlackFlow@GiveUpCasterRecruit", "#self"]
+        "next": ["MiniGame@BlackFlow@GiveUpRecruit", "#self"]
     },
-    "MiniGame@BlackFlow@GiveUpCasterRecruit": {
+    "MiniGame@BlackFlow@GiveUpRecruit": {
+        "doc": "识别 <放弃> 并点击，放弃本次招募",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["放弃"],
         "roi": [930, 650, 80, 50],
-        "next": ["MiniGame@BlackFlow@GiveUpCasterRecruitConfirm", "#self"]
+        "next": ["MiniGame@BlackFlow@GiveUpRecruitConfirm", "#self"]
     },
-    "MiniGame@BlackFlow@GiveUpCasterRecruitConfirm": {
+    "MiniGame@BlackFlow@GiveUpRecruitConfirm": {
+        "doc": "模板匹配放弃招募确认弹窗并点击",
         "algorithm": "MatchTemplate",
         "action": "ClickSelf",
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
@@ -158,6 +141,7 @@
         "next": ["MiniGame@BlackFlow@ChooseSniperVoucher", "#self"]
     },
     "MiniGame@BlackFlow@ChooseSniperVoucher": {
+        "doc": "识别 <狙击招募券> 并点击（范围同重装招募券），之后直接放弃",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["狙击招募券"],
@@ -165,6 +149,7 @@
         "next": ["MiniGame@BlackFlow@GiveUpSniperRecruit", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpSniperRecruit": {
+        "doc": "识别 <放弃> 并点击，放弃本次招募",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["放弃"],
@@ -172,6 +157,7 @@
         "next": ["MiniGame@BlackFlow@GiveUpSniperRecruitConfirm", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpSniperRecruitConfirm": {
+        "doc": "模板匹配放弃招募确认弹窗并点击",
         "algorithm": "MatchTemplate",
         "action": "ClickSelf",
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
@@ -179,6 +165,7 @@
         "next": ["MiniGame@BlackFlow@ChooseTreeSea", "#self"]
     },
     "MiniGame@BlackFlow@ChooseTreeSea": {
+        "doc": "识别 <沉沦于树海> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["沉沦于树海"],
@@ -187,6 +174,7 @@
         "next": ["MiniGame@BlackFlow@ActionPoint", "#self"]
     },
     "MiniGame@BlackFlow@ActionPoint": {
+        "doc": "识别 <行动力> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["行动力", "行动", "动力"],
@@ -194,6 +182,7 @@
         "next": ["MiniGame@BlackFlow@StructuralPrinciple", "#self"]
     },
     "MiniGame@BlackFlow@StructuralPrinciple": {
+        "doc": "识别 <结构性原理> 并点击",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["结构性原理"],
@@ -201,38 +190,85 @@
         "next": ["MiniGame@BlackFlow@BolivarSkin", "#self"]
     },
     "MiniGame@BlackFlow@BolivarSkin": {
+        "doc": "识别 <玻利瓦尔肤层> 并点击，等 1s；若未出现 <未知的诡秘> 则直接放弃本次探索",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["玻利", "瓦尔", "肤层"],
         "roi": [555, 0, 250, 35],
         "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@UnknownMystery", "#self"]
+        "next": ["MiniGame@BlackFlow@UnknownMystery", "MiniGame@BlackFlow@ExitThenAbandon"]
     },
     "MiniGame@BlackFlow@UnknownMystery": {
+        "doc": "识别 <未知的诡秘> 并点击；若未出现 <出发前往> 则直接放弃本次探索",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["未知的诡秘"],
         "roi": [888, 380, 200, 45],
-        "next": ["MiniGame@BlackFlow@DepartFor", "#self"]
+        "next": ["MiniGame@BlackFlow@DepartFor", "MiniGame@BlackFlow@ExitThenAbandon"]
     },
     "MiniGame@BlackFlow@DepartFor": {
+        "doc": "识别 <出发前往> 并点击；若点击后未出现 <投资系统> 则直接放弃本次探索",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["出发前往"],
         "roi": [1140, 520, 120, 55],
         "postDelay": 2000,
-        "next": ["MiniGame@BlackFlow@RefreshControlVisible", "#self"]
+        "next": ["MiniGame@BlackFlow@InvestSystem", "MiniGame@BlackFlow@ExitThenAbandon"]
+    },
+    "MiniGame@BlackFlow@InvestSystem": {
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["投资", "系统"],
+        "roi": [420, 170, 170, 40],
+        "next": ["MiniGame@BlackFlow@ExitThenAbandon", "#self"]
+    },
+    "MiniGame@BlackFlow@ExitThenAbandon": {
+        "doc": "模板匹配退出按钮并点击",
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@ExitThenAbandon.png",
+        "roi": [0, 0, 90, 90],
+        "next": ["MiniGame@BlackFlow@StopAt", "#self"]
+    },
+    "MiniGame@BlackFlow@StopAt": {
+        "doc": "识别到 <驻足于>，点击 [1140,325] 进入放弃确认",
+        "algorithm": "OcrDetect",
+        "action": "ClickRect",
+        "text": ["驻足于"],
+        "roi": [1010, 420, 90, 40],
+        "specificRect": [1140, 325, 1, 1],
+        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"]
+    },
+    "MiniGame@BlackFlow@AbandonConfirm": {
+        "doc": "模板匹配放弃确认按钮并点击",
+        "algorithm": "MatchTemplate",
+        "action": "ClickSelf",
+        "template": "Roguelike@AbandonConfirm.png",
+        "roi": [0, 0, 1280, 720],
+        "next": ["#self", "MiniGame@BlackFlow@WaitForExploreRestart"]
+    },
+    "MiniGame@BlackFlow@WaitForExploreRestart": {
+        "doc": "放弃后持续点击 [600,610] 最多 20 次，直到识别到 <开始探索> 回到入口；若出现 <正在初始化> 则等待 5s；超过 10 次仍未回到入口则强制放弃",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [600, 610, 1, 1],
+        "postDelay": 1500,
+        "maxTimes": 10,
+        "exceededNext": ["Stop"],
+        "next": ["MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@WaitInitializing", "#self"]
+    },
+    "MiniGame@BlackFlow@WaitInitializing": {
+        "doc": "识别到 <正在初始化>，等待 1s 后继续",
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["正在初始化"],
+        "roi": [1075, 590, 120, 45],
+        "postDelay": 1000,
+        "next": ["#self", "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@WaitForExploreRestart"]
     },
     "MiniGame@BlackFlow@ObserveStorePage": {
         "Doc": "Read-only store-overview observation entry.",
         "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@StorePageReady"]
-    },
-    "MiniGame@BlackFlow@RefreshControlVisible": {
-        "algorithm": "MatchTemplate",
-        "action": "DoNothing",
-        "template": "Roguelike@StageTraderRefresh.png",
-        "roi": [230, 47, 211, 182],
         "next": ["MiniGame@BlackFlow@StorePageReady"]
     },
     "MiniGame@BlackFlow@StorePageReady": {
@@ -273,18 +309,8 @@
         "maxTimes": 1,
         "postDelay": 500
     },
-    "MiniGame@BlackFlow@PrepareFreshEntry": {
-        "Doc": "Take over an unfinished exploration, or succeed inertly when Start Exploration is already visible.",
-        "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"]
-    },
-    "MiniGame@BlackFlow@SafeExit": {
-        "Doc": "Safe exit starts from any recognized takeover state and finishes only on the Start Exploration fact.",
-        "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"]
-    },
     "MiniGame@BlackFlow@DismissRefreshDialog": {
-        "Doc": "Dismiss a recognized refresh confirmation without confirming another refresh.",
+        "Doc": "Best-effort store-internal refresh-dialog cleanup command.",
         "algorithm": "MatchTemplate",
         "action": "ClickRect",
         "template": [
@@ -294,158 +320,8 @@
         ],
         "roi": [580, 375, 700, 230],
         "specificRect": [600, 610, 1, 1],
-        "maxTimes": 3,
+        "maxTimes": 1,
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@LeaveStore": {
-        "algorithm": "MatchTemplate",
-        "action": "ClickSelf",
-        "template": "Roguelike@StageTraderLeave.png",
-        "roi": [1046, 443, 234, 204],
-        "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@LeaveStoreConfirm": {
-        "algorithm": "MatchTemplate",
-        "action": "ClickSelf",
-        "template": "Roguelike@StageTraderLeaveConfirm.png",
-        "roi": [985, 447, 295, 203],
-        "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@ExitExploration": {
-        "algorithm": "MatchTemplate",
-        "action": "ClickSelf",
-        "template": "Roguelike@ExitThenAbandon.png",
-        "roi": [0, 0, 90, 90],
-        "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@AbandonEntryVisible": {
-        "Doc": "Recognize the exploration summary before entering the established abandon action.",
-        "algorithm": "OcrDetect",
-        "action": "DoNothing",
-        "text": ["驻足于"],
-        "roi": [1010, 420, 90, 40],
-        "next": [
-            "MiniGame@BlackFlow@AbandonEntry",
-            "MiniGame@BlackFlow@AbandonEntryFallback"
-        ]
-    },
-    "MiniGame@BlackFlow@AbandonEntry": {
-        "Doc": "Stage-local use of the JieGarden abandon recognition after its OCR guard.",
-        "baseTask": "JieGarden@Roguelike@Abandon",
-        "template": ["JieGarden@Roguelike@Abandon.png", "JieGarden@Roguelike@Abandon2.png"],
-        "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@AbandonEntryFallback": {
-        "Doc": "Click the verified abandon-control center when the dim summary frame defeats the upstream matcher.",
-        "algorithm": "JustReturn",
-        "action": "ClickRect",
-        "specificRect": [1140, 325, 1, 1],
-        "maxTimes": 3,
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@AbandonConfirmVisible": {
-        "Doc": "Uniquely identify an abandon confirmation before any refresh-dialog recovery is considered.",
-        "algorithm": "OcrDetect",
-        "action": "DoNothing",
-        "text": ["确认放弃本次探索"],
-        "roi": [450, 230, 400, 100],
-        "next": ["MiniGame@BlackFlow@AbandonConfirm"]
-    },
-    "MiniGame@BlackFlow@AbandonConfirm": {
-        "Doc": "Stage-local use of the established Roguelike abandon-confirm action.",
-        "baseTask": "Roguelike@AbandonConfirm",
-        "template": "Roguelike@AbandonConfirm.png",
-        "maxTimes": 3,
-        "next": [
-            "MiniGame@BlackFlow@StartExploreEntryVisible",
-            "MiniGame@BlackFlow@AbandonConfirm",
-            "MiniGame@BlackFlow@WaitAfterAbandonInitializing",
-            "MiniGame@BlackFlow@RetryAfterAbandonDelay"
-        ],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@ContinueAfterAbandon": {
-        "Doc": "Poll only post-abandon states; refresh-dialog recovery is intentionally unreachable.",
-        "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "maxTimes": 20,
-        "next": [
-            "MiniGame@BlackFlow@StartExploreEntryVisible",
-            "MiniGame@BlackFlow@AbandonConfirm",
-            "MiniGame@BlackFlow@WaitAfterAbandonInitializing",
-            "MiniGame@BlackFlow@RetryAfterAbandonDelay"
-        ],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@WaitAfterAbandonInitializing": {
-        "algorithm": "OcrDetect",
-        "action": "DoNothing",
-        "text": ["正在初始化"],
-        "roi": [1075, 590, 120, 45],
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueAfterAbandon"]
-    },
-    "MiniGame@BlackFlow@RetryAfterAbandonDelay": {
-        "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueAfterAbandon"]
-    },
-    "MiniGame@BlackFlow@WaitInitializing": {
-        "algorithm": "OcrDetect",
-        "action": "DoNothing",
-        "text": ["正在初始化"],
-        "roi": [1075, 590, 120, 45],
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"]
-    },
-    "MiniGame@BlackFlow@WaitForExploreEntry": {
-        "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ContinueSafeExit"]
-    },
-    "MiniGame@BlackFlow@ContinueSafeExit": {
-        "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "maxTimes": 20,
-        "next": [
-            "MiniGame@BlackFlow@StartExploreEntryVisible",
-            "MiniGame@BlackFlow@AbandonConfirmVisible",
-            "MiniGame@BlackFlow@DismissRefreshDialog",
-            "MiniGame@BlackFlow@LeaveStore",
-            "MiniGame@BlackFlow@LeaveStoreConfirm",
-            "MiniGame@BlackFlow@ExitExploration",
-            "MiniGame@BlackFlow@AbandonEntryVisible",
-            "MiniGame@BlackFlow@WaitInitializing",
-            "MiniGame@BlackFlow@WaitForExploreEntry"
-        ],
-        "exceededNext": ["MiniGame@BlackFlow@SafeExitFailed"]
-    },
-    "MiniGame@BlackFlow@StartExploreEntryVisible": {
-        "algorithm": "OcrDetect",
-        "action": "DoNothing",
-        "text": ["开始探索"],
-        "roi": [1000, 560, 200, 100]
-    },
-    "MiniGame@BlackFlow@SafeExitFailed": {
-        "algorithm": "JustReturn",
-        "action": "DoNothing"
+        "next": ["MiniGame@BlackFlow@StorePageReady"]
     }
 }

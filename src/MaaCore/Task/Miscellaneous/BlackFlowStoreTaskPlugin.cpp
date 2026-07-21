@@ -34,8 +34,7 @@ public:
     using Pause = std::function<bool(unsigned)>;
     using StopRequested = std::function<bool()>;
     using SnapshotCallback = std::function<void(const asst::BlackFlowStoreSnapshot&)>;
-    using ExplorationEndedCallback =
-        std::function<void(const asst::BlackFlowStoreExplorationSummary&, std::string_view)>;
+    using CollectionEndedCallback = std::function<void(const asst::BlackFlowStoreCollectionSummary&, std::string_view)>;
 
     BlackFlowStoreProductionRuntime(
         asst::BlackFlowStoreImageAnalyzer& analyzer,
@@ -44,14 +43,14 @@ public:
         Pause pause,
         StopRequested stop_requested,
         SnapshotCallback snapshot_callback,
-        ExplorationEndedCallback exploration_ended_callback) :
+        CollectionEndedCallback collection_ended_callback) :
         m_analyzer(analyzer),
         m_named_task_runner(std::move(named_task_runner)),
         m_image_provider(std::move(image_provider)),
         m_pause(std::move(pause)),
         m_stop_requested(std::move(stop_requested)),
         m_snapshot_callback(std::move(snapshot_callback)),
-        m_exploration_ended_callback(std::move(exploration_ended_callback))
+        m_collection_ended_callback(std::move(collection_ended_callback))
     {
     }
 
@@ -110,21 +109,21 @@ public:
         const asst::BlackFlowStoreStopRequested& cancel_requested) override
     {
         if (cancel_requested && cancel_requested()) {
-            return { };
+            return {};
         }
         const auto image = MAA_NS::imread(path);
         if (cancel_requested && cancel_requested()) {
-            return { };
+            return {};
         }
         return m_analyzer.analyze_slots(image, cancel_requested);
     }
 
     void snapshot_committed(const asst::BlackFlowStoreSnapshot& snapshot) override { m_snapshot_callback(snapshot); }
 
-    void exploration_ended(const asst::BlackFlowStoreExplorationSummary& summary, std::string_view exploration_id)
-        override
+    void
+        collection_ended(const asst::BlackFlowStoreCollectionSummary& summary, std::string_view exploration_id) override
     {
-        m_exploration_ended_callback(summary, exploration_id);
+        m_collection_ended_callback(summary, exploration_id);
     }
 
     bool wait_for(std::chrono::milliseconds duration) override
@@ -143,22 +142,44 @@ private:
     Pause m_pause;
     StopRequested m_stop_requested;
     SnapshotCallback m_snapshot_callback;
-    ExplorationEndedCallback m_exploration_ended_callback;
+    CollectionEndedCallback m_collection_ended_callback;
     cv::Mat m_stable_frame;
 };
 } // namespace
 
 bool asst::BlackFlowStoreTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
-    return should_start_black_flow_store_cycle(msg, details);
+    m_invocation = classify_black_flow_store_plugin_invocation(
+        should_start_black_flow_store_cycle(msg, details),
+        m_pending_collection.has_value(),
+        msg == AsstMsg::SubTaskStart && details.get("subtask", std::string()) == "ProcessTask",
+        details.get("details", "task", std::string()));
+    return m_invocation != BlackFlowStorePluginInvocation::None;
 }
 
 bool asst::BlackFlowStoreTaskPlugin::_run()
 {
-    stop_process_task();
+    const auto invocation = std::exchange(m_invocation, BlackFlowStorePluginInvocation::None);
+    if (invocation == BlackFlowStorePluginInvocation::FinalizeReturnedToEntry ||
+        invocation == BlackFlowStorePluginInvocation::FinalizeFailedExit) {
+        finalize_collection(invocation == BlackFlowStorePluginInvocation::FinalizeReturnedToEntry);
+        return true;
+    }
+    if (invocation != BlackFlowStorePluginInvocation::CollectStore) {
+        return false;
+    }
 
     if (!m_client_type) {
-        Log.error(__FUNCTION__, "| missing admitted BlackFlow client; refusing cycle before UI takeover");
+        Log.error(__FUNCTION__, "| missing admitted BlackFlow client; refusing store collection");
+        remember_collection(
+            BlackFlowStoreCollectionSummary {
+                .status = BlackFlowStoreCycleStatus::Failed,
+                .failure = BlackFlowStoreCycleFailure::MissingClient,
+            },
+            std::string_view {});
+        if (need_exit()) {
+            finalize_collection(false);
+        }
         return false;
     }
 
@@ -212,36 +233,50 @@ bool asst::BlackFlowStoreTaskPlugin::_run()
                 };
                 callback(AsstMsg::SubTaskExtraInfo, info);
             },
-            [&](const BlackFlowStoreExplorationSummary& summary, std::string_view exploration_id) {
-                auto info = basic_info_with_what("BlackFlowExplorationEnded");
-                info["details"] = json::object {
-                    { "exploration_id", std::string(exploration_id) },
-                    { "completed_pages", summary.completed_pages },
-                    { "successful_refreshes", summary.successful_refreshes },
-                    { "safely_exited", summary.safely_exited },
-                    { "reason",
-                      summary.safely_exited && summary.completed_pages == BlackFlowStorePageLimit ? "completed"
-                                                                                                  : "incomplete" },
-                };
-                callback(AsstMsg::SubTaskExtraInfo, info);
+            [&](const BlackFlowStoreCollectionSummary& summary, std::string_view exploration_id) {
+                remember_collection(summary, exploration_id);
             });
         BlackFlowStoreCycleAdapter port(repository, m_client_type.value(), callback_relative_root, runtime);
 
-        const auto result = run_black_flow_store_session(port);
-        if (result.status == BlackFlowStoreSessionStatus::Failed) {
+        const auto result = run_black_flow_store_cycle(port);
+        if (!m_pending_collection) {
+            remember_collection(
+                BlackFlowStoreCollectionSummary {
+                    .status = result.status,
+                    .failure = result.failure,
+                    .completed_pages = result.completed_pages,
+                    .successful_refreshes = result.successful_refreshes,
+                },
+                std::string_view {});
+        }
+        if (need_exit()) {
+            finalize_collection(false);
+        }
+        if (result.status == BlackFlowStoreCycleStatus::Failed) {
             Log.error(
                 __FUNCTION__,
-                "| BlackFlow session stopped after a fatal recovery failure; status=",
+                "| BlackFlow store collection failed; status=",
                 static_cast<int>(result.status),
                 "failure=",
                 static_cast<int>(result.failure),
-                "safely_exited_cycles=",
-                result.safely_exited_cycles);
+                "completed_pages=",
+                result.completed_pages,
+                "successful_refreshes=",
+                result.successful_refreshes);
         }
-        return false;
+        return result.status == BlackFlowStoreCycleStatus::Completed;
     }
     catch (const std::exception&) {
-        Log.error(__FUNCTION__, "| BlackFlow production cycle failed without exposing internal details");
+        remember_collection(
+            BlackFlowStoreCollectionSummary {
+                .status = BlackFlowStoreCycleStatus::Failed,
+                .failure = BlackFlowStoreCycleFailure::Unexpected,
+            },
+            std::string_view {});
+        if (need_exit()) {
+            finalize_collection(false);
+        }
+        Log.error(__FUNCTION__, "| BlackFlow store collection failed without exposing internal details");
         return false;
     }
 }
@@ -253,9 +288,47 @@ asst::BlackFlowStoreTaskPlugin&
     return *this;
 }
 
-void asst::BlackFlowStoreTaskPlugin::stop_process_task() const
+void asst::BlackFlowStoreTaskPlugin::remember_collection(
+    const BlackFlowStoreCollectionSummary& summary,
+    std::string_view exploration_id)
 {
-    if (m_task_ptr) {
-        m_task_ptr->set_enable(false);
+    m_pending_collection = PendingCollection {
+        .summary = summary,
+        .exploration_id = std::string(exploration_id),
+    };
+}
+
+void asst::BlackFlowStoreTaskPlugin::finalize_collection(bool safely_exited)
+{
+    if (!m_pending_collection) {
+        return;
     }
+    auto pending = std::move(m_pending_collection.value());
+    m_pending_collection.reset();
+
+    const auto reason = [&]() -> std::string_view {
+        if (!safely_exited) {
+            return "incomplete";
+        }
+        switch (pending.summary.status) {
+        case BlackFlowStoreCycleStatus::Completed:
+            return "completed";
+        case BlackFlowStoreCycleStatus::Failed:
+            return "store_collection_failed";
+        case BlackFlowStoreCycleStatus::Stopped:
+            return "store_collection_stopped";
+        }
+        return "incomplete";
+    }();
+    auto info = basic_info_with_what("BlackFlowExplorationEnded");
+    info["details"] = json::object {
+        { "exploration_id", pending.exploration_id },
+        { "completed_pages", pending.summary.completed_pages },
+        { "successful_refreshes", pending.summary.successful_refreshes },
+        { "safely_exited", safely_exited },
+        { "collection_status", std::string(black_flow_store_cycle_status_name(pending.summary.status)) },
+        { "failure", std::string(black_flow_store_cycle_failure_name(pending.summary.failure)) },
+        { "reason", std::string(reason) },
+    };
+    callback(AsstMsg::SubTaskExtraInfo, info);
 }

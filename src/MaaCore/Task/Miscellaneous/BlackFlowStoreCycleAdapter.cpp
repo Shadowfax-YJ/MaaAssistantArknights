@@ -61,7 +61,7 @@ void asst::BlackFlowStoreCycleAdapter::recover_pending_pages()
         });
 }
 
-bool asst::BlackFlowStoreCycleAdapter::begin_exploration()
+bool asst::BlackFlowStoreCycleAdapter::begin_collection()
 {
     m_exploration = m_repository.begin_exploration(m_client_type);
     m_page_with_committed_png.reset();
@@ -78,7 +78,7 @@ asst::BlackFlowStoreCaptureResult
     asst::BlackFlowStoreCycleAdapter::capture_store_page(size_t page_index, size_t attempt)
 {
     if (!m_exploration) {
-        return { };
+        return {};
     }
 
     const auto analyze = [&](const std::filesystem::path& committed_png) {
@@ -89,7 +89,7 @@ asst::BlackFlowStoreCaptureResult
     if (m_page_with_committed_png != page_index) {
         const auto encoded_png = m_runtime.encode_observed_page();
         if (!encoded_png) {
-            return { };
+            return {};
         }
         committed = m_repository.capture_page(
             m_exploration.value(),
@@ -121,12 +121,12 @@ void asst::BlackFlowStoreCycleAdapter::snapshot_committed(const BlackFlowStoreSn
     m_runtime.snapshot_committed(snapshot);
 }
 
-void asst::BlackFlowStoreCycleAdapter::exploration_ended(const BlackFlowStoreExplorationSummary& summary)
+void asst::BlackFlowStoreCycleAdapter::collection_ended(const BlackFlowStoreCollectionSummary& summary)
 {
-    const auto exploration_id = m_exploration ? m_exploration->id() : std::string { };
+    const auto exploration_id = m_exploration ? m_exploration->id() : std::string {};
     m_exploration.reset();
     m_page_with_committed_png.reset();
-    m_runtime.exploration_ended(summary, exploration_id);
+    m_runtime.collection_ended(summary, exploration_id);
 }
 
 bool asst::BlackFlowStoreCycleAdapter::wait_for(std::chrono::milliseconds duration)

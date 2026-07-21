@@ -14,28 +14,24 @@ inline constexpr size_t BlackFlowStorePageAttemptLimit = 3;
 enum class BlackFlowStorePhase
 {
     Idle,
-    EnteringFreshExploration,
-    BeginningExploration,
     AwaitingStorePage,
     AwaitingCaptureRetry,
     CapturingStorePage,
     AwaitingRefreshDialog,
     AwaitingRefreshConfirmation,
     AwaitingRefreshedStorePage,
-    SafelyExiting,
+    DismissingRefreshDialog,
     Finished,
     Stopped,
 };
 
 enum class BlackFlowStoreCommandKind
 {
-    EnterFreshExploration,
-    BeginExploration,
     ObserveStorePage,
     CaptureStorePage,
     OpenRefreshDialog,
     ConfirmRefresh,
-    SafeExit,
+    DismissRefreshDialog,
     Finish,
     Stop,
 };
@@ -51,10 +47,6 @@ struct BlackFlowStoreCommand
 
 enum class BlackFlowStoreEventKind
 {
-    FreshExplorationEntered,
-    FreshExplorationFailed,
-    ExplorationStarted,
-    ExplorationStartFailed,
     StorePageObserved,
     StorePageObservationFailed,
     PageCaptureSucceeded,
@@ -63,8 +55,8 @@ enum class BlackFlowStoreEventKind
     RefreshDialogFailed,
     RefreshConfirmationSucceeded,
     RefreshConfirmationFailed,
-    SafeExitSucceeded,
-    SafeExitFailed,
+    RefreshDialogDismissed,
+    RefreshDialogDismissalFailed,
     StepLimitReached,
     StopRequested,
 };
@@ -73,12 +65,8 @@ struct BlackFlowStoreEvent
 {
     BlackFlowStoreEventKind kind = BlackFlowStoreEventKind::StopRequested;
     BlackFlowStorePageClassification page_classification = BlackFlowStorePageClassification::NotReady;
-    BlackFlowStoreTitleFingerprint title_fingerprint { };
+    BlackFlowStoreTitleFingerprint title_fingerprint {};
 
-    static BlackFlowStoreEvent fresh_exploration_entered() noexcept;
-    static BlackFlowStoreEvent fresh_exploration_failed() noexcept;
-    static BlackFlowStoreEvent exploration_started() noexcept;
-    static BlackFlowStoreEvent exploration_start_failed() noexcept;
     static BlackFlowStoreEvent store_page_observed(
         BlackFlowStorePageClassification classification,
         BlackFlowStoreTitleFingerprint fingerprint) noexcept;
@@ -89,8 +77,8 @@ struct BlackFlowStoreEvent
     static BlackFlowStoreEvent refresh_dialog_failed() noexcept;
     static BlackFlowStoreEvent refresh_confirmation_succeeded() noexcept;
     static BlackFlowStoreEvent refresh_confirmation_failed() noexcept;
-    static BlackFlowStoreEvent safe_exit_succeeded() noexcept;
-    static BlackFlowStoreEvent safe_exit_failed() noexcept;
+    static BlackFlowStoreEvent refresh_dialog_dismissed() noexcept;
+    static BlackFlowStoreEvent refresh_dialog_dismissal_failed() noexcept;
     static BlackFlowStoreEvent step_limit_reached() noexcept;
     static BlackFlowStoreEvent stop_requested() noexcept;
 };
@@ -116,7 +104,7 @@ public:
 private:
     BlackFlowStoreCommand observe_store_page() noexcept;
     BlackFlowStoreCommand capture_observed_page(const BlackFlowStoreEvent& event) noexcept;
-    BlackFlowStoreCommand begin_safe_exit() noexcept;
+    BlackFlowStoreCommand dismiss_refresh_dialog() noexcept;
     BlackFlowStoreCommand stop() noexcept;
 
     BlackFlowStoreState m_state;

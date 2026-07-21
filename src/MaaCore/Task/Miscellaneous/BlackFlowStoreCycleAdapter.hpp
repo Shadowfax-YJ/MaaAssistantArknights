@@ -24,8 +24,7 @@ public:
         const std::filesystem::path& path,
         const BlackFlowStoreStopRequested& cancel_requested) = 0;
     virtual void snapshot_committed(const BlackFlowStoreSnapshot& snapshot) = 0;
-    virtual void
-        exploration_ended(const BlackFlowStoreExplorationSummary& summary, std::string_view exploration_id) = 0;
+    virtual void collection_ended(const BlackFlowStoreCollectionSummary& summary, std::string_view exploration_id) = 0;
     virtual bool wait_for(std::chrono::milliseconds duration) = 0;
     virtual bool stop_requested() const noexcept = 0;
     virtual std::chrono::steady_clock::time_point now() const noexcept = 0;
@@ -42,12 +41,12 @@ public:
 
     bool run_named_task(std::string_view task_name) override;
     void recover_pending_pages() override;
-    bool begin_exploration() override;
+    bool begin_collection() override;
     std::optional<BlackFlowStoreObservedPage>
         observe_store_page(const std::optional<BlackFlowStoreTitleFingerprint>& last_committed_fingerprint) override;
     BlackFlowStoreCaptureResult capture_store_page(size_t page_index, size_t attempt) override;
     void snapshot_committed(const BlackFlowStoreSnapshot& snapshot) override;
-    void exploration_ended(const BlackFlowStoreExplorationSummary& summary) override;
+    void collection_ended(const BlackFlowStoreCollectionSummary& summary) override;
     bool wait_for(std::chrono::milliseconds duration) override;
     bool stop_requested() const noexcept override;
     std::chrono::steady_clock::time_point now() const noexcept override;

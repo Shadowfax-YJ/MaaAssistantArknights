@@ -23,7 +23,7 @@ namespace
 {
 asst::BlackFlowStoreTitleFingerprint fingerprint(std::uint8_t marker)
 {
-    asst::BlackFlowStoreTitleFingerprint value { };
+    asst::BlackFlowStoreTitleFingerprint value {};
     value.front() = marker;
     return value;
 }
@@ -79,13 +79,7 @@ public:
     bool run_named_task(std::string_view task_name) override
     {
         named_tasks.emplace_back(task_name);
-        current_time += task_name == asst::black_flow_store_tasks::SafeExit ? safe_exit_interval : named_task_interval;
-        if (task_name == asst::black_flow_store_tasks::EnterFreshExploration) {
-            ++enter_fresh_call_count;
-            if (enter_fresh_fail_on_call == enter_fresh_call_count) {
-                return false;
-            }
-        }
+        current_time += named_task_interval;
         if (task_name == asst::black_flow_store_tasks::OpenRefreshDialog && open_refresh_failures_remaining > 0U) {
             --open_refresh_failures_remaining;
             return false;
@@ -96,6 +90,9 @@ public:
         }
         if (task_name == asst::black_flow_store_tasks::ConfirmRefresh) {
             return confirm_refresh_result;
+        }
+        if (task_name == asst::black_flow_store_tasks::DismissRefreshDialog) {
+            return dismiss_refresh_result;
         }
         return true;
     }
@@ -147,7 +144,7 @@ public:
         const asst::BlackFlowStoreStopRequested& cancel_requested) override
     {
         if (cancel_requested && cancel_requested()) {
-            return { };
+            return {};
         }
         return analyze_committed_page(path);
     }
@@ -158,12 +155,12 @@ public:
         callback_order.push_back("snapshot-" + std::to_string(snapshot.page_index));
     }
 
-    void exploration_ended(const asst::BlackFlowStoreExplorationSummary& summary, std::string_view exploration_id)
-        override
+    void
+        collection_ended(const asst::BlackFlowStoreCollectionSummary& summary, std::string_view exploration_id) override
     {
         ended_summaries.push_back(summary);
         ended_exploration_ids.emplace_back(exploration_id);
-        callback_order.emplace_back("exploration-ended");
+        callback_order.emplace_back("collection-ended");
     }
 
     bool wait_for(std::chrono::milliseconds duration) override
@@ -174,7 +171,7 @@ public:
 
     bool stop_requested() const noexcept override
     {
-        return ended_summaries.size() >= stop_after_explorations || committed_snapshots.size() >= stop_after_snapshots;
+        return force_stop || committed_snapshots.size() >= stop_after_snapshots;
     }
 
     std::chrono::steady_clock::time_point now() const noexcept override { return current_time; }
@@ -185,17 +182,15 @@ public:
         { asst::BlackFlowStorePageClassification::StableNew, fingerprint(3) },
     };
     size_t next_observation = 0;
-    std::chrono::steady_clock::time_point current_time { };
-    std::chrono::steady_clock::duration observation_interval { };
-    std::chrono::steady_clock::duration named_task_interval { };
-    std::chrono::steady_clock::duration safe_exit_interval { };
+    std::chrono::steady_clock::time_point current_time {};
+    std::chrono::steady_clock::duration observation_interval {};
+    std::chrono::steady_clock::duration named_task_interval {};
     size_t open_refresh_failures_remaining = 0;
     size_t observe_task_failures_remaining = 0;
-    size_t enter_fresh_call_count = 0;
-    size_t enter_fresh_fail_on_call = 0;
     bool confirm_refresh_result = true;
+    bool dismiss_refresh_result = true;
+    bool force_stop = false;
     size_t analysis_failures_remaining = 0;
-    size_t stop_after_explorations = std::numeric_limits<size_t>::max();
     size_t stop_after_snapshots = std::numeric_limits<size_t>::max();
     size_t encode_calls = 0;
     size_t encode_failures_remaining = 0;
@@ -203,23 +198,24 @@ public:
     std::vector<size_t> encoded_pages;
     std::vector<std::string> analyzed_pages;
     std::vector<asst::BlackFlowStoreSnapshot> committed_snapshots;
-    std::vector<asst::BlackFlowStoreExplorationSummary> ended_summaries;
+    std::vector<asst::BlackFlowStoreCollectionSummary> ended_summaries;
     std::vector<std::string> ended_exploration_ids;
     std::vector<std::string> callback_order;
 };
+
+std::optional<asst::BlackFlowPngDimensions> verify_test_png(const std::filesystem::path& path)
+{
+    return read_bytes(path).starts_with("valid-png-page-")
+               ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
+               : std::nullopt;
+}
 } // namespace
 
 TEST_CASE("BlackFlow state machine completes three distinct store pages with two one-shot refreshes")
 {
     asst::BlackFlowStoreStateMachine machine;
 
-    CHECK(machine.start() == asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::EnterFreshExploration });
-    CHECK(
-        machine.handle(asst::BlackFlowStoreEvent::fresh_exploration_entered()) ==
-        asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::BeginExploration });
-    CHECK(
-        machine.handle(asst::BlackFlowStoreEvent::exploration_started()) ==
-        asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::ObserveStorePage });
+    CHECK(machine.start() == asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::ObserveStorePage });
 
     const auto page_1 = fingerprint(1);
     CHECK(
@@ -227,7 +223,6 @@ TEST_CASE("BlackFlow state machine completes three distinct store pages with two
             asst::BlackFlowStoreEvent::store_page_observed(
                 asst::BlackFlowStorePageClassification::StableInitial,
                 page_1)) == asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::CaptureStorePage, 1, 1 });
-    CHECK(machine.state().current_page_attempts == 1);
     CHECK(
         machine.handle(asst::BlackFlowStoreEvent::page_capture_succeeded()) ==
         asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::OpenRefreshDialog });
@@ -253,7 +248,6 @@ TEST_CASE("BlackFlow state machine completes three distinct store pages with two
     CHECK(
         machine.handle(asst::BlackFlowStoreEvent::page_capture_succeeded()) ==
         asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::OpenRefreshDialog });
-
     CHECK(
         machine.handle(asst::BlackFlowStoreEvent::refresh_dialog_opened()) ==
         asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::ConfirmRefresh });
@@ -270,38 +264,56 @@ TEST_CASE("BlackFlow state machine completes three distinct store pages with two
     CHECK(machine.state().successful_refreshes == 2);
     CHECK(
         machine.handle(asst::BlackFlowStoreEvent::page_capture_succeeded()) ==
-        asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::SafeExit });
-
-    CHECK(machine.state().completed_pages == 3);
-    CHECK(machine.state().current_page_attempts == 0);
-    CHECK(machine.state().last_committed_fingerprint == page_3);
-    CHECK(
-        machine.handle(asst::BlackFlowStoreEvent::safe_exit_succeeded()) ==
         asst::BlackFlowStoreCommand { asst::BlackFlowStoreCommandKind::Finish });
+    CHECK(machine.state().completed_pages == 3);
     CHECK(machine.state().phase == asst::BlackFlowStorePhase::Finished);
+    CHECK(machine.state().last_committed_fingerprint == page_3);
 }
 
-TEST_CASE("BlackFlow refresh confirmation task policy permits one recognition and one action")
+TEST_CASE("BlackFlow task policy contains only store-internal actions")
 {
-    const auto policy = asst::black_flow_store_task_policy(asst::black_flow_store_tasks::ConfirmRefresh);
+    const auto confirm = asst::black_flow_store_task_policy(asst::black_flow_store_tasks::ConfirmRefresh);
+    REQUIRE(confirm.has_value());
+    CHECK(confirm->expected_terminal == asst::black_flow_store_tasks::ConfirmRefresh);
+    CHECK(confirm->retry_times == 0);
+    REQUIRE(confirm->times_limit.has_value());
+    CHECK(confirm->times_limit.value() == 1);
 
-    REQUIRE(policy.has_value());
-    CHECK(policy->expected_terminal == asst::black_flow_store_tasks::ConfirmRefresh);
-    CHECK(policy->retry_times == 0);
-    REQUIRE(policy->times_limit.has_value());
-    CHECK(policy->times_limit.value() == 1);
+    const auto dismiss = asst::black_flow_store_task_policy(asst::black_flow_store_tasks::DismissRefreshDialog);
+    REQUIRE(dismiss.has_value());
+    CHECK(dismiss->expected_terminal == asst::black_flow_store_tasks::StorePageReady);
+    CHECK(dismiss->retry_times == 0);
+    REQUIRE(dismiss->times_limit.has_value());
+    CHECK(dismiss->times_limit.value() == 1);
+
+    CHECK_FALSE(asst::black_flow_store_task_policy("MiniGame@BlackFlow@PrepareFreshEntry").has_value());
+    CHECK_FALSE(asst::black_flow_store_task_policy("MiniGame@BlackFlow@EnterFreshExploration").has_value());
+    CHECK_FALSE(asst::black_flow_store_task_policy("MiniGame@BlackFlow@SafeExit").has_value());
 }
 
-TEST_CASE("BlackFlow production orchestration commits three pages and safely exits without investment")
+TEST_CASE("BlackFlow plugin collector trigger is one-shot until the outer flow finalizes it")
+{
+    using enum asst::BlackFlowStorePluginInvocation;
+
+    CHECK(
+        asst::classify_black_flow_store_plugin_invocation(true, false, true, "MiniGame@BlackFlow@InvestSystem") ==
+        CollectStore);
+    CHECK(
+        asst::classify_black_flow_store_plugin_invocation(true, true, true, "MiniGame@BlackFlow@InvestSystem") == None);
+    CHECK(
+        asst::classify_black_flow_store_plugin_invocation(false, true, true, "MiniGame@BlackFlow@StartExplore") ==
+        FinalizeReturnedToEntry);
+    CHECK(asst::classify_black_flow_store_plugin_invocation(false, true, true, "Stop") == FinalizeFailedExit);
+    CHECK(
+        asst::classify_black_flow_store_plugin_invocation(false, false, true, "MiniGame@BlackFlow@StartExplore") ==
+        None);
+}
+
+TEST_CASE("BlackFlow store collection commits three pages and returns without outer-flow actions")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
     const auto callback_relative_root = std::filesystem::path("debug") / "roguelike" / "black_flow_store";
     asst::BlackFlowStoreCycleAdapter port(
@@ -313,25 +325,22 @@ TEST_CASE("BlackFlow production orchestration commits three pages and safely exi
     const auto outcome = asst::run_black_flow_store_cycle(port);
 
     CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::None);
     CHECK(outcome.completed_pages == 3);
     CHECK(outcome.successful_refreshes == 2);
-
     const std::vector<std::string> expected_tasks {
-        "MiniGame@BlackFlow@EnterFreshExploration",
+        "MiniGame@BlackFlow@ObserveStorePage",  "MiniGame@BlackFlow@OpenRefreshDialog",
+        "MiniGame@BlackFlow@ConfirmRefresh",    "MiniGame@BlackFlow@ObserveStorePage",
+        "MiniGame@BlackFlow@OpenRefreshDialog", "MiniGame@BlackFlow@ConfirmRefresh",
         "MiniGame@BlackFlow@ObserveStorePage",
-        "MiniGame@BlackFlow@OpenRefreshDialog",
-        "MiniGame@BlackFlow@ConfirmRefresh",
-        "MiniGame@BlackFlow@ObserveStorePage",
-        "MiniGame@BlackFlow@OpenRefreshDialog",
-        "MiniGame@BlackFlow@ConfirmRefresh",
-        "MiniGame@BlackFlow@ObserveStorePage",
-        "MiniGame@BlackFlow@SafeExit",
     };
     CHECK(runtime.named_tasks == expected_tasks);
-    CHECK(std::ranges::count(runtime.named_tasks, "MiniGame@BlackFlow@ConfirmRefresh") == 2);
-    CHECK(std::ranges::count(runtime.named_tasks, "MiniGame@BlackFlow@SafeExit") == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 2);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 2);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
     CHECK(std::ranges::none_of(runtime.named_tasks, [](const auto& name) {
-        return name.find("Invest") != std::string::npos;
+        return name.find("StartExplore") != std::string::npos || name.find("Abandon") != std::string::npos ||
+               name.find("Exit") != std::string::npos || name.find("Invest") != std::string::npos;
     }));
 
     CHECK(runtime.encoded_pages == std::vector<size_t> { 1, 2, 3 });
@@ -368,28 +377,26 @@ TEST_CASE("BlackFlow production orchestration commits three pages and safely exi
     }
 
     REQUIRE(runtime.ended_summaries.size() == 1);
+    CHECK(runtime.ended_summaries.front().status == asst::BlackFlowStoreCycleStatus::Completed);
+    CHECK(runtime.ended_summaries.front().failure == asst::BlackFlowStoreCycleFailure::None);
     CHECK(runtime.ended_summaries.front().completed_pages == 3);
     CHECK(runtime.ended_summaries.front().successful_refreshes == 2);
-    CHECK(runtime.ended_summaries.front().safely_exited);
     CHECK(
         runtime.callback_order ==
-        std::vector<std::string> { "snapshot-1", "snapshot-2", "snapshot-3", "exploration-ended" });
+        std::vector<std::string> { "snapshot-1", "snapshot-2", "snapshot-3", "collection-ended" });
 }
 
-TEST_CASE("BlackFlow capture retries create a PNG until one is committed and then reprocess that PNG")
+TEST_CASE("BlackFlow capture retries create one PNG and then completes the collection")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
     runtime.observations = {
         { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
         { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+        { asst::BlackFlowStorePageClassification::StableNew, fingerprint(2) },
+        { asst::BlackFlowStorePageClassification::StableNew, fingerprint(3) },
     };
     runtime.encode_failures_remaining = 1;
     asst::BlackFlowStoreCycleAdapter port(
@@ -401,24 +408,19 @@ TEST_CASE("BlackFlow capture retries create a PNG until one is committed and the
     const auto outcome = asst::run_black_flow_store_cycle(port);
 
     CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(runtime.encode_calls == 2);
-    CHECK(runtime.encoded_pages == std::vector<size_t> { 1 });
-    REQUIRE(runtime.committed_snapshots.size() == 1);
+    CHECK(outcome.completed_pages == 3);
+    CHECK(runtime.encode_calls == 4);
+    CHECK(runtime.encoded_pages == std::vector<size_t> { 1, 2, 3 });
+    REQUIRE(runtime.committed_snapshots.size() == 3);
     CHECK(runtime.committed_snapshots.front().page_index == 1);
     CHECK(runtime.committed_snapshots.front().attempt == 2);
-    const auto exploration_id = runtime.committed_snapshots.front().exploration_id;
-    CHECK(read_bytes(temporary.path() / exploration_id / "page-01.png") == "valid-png-page-01");
 }
 
-TEST_CASE("BlackFlow unstable initial page times out after twenty seconds and exits safely")
+TEST_CASE("BlackFlow unstable initial page fails after the twenty-second observation timeout")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path&) -> std::optional<asst::BlackFlowPngDimensions> {
-        return std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
     runtime.observations.assign(
         250,
@@ -435,32 +437,22 @@ TEST_CASE("BlackFlow unstable initial page times out after twenty seconds and ex
 
     const auto outcome = asst::run_black_flow_store_cycle(port);
 
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
     CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ObserveStorePage);
     CHECK(outcome.completed_pages == 0);
     CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 200);
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
     REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK(runtime.ended_summaries.front().safely_exited);
+    CHECK(runtime.ended_summaries.front().status == asst::BlackFlowStoreCycleStatus::Failed);
 }
 
 TEST_CASE("BlackFlow store observation retries a transient task miss within its deadline")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations = {
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-    };
     runtime.observe_task_failures_remaining = 1;
-    runtime.confirm_refresh_result = false;
     asst::BlackFlowStoreCycleAdapter port(
         repository,
         asst::BlackFlowClientType::Official,
@@ -470,24 +462,16 @@ TEST_CASE("BlackFlow store observation retries a transient task miss within its 
     const auto outcome = asst::run_black_flow_store_cycle(port);
 
     CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 2);
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    CHECK(runtime.committed_snapshots.front().page_index == 1);
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::None);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 4);
+    CHECK(runtime.committed_snapshots.size() == 3);
 }
 
-TEST_CASE("BlackFlow opening the refresh dialog is limited to three attempts within ten seconds")
+TEST_CASE("BlackFlow opening the refresh dialog is limited and only dismisses a possible modal")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
     runtime.observations = {
         { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
@@ -502,123 +486,186 @@ TEST_CASE("BlackFlow opening the refresh dialog is limited to three attempts wit
 
     const auto outcome = asst::run_black_flow_store_cycle(port);
 
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
     CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::OpenRefreshDialog);
     CHECK(outcome.completed_pages == 1);
     CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 3);
     CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 0);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 1);
     REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
+    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::DismissRefreshDialog);
+    CHECK(runtime.committed_snapshots.size() == 1);
+}
+
+TEST_CASE("BlackFlow failed refresh confirmation is one-shot and dismisses its modal")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.observations = {
+        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+    };
+    runtime.confirm_refresh_result = false;
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ConfirmRefresh);
+    CHECK(outcome.completed_pages == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 1);
+    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::DismissRefreshDialog);
+}
+
+TEST_CASE("BlackFlow repeated old pages never resubmit refresh and fail without outer actions")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.observations.resize(26);
+    runtime.observations.front() = {
+        asst::BlackFlowStorePageClassification::StableInitial,
+        fingerprint(1),
+    };
+    for (size_t index = 1; index < runtime.observations.size(); ++index) {
+        runtime.observations[index] = {
+            asst::BlackFlowStorePageClassification::StableOld,
+            fingerprint(1),
+        };
+    }
+    runtime.observation_interval = std::chrono::seconds(1);
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ObserveStorePage);
+    CHECK(outcome.completed_pages == 1);
+    CHECK(outcome.successful_refreshes == 0);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 21);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
+    CHECK(runtime.committed_snapshots.size() == 1);
+}
+
+TEST_CASE("BlackFlow observation poll limit preserves its committed snapshot")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.observations.resize(600);
+    runtime.observations.front() = {
+        asst::BlackFlowStorePageClassification::StableInitial,
+        fingerprint(1),
+    };
+    for (size_t index = 1; index < runtime.observations.size(); ++index) {
+        runtime.observations[index] = {
+            asst::BlackFlowStorePageClassification::StableOld,
+            fingerprint(1),
+        };
+    }
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::StepLimit);
+    CHECK(outcome.completed_pages == 1);
+    CHECK(outcome.successful_refreshes == 0);
+    CHECK(runtime.committed_snapshots.size() == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
+    REQUIRE(runtime.ended_summaries.size() == 1);
+    CHECK(runtime.ended_summaries.front().status == asst::BlackFlowStoreCycleStatus::Failed);
+}
+
+TEST_CASE("BlackFlow user stop preserves the last committed snapshot without further UI actions")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.observations = {
+        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+    };
+    runtime.stop_after_snapshots = 1;
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Stopped);
+    CHECK(outcome.completed_pages == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 0);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 0);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
     REQUIRE(runtime.committed_snapshots.size() == 1);
-    CHECK(runtime.committed_snapshots.front().page_index == 1);
+    const auto exploration_id = runtime.committed_snapshots.front().exploration_id;
+    CHECK(read_bytes(temporary.path() / exploration_id / "page-01.png") == "valid-png-page-01");
+    REQUIRE(runtime.ended_summaries.size() == 1);
+    CHECK(runtime.ended_summaries.front().status == asst::BlackFlowStoreCycleStatus::Stopped);
 }
 
-TEST_CASE("BlackFlow session resets page and refresh counts across two safely exited cycles")
+TEST_CASE("BlackFlow failed page processing is limited to three attempts on one immutable PNG")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations.clear();
-    runtime.observations.resize(6);
-    for (size_t index = 0; index < runtime.observations.size(); ++index) {
-        auto& observation = runtime.observations[index];
-        observation.classification = index % 3U == 0U ? asst::BlackFlowStorePageClassification::StableInitial
-                                                      : asst::BlackFlowStorePageClassification::StableNew;
-        observation.title_fingerprint.front() = static_cast<std::uint8_t>(index + 1U);
-    }
-    runtime.stop_after_explorations = 2;
+    runtime.observations = {
+        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
+    };
+    runtime.analysis_failures_remaining = 3;
     asst::BlackFlowStoreCycleAdapter port(
         repository,
         asst::BlackFlowClientType::Official,
         std::filesystem::path("debug") / "roguelike" / "black_flow_store",
         runtime);
 
-    const auto outcome = asst::run_black_flow_store_session(port);
+    const auto outcome = asst::run_black_flow_store_cycle(port);
 
-    CHECK(outcome.status == asst::BlackFlowStoreSessionStatus::Stopped);
-    CHECK(outcome.failure == asst::BlackFlowStoreSessionFailure::None);
-    CHECK(outcome.safely_exited_cycles == 2);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::PrepareFreshEntry) == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::EnterFreshExploration) == 2);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 4);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::SafeExit) == 2);
-    CHECK(std::ranges::none_of(runtime.named_tasks, [](const auto& name) {
-        return name.find("Invest") != std::string::npos;
-    }));
-
-    REQUIRE(runtime.ended_summaries.size() == 2);
-    for (const auto& summary : runtime.ended_summaries) {
-        CHECK(summary.completed_pages == 3);
-        CHECK(summary.successful_refreshes == 2);
-        CHECK(summary.safely_exited);
-    }
-    REQUIRE(runtime.ended_exploration_ids.size() == 2);
-    CHECK(runtime.ended_exploration_ids[0] != runtime.ended_exploration_ids[1]);
-    REQUIRE(runtime.committed_snapshots.size() == 6);
-    CHECK(
-        std::vector<size_t> {
-            runtime.committed_snapshots[0].page_index,
-            runtime.committed_snapshots[1].page_index,
-            runtime.committed_snapshots[2].page_index,
-            runtime.committed_snapshots[3].page_index,
-            runtime.committed_snapshots[4].page_index,
-            runtime.committed_snapshots[5].page_index,
-        } == std::vector<size_t> { 1, 2, 3, 1, 2, 3 });
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::CaptureStorePage);
+    CHECK(outcome.completed_pages == 0);
+    CHECK(runtime.encode_calls == 1);
+    CHECK(runtime.encoded_pages == std::vector<size_t> { 1 });
+    CHECK(runtime.analyzed_pages == std::vector<std::string> { "page-01.png", "page-01.png", "page-01.png" });
+    REQUIRE(runtime.committed_snapshots.size() == 1);
+    const auto& failed_snapshot = runtime.committed_snapshots.front();
+    CHECK(failed_snapshot.attempt == 1);
+    CHECK(failed_snapshot.page_status == "failed");
+    CHECK(read_bytes(temporary.path() / failed_snapshot.exploration_id / "page-01.png") == "valid-png-page-01");
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::DismissRefreshDialog) == 0);
 }
 
-TEST_CASE("BlackFlow failed entry after a completed cycle ends without reusing its exploration identity")
+TEST_CASE("BlackFlow collector recovers pending pages before starting a new repository directory")
 {
     TemporaryDirectory temporary;
     const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.enter_fresh_fail_on_call = 2;
-    runtime.stop_after_explorations = 2;
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_session(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreSessionStatus::Stopped);
-    CHECK(outcome.failure == asst::BlackFlowStoreSessionFailure::None);
-    CHECK(outcome.safely_exited_cycles == 2);
-    REQUIRE(runtime.ended_summaries.size() == 2);
-    CHECK(runtime.ended_summaries[0].completed_pages == 3);
-    CHECK(runtime.ended_summaries[0].safely_exited);
-    CHECK(runtime.ended_summaries[1].completed_pages == 0);
-    CHECK(runtime.ended_summaries[1].successful_refreshes == 0);
-    CHECK(runtime.ended_summaries[1].safely_exited);
-    REQUIRE(runtime.ended_exploration_ids.size() == 2);
-    CHECK_FALSE(runtime.ended_exploration_ids[0].empty());
-    CHECK(runtime.ended_exploration_ids[1].empty());
-    CHECK(runtime.committed_snapshots.size() == 3);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::SafeExit) == 2);
-}
-
-TEST_CASE("BlackFlow session recovers pending pages before taking over the game UI")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
     const auto interrupted = repository.begin_exploration(asst::BlackFlowClientType::Official);
     REQUIRE(interrupted.has_value());
     auto retryable = complete_page_analysis();
@@ -642,10 +689,9 @@ TEST_CASE("BlackFlow session recovers pending pages before taking over the game 
         std::filesystem::path("debug") / "roguelike" / "black_flow_store",
         runtime);
 
-    const auto outcome = asst::run_black_flow_store_session(port);
+    const auto outcome = asst::run_black_flow_store_cycle(port);
 
-    CHECK(outcome.status == asst::BlackFlowStoreSessionStatus::Stopped);
-    CHECK(outcome.safely_exited_cycles == 0);
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Stopped);
     CHECK(runtime.named_tasks.empty());
     REQUIRE(runtime.committed_snapshots.size() == 1);
     const auto& recovered = runtime.committed_snapshots.front();
@@ -653,281 +699,19 @@ TEST_CASE("BlackFlow session recovers pending pages before taking over the game 
     CHECK(recovered.exploration_id == interrupted->id());
     CHECK(recovered.page_index == 1);
     CHECK(recovered.page_status == "complete");
+    REQUIRE(runtime.ended_exploration_ids.size() == 1);
+    CHECK(runtime.ended_exploration_ids.front().empty());
     const auto sidecar = json::open(temporary.path() / pending.json_relative_path, true, true);
     REQUIRE(sidecar.has_value());
     CHECK(sidecar->at("page_status").as_string() == "complete");
 }
 
-TEST_CASE("BlackFlow startup takeover stops after thirty seconds without starting a cycle")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path&) -> std::optional<asst::BlackFlowPngDimensions> {
-        return std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.named_task_interval = std::chrono::seconds(31);
-    runtime.stop_after_explorations = 1;
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_session(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreSessionStatus::Failed);
-    CHECK(outcome.failure == asst::BlackFlowStoreSessionFailure::PrepareFreshEntry);
-    CHECK(outcome.safely_exited_cycles == 0);
-    CHECK(
-        runtime.named_tasks ==
-        std::vector<std::string> { std::string(asst::black_flow_store_tasks::PrepareFreshEntry) });
-    REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK_FALSE(runtime.ended_summaries.front().safely_exited);
-    CHECK(runtime.callback_order == std::vector<std::string> { "exploration-ended" });
-}
-
-TEST_CASE("BlackFlow unconfirmed safe exit emits the ended callback and fails after thirty seconds")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations = {
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-    };
-    runtime.open_refresh_failures_remaining = 3;
-    runtime.safe_exit_interval = std::chrono::seconds(31);
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
-    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::SafeExit);
-    CHECK(outcome.completed_pages == 1);
-    REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK_FALSE(runtime.ended_summaries.front().safely_exited);
-    CHECK(runtime.callback_order == std::vector<std::string> { "snapshot-1", "exploration-ended" });
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
-}
-
-TEST_CASE("BlackFlow repeated old pages never resubmit refresh and time out safely")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations.clear();
-    runtime.observations.resize(26);
-    runtime.observations.front().classification = asst::BlackFlowStorePageClassification::StableInitial;
-    runtime.observations.front().title_fingerprint.front() = 1;
-    for (size_t index = 1; index < runtime.observations.size(); ++index) {
-        runtime.observations[index].classification = asst::BlackFlowStorePageClassification::StableOld;
-        runtime.observations[index].title_fingerprint.front() = 1;
-    }
-    runtime.observation_interval = std::chrono::seconds(1);
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ObserveStorePage);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(outcome.successful_refreshes == 0);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 21);
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    CHECK(runtime.committed_snapshots.front().page_index == 1);
-}
-
-TEST_CASE("BlackFlow operation step limit preserves its snapshot and still exits safely")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations.resize(600);
-    runtime.observations.front().classification = asst::BlackFlowStorePageClassification::StableInitial;
-    runtime.observations.front().title_fingerprint.front() = 1;
-    for (size_t index = 1; index < runtime.observations.size(); ++index) {
-        runtime.observations[index].classification = asst::BlackFlowStorePageClassification::StableOld;
-        runtime.observations[index].title_fingerprint.front() = 1;
-    }
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::StepLimit);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(outcome.successful_refreshes == 0);
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    CHECK(runtime.committed_snapshots.front().page_index == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::SafeExit) == 1);
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
-    REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK(runtime.ended_summaries.front().safely_exited);
-    CHECK(runtime.callback_order == std::vector<std::string> { "snapshot-1", "exploration-ended" });
-}
-
-TEST_CASE("BlackFlow unavailable refresh preserves the committed page and exits safely")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations = {
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-    };
-    runtime.confirm_refresh_result = false;
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ConfirmRefresh);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(outcome.successful_refreshes == 0);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    const auto exploration_id = runtime.committed_snapshots.front().exploration_id;
-    CHECK(read_bytes(temporary.path() / exploration_id / "page-01.png") == "valid-png-page-01");
-    REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK(runtime.ended_summaries.front().safely_exited);
-}
-
-TEST_CASE("BlackFlow user stop preserves the last committed snapshot without further UI actions")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations = {
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-    };
-    runtime.stop_after_snapshots = 1;
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Stopped);
-    CHECK(outcome.completed_pages == 1);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::OpenRefreshDialog) == 0);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 0);
-    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::SafeExit) == 0);
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    const auto exploration_id = runtime.committed_snapshots.front().exploration_id;
-    CHECK(read_bytes(temporary.path() / exploration_id / "page-01.png") == "valid-png-page-01");
-    REQUIRE(runtime.ended_summaries.size() == 1);
-    CHECK_FALSE(runtime.ended_summaries.front().safely_exited);
-}
-
-TEST_CASE("BlackFlow failed page processing is limited to three attempts on one immutable PNG")
-{
-    TemporaryDirectory temporary;
-    const auto config = release_config();
-    const auto png_verifier = [](const std::filesystem::path& path) -> std::optional<asst::BlackFlowPngDimensions> {
-        return read_bytes(path).starts_with("valid-png-page-")
-                   ? std::optional(asst::BlackFlowPngDimensions { .width = 1280, .height = 720 })
-                   : std::nullopt;
-    };
-    asst::BlackFlowStorePageRepository repository(temporary.path(), config, png_verifier);
-    ScriptedBlackFlowStoreRuntime runtime;
-    runtime.observations = {
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-        { asst::BlackFlowStorePageClassification::StableInitial, fingerprint(1) },
-    };
-    runtime.analysis_failures_remaining = 3;
-    asst::BlackFlowStoreCycleAdapter port(
-        repository,
-        asst::BlackFlowClientType::Official,
-        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
-        runtime);
-
-    const auto outcome = asst::run_black_flow_store_cycle(port);
-
-    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
-    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::CaptureStorePage);
-    CHECK(outcome.completed_pages == 0);
-    CHECK(runtime.encode_calls == 1);
-    CHECK(runtime.encoded_pages == std::vector<size_t> { 1 });
-    CHECK(runtime.analyzed_pages == std::vector<std::string> { "page-01.png", "page-01.png", "page-01.png" });
-    REQUIRE(runtime.committed_snapshots.size() == 1);
-    const auto& failed_snapshot = runtime.committed_snapshots.front();
-    CHECK(failed_snapshot.attempt == 1);
-    CHECK(failed_snapshot.page_status == "failed");
-    CHECK(read_bytes(temporary.path() / failed_snapshot.exploration_id / "page-01.png") == "valid-png-page-01");
-    REQUIRE_FALSE(runtime.named_tasks.empty());
-    CHECK(runtime.named_tasks.back() == asst::black_flow_store_tasks::SafeExit);
-}
-
-TEST_CASE("BlackFlow page retry requires the same page to be stable again")
+TEST_CASE("BlackFlow page retry requires the same page to become stable again")
 {
     asst::BlackFlowStoreStateMachine machine;
     const auto page = fingerprint(1);
 
-    CHECK(machine.start().kind == asst::BlackFlowStoreCommandKind::EnterFreshExploration);
-    CHECK(
-        machine.handle(asst::BlackFlowStoreEvent::fresh_exploration_entered()).kind ==
-        asst::BlackFlowStoreCommandKind::BeginExploration);
-    CHECK(
-        machine.handle(asst::BlackFlowStoreEvent::exploration_started()).kind ==
-        asst::BlackFlowStoreCommandKind::ObserveStorePage);
+    CHECK(machine.start().kind == asst::BlackFlowStoreCommandKind::ObserveStorePage);
     CHECK(
         machine.handle(
             asst::BlackFlowStoreEvent::store_page_observed(
@@ -940,17 +724,31 @@ TEST_CASE("BlackFlow page retry requires the same page to be stable again")
     const auto command = machine.handle(
         asst::BlackFlowStoreEvent::store_page_observed(asst::BlackFlowStorePageClassification::Unstable, page));
 
-    CHECK(command.kind == asst::BlackFlowStoreCommandKind::SafeExit);
+    CHECK(command.kind == asst::BlackFlowStoreCommandKind::Stop);
+    CHECK(machine.state().phase == asst::BlackFlowStorePhase::Stopped);
     CHECK(machine.state().current_page_attempts == 1);
 }
 
-TEST_CASE("BlackFlow failed fresh-entry action transitions to safe exit")
+TEST_CASE("BlackFlow refresh failures request only the store-modal cleanup")
 {
     asst::BlackFlowStoreStateMachine machine;
 
-    CHECK(machine.start().kind == asst::BlackFlowStoreCommandKind::EnterFreshExploration);
-    const auto command = machine.handle(asst::BlackFlowStoreEvent::fresh_exploration_failed());
-
-    CHECK(command.kind == asst::BlackFlowStoreCommandKind::SafeExit);
-    CHECK(machine.state().phase == asst::BlackFlowStorePhase::SafelyExiting);
+    CHECK(machine.start().kind == asst::BlackFlowStoreCommandKind::ObserveStorePage);
+    CHECK(
+        machine
+            .handle(
+                asst::BlackFlowStoreEvent::store_page_observed(
+                    asst::BlackFlowStorePageClassification::StableInitial,
+                    fingerprint(1)))
+            .kind == asst::BlackFlowStoreCommandKind::CaptureStorePage);
+    CHECK(
+        machine.handle(asst::BlackFlowStoreEvent::page_capture_succeeded()).kind ==
+        asst::BlackFlowStoreCommandKind::OpenRefreshDialog);
+    CHECK(
+        machine.handle(asst::BlackFlowStoreEvent::refresh_dialog_failed()).kind ==
+        asst::BlackFlowStoreCommandKind::DismissRefreshDialog);
+    CHECK(machine.state().phase == asst::BlackFlowStorePhase::DismissingRefreshDialog);
+    CHECK(
+        machine.handle(asst::BlackFlowStoreEvent::refresh_dialog_dismissed()).kind ==
+        asst::BlackFlowStoreCommandKind::Stop);
 }

@@ -10,26 +10,6 @@ asst::BlackFlowStoreEvent event(asst::BlackFlowStoreEventKind kind) noexcept
 }
 } // namespace
 
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::fresh_exploration_entered() noexcept
-{
-    return event(BlackFlowStoreEventKind::FreshExplorationEntered);
-}
-
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::fresh_exploration_failed() noexcept
-{
-    return event(BlackFlowStoreEventKind::FreshExplorationFailed);
-}
-
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::exploration_started() noexcept
-{
-    return event(BlackFlowStoreEventKind::ExplorationStarted);
-}
-
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::exploration_start_failed() noexcept
-{
-    return event(BlackFlowStoreEventKind::ExplorationStartFailed);
-}
-
 asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::store_page_observed(
     BlackFlowStorePageClassification classification,
     BlackFlowStoreTitleFingerprint fingerprint) noexcept
@@ -76,14 +56,14 @@ asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::refresh_confirmation_failed
     return event(BlackFlowStoreEventKind::RefreshConfirmationFailed);
 }
 
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::safe_exit_succeeded() noexcept
+asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::refresh_dialog_dismissed() noexcept
 {
-    return event(BlackFlowStoreEventKind::SafeExitSucceeded);
+    return event(BlackFlowStoreEventKind::RefreshDialogDismissed);
 }
 
-asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::safe_exit_failed() noexcept
+asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::refresh_dialog_dismissal_failed() noexcept
 {
-    return event(BlackFlowStoreEventKind::SafeExitFailed);
+    return event(BlackFlowStoreEventKind::RefreshDialogDismissalFailed);
 }
 
 asst::BlackFlowStoreEvent asst::BlackFlowStoreEvent::step_limit_reached() noexcept
@@ -101,8 +81,8 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::start() noexcept
     if (m_state.phase != BlackFlowStorePhase::Idle) {
         return stop();
     }
-    m_state.phase = BlackFlowStorePhase::EnteringFreshExploration;
-    return { BlackFlowStoreCommandKind::EnterFreshExploration };
+    m_state.phase = BlackFlowStorePhase::AwaitingStorePage;
+    return observe_store_page();
 }
 
 asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const BlackFlowStoreEvent& event) noexcept
@@ -111,37 +91,10 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
         return stop();
     }
     if (event.kind == BlackFlowStoreEventKind::StepLimitReached) {
-        if (m_state.phase >= BlackFlowStorePhase::EnteringFreshExploration &&
-            m_state.phase < BlackFlowStorePhase::SafelyExiting) {
-            return begin_safe_exit();
-        }
-        if (m_state.phase == BlackFlowStorePhase::SafelyExiting) {
-            return { BlackFlowStoreCommandKind::SafeExit };
-        }
-        if (m_state.phase == BlackFlowStorePhase::Finished) {
-            return { BlackFlowStoreCommandKind::Finish };
-        }
         return stop();
     }
 
     switch (m_state.phase) {
-    case BlackFlowStorePhase::EnteringFreshExploration:
-        if (event.kind == BlackFlowStoreEventKind::FreshExplorationEntered) {
-            m_state.phase = BlackFlowStorePhase::BeginningExploration;
-            return { BlackFlowStoreCommandKind::BeginExploration };
-        }
-        if (event.kind == BlackFlowStoreEventKind::FreshExplorationFailed) {
-            return begin_safe_exit();
-        }
-        break;
-
-    case BlackFlowStorePhase::BeginningExploration:
-        if (event.kind == BlackFlowStoreEventKind::ExplorationStarted) {
-            m_state.phase = BlackFlowStorePhase::AwaitingStorePage;
-            return observe_store_page();
-        }
-        break;
-
     case BlackFlowStorePhase::AwaitingStorePage:
         if (event.kind == BlackFlowStoreEventKind::StorePageObserved) {
             if (event.page_classification == BlackFlowStorePageClassification::StableInitial &&
@@ -151,7 +104,7 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
             return observe_store_page();
         }
         if (event.kind == BlackFlowStoreEventKind::StorePageObservationFailed) {
-            return begin_safe_exit();
+            return stop();
         }
         break;
 
@@ -167,7 +120,7 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
             return observe_store_page();
         }
         if (event.kind == BlackFlowStoreEventKind::StorePageObservationFailed) {
-            return begin_safe_exit();
+            return stop();
         }
         break;
 
@@ -186,17 +139,19 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
         }
         if (event.kind == BlackFlowStoreEventKind::StorePageObserved ||
             event.kind == BlackFlowStoreEventKind::StorePageObservationFailed) {
-            return begin_safe_exit();
+            return stop();
         }
         break;
 
     case BlackFlowStorePhase::CapturingStorePage:
         if (event.kind == BlackFlowStoreEventKind::PageCaptureSucceeded && m_pending_fingerprint) {
             ++m_state.completed_pages;
-            m_state.last_committed_fingerprint = std::move(m_pending_fingerprint);
+            m_state.last_committed_fingerprint = m_pending_fingerprint;
+            m_pending_fingerprint.reset();
             m_state.current_page_attempts = 0;
             if (m_state.completed_pages == BlackFlowStorePageLimit) {
-                return begin_safe_exit();
+                m_state.phase = BlackFlowStorePhase::Finished;
+                return { BlackFlowStoreCommandKind::Finish };
             }
             m_state.phase = BlackFlowStorePhase::AwaitingRefreshDialog;
             return { BlackFlowStoreCommandKind::OpenRefreshDialog };
@@ -206,7 +161,7 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
                 m_state.phase = BlackFlowStorePhase::AwaitingCaptureRetry;
                 return observe_store_page();
             }
-            return begin_safe_exit();
+            return stop();
         }
         break;
 
@@ -217,7 +172,7 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
             return { BlackFlowStoreCommandKind::ConfirmRefresh };
         }
         if (event.kind == BlackFlowStoreEventKind::RefreshDialogFailed) {
-            return begin_safe_exit();
+            return dismiss_refresh_dialog();
         }
         break;
 
@@ -227,16 +182,13 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
             return observe_store_page();
         }
         if (event.kind == BlackFlowStoreEventKind::RefreshConfirmationFailed) {
-            return begin_safe_exit();
+            return dismiss_refresh_dialog();
         }
         break;
 
-    case BlackFlowStorePhase::SafelyExiting:
-        if (event.kind == BlackFlowStoreEventKind::SafeExitSucceeded) {
-            m_state.phase = BlackFlowStorePhase::Finished;
-            return { BlackFlowStoreCommandKind::Finish };
-        }
-        if (event.kind == BlackFlowStoreEventKind::SafeExitFailed) {
+    case BlackFlowStorePhase::DismissingRefreshDialog:
+        if (event.kind == BlackFlowStoreEventKind::RefreshDialogDismissed ||
+            event.kind == BlackFlowStoreEventKind::RefreshDialogDismissalFailed) {
             return stop();
         }
         break;
@@ -247,10 +199,6 @@ asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::handle(const Black
         break;
     }
 
-    if (m_state.phase >= BlackFlowStorePhase::BeginningExploration &&
-        m_state.phase < BlackFlowStorePhase::SafelyExiting) {
-        return begin_safe_exit();
-    }
     return stop();
 }
 
@@ -268,10 +216,10 @@ asst::BlackFlowStoreCommand
     return { BlackFlowStoreCommandKind::CaptureStorePage, m_state.completed_pages + 1U, 1U };
 }
 
-asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::begin_safe_exit() noexcept
+asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::dismiss_refresh_dialog() noexcept
 {
-    m_state.phase = BlackFlowStorePhase::SafelyExiting;
-    return { BlackFlowStoreCommandKind::SafeExit };
+    m_state.phase = BlackFlowStorePhase::DismissingRefreshDialog;
+    return { BlackFlowStoreCommandKind::DismissRefreshDialog };
 }
 
 asst::BlackFlowStoreCommand asst::BlackFlowStoreStateMachine::stop() noexcept
