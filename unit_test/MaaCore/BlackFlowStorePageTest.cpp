@@ -97,6 +97,28 @@ TEST_CASE("BlackFlow matching applies only the approved OCR normalization rules"
     CHECK(unsuffixed.standard_product_name == "沙盘α");
 }
 
+TEST_CASE("BlackFlow matching normalizes mixed ASCII and curved quote punctuation")
+{
+    const std::array<std::string, 3> standard_product_names { "“庇护”", "“阿猛”", "“绽放”" };
+    const asst::BlackFlowProductNameMatcher matcher(standard_product_names);
+
+    const auto ascii_closing_quote = matcher.match("“庇护\"", 0.834033);
+    CHECK(ascii_closing_quote.kind == asst::BlackFlowProductNameMatchKind::Exact);
+    CHECK(ascii_closing_quote.standard_product_name == "“庇护”");
+
+    const auto ascii_opening_quote = matcher.match("\"庇护”", 0.834033);
+    CHECK(ascii_opening_quote.kind == asst::BlackFlowProductNameMatchKind::Exact);
+    CHECK(ascii_opening_quote.standard_product_name == "“庇护”");
+
+    const auto ameng = matcher.match("“阿猛\"", 0.852172);
+    CHECK(ameng.kind == asst::BlackFlowProductNameMatchKind::Exact);
+    CHECK(ameng.standard_product_name == "“阿猛”");
+
+    const auto bloom = matcher.match("“绽放\"", 0.852172);
+    CHECK(bloom.kind == asst::BlackFlowProductNameMatchKind::Exact);
+    CHECK(bloom.standard_product_name == "“绽放”");
+}
+
 TEST_CASE("BlackFlow matching normalizes standard names and OCR text to Unicode NFC")
 {
     const std::array<std::string, 1> decomposed_standard_product_names { "Café" };

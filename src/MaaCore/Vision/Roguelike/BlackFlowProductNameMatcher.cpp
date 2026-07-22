@@ -248,11 +248,15 @@ asst::BlackFlowProductNameMatch
             };
         }
 
-        if (normalized_code_points->size() >= 2U && normalized_code_points->front() == U'"' &&
-            normalized_code_points->back() == U'"') {
+        if (normalized_code_points->size() >= 2U &&
+            (normalized_code_points->front() == U'"' || normalized_code_points->back() == U'"')) {
             auto quoted_code_points = normalized_code_points.value();
-            quoted_code_points.front() = U'“';
-            quoted_code_points.back() = U'”';
+            if (quoted_code_points.front() == U'"') {
+                quoted_code_points.front() = U'“';
+            }
+            if (quoted_code_points.back() == U'"') {
+                quoted_code_points.back() = U'”';
+            }
             exact = std::ranges::find(
                 m_standard_product_names,
                 encode_utf8(quoted_code_points),
