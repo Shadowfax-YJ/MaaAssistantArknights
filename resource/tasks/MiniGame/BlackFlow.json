@@ -14,7 +14,10 @@
         "action": "ClickSelf",
         "text": ["开始探索"],
         "roi": [1000, 560, 200, 100],
-        "reduceOtherTimes": ["MiniGame@BlackFlow@WaitForExploreRestart*20"],
+        "reduceOtherTimes": [
+            "MiniGame@BlackFlow@WaitForExploreRestart*20",
+            "MiniGame@BlackFlow@SwipeToPioneerSquad*20"
+        ],
         "next": [
             "MiniGame@BlackFlow@ChoosePioneerSquad",
             "MiniGame@BlackFlow@SwipeToPioneerSquad",
