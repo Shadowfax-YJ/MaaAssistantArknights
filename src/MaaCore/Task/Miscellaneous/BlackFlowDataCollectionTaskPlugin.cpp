@@ -2,34 +2,12 @@
 
 #include <exception>
 #include <string>
-#include <string_view>
 
+#include "BlackFlowDataCollectionPlan.hpp"
+#include "Controller/Controller.h"
+#include "MaaUtils/Time.hpp"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
-
-namespace
-{
-struct CaptureMetadata
-{
-    std::string_view directory;
-    std::string_view description;
-};
-
-CaptureMetadata capture_metadata(asst::BlackFlowCaptureTarget target)
-{
-    switch (target) {
-    case asst::BlackFlowCaptureTarget::StoreOverview:
-        return { "black_flow_store", "Black Flow store overview" };
-    case asst::BlackFlowCaptureTarget::ProcessingItemPopup:
-        return { "black_flow/processing_items", "Black Flow processing item popup" };
-    case asst::BlackFlowCaptureTarget::PartsBox:
-        return { "black_flow/parts_boxes", "Black Flow parts box" };
-    case asst::BlackFlowCaptureTarget::None:
-        break;
-    }
-    return { "unknown", "Black Flow data collection" };
-}
-} // namespace
 
 bool asst::BlackFlowDataCollectionTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
@@ -40,21 +18,43 @@ bool asst::BlackFlowDataCollectionTaskPlugin::verify(AsstMsg msg, const json::va
 bool asst::BlackFlowDataCollectionTaskPlugin::_run()
 {
     const auto target = m_capture_target;
-    const auto metadata = capture_metadata(target);
-    const auto image = get_hit_image();
-    if (!image) {
+    auto plan = black_flow_capture_plan(target, m_group_id);
+
+    if (plan.group_role == BlackFlowCaptureGroupRole::BeginsGroup) {
+        m_group_id = OpeningCaptureGroupId { MAA_NS::format_now_for_filename() };
+        plan = black_flow_capture_plan(target, m_group_id);
+    }
+    else if (plan.group_role == BlackFlowCaptureGroupRole::RequiresGroup && !m_group_id) {
+        Log.error(__FUNCTION__, "| parts-box snapshot has no matching processing-item cycle; stopping collection");
+        stop_process_task();
+        return false;
+    }
+
+    cv::Mat image;
+    if (plan.image_source == BlackFlowCaptureImageSource::RecognitionFrame) {
+        if (const auto hit_image = get_hit_image()) {
+            image = *hit_image;
+        }
+    }
+    else if (const auto controller = ctrler()) {
+        // Opening capture callbacks run after their configured stability delay. Fetch again here instead of
+        // saving the recognition frame captured before that delay.
+        image = controller->get_image();
+    }
+
+    if (image.empty()) {
         Log.error(__FUNCTION__, "| collection image is unavailable; stopping the BlackFlow cycle");
         stop_process_task();
         return false;
     }
 
-    const auto relative_dir = utils::path("debug") / "roguelike" / utils::path(std::string(metadata.directory));
     try {
         if (utils::save_debug_image(
-                *image,
-                relative_dir,
+                image,
+                plan.relative_dir,
                 /* auto_clean = */ false,
-                metadata.description)) {
+                plan.description,
+                plan.suffix)) {
             return true;
         }
     }
@@ -64,7 +64,7 @@ bool asst::BlackFlowDataCollectionTaskPlugin::_run()
         return false;
     }
 
-    Log.error(__FUNCTION__, "| failed to save BlackFlow collection image at", relative_dir);
+    Log.error(__FUNCTION__, "| failed to save BlackFlow collection image at", plan.relative_dir);
     stop_process_task();
     return false;
 }

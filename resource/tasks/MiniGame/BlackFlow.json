@@ -27,7 +27,21 @@
         "action": "ClickSelf",
         "text": ["开拓者分队"],
         "roi": [0, 320, 1280, 190],
-        "next": ["MiniGame@BlackFlow@ProcessingItemReady", "#self"]
+        "next": [
+            "MiniGame@BlackFlow@ConfirmPioneerSquad",
+            "MiniGame@BlackFlow@ProcessingItemReady",
+            "#self"
+        ]
+    },
+    "MiniGame@BlackFlow@ConfirmPioneerSquad": {
+        "doc": "复用首页自动肉鸽的分队确认逻辑，用黑流树海专用模板定位并点击卡片内对勾",
+        "baseTask": "JieGarden@Roguelike@SquadConfirm",
+        "template": "MiniGame@BlackFlow@PioneerSquadConfirm.png",
+        "next": [
+            "MiniGame@BlackFlow@ProcessingItemReady",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "#self"
+        ]
     },
     "MiniGame@BlackFlow@SwipeToPioneerSquad": {
         "doc": "复用通用横向滑动，直到开拓者分队进入可见区域",
@@ -43,7 +57,7 @@
         "action": "DoNothing",
         "text": ["加工品"],
         "roi": [400, 180, 220, 100],
-        "preDelay": 500,
+        "preDelay": 1000,
         "next": ["MiniGame@BlackFlow@CloseProcessingItem"]
     },
     "MiniGame@BlackFlow@CloseProcessingItem": {
@@ -163,7 +177,7 @@
         "action": "DoNothing",
         "text": ["零件箱容量"],
         "roi": [0, 300, 400, 170],
-        "preDelay": 500,
+        "preDelay": 1000,
         "next": ["MiniGame@BlackFlow@ClosePartsBox"]
     },
     "MiniGame@BlackFlow@ClosePartsBox": {

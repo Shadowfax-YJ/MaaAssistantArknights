@@ -7,12 +7,17 @@
 
 namespace
 {
-json::value collection_flow()
+json::value task_file(std::string_view relative_path)
 {
-    const auto path = std::filesystem::path(MAA_TEST_RESOURCE_DIR) / "tasks" / "MiniGame" / "BlackFlow.json";
+    const auto path = std::filesystem::path(MAA_TEST_RESOURCE_DIR) / relative_path;
     const auto document = json::open(path, true, true);
     REQUIRE(document.has_value());
     return document.value();
+}
+
+json::value collection_flow()
+{
+    return task_file("tasks/MiniGame/BlackFlow.json");
 }
 
 bool string_array_contains(const json::value& value, std::string_view expected)
@@ -30,6 +35,33 @@ void check_next_contains(const json::value& flow, std::string_view task, std::st
     REQUIRE(flow.at(task_name).contains("next"));
     CHECK(string_array_contains(flow.at(task_name).at("next"), next));
 }
+
+void check_fixed_confirmation_task(
+    const json::value& flow,
+    std::string_view task,
+    std::string_view next,
+    int recorded_confirm_x,
+    int recorded_confirm_y)
+{
+    CAPTURE(task, next);
+    const auto task_name = std::string(task);
+    REQUIRE(flow.contains(task_name));
+    const auto& confirmation = flow.at(task_name);
+    CHECK(confirmation.at("action").as_string() == "ClickRect");
+    CHECK(string_array_contains(confirmation.at("text"), "你确定要这么做"));
+    REQUIRE(confirmation.contains("specificRect"));
+    const auto& confirm_rect = confirmation.at("specificRect").as_array();
+    REQUIRE(confirm_rect.size() == 4);
+    const auto rect_x = confirm_rect[0].as_integer();
+    const auto rect_y = confirm_rect[1].as_integer();
+    const auto rect_width = confirm_rect[2].as_integer();
+    const auto rect_height = confirm_rect[3].as_integer();
+    CHECK(rect_x <= recorded_confirm_x);
+    CHECK(recorded_confirm_x < rect_x + rect_width);
+    CHECK(rect_y <= recorded_confirm_y);
+    CHECK(recorded_confirm_y < rect_y + rect_height);
+    check_next_contains(flow, task, next);
+}
 } // namespace
 
 TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
@@ -44,11 +76,33 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     const auto& squad_swipe = flow.at("MiniGame@BlackFlow@SwipeToPioneerSquad");
     CHECK(squad_swipe.at("baseTask").as_string() == "SwipeToTheRight");
     check_next_contains(flow, "MiniGame@BlackFlow@SwipeToPioneerSquad", "MiniGame@BlackFlow@ChoosePioneerSquad");
-    check_next_contains(flow, "MiniGame@BlackFlow@ChoosePioneerSquad", "MiniGame@BlackFlow@ProcessingItemReady");
+    check_next_contains(flow, "MiniGame@BlackFlow@ChoosePioneerSquad", "MiniGame@BlackFlow@ConfirmPioneerSquad");
+    const auto& squad_confirm = flow.at("MiniGame@BlackFlow@ConfirmPioneerSquad");
+    CHECK(squad_confirm.at("baseTask").as_string() == "JieGarden@Roguelike@SquadConfirm");
+    CHECK(squad_confirm.at("template").as_string() == "MiniGame@BlackFlow@PioneerSquadConfirm.png");
+    CHECK(
+        std::filesystem::exists(
+            std::filesystem::path(MAA_TEST_RESOURCE_DIR) / "template" / "MiniGame" / "BlackFlow" /
+            "MiniGame@BlackFlow@PioneerSquadConfirm.png"));
+    CHECK_FALSE(squad_confirm.contains("algorithm"));
+    CHECK_FALSE(squad_confirm.contains("action"));
+    CHECK_FALSE(squad_confirm.contains("roi"));
+    CHECK_FALSE(squad_confirm.contains("specificRect"));
+
+    const auto base_tasks = task_file("tasks/Roguelike/base.json");
+    const auto& base_squad_confirm = base_tasks.at("Roguelike@SquadConfirm");
+    CHECK(base_squad_confirm.at("action").as_string() == "ClickSelf");
+    CHECK_FALSE(base_squad_confirm.contains("specificRect"));
+
+    const auto jie_garden_tasks = task_file("tasks/Roguelike/JieGarden.json");
+    const auto& jie_garden_squad_confirm = jie_garden_tasks.at("JieGarden@Roguelike@SquadConfirm");
+    CHECK(jie_garden_squad_confirm.at("template").as_string() == "JieGarden@Roguelike@LastRewardConfirm.png");
+    check_next_contains(flow, "MiniGame@BlackFlow@ConfirmPioneerSquad", "MiniGame@BlackFlow@ProcessingItemReady");
 
     const auto& processing_item = flow.at("MiniGame@BlackFlow@ProcessingItemReady");
     CHECK(processing_item.at("action").as_string() == "DoNothing");
     CHECK(string_array_contains(processing_item.at("text"), "加工品"));
+    CHECK(processing_item.at("preDelay").as_integer() >= 1000);
     check_next_contains(flow, "MiniGame@BlackFlow@ProcessingItemReady", "MiniGame@BlackFlow@CloseProcessingItem");
     check_next_contains(flow, "MiniGame@BlackFlow@CloseProcessingItem", "MiniGame@BlackFlow@ChooseRecruitCombination");
 }
@@ -64,23 +118,12 @@ TEST_CASE("BlackFlow collection gives up exactly three recruitments before enter
         "MiniGame@BlackFlow@ChooseRecruitCombination",
         "MiniGame@BlackFlow@ConfirmRecruitCombination");
 
-    const auto& combination_confirm = flow.at("MiniGame@BlackFlow@ConfirmRecruitCombination");
-    CHECK(combination_confirm.at("action").as_string() == "ClickRect");
-    CHECK(string_array_contains(combination_confirm.at("text"), "你确定要这么做"));
-    REQUIRE(combination_confirm.contains("specificRect"));
-    const auto& confirm_rect = combination_confirm.at("specificRect").as_array();
-    REQUIRE(confirm_rect.size() == 4);
-    constexpr int RecordedConfirmX = 455;
-    constexpr int RecordedConfirmY = 595;
-    const auto rect_x = confirm_rect[0].as_integer();
-    const auto rect_y = confirm_rect[1].as_integer();
-    const auto rect_width = confirm_rect[2].as_integer();
-    const auto rect_height = confirm_rect[3].as_integer();
-    CHECK(rect_x <= RecordedConfirmX);
-    CHECK(RecordedConfirmX < rect_x + rect_width);
-    CHECK(rect_y <= RecordedConfirmY);
-    CHECK(RecordedConfirmY < rect_y + rect_height);
-    check_next_contains(flow, "MiniGame@BlackFlow@ConfirmRecruitCombination", "MiniGame@BlackFlow@RecruitVoucher1");
+    check_fixed_confirmation_task(
+        flow,
+        "MiniGame@BlackFlow@ConfirmRecruitCombination",
+        "MiniGame@BlackFlow@RecruitVoucher1",
+        455,
+        595);
 
     for (int index = 1; index <= 3; ++index) {
         const auto suffix = std::to_string(index);
@@ -119,6 +162,7 @@ TEST_CASE("BlackFlow collection captures the parts box then reuses the establish
     const auto& parts_box = flow.at("MiniGame@BlackFlow@PartsBoxReady");
     CHECK(parts_box.at("action").as_string() == "DoNothing");
     CHECK(string_array_contains(parts_box.at("text"), "零件箱容量"));
+    CHECK(parts_box.at("preDelay").as_integer() >= 1000);
 
     check_next_contains(flow, "MiniGame@BlackFlow@PartsBoxReady", "MiniGame@BlackFlow@ClosePartsBox");
     check_next_contains(flow, "MiniGame@BlackFlow@ClosePartsBox", "MiniGame@BlackFlow@ExitExploration");

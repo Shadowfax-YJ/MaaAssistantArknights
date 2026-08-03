@@ -22,6 +22,8 @@
       "ctestRegex": "^black-flow-data-collection::",
       "paths": [
         "resource/tasks/MiniGame/BlackFlow.json",
+        "resource/template/MiniGame/BlackFlow/MiniGame@BlackFlow@PioneerSquadConfirm.png",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionPlan.hpp",
         "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTrigger.hpp",
         "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTaskPlugin.cpp",
         "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTaskPlugin.h",
