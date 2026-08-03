@@ -203,6 +203,15 @@ TEST_CASE("BlackFlow page classification honors the stable and changed fingerpri
         asst::classify_black_flow_store_page(first, stable, std::nullopt) ==
         asst::BlackFlowStorePageClassification::StableInitial);
 
+    auto overlay = stable;
+    overlay.overlay_visible = true;
+    CHECK(
+        asst::classify_black_flow_store_page(overlay, stable, std::nullopt) ==
+        asst::BlackFlowStorePageClassification::NotReady);
+    CHECK(
+        asst::classify_black_flow_store_page(stable, overlay, std::nullopt) ==
+        asst::BlackFlowStorePageClassification::NotReady);
+
     auto unstable = stable;
     unstable.title_fingerprint[267] = 1U;
     CHECK(

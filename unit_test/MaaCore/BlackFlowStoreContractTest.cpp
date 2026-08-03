@@ -225,3 +225,28 @@ TEST_CASE("Custom task admission rejects unsupported BlackFlow clients before UI
         asst::check_black_flow_task_admission(std::vector<std::string> { "GachaOnce" }, std::nullopt) ==
         asst::BlackFlowTaskAdmission::NotBlackFlow);
 }
+
+TEST_CASE("BlackFlow store readiness rejects the submission overlay before accepting the leave control")
+{
+    const auto task_path = std::filesystem::path(MAA_TEST_RESOURCE_DIR) / "tasks" / "MiniGame" / "BlackFlow.json";
+    const auto document = json::open(task_path, true, true);
+    REQUIRE(document.has_value());
+    const auto sami_path = std::filesystem::path(MAA_TEST_RESOURCE_DIR) / "tasks" / "Roguelike" / "Sami.json";
+    const auto sami_document = json::open(sami_path, true, true);
+    REQUIRE(sami_document.has_value());
+
+    const auto& readiness_order = document->at("MiniGame@BlackFlow@ObserveStorePage").at("next").as_array();
+    REQUIRE(readiness_order.size() == 2);
+    CHECK(readiness_order.at(0).as_string() == "Sami@Roguelike@CheckCollapsalParadigms_loading");
+    CHECK(readiness_order.at(1).as_string() == "MiniGame@BlackFlow@StorePageReady");
+    CHECK(
+        sami_document->at(readiness_order.at(0).as_string()).at("algorithm").as_string() ==
+        "OcrDetect");
+    CHECK(
+        string_array_contains(
+            sami_document->at(readiness_order.at(0).as_string()).at("text"),
+            "正在提交反馈至神经"));
+    CHECK(
+        document->at(readiness_order.at(1).as_string()).at("template").as_string() ==
+        "Roguelike@StageTraderLeave.png");
+}

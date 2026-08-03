@@ -267,9 +267,12 @@
         "next": ["#self", "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@WaitForExploreRestart"]
     },
     "MiniGame@BlackFlow@ObserveStorePage": {
-        "Doc": "Read-only store-overview observation entry.",
+        "Doc": "Read-only store-overview observation entry; reject the submission overlay before accepting the leave control.",
         "algorithm": "JustReturn",
-        "next": ["MiniGame@BlackFlow@StorePageReady"]
+        "next": [
+            "Sami@Roguelike@CheckCollapsalParadigms_loading",
+            "MiniGame@BlackFlow@StorePageReady"
+        ]
     },
     "MiniGame@BlackFlow@StorePageReady": {
         "algorithm": "MatchTemplate",

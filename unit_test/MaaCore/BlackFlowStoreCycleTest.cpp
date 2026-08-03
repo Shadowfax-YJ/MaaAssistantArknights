@@ -84,7 +84,14 @@ public:
             --open_refresh_failures_remaining;
             return false;
         }
-        if (task_name == asst::black_flow_store_tasks::ObserveStorePage && observe_task_failures_remaining > 0U) {
+        if (task_name == asst::black_flow_store_tasks::ObserveStorePage &&
+            next_observation >= submission_overlay_after_observations && submission_overlay_polls_remaining > 0U) {
+            --submission_overlay_polls_remaining;
+            ++submission_overlay_with_leave_control_polls;
+            return false;
+        }
+        if (task_name == asst::black_flow_store_tasks::ObserveStorePage &&
+            next_observation >= observe_task_failures_after_observations && observe_task_failures_remaining > 0U) {
             --observe_task_failures_remaining;
             return false;
         }
@@ -187,6 +194,10 @@ public:
     std::chrono::steady_clock::duration named_task_interval {};
     size_t open_refresh_failures_remaining = 0;
     size_t observe_task_failures_remaining = 0;
+    size_t observe_task_failures_after_observations = 0;
+    size_t submission_overlay_polls_remaining = 0;
+    size_t submission_overlay_after_observations = std::numeric_limits<size_t>::max();
+    size_t submission_overlay_with_leave_control_polls = 0;
     bool confirm_refresh_result = true;
     bool dismiss_refresh_result = true;
     bool force_stop = false;
@@ -465,6 +476,58 @@ TEST_CASE("BlackFlow store observation retries a transient task miss within its 
     CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::None);
     CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 4);
     CHECK(runtime.committed_snapshots.size() == 3);
+}
+
+TEST_CASE("BlackFlow submission overlay is polled until a distinct stable refreshed page appears")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.submission_overlay_after_observations = 1;
+    runtime.submission_overlay_polls_remaining = 3;
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Completed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::None);
+    CHECK(outcome.completed_pages == 3);
+    CHECK(outcome.successful_refreshes == 2);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 6);
+    CHECK(runtime.submission_overlay_with_leave_control_polls == 3);
+    CHECK(runtime.committed_snapshots.size() == 3);
+}
+
+TEST_CASE("BlackFlow submission overlay timeout preserves only the last committed page")
+{
+    TemporaryDirectory temporary;
+    const auto config = release_config();
+    asst::BlackFlowStorePageRepository repository(temporary.path(), config, verify_test_png);
+    ScriptedBlackFlowStoreRuntime runtime;
+    runtime.submission_overlay_after_observations = 1;
+    runtime.submission_overlay_polls_remaining = 250;
+    asst::BlackFlowStoreCycleAdapter port(
+        repository,
+        asst::BlackFlowClientType::Official,
+        std::filesystem::path("debug") / "roguelike" / "black_flow_store",
+        runtime);
+
+    const auto outcome = asst::run_black_flow_store_cycle(port);
+
+    CHECK(outcome.status == asst::BlackFlowStoreCycleStatus::Failed);
+    CHECK(outcome.failure == asst::BlackFlowStoreCycleFailure::ObserveStorePage);
+    CHECK(outcome.completed_pages == 1);
+    CHECK(outcome.successful_refreshes == 0);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ConfirmRefresh) == 1);
+    CHECK(std::ranges::count(runtime.named_tasks, asst::black_flow_store_tasks::ObserveStorePage) == 201);
+    CHECK(runtime.submission_overlay_with_leave_control_polls == 200);
+    REQUIRE(runtime.committed_snapshots.size() == 1);
+    CHECK(runtime.committed_snapshots.front().page_index == 1);
 }
 
 TEST_CASE("BlackFlow opening the refresh dialog is limited and only dismisses a possible modal")
