@@ -16,15 +16,17 @@
       ]
     },
     {
-      "id": "maa-black-flow-store-screenshot-trigger-test",
-      "name": "Black Flow Store Screenshot Trigger",
-      "buildTarget": "maa-black-flow-store-screenshot-trigger-test",
-      "ctestRegex": "^black-flow-store-screenshot-trigger::",
+      "id": "maa-black-flow-data-collection-test",
+      "name": "Black Flow Data Collection",
+      "buildTarget": "maa-black-flow-data-collection-test",
+      "ctestRegex": "^black-flow-data-collection::",
       "paths": [
-        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTrigger.hpp",
-        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.cpp",
-        "src/MaaCore/Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h",
-        "unit_test/MaaCore/BlackFlowStoreScreenshotTriggerTest.cpp"
+        "resource/tasks/MiniGame/BlackFlow.json",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTrigger.hpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTaskPlugin.cpp",
+        "src/MaaCore/Task/Miscellaneous/BlackFlowDataCollectionTaskPlugin.h",
+        "unit_test/MaaCore/BlackFlowDataCollectionTriggerTest.cpp",
+        "unit_test/MaaCore/BlackFlowDataCollectionFlowTest.cpp"
       ]
     }
   ]

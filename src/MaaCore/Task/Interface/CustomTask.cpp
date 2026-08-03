@@ -2,7 +2,7 @@
 
 #include "Config/TaskData.h"
 #include "Task/MiniGame/SecretFrontTaskPlugin.h"
-#include "Task/Miscellaneous/BlackFlowStoreScreenshotTaskPlugin.h"
+#include "Task/Miscellaneous/BlackFlowDataCollectionTaskPlugin.h"
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
@@ -13,7 +13,7 @@ asst::CustomTask::CustomTask(const AsstCallback& callback, Assistant* inst) :
 {
     LogTraceFunction;
     m_custom_task_ptr->register_plugin<ScreenshotTaskPlugin>();
-    m_custom_task_ptr->register_plugin<BlackFlowStoreScreenshotTaskPlugin>()->set_retry_times(0);
+    m_custom_task_ptr->register_plugin<BlackFlowDataCollectionTaskPlugin>()->set_retry_times(0);
 }
 
 bool asst::CustomTask::set_params(const json::value& params)

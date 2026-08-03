@@ -1,14 +1,15 @@
 #pragma once
 
+#include "BlackFlowDataCollectionTrigger.hpp"
 #include "Task/AbstractTaskPlugin.h"
 
 namespace asst
 {
-class BlackFlowStoreScreenshotTaskPlugin final : public AbstractTaskPlugin
+class BlackFlowDataCollectionTaskPlugin final : public AbstractTaskPlugin
 {
 public:
     using AbstractTaskPlugin::AbstractTaskPlugin;
-    virtual ~BlackFlowStoreScreenshotTaskPlugin() override = default;
+    virtual ~BlackFlowDataCollectionTaskPlugin() override = default;
 
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
 
@@ -17,5 +18,7 @@ protected:
 
 private:
     void stop_process_task() const;
+
+    mutable BlackFlowCaptureTarget m_capture_target = BlackFlowCaptureTarget::None;
 };
 } // namespace asst
