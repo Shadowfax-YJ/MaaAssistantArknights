@@ -18,16 +18,17 @@ bool asst::BlackFlowDataCollectionTaskPlugin::verify(AsstMsg msg, const json::va
 bool asst::BlackFlowDataCollectionTaskPlugin::_run()
 {
     const auto target = m_capture_target;
-    auto plan = black_flow_capture_plan(target, m_group_id);
+    auto plan = black_flow_capture_plan(target, m_capture_group.id());
 
     if (plan.group_role == BlackFlowCaptureGroupRole::BeginsGroup) {
-        m_group_id = OpeningCaptureGroupId { MAA_NS::format_now_for_filename() };
-        plan = black_flow_capture_plan(target, m_group_id);
+        m_capture_group.begin(OpeningCaptureGroupId { MAA_NS::format_now_for_filename() });
+        plan = black_flow_capture_plan(target, m_capture_group.id());
     }
-    else if (plan.group_role == BlackFlowCaptureGroupRole::RequiresGroup && !m_group_id) {
-        Log.error(__FUNCTION__, "| parts-box snapshot has no matching processing-item cycle; stopping collection");
-        stop_process_task();
-        return false;
+    else if (!m_capture_group.can_capture(plan)) {
+        Log.warn(
+            __FUNCTION__,
+            "| parts-box snapshot has no matching processing-item cycle; skipping unpaired snapshot");
+        return true;
     }
 
     cv::Mat image;
@@ -55,6 +56,7 @@ bool asst::BlackFlowDataCollectionTaskPlugin::_run()
                 /* auto_clean = */ false,
                 plan.description,
                 plan.suffix)) {
+            m_capture_group.capture_succeeded(plan);
             return true;
         }
     }

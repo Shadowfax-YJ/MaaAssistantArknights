@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "BlackFlowDataCollectionTrigger.hpp"
 
@@ -18,7 +19,7 @@ enum class BlackFlowCaptureGroupRole
 {
     None,
     BeginsGroup,
-    RequiresGroup,
+    CompletesGroup,
 };
 
 enum class BlackFlowCaptureImageSource
@@ -66,7 +67,7 @@ inline BlackFlowCapturePlan
             group_dir,
             "parts-box",
             "Black Flow parts box",
-            BlackFlowCaptureGroupRole::RequiresGroup,
+            BlackFlowCaptureGroupRole::CompletesGroup,
             BlackFlowCaptureImageSource::FreshScreenshot,
         };
     case BlackFlowCaptureTarget::None:
@@ -80,4 +81,27 @@ inline BlackFlowCapturePlan
         BlackFlowCaptureImageSource::RecognitionFrame,
     };
 }
+
+class BlackFlowOpeningCaptureGroup
+{
+public:
+    void begin(OpeningCaptureGroupId group_id) { m_group_id = std::move(group_id); }
+
+    const std::optional<OpeningCaptureGroupId>& id() const noexcept { return m_group_id; }
+
+    bool can_capture(const BlackFlowCapturePlan& plan) const noexcept
+    {
+        return plan.group_role != BlackFlowCaptureGroupRole::CompletesGroup || m_group_id.has_value();
+    }
+
+    void capture_succeeded(const BlackFlowCapturePlan& plan) noexcept
+    {
+        if (plan.group_role == BlackFlowCaptureGroupRole::CompletesGroup) {
+            m_group_id.reset();
+        }
+    }
+
+private:
+    std::optional<OpeningCaptureGroupId> m_group_id;
+};
 } // namespace asst

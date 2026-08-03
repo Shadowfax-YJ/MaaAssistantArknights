@@ -79,7 +79,26 @@ TEST_CASE("BlackFlow opening snapshots share one cycle directory and keep distin
     CHECK(processing_item.suffix == "processing-item");
     CHECK(parts_box.suffix == "parts-box");
     CHECK(processing_item.group_role == asst::BlackFlowCaptureGroupRole::BeginsGroup);
-    CHECK(parts_box.group_role == asst::BlackFlowCaptureGroupRole::RequiresGroup);
+    CHECK(parts_box.group_role == asst::BlackFlowCaptureGroupRole::CompletesGroup);
     CHECK(processing_item.image_source == asst::BlackFlowCaptureImageSource::FreshScreenshot);
     CHECK(parts_box.image_source == asst::BlackFlowCaptureImageSource::FreshScreenshot);
+}
+
+TEST_CASE("BlackFlow closes a completed opening group and skips an unpaired parts box")
+{
+    asst::BlackFlowOpeningCaptureGroup group;
+
+    auto parts_box = asst::black_flow_capture_plan(asst::BlackFlowCaptureTarget::PartsBox, group.id());
+    CHECK_FALSE(group.can_capture(parts_box));
+
+    group.begin(asst::OpeningCaptureGroupId { "2026.08.03-22.49.48.240" });
+    parts_box = asst::black_flow_capture_plan(asst::BlackFlowCaptureTarget::PartsBox, group.id());
+    REQUIRE(group.id().has_value());
+    CHECK(group.can_capture(parts_box));
+
+    group.capture_succeeded(parts_box);
+    CHECK_FALSE(group.id().has_value());
+
+    parts_box = asst::black_flow_capture_plan(asst::BlackFlowCaptureTarget::PartsBox, group.id());
+    CHECK_FALSE(group.can_capture(parts_box));
 }

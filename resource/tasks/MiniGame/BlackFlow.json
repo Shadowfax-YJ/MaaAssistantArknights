@@ -43,6 +43,7 @@
         "template": "MiniGame@BlackFlow@PioneerSquadConfirm.png",
         "next": [
             "MiniGame@BlackFlow@ProcessingItemReady",
+            "MiniGame@BlackFlow@ChooseRecruitCombination",
             "MiniGame@BlackFlow@ChoosePioneerSquad",
             "#self"
         ]

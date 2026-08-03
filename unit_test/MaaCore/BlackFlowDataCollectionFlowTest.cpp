@@ -109,6 +109,7 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     const auto& jie_garden_squad_confirm = jie_garden_tasks.at("JieGarden@Roguelike@SquadConfirm");
     CHECK(jie_garden_squad_confirm.at("template").as_string() == "JieGarden@Roguelike@LastRewardConfirm.png");
     check_next_contains(flow, "MiniGame@BlackFlow@ConfirmPioneerSquad", "MiniGame@BlackFlow@ProcessingItemReady");
+    check_next_contains(flow, "MiniGame@BlackFlow@ConfirmPioneerSquad", "MiniGame@BlackFlow@ChooseRecruitCombination");
 
     const auto& processing_item = flow.at("MiniGame@BlackFlow@ProcessingItemReady");
     CHECK(processing_item.at("action").as_string() == "DoNothing");
