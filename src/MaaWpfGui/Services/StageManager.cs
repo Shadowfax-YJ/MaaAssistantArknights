@@ -77,7 +77,7 @@ public class StageManager
     public IReadOnlyDictionary<string, SideStoryActivity> ActivityList => _activityList.AsReadOnly();
 
     // mini game entries exposed from StageActivityV2 (richer model including Tip/TipKey)
-    private List<MiniGameEntry> _miniGameEntries = InitializeDefaultMiniGameEntries();
+    private List<MiniGameEntry> _miniGameEntries = InitializeDefaultMiniGameEntries(includeBlackFlowDataCollection: false);
 
     /// <summary>
     /// 刷新小游戏条目的本地化文本。
@@ -270,7 +270,7 @@ public class StageManager
         _stages = tempStage;
 
         // parse mini-game tasks from activity json if provided (use helper to populate temp list)
-        var tempMiniGames = InitializeDefaultMiniGameEntries();
+        var tempMiniGames = InitializeDefaultMiniGameEntries(includeBlackFlowDataCollection: clientType == ClientType.Official);
         ParseMiniGameEntries(activity?[clientType], tempMiniGames, curVerParsed, curVersionObj, isDebugVersion);
         _miniGameEntries = tempMiniGames;
     }
@@ -297,7 +297,7 @@ public class StageManager
         RefreshMiniGameLocalization();
     }
 
-    private static List<MiniGameEntry> InitializeDefaultMiniGameEntries()
+    private static List<MiniGameEntry> InitializeDefaultMiniGameEntries(bool includeBlackFlowDataCollection)
     {
         var entries = new List<MiniGameEntry>
         {
@@ -307,6 +307,16 @@ public class StageManager
             new() { Display = LocalizationHelper.GetString("MiniGameNameRAStore"), DisplayKey = "MiniGameNameRAStore", Value = "RA@Store@Begin", TipKey = "MiniGameNameRAStoreTip" },
             new() { Display = LocalizationHelper.GetString("MiniGame@SecretFront"), DisplayKey = "MiniGame@SecretFront", Value = "MiniGame@SecretFront", TipKey = "MiniGame@SecretFrontTip" },
         };
+
+        if (includeBlackFlowDataCollection)
+        {
+            entries.Add(new() {
+                Display = LocalizationHelper.GetString("MiniGameNameBlackFlowDataCollection"),
+                DisplayKey = "MiniGameNameBlackFlowDataCollection",
+                Value = "MiniGame@BlackFlow@Begin",
+                TipKey = "MiniGameNameBlackFlowDataCollectionTip",
+            });
+        }
 
         return entries;
     }

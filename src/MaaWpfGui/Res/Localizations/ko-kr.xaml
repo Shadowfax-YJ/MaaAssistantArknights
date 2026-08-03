@@ -1053,6 +1053,8 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="MiniGameNameSsStoreTip" xml:space="preserve">이벤트 상점 페이지에서 시작하세요&#10;구매 수량이 무제한인 아이템은 구매하지 않아요</system:String>
     <system:String x:Key="MiniGameNameRAStore">생존 연산 상점</system:String>
     <system:String x:Key="MiniGameNameRAStoreTip" xml:space="preserve">생존 연산 상점 페이지에서 시작하세요</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollection">블랙 플로우 시작 데이터 수집</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollectionTip" xml:space="preserve">중국 공식 및 Bilibili 클라이언트 전용입니다. 살카즈 통합 전략 탐험 개요에서 시작하세요. 가공품 팝업 스냅샷과 부품 상자 스냅샷을 반복해서 저장한 뒤 탐험을 포기합니다.</system:String>
     <!--  !미니게임  -->
     <!--  로그  -->
     <system:String x:Key="Identifying">인식 중……</system:String>

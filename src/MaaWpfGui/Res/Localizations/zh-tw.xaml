@@ -1052,6 +1052,8 @@ C:\\leidian\\LDPlayer9\n
     <system:String x:Key="MiniGameNameSsStoreTip" xml:space="preserve">請在活動商店頁面開始。&#10;不購買無限量物品。</system:String>
     <system:String x:Key="MiniGameNameRAStore">生息演算商店</system:String>
     <system:String x:Key="MiniGameNameRAStoreTip" xml:space="preserve">請在活動商店頁面開始。</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollection">黑流樹海開局資料採集</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollectionTip" xml:space="preserve">僅支援官服與 B 服。請在薩卡茲肉鴿探索總覽開始；任務會循環採集加工品彈窗快照和零件箱快照，然後放棄本次探索。</system:String>
     <!--  !小遊戲  -->
     <!--  日誌  -->
     <system:String x:Key="Identifying">正在辨識……</system:String>

@@ -1052,6 +1052,8 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="MiniGameNameSsStoreTip" xml:space="preserve">イベントのショップページからのみ始めてください。&#10;購入数量無制限のアイテムは購入することはありません。</system:String>
     <system:String x:Key="MiniGameNameRAStore">生息演算商店</system:String>
     <system:String x:Key="MiniGameNameRAStoreTip" xml:space="preserve">イベントのショップページからのみ始めてください。</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollection">黒流樹海開始データ収集</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollectionTip" xml:space="preserve">中国版公式・Bilibili クライアント専用です。サルカズローグライクの探索概要から開始してください。加工品ポップアップのスナップショットとパーツボックスのスナップショットを繰り返し保存し、探索を放棄します。</system:String>
     <!--  !小游戏  -->
     <!--  Logs  -->
     <system:String x:Key="Identifying">認識中……</system:String>

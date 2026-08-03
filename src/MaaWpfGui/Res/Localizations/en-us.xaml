@@ -1051,6 +1051,8 @@ Only level rewards can be farmed; to get the Engraved Medal, all ｢Key Objectiv
     <system:String x:Key="MiniGameNameSsStoreTip" xml:space="preserve">Please start from the event shop page.&#10;Won't buy items with unlimited purchase quantities.</system:String>
     <system:String x:Key="MiniGameNameRAStore">Reclamation Algorithm Shop</system:String>
     <system:String x:Key="MiniGameNameRAStoreTip" xml:space="preserve">Please start from the event shop page.</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollection">Black Flow Opening Data Collection</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollectionTip" xml:space="preserve">Official and Bilibili clients only. Start from the Sarkaz Integrated Strategies exploration overview; the task repeatedly saves a processing-item popup snapshot and a parts-box snapshot, then abandons the run.</system:String>
     <!--  !Minigame  -->
     <!--  Logs  -->
     <system:String x:Key="Identifying">Identifying……</system:String>

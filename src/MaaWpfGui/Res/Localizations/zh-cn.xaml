@@ -1052,6 +1052,8 @@ C:\\leidian\\LDPlayer9。\n
     <system:String x:Key="MiniGameNameSsStoreTip" xml:space="preserve">请在活动商店页面开始。&#10;不买无限池。</system:String>
     <system:String x:Key="MiniGameNameRAStore">生息演算商店</system:String>
     <system:String x:Key="MiniGameNameRAStoreTip" xml:space="preserve">请在活动商店页面开始。</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollection">黑流树海开局数据采集</system:String>
+    <system:String x:Key="MiniGameNameBlackFlowDataCollectionTip" xml:space="preserve">仅支持官服与 B 服。请在萨卡兹肉鸽探索总览开始；任务会循环采集加工品弹窗快照和零件箱快照，然后放弃本次探索。</system:String>
     <!--  !小游戏  -->
     <!--  日志  -->
     <system:String x:Key="Identifying">正在识别……</system:String>
