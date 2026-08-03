@@ -65,8 +65,21 @@ TEST_CASE("BlackFlow collection gives up exactly three recruitments before enter
         "MiniGame@BlackFlow@ConfirmRecruitCombination");
 
     const auto& combination_confirm = flow.at("MiniGame@BlackFlow@ConfirmRecruitCombination");
-    CHECK(combination_confirm.at("action").as_string() == "ClickSelf");
+    CHECK(combination_confirm.at("action").as_string() == "ClickRect");
     CHECK(string_array_contains(combination_confirm.at("text"), "你确定要这么做"));
+    REQUIRE(combination_confirm.contains("specificRect"));
+    const auto& confirm_rect = combination_confirm.at("specificRect").as_array();
+    REQUIRE(confirm_rect.size() == 4);
+    constexpr int RecordedConfirmX = 455;
+    constexpr int RecordedConfirmY = 595;
+    const auto rect_x = confirm_rect[0].as_integer();
+    const auto rect_y = confirm_rect[1].as_integer();
+    const auto rect_width = confirm_rect[2].as_integer();
+    const auto rect_height = confirm_rect[3].as_integer();
+    CHECK(rect_x <= RecordedConfirmX);
+    CHECK(RecordedConfirmX < rect_x + rect_width);
+    CHECK(rect_y <= RecordedConfirmY);
+    CHECK(RecordedConfirmY < rect_y + rect_height);
     check_next_contains(flow, "MiniGame@BlackFlow@ConfirmRecruitCombination", "MiniGame@BlackFlow@RecruitVoucher1");
 
     for (int index = 1; index <= 3; ++index) {

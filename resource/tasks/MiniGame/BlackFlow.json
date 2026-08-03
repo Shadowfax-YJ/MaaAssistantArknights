@@ -65,9 +65,10 @@
     "MiniGame@BlackFlow@ConfirmRecruitCombination": {
         "doc": "复用已有黑流流程，确认选择稳扎稳打招募组合",
         "algorithm": "OcrDetect",
-        "action": "ClickSelf",
+        "action": "ClickRect",
         "text": ["你确定要这么做"],
         "roi": [380, 535, 150, 30],
+        "specificRect": [455, 595, 1, 1],
         "postDelay": 1000,
         "next": [
             "MiniGame@BlackFlow@RecruitVoucher1",
