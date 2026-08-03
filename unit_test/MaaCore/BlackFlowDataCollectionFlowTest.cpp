@@ -72,9 +72,16 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     CHECK(squad.at("algorithm").as_string() == "OcrDetect");
     CHECK(string_array_contains(squad.at("text"), "开拓者分队"));
     const auto& start_explore = flow.at("MiniGame@BlackFlow@StartExplore");
-    CHECK(string_array_contains(
-        start_explore.at("reduceOtherTimes"),
-        "MiniGame@BlackFlow@SwipeToPioneerSquad*20"));
+    for (const auto& [task_name, task] : flow.as_object()) {
+        if (!task.contains("maxTimes") || !task.contains("exceededNext") ||
+            !string_array_contains(task.at("exceededNext"), "Stop")) {
+            continue;
+        }
+
+        const auto reset = task_name + "*" + std::to_string(task.at("maxTimes").as_integer());
+        CAPTURE(task_name, reset);
+        CHECK(string_array_contains(start_explore.at("reduceOtherTimes"), reset));
+    }
     check_next_contains(flow, "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@ChoosePioneerSquad");
     check_next_contains(flow, "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@SwipeToPioneerSquad");
     const auto& squad_swipe = flow.at("MiniGame@BlackFlow@SwipeToPioneerSquad");
