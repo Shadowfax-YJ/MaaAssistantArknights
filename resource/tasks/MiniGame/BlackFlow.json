@@ -41,6 +41,7 @@
         "doc": "复用首页自动肉鸽的分队确认逻辑，用黑流树海专用模板定位并点击卡片内对勾",
         "baseTask": "JieGarden@Roguelike@SquadConfirm",
         "template": "MiniGame@BlackFlow@PioneerSquadConfirm.png",
+        "postDelay": 1500,
         "next": [
             "MiniGame@BlackFlow@ProcessingItemReady",
             "MiniGame@BlackFlow@ChooseRecruitCombination",
@@ -79,7 +80,11 @@
         "action": "ClickSelf",
         "text": ["稳扎稳打"],
         "roi": [0, 330, 1280, 210],
-        "next": ["MiniGame@BlackFlow@ConfirmRecruitCombination", "#self"]
+        "next": [
+            "MiniGame@BlackFlow@ProcessingItemReady",
+            "MiniGame@BlackFlow@ConfirmRecruitCombination",
+            "#self"
+        ]
     },
     "MiniGame@BlackFlow@ConfirmRecruitCombination": {
         "doc": "复用已有黑流流程，确认选择稳扎稳打招募组合",

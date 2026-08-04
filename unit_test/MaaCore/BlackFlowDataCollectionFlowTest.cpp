@@ -91,6 +91,8 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     const auto& squad_confirm = flow.at("MiniGame@BlackFlow@ConfirmPioneerSquad");
     CHECK(squad_confirm.at("baseTask").as_string() == "JieGarden@Roguelike@SquadConfirm");
     CHECK(squad_confirm.at("template").as_string() == "MiniGame@BlackFlow@PioneerSquadConfirm.png");
+    REQUIRE(squad_confirm.contains("postDelay"));
+    CHECK(squad_confirm.at("postDelay").as_integer() >= 1500);
     CHECK(
         std::filesystem::exists(
             std::filesystem::path(MAA_TEST_RESOURCE_DIR) / "template" / "MiniGame" / "BlackFlow" /
@@ -125,6 +127,7 @@ TEST_CASE("BlackFlow collection gives up exactly three recruitments before enter
 
     const auto& combination = flow.at("MiniGame@BlackFlow@ChooseRecruitCombination");
     CHECK(string_array_contains(combination.at("text"), "稳扎稳打"));
+    check_next_contains(flow, "MiniGame@BlackFlow@ChooseRecruitCombination", "MiniGame@BlackFlow@ProcessingItemReady");
     check_next_contains(
         flow,
         "MiniGame@BlackFlow@ChooseRecruitCombination",
