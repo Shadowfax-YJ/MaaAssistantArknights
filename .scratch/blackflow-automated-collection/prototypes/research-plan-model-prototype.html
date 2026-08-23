@@ -1,0 +1,1613 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>原型：黑流树海可配置研究计划模型</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101419;
+      --panel: #192129;
+      --panel-2: #222c36;
+      --line: #344453;
+      --text: #edf2f6;
+      --muted: #9fb0bf;
+      --accent: #55c4a0;
+      --warn: #e4b663;
+      --bad: #ed7878;
+      --good: #7bdcae;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 system-ui, "Microsoft YaHei", sans-serif;
+    }
+    main { max-width: 1440px; margin: auto; padding: 28px; }
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.25; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 26px; font-size: 19px; }
+    h3 { font-size: 15px; color: var(--accent); }
+    p { margin: 8px 0; }
+    code { color: #b8ead9; }
+    .prototype {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 3px 8px;
+      border: 1px solid var(--warn);
+      color: var(--warn);
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .intro, .panel, .walkthrough {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .rules, .summary, .grid {
+      display: grid;
+      gap: 10px;
+    }
+    .rules { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-top: 14px; }
+    .summary { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+    .grid { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); margin-top: 12px; }
+    .rules div, .metric, .entity {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .metric .value { font-size: 17px; font-weight: 700; word-break: break-word; }
+    .metric .label { color: var(--muted); font-size: 12px; }
+    .entity { overflow: auto; }
+    .toolbar, .tabs, .steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 11px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.active, button.done { border-color: var(--accent); color: var(--accent); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.danger { color: #ffc0c0; }
+    .notice {
+      min-height: 46px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-left: 4px solid var(--accent);
+      background: var(--panel-2);
+    }
+    .notice.warn { border-color: var(--warn); }
+    .notice.error { border-color: var(--bad); }
+    .notice.good { border-color: var(--good); }
+    .tabs { margin-bottom: 12px; }
+    .steps { margin-top: 12px; }
+    .scenario-copy { color: var(--muted); min-height: 44px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td {
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      word-break: break-word;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .empty { color: var(--muted); font-style: italic; }
+    .tag {
+      display: inline-block;
+      margin: 1px 3px 1px 0;
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .tag.active { border-color: var(--accent); color: var(--accent); }
+    .tag.completed { border-color: var(--good); color: var(--good); }
+    .tag.rejected, .tag.terminated { border-color: var(--bad); color: var(--bad); }
+    .tag.paused, .tag.draft { border-color: var(--warn); color: var(--warn); }
+    details { margin-top: 12px; }
+    pre {
+      max-height: 620px;
+      overflow: auto;
+      padding: 12px;
+      background: #0c1116;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+    .log { max-height: 360px; overflow: auto; }
+    @media (max-width: 760px) {
+      main { padding: 16px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <section class="intro">
+    <span class="prototype">一次性决策原型，不是生产实现</span>
+    <h1>黑流树海可配置研究计划模型</h1>
+    <p>要检验的问题：一份研究计划能否只用受支持的观测契约、条件与停止规则声明多个研究目标，编译成不可变发布版，再由多个账号和采集会话严格按同一摘要执行；同时又不把任意脚本语言塞进配置。</p>
+    <div class="rules">
+      <div><strong>草案可改，发布版不可改</strong><br>发布时规范化并计算发布版指纹；修改产生新修订，不覆盖旧发布版。</div>
+      <div><strong>活动绑定精确指纹</strong><br>采集活动建立后不能换版；不持有相同指纹的会话拒绝加入。</div>
+      <div><strong>目标共享活动、独立截止</strong><br>一次运行可服务多个目标；每个目标单独判定有效观测、分层和主要分析截止点。</div>
+      <div><strong>配置只组合已登记能力</strong><br>观测类型、字段、条件运算和停止规则都来自版本化注册表；新组合用配置，新能力才改代码。</div>
+    </div>
+  </section>
+
+  <h2>当前状态</h2>
+  <section class="panel">
+    <div id="summary" class="summary"></div>
+    <div id="notice" class="notice">尚未执行动作。</div>
+    <div class="grid">
+      <article class="entity"><h3>研究计划草案与发布版</h3><div id="plans"></div></article>
+      <article class="entity"><h3>采集活动与目标运行态</h3><div id="campaigns"></div></article>
+      <article class="entity"><h3>采集会话</h3><div id="sessions"></div></article>
+      <article class="entity"><h3>最近记录</h3><div id="events" class="log"></div></article>
+    </div>
+    <details>
+      <summary>查看完整状态与最近发布版的规范化配置</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+
+  <h2>自由操作</h2>
+  <section class="panel">
+    <div id="freeplay" class="toolbar"></div>
+  </section>
+
+  <h2>引导案例</h2>
+  <section class="walkthrough">
+    <div id="tabs" class="tabs"></div>
+    <div id="scenarioCopy" class="scenario-copy"></div>
+    <div id="steps" class="steps"></div>
+  </section>
+</main>
+
+<script>
+const ResearchPlanModel = (() => {
+  "use strict";
+
+  const registries = Object.freeze({
+    observationKinds: Object.freeze({
+      "map.initial-state/v1": ["map_instance_id", "floor", "template_id", "nodes", "edges"],
+      "encounter.candidate-set/v1": ["event_instance_id", "floor", "candidates", "selected", "selection_probability"]
+    }),
+    samplingProtocols: Object.freeze({
+      "initial-map-generation/v1": Object.freeze({
+        observation_kind: "map.initial-state/v1",
+        sampling_unit: "one-complete-initial-map-generation",
+        completeness: "all-visible-nodes-and-edges-required",
+        dedupe_key: ["map_instance_id", "initial_generation"],
+        cluster_key: ["run_id"]
+      }),
+      "encounter-generation-opportunity/v1": Object.freeze({
+        observation_kind: "encounter.candidate-set/v1",
+        sampling_unit: "one-complete-event-generation-opportunity",
+        completeness: "complete-candidate-set-including-miss-required",
+        dedupe_key: ["event_instance_id"],
+        cluster_key: ["run_id", "map_instance_id"]
+      })
+    }),
+    conditionFields: Object.freeze([
+      "floor", "node_type", "is_emergency", "observation_mode", "subject_id", "server_channel"
+    ]),
+    completionRules: Object.freeze({
+      "registered-sequential-check/v1": Object.freeze({
+        algorithm: "pre-registered-sequential-precision-check",
+        required_parameters: [
+          "min_effective_units", "min_clusters", "max_missing_rate",
+          "check_every_units", "precision_rule_ref", "max_nodes_while_active"
+        ]
+      })
+    }),
+    operators: Object.freeze(["eq", "in", "gte", "lte"])
+  });
+
+  const copy = value => JSON.parse(JSON.stringify(value));
+
+  function canonicalize(value) {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((out, key) => {
+        out[key] = canonicalize(value[key]);
+        return out;
+      }, {});
+    }
+    return value;
+  }
+
+  function stableJson(value) {
+    return JSON.stringify(canonicalize(value));
+  }
+
+  // 原型内只需稳定地显示“内容相同则摘要相同”。正式规格使用完整 SHA-256。
+  function demoDigest(value) {
+    const text = typeof value === "string" ? value : stableJson(value);
+    let a = 0x811c9dc5;
+    let b = 0x9e3779b9;
+    for (let i = 0; i < text.length; i++) {
+      a = Math.imul(a ^ text.charCodeAt(i), 0x01000193) >>> 0;
+      b = Math.imul(b ^ (text.charCodeAt(i) + i), 0x85ebca6b) >>> 0;
+    }
+    return `demo:${a.toString(16).padStart(8, "0")}${b.toString(16).padStart(8, "0")}`;
+  }
+
+  function baseDraft() {
+    return {
+      schema_version: "blackflow-research-plan/v1",
+      plan_id: "blackflow-mechanism-study",
+      display_name: "黑流树海机制联合研究",
+      draft_generation: 1,
+      authoring: {
+        entry_file: "plans/blackflow-mechanism-study.json",
+        template_refs: ["baseline/blackflow-n6", "stopping/sequential-defaults"]
+      },
+      target_population: {
+        theme: "BlackFlow",
+        difficulty: "N6",
+        squad: "fortress_tactics",
+        strategy: "steady_progress",
+        tech_tree: "maxed",
+        account_cohort: "registered-research-subjects"
+      },
+      capability_manifest: {
+        runtime_protocol: "blackflow-research-collector/v1",
+        observation_registry: "sha256:observation-registry-2026-08-24",
+        stopping_registry: "sha256:stopping-registry-v1",
+        routing_registry: "sha256:routing-registry-v1",
+        resource_revision: "sha256:maa-blackflow-resources"
+      },
+      shared_constraints: {
+        allowed_modes: ["natural", "interventional"],
+        preserve_complete_candidate_set: true,
+        retain_failures_and_misses: true,
+        max_campaign_nodes: 12000,
+        max_parallel_sessions: 4,
+        checkpoint_barrier_timeout_seconds: 300
+      },
+      routing_policy: {
+        kind: "constrained-adaptive-sampling/v1",
+        resource_policy_ref: "registered-opportunity-cost/v1",
+        tie_break: "randomize-equivalent-options",
+        completed_targets_stop_influencing_routes: true
+      },
+      targets: [
+        {
+          target_id: "node-distribution",
+          display_name: "基础地图节点分布",
+          enabled: true,
+          completion_role: "required",
+          routing_weight: 3,
+          observation: {
+            kind: "map.initial-state/v1",
+            sampling_protocol_ref: "initial-map-generation/v1",
+            inclusion: [
+              { field: "observation_mode", op: "eq", value: "natural" }
+            ]
+          },
+          strata: [
+            {
+              strata_set_id: "by-floor",
+              membership_mode: "partition",
+              required: true,
+              assignment: {
+                kind: "group_by",
+                fields: ["floor"],
+                enumerated_values: [1, 2, 3, 4, 5],
+                unclassified_stratum: "unknown/unclassified",
+                max_unclassified_rate: 0.02
+              }
+            }
+          ],
+          completion: {
+            completion_rule_ref: "registered-sequential-check/v1",
+            parameters: {
+              min_effective_units: 3,
+              min_clusters: 2,
+              max_missing_rate: 0.05,
+              check_every_units: 1,
+              precision_rule_ref: "node-proportion-cs/v1",
+              max_nodes_while_active: 9000
+            }
+          }
+        },
+        {
+          target_id: "encounter-event-weights",
+          display_name: "不期而遇事件权重",
+          enabled: true,
+          completion_role: "required",
+          routing_weight: 2,
+          observation: {
+            kind: "encounter.candidate-set/v1",
+            sampling_protocol_ref: "encounter-generation-opportunity/v1",
+            inclusion: [
+              { field: "node_type", op: "eq", value: "encounter" },
+              { field: "observation_mode", op: "eq", value: "natural" }
+            ]
+          },
+          strata: [
+            {
+              strata_set_id: "by-floor",
+              membership_mode: "partition",
+              required: true,
+              assignment: {
+                kind: "group_by",
+                fields: ["floor"],
+                enumerated_values: [1, 2, 3, 4, 5],
+                unclassified_stratum: "unknown/unclassified",
+                max_unclassified_rate: 0.02
+              }
+            }
+          ],
+          completion: {
+            completion_rule_ref: "registered-sequential-check/v1",
+            parameters: {
+              min_effective_units: 2,
+              min_clusters: 2,
+              max_missing_rate: 0.08,
+              check_every_units: 1,
+              precision_rule_ref: "event-weight-cs/v1",
+              max_nodes_while_active: 10000
+            }
+          }
+        },
+        {
+          target_id: "exploratory-template-coverage",
+          display_name: "探索性地图模板覆盖",
+          enabled: true,
+          completion_role: "optional",
+          routing_weight: 0.5,
+          observation: {
+            kind: "map.initial-state/v1",
+            sampling_protocol_ref: "initial-map-generation/v1",
+            inclusion: [
+              { field: "observation_mode", op: "eq", value: "natural" }
+            ]
+          },
+          strata: [
+            {
+              strata_set_id: "by-floor",
+              membership_mode: "partition",
+              required: true,
+              assignment: {
+                kind: "group_by",
+                fields: ["floor"],
+                enumerated_values: [1, 2, 3, 4, 5],
+                unclassified_stratum: "unknown/unclassified",
+                max_unclassified_rate: 0.02
+              }
+            },
+            {
+              strata_set_id: "visual-feature-flags",
+              membership_mode: "overlapping",
+              required: false,
+              assignment: {
+                kind: "named_predicates",
+                members: [
+                  { stratum_id: "contains-unknown-node", predicate_ref: "contains-unknown-node/v1", role: "diagnostic" },
+                  { stratum_id: "contains-extra-edge", predicate_ref: "contains-extra-edge/v1", role: "diagnostic" }
+                ]
+              }
+            }
+          ],
+          completion: {
+            completion_rule_ref: "registered-sequential-check/v1",
+            parameters: {
+              min_effective_units: 99,
+              min_clusters: 20,
+              max_missing_rate: 0.05,
+              check_every_units: 10,
+              precision_rule_ref: "template-coverage-cs/v1",
+              max_nodes_while_active: 11000
+            }
+          }
+        }
+      ]
+    };
+  }
+
+  function initialState() {
+    return {
+      draft: baseDraft(),
+      releases: [],
+      campaigns: [],
+      sessions: [],
+      validation: { status: "not_checked", errors: [] },
+      events: [],
+      next_campaign: 1,
+      next_session: 1,
+      last: { level: "normal", message: "尚未执行动作。" }
+    };
+  }
+
+  function append(state, type, message, level = "normal", data = {}) {
+    const campaign = state.campaigns?.find(item => item.status === "active" || item.status === "paused") || state.campaigns?.[state.campaigns.length - 1];
+    state.events.unshift({
+      seq: state.events.length + 1,
+      type,
+      message,
+      data,
+      campaign_id: campaign?.campaign_id || null,
+      release_fingerprint: campaign?.bound_fingerprint || null
+    });
+    state.last = { level, message };
+  }
+
+  function validate(draft) {
+    const errors = [];
+    const checkKeys = (value, allowed, context) => {
+      for (const key of Object.keys(value || {})) {
+        if (!allowed.includes(key)) errors.push(`${context} 含未知字段 ${key}`);
+      }
+    };
+    checkKeys(
+      draft,
+      ["schema_version", "plan_id", "display_name", "draft_generation", "authoring", "target_population", "capability_manifest", "shared_constraints", "routing_policy", "targets"],
+      "研究计划根"
+    );
+    if (!["blackflow-research-plan/v1", "blackflow-research-plan/v2"].includes(draft.schema_version)) errors.push("不支持的研究计划 schema_version");
+    if (!draft.plan_id) errors.push("plan_id 不能为空");
+    for (const capability of ["runtime_protocol", "observation_registry", "stopping_registry", "routing_registry", "resource_revision"]) {
+      if (!draft.capability_manifest?.[capability]) errors.push(`发布版能力清单缺少 ${capability}`);
+    }
+    if (!Array.isArray(draft.targets) || draft.targets.length === 0) errors.push("至少需要一个研究目标");
+    if (!draft.targets?.some(target => target.enabled && target.completion_role === "required")) errors.push("首版至少需要一个启用的必需目标");
+    if (!(draft.shared_constraints?.checkpoint_barrier_timeout_seconds > 0)) errors.push("检查水位屏障等待上限必须为正数");
+    const ids = new Set();
+    for (const target of draft.targets || []) {
+      checkKeys(target, ["target_id", "display_name", "enabled", "completion_role", "routing_weight", "observation", "strata", "completion"], `目标 ${target.target_id || "<empty>"}`);
+      checkKeys(target.observation, ["kind", "sampling_protocol_ref", "inclusion"], `目标 ${target.target_id} 的观测声明`);
+      checkKeys(target.completion, ["completion_rule_ref", "parameters"], `目标 ${target.target_id} 的完成声明`);
+      if (!target.target_id || ids.has(target.target_id)) errors.push(`目标身份为空或重复：${target.target_id || "<empty>"}`);
+      ids.add(target.target_id);
+      if (typeof target.enabled !== "boolean") errors.push(`${target.target_id} 未明确 enabled`);
+      if (!["required", "optional"].includes(target.completion_role)) errors.push(`${target.target_id} 的完成责任无效`);
+      if (!(target.routing_weight > 0)) errors.push(`${target.target_id} 的选路权重必须为正数`);
+      const requiredFields = registries.observationKinds[target.observation?.kind];
+      if (!requiredFields) errors.push(`${target.target_id} 引用了未登记观测类型 ${target.observation?.kind}`);
+      const samplingProtocol = registries.samplingProtocols[target.observation?.sampling_protocol_ref];
+      if (!samplingProtocol) errors.push(`${target.target_id} 引用了未登记抽样协议 ${target.observation?.sampling_protocol_ref}`);
+      else if (samplingProtocol.observation_kind !== target.observation?.kind) errors.push(`${target.target_id} 的观测类型与抽样协议不匹配`);
+      for (const condition of target.observation?.inclusion || []) {
+        checkKeys(condition, ["field", "op", "value", "predicate_ref"], `目标 ${target.target_id} 的纳入条件`);
+        if (!registries.conditionFields.includes(condition.field)) errors.push(`${target.target_id} 使用未登记条件字段 ${condition.field}`);
+        if (!registries.operators.includes(condition.op)) errors.push(`${target.target_id} 使用未登记条件运算 ${condition.op}`);
+      }
+      const completionRule = registries.completionRules[target.completion?.completion_rule_ref];
+      if (!completionRule) errors.push(`${target.target_id} 使用未登记完成规则 ${target.completion?.completion_rule_ref}`);
+      else for (const parameter of completionRule.required_parameters) {
+        if (target.completion?.parameters?.[parameter] === undefined) errors.push(`${target.target_id} 的完成规则缺少 ${parameter}`);
+      }
+      if (!target.strata?.some(s => s.required)) errors.push(`${target.target_id} 至少需要一个必需分层`);
+      for (const strataSet of target.strata || []) {
+        checkKeys(strataSet, ["strata_set_id", "membership_mode", "required", "assignment", "threshold_overrides"], `目标 ${target.target_id} 的分层集合`);
+        if (!["partition", "overlapping"].includes(strataSet.membership_mode)) errors.push(`${target.target_id}/${strataSet.strata_set_id} 的成员关系模式无效`);
+        if (strataSet.required && strataSet.membership_mode === "partition" && !strataSet.assignment?.unclassified_stratum) {
+          errors.push(`${target.target_id}/${strataSet.strata_set_id} 的必需分区缺少未分类层`);
+        }
+        if (strataSet.required && strataSet.membership_mode === "partition" && !strataSet.assignment?.enumerated_values?.length) {
+          errors.push(`${target.target_id}/${strataSet.strata_set_id} 的必需分区必须预先枚举成员`);
+        }
+        if (strataSet.required && strataSet.membership_mode === "partition" && !(strataSet.assignment?.max_unclassified_rate >= 0)) {
+          errors.push(`${target.target_id}/${strataSet.strata_set_id} 缺少最大未分类率`);
+        }
+      }
+    }
+    return errors;
+  }
+
+  function classifyConfigOnlyTargets(draft) {
+    return (draft.targets || []).filter(target => {
+      return Boolean(
+        registries.observationKinds[target.observation?.kind] &&
+        registries.samplingProtocols[target.observation?.sampling_protocol_ref] &&
+        registries.completionRules[target.completion?.completion_rule_ref]
+      );
+    }).map(target => target.target_id);
+  }
+
+  function compileRelease(draft, revision) {
+    const content = copy(draft);
+    const supersedes = content.authoring?.supersedes || null;
+    delete content.draft_generation;
+    delete content.authoring;
+    content.revision = revision;
+    for (const target of content.targets) {
+      const protocolRef = target.observation.sampling_protocol_ref;
+      const protocol = registries.samplingProtocols[protocolRef];
+      if (protocol) {
+        target.observation.sampling_protocol = { protocol_id: protocolRef, ...copy(protocol) };
+        delete target.observation.sampling_protocol_ref;
+      }
+      const completionRef = target.completion.completion_rule_ref;
+      const completionRule = registries.completionRules[completionRef];
+      if (completionRule) {
+        target.completion.completion_rule = { rule_id: completionRef, ...copy(completionRule) };
+        delete target.completion.completion_rule_ref;
+      }
+      const defaults = target.completion.parameters;
+      const thresholdDefaults = {
+        min_effective_units: defaults.min_effective_units,
+        min_clusters: defaults.min_clusters,
+        max_missing_rate: defaults.max_missing_rate,
+        precision_rule_ref: defaults.precision_rule_ref
+      };
+      for (const strataSet of target.strata) {
+        if (strataSet.membership_mode === "partition") {
+          strataSet.expanded_members = strataSet.assignment.enumerated_values.map(value => ({
+            stratum_id: `${strataSet.strata_set_id}:${value}`,
+            match_value: value,
+            role: strataSet.required ? "required" : "diagnostic",
+            thresholds: strataSet.required
+              ? { ...copy(thresholdDefaults), ...(strataSet.threshold_overrides?.[String(value)] || {}) }
+              : null
+          }));
+          strataSet.expanded_members.push({
+            stratum_id: strataSet.assignment.unclassified_stratum,
+            role: "coverage_guard",
+            max_unclassified_rate: strataSet.assignment.max_unclassified_rate,
+            thresholds: null
+          });
+        } else {
+          strataSet.expanded_members = strataSet.assignment.members.map(member => ({
+            ...copy(member),
+            thresholds: member.role === "required"
+              ? { ...copy(thresholdDefaults), ...(strataSet.threshold_overrides?.[member.stratum_id] || {}) }
+              : null
+          }));
+        }
+      }
+    }
+    content.targets.sort((a, b) => a.target_id.localeCompare(b.target_id));
+    const canonical = canonicalize(content);
+    const canonicalBytes = stableJson(canonical);
+    return {
+      plan_id: content.plan_id,
+      revision,
+      digest_algorithm: "RFC 8785 + SHA-256（原型显示为 demo 指纹）",
+      release_fingerprint: demoDigest(canonicalBytes),
+      published_at: `演示时点-${revision}`,
+      published_by: "prototype-author",
+      signature: null,
+      supersedes,
+      validation_report: {
+        strict: true,
+        runtime_defaults_allowed: false,
+        config_only_targets: classifyConfigOnlyTargets(draft),
+        errors: []
+      },
+      canonical_bytes: canonicalBytes,
+      canonical
+    };
+  }
+
+  function activeCampaign(state) {
+    return state.campaigns.find(c => c.status === "active" || c.status === "paused");
+  }
+
+  function latestRelease(state) {
+    return state.releases[state.releases.length - 1];
+  }
+
+  function hasActiveEnrollment(campaign, subjectId) {
+    return campaign?.subject_enrollments.some(enrollment => enrollment.subject_id === subjectId && enrollment.status === "active");
+  }
+
+  function refreshProgress(campaign, reason) {
+    campaign.progress_revision += 1;
+    campaign.progress_snapshots.unshift({
+      progress_revision: campaign.progress_revision,
+      reason,
+      campaign_status: campaign.status,
+      nodes_remaining: Math.max(0, campaign.max_campaign_nodes - campaign.nodes_visited),
+      targets: campaign.targets.map(target => ({
+        target_id: target.target_id,
+        status: target.status,
+        effective_units_deficit: Math.max(0, target.min_effective_units - target.effective_units),
+        cluster_deficit: Math.max(0, target.min_clusters - target.clusters),
+        nodes_remaining: Math.max(0, target.max_nodes_while_active - target.nodes_while_active),
+        strata_sets: copy(target.strata_sets)
+      }))
+    });
+  }
+
+  function makeCampaign(state, release) {
+    const campaign = {
+      campaign_id: `campaign-${String(state.next_campaign++).padStart(2, "0")}`,
+      plan_id: release.plan_id,
+      bound_revision: release.revision,
+      bound_fingerprint: release.release_fingerprint,
+      bound_payload_bytes: release.canonical_bytes,
+      status: "active",
+      nodes_visited: 0,
+      max_campaign_nodes: release.canonical.shared_constraints.max_campaign_nodes,
+      checkpoint_barrier_timeout_seconds: release.canonical.shared_constraints.checkpoint_barrier_timeout_seconds,
+      termination_reason: null,
+      subject_enrollments: [],
+      pending_opportunities: [],
+      next_opportunity: 1,
+      checkpoint_barrier: null,
+      last_checkpoint_barrier: null,
+      progress_revision: 0,
+      progress_snapshots: [],
+      targets: release.canonical.targets.filter(target => target.enabled).map(target => ({
+        target_id: target.target_id,
+        display_name: target.display_name,
+        completion_role: target.completion_role,
+        routing_weight: target.routing_weight,
+        status: "active",
+        effective_units: 0,
+        clusters: 0,
+        missing: 0,
+        post_cutoff_units: 0,
+        analysis_cutoff: null,
+        nodes_while_active: 0,
+        min_effective_units: target.completion.parameters.min_effective_units,
+        min_clusters: target.completion.parameters.min_clusters,
+        max_missing_rate: target.completion.parameters.max_missing_rate,
+        max_nodes_while_active: target.completion.parameters.max_nodes_while_active,
+        strata_sets: target.strata.map(set => ({
+          strata_set_id: set.strata_set_id,
+          membership_mode: set.membership_mode,
+          required: set.required,
+          unclassified_count: 0,
+          members: set.expanded_members.map(member => ({
+            stratum_id: member.stratum_id,
+            role: member.role,
+            thresholds: copy(member.thresholds),
+            effective_units: 0,
+            clusters: 0,
+            missing: 0
+          }))
+        }))
+      }))
+    };
+    refreshProgress(campaign, "campaign_started");
+    return campaign;
+  }
+
+  function visitNode(campaign) {
+    campaign.nodes_visited += 1;
+    for (const target of campaign.targets) {
+      if (target.status === "active") target.nodes_while_active += 1;
+    }
+  }
+
+  function recordObservation(state, targetId, kind) {
+    const campaign = activeCampaign(state);
+    if (!campaign || campaign.status !== "active") {
+      append(state, "observation_rejected", "没有可接收观测的活动；暂停或结束状态不能提交。", "error");
+      return;
+    }
+    const target = campaign.targets.find(t => t.target_id === targetId);
+    if (!target) {
+      append(state, "observation_rejected", `绑定的发布版没有目标 ${targetId}。`, "error");
+      return;
+    }
+    visitNode(campaign);
+    if (target.status === "completed") {
+      target.post_cutoff_units += 1;
+      refreshProgress(campaign, kind);
+      append(state, kind, `${target.display_name} 已截止：观测保留为截止后补充观测，不进入主要分析。`, "warn");
+      return;
+    }
+    target.effective_units += 1;
+    target.clusters += 1;
+    const alsoServed = [];
+    if (targetId === "node-distribution") {
+      const optional = campaign.targets.find(item => item.target_id === "exploratory-template-coverage" && item.status === "active");
+      if (optional) {
+        optional.effective_units += 1;
+        optional.clusters += 1;
+        alsoServed.push(optional.display_name);
+      }
+    }
+    refreshProgress(campaign, kind);
+    append(
+      state,
+      kind,
+      `${target.display_name} 新增一个有效抽样单位；候选全集和未命中仍随证据保留。${alsoServed.length ? `同一生成机会也服务了：${alsoServed.join("、")}。` : ""}`,
+      "good"
+    );
+  }
+
+  function recordUnknownObservation(state, targetId) {
+    const campaign = activeCampaign(state);
+    if (!campaign || campaign.status !== "active") {
+      append(state, "unknown_condition_rejected", "没有可接收观测的活动。", "error");
+      return;
+    }
+    const target = campaign.targets.find(t => t.target_id === targetId);
+    visitNode(campaign);
+    target.missing += 1;
+    refreshProgress(campaign, "condition_unknown");
+    append(state, "condition_unknown", `${target.display_name} 的纳入条件因字段缺失无法判定：保留为条件未知，进入缺失率与节点成本，但不计有效单位。`, "warn");
+  }
+
+  function resolveUnknownObservation(state, targetId) {
+    const campaign = activeCampaign(state);
+    const target = campaign?.targets.find(t => t.target_id === targetId);
+    if (!target || target.missing < 1) {
+      append(state, "unknown_resolution_rejected", "没有可复核的条件未知观测。", "error");
+      return;
+    }
+    target.missing -= 1;
+    target.effective_units += 1;
+    target.clusters += 1;
+    refreshProgress(campaign, "condition_resolved");
+    append(state, "condition_resolved", `${target.display_name} 的条件未知经证据复核变为 true；从下一检查点起计入有效单位，原记录不被覆盖。`, "good");
+  }
+
+  function runCheckpoint(state, watermarkVector = {}) {
+    const campaign = activeCampaign(state);
+    if (!campaign || campaign.status !== "active") {
+      append(state, "checkpoint_rejected", "只有活动中的采集活动可以执行预登记检查。", "error");
+      return;
+    }
+    const completed = [];
+    for (const target of campaign.targets) {
+      if (target.status !== "active") continue;
+      const denominator = target.effective_units + target.missing;
+      const missingRate = denominator ? target.missing / denominator : 0;
+      if (target.effective_units >= target.min_effective_units && target.clusters >= target.min_clusters && missingRate <= target.max_missing_rate) {
+        target.status = "completed";
+        target.analysis_cutoff = {
+          checkpoint: campaign.nodes_visited,
+          effective_units: target.effective_units,
+          clusters: target.clusters,
+          session_watermark_vector: copy(watermarkVector)
+        };
+        completed.push(target.display_name);
+      }
+    }
+    const blockers = campaign.targets.filter(t => t.completion_role === "required" && t.status !== "completed");
+    if (blockers.length === 0) {
+      for (const target of campaign.targets) {
+        if (target.status === "active" && target.completion_role === "optional") {
+          target.status = "campaign_completed_before_target";
+        }
+      }
+      campaign.status = "completed";
+    }
+    refreshProgress(campaign, "registered_checkpoint");
+    append(
+      state,
+      "registered_checkpoint",
+      completed.length
+        ? `冻结主要分析截止点：${completed.join("、")}。${campaign.status === "completed" ? "全部必需目标完成，活动正常完成。" : "其他目标继续采集。"}`
+        : `没有目标同时达到有效单位数、相关簇数、缺失率与精度门槛；继续采集。`,
+      completed.length ? "good" : "warn",
+      { session_watermark_vector: copy(watermarkVector) }
+    );
+  }
+
+  function exhaustTargetBudget(state, targetId) {
+    const campaign = activeCampaign(state);
+    const target = campaign?.targets.find(item => item.target_id === targetId && item.status === "active");
+    if (!campaign || !target) {
+      append(state, "target_budget_rejected", "没有匹配的活跃研究目标。", "error");
+      return;
+    }
+    target.nodes_while_active = target.max_nodes_while_active;
+    target.status = "budget_exhausted";
+    target.analysis_cutoff = null;
+    if (target.completion_role === "required") {
+      campaign.status = "terminated";
+      campaign.termination_reason = `required_target_budget_exhausted:${target.target_id}`;
+    }
+    refreshProgress(campaign, "target_budget_exhausted");
+    append(
+      state,
+      "target_budget_exhausted",
+      `${target.display_name} 达到目标节点预算，形成 budget_exhausted，不能记为完成。${target.completion_role === "required" ? "它是必需目标，因此活动以未完成终态结束。" : "它是可选目标，活动继续。"}`,
+      "error"
+    );
+  }
+
+  function reducer(previous, action) {
+    if (action.type === "RESET") return initialState();
+    const state = copy(previous);
+    switch (action.type) {
+      case "VALIDATE": {
+        const errors = validate(state.draft);
+        state.validation = { status: errors.length ? "invalid" : "valid", errors };
+        append(state, "plan_validated", errors.length ? `校验失败：${errors.join("；")}` : "草案通过封闭注册表与完整性校验，可以发布。", errors.length ? "error" : "good");
+        break;
+      }
+      case "PUBLISH": {
+        const errors = validate(state.draft);
+        state.validation = { status: errors.length ? "invalid" : "valid", errors };
+        if (errors.length) {
+          append(state, "publish_rejected", `发布被拒绝：${errors.join("；")}`, "error");
+          break;
+        }
+        const release = compileRelease(state.draft, state.releases.length + 1);
+        state.releases.push(release);
+        append(state, "plan_published", `发布修订 ${release.revision}，发布版指纹 ${release.release_fingerprint}。发布内容冻结。`, "good");
+        break;
+      }
+      case "START_CAMPAIGN": {
+        const release = latestRelease(state);
+        if (!release) {
+          append(state, "campaign_rejected", "必须先发布研究计划，活动不能绑定草案。", "error");
+          break;
+        }
+        const payloadValid = stableJson(release.canonical) === release.canonical_bytes && demoDigest(release.canonical_bytes) === release.release_fingerprint;
+        const hasRequiredTarget = release.canonical.targets.some(target => target.enabled && target.completion_role === "required");
+        if (!payloadValid || !release.validation_report?.strict || !hasRequiredTarget) {
+          append(state, "campaign_rejected", "发布版载荷字节、指纹、严格校验报告或必需目标集合核验失败；拒绝建立活动。", "error");
+          break;
+        }
+        if (activeCampaign(state)) {
+          append(state, "campaign_rejected", "演示一次只保留一个活动中或暂停的采集活动。", "error");
+          break;
+        }
+        const campaign = makeCampaign(state, release);
+        state.campaigns.push(campaign);
+        append(state, "campaign_started", `${campaign.campaign_id} 绑定修订 ${release.revision} 的精确发布版指纹；目标运行态从发布版复制后独立推进。`, "good");
+        break;
+      }
+      case "ENROLL_SUBJECT": {
+        const campaign = activeCampaign(state);
+        const subjectId = action.subject_id;
+        if (!campaign || !subjectId) {
+          append(state, "enrollment_rejected", "需要活动中或暂停的采集活动与匿名研究账号。", "error");
+          break;
+        }
+        if (campaign.subject_enrollments.some(enrollment => enrollment.subject_id === subjectId)) {
+          append(state, "enrollment_rejected", `${subjectId} 已经存在活动账号登记；登记记录只追加、不覆盖。`, "error");
+          break;
+        }
+        campaign.subject_enrollments.push({
+          subject_id: subjectId,
+          status: "active",
+          eligibility: "verified",
+          baseline: "verified",
+          enrolled_at: `event-${state.events.length + 1}`,
+          closed_at: null
+        });
+        append(state, "subject_enrolled", `${subjectId} 通过目标总体资格与采集基线核验，加入 ${campaign.campaign_id}。`, "good");
+        break;
+      }
+      case "CLOSE_SUBJECT_ENROLLMENT": {
+        const campaign = activeCampaign(state);
+        const enrollment = campaign?.subject_enrollments.find(item => item.subject_id === action.subject_id && item.status === "active");
+        if (!enrollment) {
+          append(state, "enrollment_close_rejected", "没有可关闭的活动账号登记。", "error");
+          break;
+        }
+        enrollment.status = "closed";
+        enrollment.closed_at = `event-${state.events.length + 1}`;
+        append(state, "subject_enrollment_closed", `${enrollment.subject_id} 停止参与；登记关系关闭，既有观测和证据全部保留。`, "warn");
+        break;
+      }
+      case "CONNECT_SESSION": {
+        const campaign = activeCampaign(state);
+        const subjectId = action.subject_id || `subject-${state.next_session}`;
+        if (!campaign) {
+          append(state, "session_rejected", "没有可加入的采集活动。", "error");
+          break;
+        }
+        if (!hasActiveEnrollment(campaign, subjectId)) {
+          append(state, "session_rejected", `${subjectId} 没有活动中的账号登记；采集会话不能代替资格与基线核验。`, "error");
+          break;
+        }
+        const session = {
+          collector_session_id: `session-${String(state.next_session++).padStart(2, "0")}`,
+          subject_id: subjectId,
+          campaign_id: campaign.campaign_id,
+          presented_fingerprint: campaign.bound_fingerprint,
+          capability_status: "exact_match",
+          cached_payload_bytes: campaign.bound_payload_bytes,
+          payload_bytes_verified: true,
+          last_progress_revision: campaign.progress_revision,
+          stream_seq: 0,
+          status: "accepted"
+        };
+        state.sessions.push(session);
+        append(state, "session_accepted", `${session.collector_session_id} 核对账号与摘要后加入 ${campaign.campaign_id}。`, "good");
+        break;
+      }
+      case "CONNECT_INCOMPATIBLE_SESSION": {
+        const campaign = activeCampaign(state);
+        if (!campaign) {
+          append(state, "session_rejected", "没有可加入的采集活动。", "error");
+          break;
+        }
+        if (!hasActiveEnrollment(campaign, "subject-incompatible")) {
+          append(state, "session_rejected", "subject-incompatible 没有活动中的账号登记。", "error");
+          break;
+        }
+        const session = {
+          collector_session_id: `session-${String(state.next_session++).padStart(2, "0")}`,
+          subject_id: "subject-incompatible",
+          campaign_id: campaign.campaign_id,
+          presented_fingerprint: campaign.bound_fingerprint,
+          capability_status: "resource_revision_mismatch",
+          cached_payload_bytes: campaign.bound_payload_bytes,
+          payload_bytes_verified: true,
+          last_progress_revision: null,
+          stream_seq: 0,
+          status: "rejected"
+        };
+        state.sessions.push(session);
+        append(state, "session_rejected", `${session.collector_session_id} 持有正确发布版，但不支持能力清单绑定的资源修订；拒绝加入，不做降级。`, "error");
+        break;
+      }
+      case "CONNECT_STALE_SESSION": {
+        const campaign = activeCampaign(state);
+        if (!campaign) {
+          append(state, "session_rejected", "没有可加入的采集活动。", "error");
+          break;
+        }
+        if (!hasActiveEnrollment(campaign, "subject-stale")) {
+          append(state, "session_rejected", "subject-stale 没有活动中的账号登记。", "error");
+          break;
+        }
+        const newest = latestRelease(state);
+        const wrongFingerprint = newest && newest.release_fingerprint !== campaign.bound_fingerprint ? newest.release_fingerprint : "demo:stale0000000000";
+        const session = {
+          collector_session_id: `session-${String(state.next_session++).padStart(2, "0")}`,
+          subject_id: "subject-stale",
+          campaign_id: campaign.campaign_id,
+          presented_fingerprint: wrongFingerprint,
+          capability_status: "not_checked",
+          cached_payload_bytes: null,
+          payload_bytes_verified: false,
+          last_progress_revision: null,
+          stream_seq: 0,
+          status: "rejected"
+        };
+        state.sessions.push(session);
+        append(state, "session_rejected", `${session.collector_session_id} 提交的发布版指纹与活动绑定指纹不同；拒绝加入，不能静默采用本地新版或旧版。`, "error");
+        break;
+      }
+      case "RECOVER_SESSION": {
+        const campaign = activeCampaign(state);
+        if (!campaign || !hasActiveEnrollment(campaign, "subject-alpha")) {
+          append(state, "session_recovery_rejected", "没有可恢复的活动绑定或账号甲登记。", "error");
+          break;
+        }
+        const session = {
+          collector_session_id: `session-${String(state.next_session++).padStart(2, "0")}`,
+          subject_id: "subject-alpha",
+          campaign_id: campaign.campaign_id,
+          presented_fingerprint: campaign.bound_fingerprint,
+          capability_status: "exact_match",
+          cached_payload_bytes: campaign.bound_payload_bytes,
+          payload_bytes_verified: true,
+          last_progress_revision: campaign.progress_revision,
+          stream_seq: 0,
+          status: "accepted",
+          recovery: true
+        };
+        state.sessions.push(session);
+        append(state, "session_recovered", `${session.collector_session_id} 从活动绑定的精确载荷恢复；即使存在新发布版，也没有读取“最新计划”。`, "good");
+        break;
+      }
+      case "SYNC_ALPHA_PROGRESS": {
+        const campaign = activeCampaign(state);
+        const session = [...state.sessions].reverse().find(item => item.subject_id === "subject-alpha" && item.status === "accepted");
+        if (!campaign || !session) {
+          append(state, "progress_sync_rejected", "没有活动中的账号甲会话。", "error");
+          break;
+        }
+        session.last_progress_revision = campaign.progress_revision;
+        append(state, "progress_synced", `${session.collector_session_id} 同步活动进度修订 ${campaign.progress_revision}；发布版载荷没有变化。`, "good");
+        break;
+      }
+      case "ROUTE_ALPHA": {
+        const campaign = activeCampaign(state);
+        const session = [...state.sessions].reverse().find(item => item.subject_id === "subject-alpha" && item.status === "accepted");
+        if (!campaign || !session) {
+          append(state, "route_rejected", "没有活动中的账号甲会话。", "error");
+          break;
+        }
+        const stale = session.last_progress_revision !== campaign.progress_revision;
+        session.stream_seq += 1;
+        append(
+          state,
+          "route_decision",
+          `${session.collector_session_id} 使用进度修订 ${session.last_progress_revision} 选路；活动当前为 ${campaign.progress_revision}${stale ? "，这是陈旧视图但会如实保留" : "，视图为最新"}。`,
+          stale ? "warn" : "good",
+          { used_progress_revision: session.last_progress_revision, current_progress_revision: campaign.progress_revision }
+        );
+        break;
+      }
+      case "TRIGGER_ALPHA_OPPORTUNITY": {
+        const campaign = activeCampaign(state);
+        const session = [...state.sessions].reverse().find(item => item.subject_id === "subject-alpha" && item.status === "accepted");
+        if (!campaign || !session) {
+          append(state, "opportunity_trigger_rejected", "没有活动中的账号甲会话。", "error");
+          break;
+        }
+        if (campaign.checkpoint_barrier) {
+          append(state, "opportunity_trigger_rejected", "检查水位屏障已经开始；会话必须停在安全点，不能触发新的生成机会。", "error");
+          break;
+        }
+        session.stream_seq += 1;
+        const opportunity = {
+          opportunity_id: `opportunity-${campaign.next_opportunity++}`,
+          collector_session_id: session.collector_session_id,
+          trigger_stream_seq: session.stream_seq,
+          status: "pending"
+        };
+        campaign.pending_opportunities.push(opportunity);
+        append(state, "opportunity_triggered", `${opportunity.opportunity_id} 已在账号甲会话序号 ${opportunity.trigger_stream_seq} 触发，结果尚未完成取证。`, "warn", copy(opportunity));
+        break;
+      }
+      case "RESOLVE_ALPHA_OPPORTUNITY": {
+        const campaign = activeCampaign(state);
+        const opportunity = campaign?.pending_opportunities.find(item => item.status === "pending");
+        const session = opportunity && state.sessions.find(item => item.collector_session_id === opportunity.collector_session_id);
+        if (!campaign || !opportunity || !session) {
+          append(state, "opportunity_resolution_rejected", "没有水位内待完成的生成机会。", "error");
+          break;
+        }
+        session.stream_seq += 1;
+        opportunity.status = "evidence_complete";
+        opportunity.resolution_stream_seq = session.stream_seq;
+        recordObservation(state, "encounter-event-weights", "event_opportunity_recorded");
+        append(state, "opportunity_resolved", `${opportunity.opportunity_id} 已在会话序号 ${session.stream_seq} 完成取证，可以提交水位。`, "good", copy(opportunity));
+        break;
+      }
+      case "BEGIN_CHECKPOINT_BARRIER": {
+        const campaign = activeCampaign(state);
+        if (!campaign || campaign.checkpoint_barrier) {
+          append(state, "checkpoint_barrier_rejected", "没有可开始屏障的活动，或屏障已经存在。", "error");
+          break;
+        }
+        const expected = state.sessions
+          .filter(item => item.campaign_id === campaign.campaign_id && item.status === "accepted")
+          .map(item => item.collector_session_id);
+        campaign.checkpoint_barrier = {
+          status: "collecting_watermarks",
+          requested_progress_revision: campaign.progress_revision,
+          expected_sessions: expected,
+          watermarks: {}
+        };
+        append(state, "checkpoint_barrier_started", `检查水位屏障开始，等待 ${expected.length} 个活跃采集会话停在安全点。`, "warn");
+        break;
+      }
+      case "ACK_ALPHA_WATERMARK": {
+        const campaign = activeCampaign(state);
+        const barrier = campaign?.checkpoint_barrier;
+        const session = [...state.sessions].reverse().find(item => item.subject_id === "subject-alpha" && item.status === "accepted");
+        if (!campaign || !barrier || !session || !barrier.expected_sessions.includes(session.collector_session_id)) {
+          append(state, "watermark_rejected", "账号甲不在当前屏障的待确认会话中。", "error");
+          break;
+        }
+        const pending = campaign.pending_opportunities.some(item => item.collector_session_id === session.collector_session_id && item.status === "pending");
+        if (pending) {
+          append(state, "watermark_rejected", "账号甲仍有已触发但未完成取证的机会，不能提交最终水位。", "error");
+          break;
+        }
+        barrier.watermarks[session.collector_session_id] = session.stream_seq;
+        append(state, "watermark_acknowledged", `账号甲提交水位 ${session.stream_seq}。`, "good", { collector_session_id: session.collector_session_id, stream_seq: session.stream_seq });
+        break;
+      }
+      case "TIMEOUT_ALPHA_BARRIER": {
+        const campaign = activeCampaign(state);
+        const barrier = campaign?.checkpoint_barrier;
+        const session = [...state.sessions].reverse().find(item => item.subject_id === "subject-alpha" && item.status === "accepted");
+        if (!campaign || !barrier || !session || !barrier.expected_sessions.includes(session.collector_session_id)) {
+          append(state, "watermark_timeout_rejected", "账号甲不在当前屏障的待确认会话中。", "error");
+          break;
+        }
+        const pending = campaign.pending_opportunities.filter(item => item.collector_session_id === session.collector_session_id && item.status === "pending");
+        const target = campaign.targets.find(item => item.target_id === "encounter-event-weights");
+        for (const opportunity of pending) {
+          opportunity.status = "missing_at_checkpoint";
+          visitNode(campaign);
+          target.missing += 1;
+        }
+        session.status = "checkpoint_unresponsive";
+        barrier.watermarks[session.collector_session_id] = session.stream_seq;
+        refreshProgress(campaign, "unresponsive_watermark_sealed");
+        append(
+          state,
+          "unresponsive_watermark_sealed",
+          `账号甲超过预登记的 ${campaign.checkpoint_barrier_timeout_seconds} 秒屏障等待上限；以最后持久化序号 ${session.stream_seq} 封存水位，${pending.length} 个在途机会记为缺失。后来证据只能触发版本化重算。`,
+          "error",
+          { collector_session_id: session.collector_session_id, stream_seq: session.stream_seq, missing_opportunities: pending.length }
+        );
+        break;
+      }
+      case "FINALIZE_CHECKPOINT_BARRIER": {
+        const campaign = activeCampaign(state);
+        const barrier = campaign?.checkpoint_barrier;
+        if (!campaign || !barrier) {
+          append(state, "checkpoint_finalize_rejected", "没有待冻结的检查水位屏障。", "error");
+          break;
+        }
+        const missing = barrier.expected_sessions.filter(id => barrier.watermarks[id] === undefined);
+        if (missing.length) {
+          append(state, "checkpoint_finalize_rejected", `仍缺少会话水位：${missing.join("、")}。`, "error");
+          break;
+        }
+        const vector = copy(barrier.watermarks);
+        barrier.status = "finalized";
+        campaign.last_checkpoint_barrier = copy(barrier);
+        campaign.checkpoint_barrier = null;
+        runCheckpoint(state, vector);
+        break;
+      }
+      case "EDIT_DRAFT": {
+        const target = state.draft.targets.find(t => t.target_id === "encounter-event-weights");
+        target.routing_weight = target.routing_weight === 2 ? 5 : 2;
+        state.draft.draft_generation += 1;
+        state.validation = { status: "not_checked", errors: [] };
+        append(state, "draft_edited", `草案代次变为 ${state.draft.draft_generation}；不期而遇目标选路权重改为 ${target.routing_weight}。既有发布版和活动未改变。`, "warn");
+        break;
+      }
+      case "MIGRATE_DRAFT": {
+        const release = latestRelease(state);
+        if (!release) {
+          append(state, "migration_rejected", "必须先有来源发布版。", "error");
+          break;
+        }
+        state.draft.schema_version = "blackflow-research-plan/v2";
+        state.draft.draft_generation += 1;
+        state.draft.authoring.supersedes = release.release_fingerprint;
+        state.draft.capability_manifest.observation_registry = "sha256:observation-registry-v2";
+        state.validation = { status: "not_checked", errors: [] };
+        append(state, "migration_draft_created", `从修订 ${release.revision} 生成 v2 迁移草案；来源发布版和既有活动未改变。`, "warn");
+        break;
+      }
+      case "ADD_UNSUPPORTED_TARGET": {
+        if (!state.draft.targets.some(t => t.target_id === "custom-screen-script")) {
+          state.draft.targets.push({
+            target_id: "custom-screen-script",
+            display_name: "任意脚本识别",
+            enabled: true,
+            completion_role: "optional",
+            routing_weight: 1,
+            observation: {
+              kind: "eval(arbitrary-javascript)",
+              sampling_unit: "whatever-the-script-says",
+              inclusion: [{ field: "raw_memory", op: "eval", value: "secret" }],
+              dedupe_key: [],
+              cluster_key: []
+            },
+            strata: [],
+            completion: { kind: "stop-when-interesting" },
+            limits: {}
+          });
+          state.draft.draft_generation += 1;
+        }
+        append(state, "unsupported_target_added", "向草案加入一个未登记的任意脚本目标；用它检验配置边界是否会失守。", "warn");
+        break;
+      }
+      case "REMOVE_UNSUPPORTED_TARGET": {
+        state.draft.targets = state.draft.targets.filter(t => t.target_id !== "custom-screen-script");
+        state.draft.draft_generation += 1;
+        state.validation = { status: "not_checked", errors: [] };
+        append(state, "unsupported_target_removed", "移除未登记目标；新增课题必须组合现有观测能力，或先由代码注册新能力。", "good");
+        break;
+      }
+      case "RECORD_MAP":
+        recordObservation(state, "node-distribution", "map_observation_recorded");
+        break;
+      case "RECORD_EVENT":
+        recordObservation(state, "encounter-event-weights", "event_opportunity_recorded");
+        break;
+      case "RECORD_UNKNOWN_EVENT":
+        recordUnknownObservation(state, "encounter-event-weights");
+        break;
+      case "RESOLVE_UNKNOWN_EVENT":
+        resolveUnknownObservation(state, "encounter-event-weights");
+        break;
+      case "CHECKPOINT": {
+        const campaign = activeCampaign(state);
+        const pending = campaign?.pending_opportunities.some(item => item.status === "pending");
+        if (pending) {
+          append(state, "checkpoint_rejected", "存在已触发但未完成取证的生成机会；必须先完成或明确记为缺失。", "error");
+          break;
+        }
+        const vector = {};
+        for (const session of state.sessions.filter(item => item.campaign_id === campaign?.campaign_id && item.status === "accepted")) {
+          vector[session.collector_session_id] = session.stream_seq;
+        }
+        runCheckpoint(state, vector);
+        break;
+      }
+      case "EXHAUST_EVENT_TARGET_BUDGET":
+        exhaustTargetBudget(state, "encounter-event-weights");
+        break;
+      case "TRY_REBIND": {
+        const campaign = activeCampaign(state) || state.campaigns[state.campaigns.length - 1];
+        const newest = latestRelease(state);
+        if (!campaign || !newest) {
+          append(state, "rebind_rejected", "需要先建立活动和发布版。", "error");
+        } else if (campaign.bound_fingerprint === newest.release_fingerprint) {
+          append(state, "rebind_rejected", "活动已经绑定这个摘要；没有发生换版。", "warn");
+        } else {
+          append(state, "rebind_rejected", `${campaign.campaign_id} 仍绑定修订 ${campaign.bound_revision}；若要采用修订 ${newest.revision}，必须关闭旧活动并创建新活动。`, "error");
+        }
+        break;
+      }
+      case "PAUSE": {
+        const campaign = activeCampaign(state);
+        if (!campaign || campaign.status !== "active") append(state, "pause_rejected", "没有活动中的采集活动可暂停。", "error");
+        else {
+          campaign.status = "paused";
+          refreshProgress(campaign, "campaign_paused");
+          append(state, "campaign_paused", `${campaign.campaign_id} 暂停；身份、发布版和目标进度保持不变。`, "warn");
+        }
+        break;
+      }
+      case "RESUME": {
+        const campaign = state.campaigns.find(c => c.status === "paused");
+        if (!campaign) append(state, "resume_rejected", "没有暂停的采集活动。", "error");
+        else {
+          campaign.status = "active";
+          refreshProgress(campaign, "campaign_resumed");
+          append(state, "campaign_resumed", `${campaign.campaign_id} 恢复；仍使用原发布版指纹。`, "good");
+        }
+        break;
+      }
+      case "EXHAUST_BUDGET": {
+        const campaign = activeCampaign(state);
+        if (!campaign) append(state, "budget_rejected", "没有活动中的采集活动。", "error");
+        else {
+          campaign.status = "terminated";
+          campaign.termination_reason = "max_campaign_nodes_exhausted";
+          refreshProgress(campaign, "campaign_budget_exhausted");
+          append(state, "campaign_terminated", `${campaign.campaign_id} 达到最大节点预算；它是未完成终态，不能记为正常完成。`, "error");
+        }
+        break;
+      }
+      default:
+        append(state, "unknown_action", `未知动作 ${action.type}`, "error");
+    }
+    return state;
+  }
+
+  return Object.freeze({ initialState, reducer, registries });
+})();
+
+const actions = [
+  { type: "RESET", label: "重置原型", danger: true },
+  { type: "VALIDATE", label: "校验草案" },
+  { type: "PUBLISH", label: "发布不可变修订" },
+  { type: "START_CAMPAIGN", label: "用最新发布版建立活动" },
+  { type: "ENROLL_SUBJECT", label: "登记账号甲", subject_id: "subject-alpha" },
+  { type: "ENROLL_SUBJECT", label: "登记账号乙", subject_id: "subject-beta" },
+  { type: "CONNECT_SESSION", label: "账号甲会话加入", subject_id: "subject-alpha" },
+  { type: "CONNECT_SESSION", label: "账号乙会话加入", subject_id: "subject-beta" },
+  { type: "CLOSE_SUBJECT_ENROLLMENT", label: "关闭账号乙登记", subject_id: "subject-beta" },
+  { type: "CONNECT_INCOMPATIBLE_SESSION", label: "能力不兼容会话加入" },
+  { type: "RECORD_MAP", label: "记录完整初始地图" },
+  { type: "RECORD_EVENT", label: "记录完整事件生成机会" },
+  { type: "RECORD_UNKNOWN_EVENT", label: "记录条件未知事件" },
+  { type: "RESOLVE_UNKNOWN_EVENT", label: "复核条件未知事件" },
+  { type: "CHECKPOINT", label: "执行预登记检查" },
+  { type: "EDIT_DRAFT", label: "修改草案优先级" },
+  { type: "ADD_UNSUPPORTED_TARGET", label: "加入任意脚本目标" },
+  { type: "REMOVE_UNSUPPORTED_TARGET", label: "移除任意脚本目标" },
+  { type: "CONNECT_STALE_SESSION", label: "错误指纹会话加入" },
+  { type: "RECOVER_SESSION", label: "恢复账号甲会话" },
+  { type: "SYNC_ALPHA_PROGRESS", label: "账号甲同步进度" },
+  { type: "ROUTE_ALPHA", label: "账号甲按所持进度选路" },
+  { type: "TRIGGER_ALPHA_OPPORTUNITY", label: "账号甲触发生成机会" },
+  { type: "RESOLVE_ALPHA_OPPORTUNITY", label: "完成账号甲在途取证" },
+  { type: "BEGIN_CHECKPOINT_BARRIER", label: "开始检查水位屏障" },
+  { type: "ACK_ALPHA_WATERMARK", label: "账号甲提交水位" },
+  { type: "TIMEOUT_ALPHA_BARRIER", label: "封存无响应账号甲水位", danger: true },
+  { type: "FINALIZE_CHECKPOINT_BARRIER", label: "冻结水位并检查" },
+  { type: "TRY_REBIND", label: "尝试给既有活动换版" },
+  { type: "MIGRATE_DRAFT", label: "从发布版生成迁移草案" },
+  { type: "PAUSE", label: "暂停活动" },
+  { type: "RESUME", label: "恢复活动" },
+  { type: "EXHAUST_EVENT_TARGET_BUDGET", label: "耗尽事件目标预算", danger: true },
+  { type: "EXHAUST_BUDGET", label: "耗尽活动节点预算", danger: true }
+];
+
+const scenarios = [
+  {
+    id: "multi",
+    title: "多目标独立截止",
+    copy: "一份发布版同时启用两个必需目标和一个可选目标。事件目标先达到门槛后退出选路影响；随后取得的事件观测只算截止后补充观测。两个必需目标完成时活动正常结束，尚未达标的可选目标明确关闭。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["ENROLL_SUBJECT", "登记账号甲", { subject_id: "subject-alpha" }],
+      ["ENROLL_SUBJECT", "登记账号乙", { subject_id: "subject-beta" }],
+      ["CONNECT_SESSION", "账号甲加入", { subject_id: "subject-alpha" }],
+      ["CONNECT_SESSION", "账号乙加入", { subject_id: "subject-beta" }],
+      ["RECORD_EVENT", "事件机会 1"],
+      ["RECORD_MAP", "地图生成 1"],
+      ["RECORD_EVENT", "事件机会 2"],
+      ["CHECKPOINT", "检查：事件目标截止"],
+      ["RECORD_EVENT", "截止后事件观测"],
+      ["RECORD_MAP", "地图生成 2"],
+      ["RECORD_MAP", "地图生成 3"],
+      ["CHECKPOINT", "检查：活动完成"]
+    ]
+  },
+  {
+    id: "immutable",
+    title: "修改不污染既有活动",
+    copy: "活动绑定修订 1 后修改草案并发布修订 2。既有活动不能原地换版；携带修订 2 摘要的会话也不能混入修订 1 活动。",
+    steps: [
+      ["PUBLISH", "发布修订 1"],
+      ["START_CAMPAIGN", "活动绑定修订 1"],
+      ["ENROLL_SUBJECT", "登记账号甲", { subject_id: "subject-alpha" }],
+      ["CONNECT_SESSION", "账号甲首次加入", { subject_id: "subject-alpha" }],
+      ["ENROLL_SUBJECT", "登记不兼容账号", { subject_id: "subject-incompatible" }],
+      ["CONNECT_INCOMPATIBLE_SESSION", "不兼容采集端被拒绝"],
+      ["EDIT_DRAFT", "调整目标优先级"],
+      ["PUBLISH", "发布修订 2"],
+      ["TRY_REBIND", "尝试给活动换版"],
+      ["RECOVER_SESSION", "账号甲仍从修订 1 恢复"],
+      ["ENROLL_SUBJECT", "登记旧指纹账号", { subject_id: "subject-stale" }],
+      ["CONNECT_STALE_SESSION", "修订 2 会话尝试加入"]
+    ]
+  },
+  {
+    id: "boundary",
+    title: "配置能力边界",
+    copy: "研究计划只组合受支持的观测契约与条件。任意脚本、未登记字段、模糊抽样单位和“看到有趣结果就停止”不能借配置进入执行环境。",
+    steps: [
+      ["ADD_UNSUPPORTED_TARGET", "加入越界目标"],
+      ["VALIDATE", "查看完整拒绝原因"],
+      ["PUBLISH", "尝试发布"],
+      ["REMOVE_UNSUPPORTED_TARGET", "移除越界目标"],
+      ["VALIDATE", "重新校验"],
+      ["PUBLISH", "发布受支持组合"]
+    ]
+  },
+  {
+    id: "unknown",
+    title: "条件未知与复核",
+    copy: "纳入条件缺少运行时字段时不能当作正常排除。该生成机会保留为条件未知并进入缺失率和成本；复核只追加新解释，从下一检查点起计入。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["RECORD_UNKNOWN_EVENT", "记录条件未知"],
+      ["CHECKPOINT", "未知阻止达标"],
+      ["RESOLVE_UNKNOWN_EVENT", "复核为 true"],
+      ["RECORD_EVENT", "再记录一个有效机会"],
+      ["CHECKPOINT", "事件目标截止"]
+    ]
+  },
+  {
+    id: "watermark",
+    title: "多会话检查水位",
+    copy: "检查点不依赖电脑时间。已经触发的生成机会必须先完成取证或明确缺失；屏障开始后不能触发新机会，所有活跃会话提交最终 stream_seq 后才能冻结水位向量。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["ENROLL_SUBJECT", "登记账号甲", { subject_id: "subject-alpha" }],
+      ["CONNECT_SESSION", "账号甲加入", { subject_id: "subject-alpha" }],
+      ["TRIGGER_ALPHA_OPPORTUNITY", "触发但尚未完成取证"],
+      ["BEGIN_CHECKPOINT_BARRIER", "开始检查水位屏障"],
+      ["ACK_ALPHA_WATERMARK", "在途机会使水位被拒绝"],
+      ["TRIGGER_ALPHA_OPPORTUNITY", "屏障内新机会被拒绝"],
+      ["RESOLVE_ALPHA_OPPORTUNITY", "完成水位内取证"],
+      ["ACK_ALPHA_WATERMARK", "提交最终 stream_seq"],
+      ["FINALIZE_CHECKPOINT_BARRIER", "冻结水位向量并检查"]
+    ]
+  },
+  {
+    id: "unresponsive",
+    title: "无响应水位封存",
+    copy: "屏障不会无限等待。超过发布版预登记的等待上限后，采用最后持久化 stream_seq，水位内未完成机会明确记为缺失；后来证据不能改写原停止快照。",
+    steps: [
+      ["PUBLISH", "发布含等待上限的计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["ENROLL_SUBJECT", "登记账号甲", { subject_id: "subject-alpha" }],
+      ["CONNECT_SESSION", "账号甲加入", { subject_id: "subject-alpha" }],
+      ["TRIGGER_ALPHA_OPPORTUNITY", "触发在途机会"],
+      ["BEGIN_CHECKPOINT_BARRIER", "开始检查水位屏障"],
+      ["TIMEOUT_ALPHA_BARRIER", "等待超限并封存水位"],
+      ["FINALIZE_CHECKPOINT_BARRIER", "按封存水位检查"]
+    ]
+  },
+  {
+    id: "progress",
+    title: "动态进度与陈旧选路",
+    copy: "发布版保持不变；活动进度投影在新观测后递增。采集会话若尚未同步，会把实际使用的旧进度修订写入路线决策，之后可同步并使用新投影。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动与进度修订 1"],
+      ["ENROLL_SUBJECT", "登记账号甲", { subject_id: "subject-alpha" }],
+      ["CONNECT_SESSION", "账号甲取得当前进度"],
+      ["RECORD_MAP", "其他采集推进活动进度"],
+      ["ROUTE_ALPHA", "账号甲使用陈旧进度选路"],
+      ["SYNC_ALPHA_PROGRESS", "同步最新进度"],
+      ["ROUTE_ALPHA", "按最新进度选路"]
+    ]
+  },
+  {
+    id: "migration",
+    title: "迁移只产生新发布版",
+    copy: "schema 或能力注册表升级时，从旧发布版生成带 supersedes 沿袭的新草案，再发布新修订；旧载荷和旧活动绑定始终不变。",
+    steps: [
+      ["PUBLISH", "发布 v1 修订"],
+      ["START_CAMPAIGN", "活动绑定 v1"],
+      ["MIGRATE_DRAFT", "生成 v2 迁移草案"],
+      ["VALIDATE", "校验 v2 草案"],
+      ["PUBLISH", "发布带沿袭关系的 v2"],
+      ["TRY_REBIND", "旧活动拒绝换版"]
+    ]
+  },
+  {
+    id: "target-budget",
+    title: "目标预算不是完成",
+    copy: "必需目标耗尽自己的活跃节点预算时形成未完成终态，并使活动终止；它没有主要分析截止点，也不能被统计为正常完成。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["RECORD_EVENT", "记录一个事件机会"],
+      ["EXHAUST_EVENT_TARGET_BUDGET", "耗尽必需目标预算"]
+    ]
+  },
+  {
+    id: "lifecycle",
+    title: "暂停与预算终态",
+    copy: "暂停和恢复不改变活动身份或发布版指纹；预算耗尽形成明确的未完成终态，不能伪装成所有必需目标正常完成。",
+    steps: [
+      ["PUBLISH", "发布计划"],
+      ["START_CAMPAIGN", "建立活动"],
+      ["RECORD_MAP", "记录一个地图单位"],
+      ["PAUSE", "暂停"],
+      ["RECORD_EVENT", "暂停时提交应拒绝"],
+      ["RESUME", "恢复"],
+      ["EXHAUST_BUDGET", "耗尽预算"]
+    ]
+  }
+];
+
+let state = ResearchPlanModel.initialState();
+let activeScenario = scenarios[0].id;
+let scenarioStep = 0;
+
+const esc = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const tag = status => `<span class="tag ${esc(status)}">${esc(status)}</span>`;
+
+function metric(label, value) {
+  return `<div class="metric"><div class="value">${value}</div><div class="label">${esc(label)}</div></div>`;
+}
+
+function renderPlans() {
+  const targets = state.draft.targets.map(t => `${esc(t.display_name)} ${tag(t.completion_role)} · 选路权重 ${t.routing_weight}${t.enabled ? "" : " · disabled"}`).join("<br>");
+  const releases = state.releases.length
+    ? `<table><thead><tr><th>修订</th><th>schema</th><th>发布版指纹 / 沿袭</th><th>严格校验</th><th>目标</th></tr></thead><tbody>${state.releases.map(r => `<tr><td>${r.revision}</td><td>${esc(r.canonical.schema_version)}</td><td><code>${esc(r.release_fingerprint)}</code>${r.supersedes ? `<br>supersedes <code>${esc(r.supersedes)}</code>` : ""}</td><td>${r.validation_report.strict ? "通过" : "失败"}<br>纯配置 ${r.validation_report.config_only_targets.length}</td><td>${r.canonical.targets.length}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="empty">尚无发布版</p>`;
+  return `
+    <p><strong>${esc(state.draft.display_name)}</strong> ${tag("draft")}</p>
+    <p>草案代次：${state.draft.draft_generation} · 校验：${tag(state.validation.status)}</p>
+    <p>${targets}</p>
+    <p>草案来源：${state.draft.authoring.template_refs.map(esc).join("、")}<br>发布时展开并移除来源引用。</p>
+    <p>发布版能力清单：<code>${esc(state.draft.capability_manifest.observation_registry)}</code> 等 ${Object.keys(state.draft.capability_manifest).length} 项精确能力。</p>
+    <h3>不可变发布版</h3>${releases}`;
+}
+
+function renderCampaigns() {
+  if (!state.campaigns.length) return `<p class="empty">尚未建立采集活动</p>`;
+  return state.campaigns.map(campaign => {
+    const enrollments = campaign.subject_enrollments.length
+      ? campaign.subject_enrollments.map(item => `${esc(item.subject_id)} ${tag(item.status)} · 资格 ${esc(item.eligibility)} · 基线 ${esc(item.baseline)}`).join("<br>")
+      : `<span class="empty">尚无活动账号登记</span>`;
+    const targets = campaign.targets.map(t => `
+      <tr>
+        <td>${esc(t.display_name)}<br><code>${esc(t.target_id)}</code></td>
+        <td>${tag(t.status)}</td>
+        <td>${t.effective_units} / ${t.min_effective_units}</td>
+        <td>${t.clusters} / ${t.min_clusters}</td>
+        <td>${t.missing} / ${((t.missing / Math.max(1, t.effective_units + t.missing)) * 100).toFixed(1)}%</td>
+        <td>${t.nodes_while_active} / ${t.max_nodes_while_active}</td>
+        <td>${t.post_cutoff_units}</td>
+        <td>${t.status === "active" ? t.routing_weight : "0（不再影响选路）"}</td>
+      </tr>`).join("");
+    return `
+      <p><strong>${esc(campaign.campaign_id)}</strong> ${tag(campaign.status)}</p>
+      <p>绑定：修订 ${campaign.bound_revision} · <code>${esc(campaign.bound_fingerprint)}</code><br>活动进度投影：修订 ${campaign.progress_revision} · 剩余节点 ${Math.max(0, campaign.max_campaign_nodes - campaign.nodes_visited)}<br>检查水位屏障：${campaign.checkpoint_barrier ? `${tag(campaign.checkpoint_barrier.status)} · ${Object.keys(campaign.checkpoint_barrier.watermarks).length}/${campaign.checkpoint_barrier.expected_sessions.length} 水位` : "无"} · 在途机会 ${campaign.pending_opportunities.filter(item => item.status === "pending").length}<br>节点成本：${campaign.nodes_visited}${campaign.termination_reason ? ` · 终止：${esc(campaign.termination_reason)}` : ""}</p>
+      <p><strong>活动账号登记</strong><br>${enrollments}</p>
+      <table><thead><tr><th>研究目标</th><th>状态</th><th>有效单位</th><th>相关簇</th><th>条件未知</th><th>活跃节点预算</th><th>截止后</th><th>当前选路权重</th></tr></thead><tbody>${targets}</tbody></table>`;
+  }).join("<hr>");
+}
+
+function renderSessions() {
+  if (!state.sessions.length) return `<p class="empty">尚无采集会话</p>`;
+  return `<table><thead><tr><th>会话</th><th>研究账号</th><th>活动</th><th>stream_seq</th><th>发布版指纹</th><th>进度修订</th><th>载荷字节</th><th>能力握手</th><th>结果</th></tr></thead><tbody>${state.sessions.map(s => `
+    <tr><td>${esc(s.collector_session_id)}${s.recovery ? "<br>恢复会话" : ""}</td><td>${esc(s.subject_id)}</td><td>${esc(s.campaign_id)}</td><td>${s.stream_seq}</td><td><code>${esc(s.presented_fingerprint)}</code></td><td>${s.last_progress_revision ?? "—"}</td><td>${s.payload_bytes_verified ? "精确匹配" : "未接受"}</td><td>${esc(s.capability_status)}</td><td>${tag(s.status)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function renderEvents() {
+  if (!state.events.length) return `<p class="empty">尚无记录</p>`;
+  return `<table><thead><tr><th>序号</th><th>类型</th><th>活动 / 发布版指纹</th><th>说明</th></tr></thead><tbody>${state.events.slice(0, 30).map(e => `<tr><td>${e.seq}</td><td><code>${esc(e.type)}</code></td><td>${e.campaign_id ? `${esc(e.campaign_id)}<br><code>${esc(e.release_fingerprint)}</code>` : "—"}</td><td>${esc(e.message)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function render() {
+  const active = state.campaigns.find(c => c.status === "active" || c.status === "paused");
+  const latest = state.releases[state.releases.length - 1];
+  const completedTargets = state.campaigns.flatMap(c => c.targets).filter(t => t.status === "completed").length;
+  document.getElementById("summary").innerHTML = [
+    metric("草案代次", state.draft.draft_generation),
+    metric("不可变发布版", state.releases.length),
+    metric("最新发布版指纹", latest ? `<code>${esc(latest.release_fingerprint)}</code>` : "—"),
+    metric("当前活动", active ? `${esc(active.campaign_id)} ${tag(active.status)}` : "—"),
+    metric("已接受 / 拒绝会话", `${state.sessions.filter(s => s.status === "accepted").length} / ${state.sessions.filter(s => s.status === "rejected").length}`),
+    metric("已截止研究目标", completedTargets)
+  ].join("");
+  const notice = document.getElementById("notice");
+  notice.className = `notice ${state.last.level}`;
+  notice.textContent = state.last.message;
+  document.getElementById("plans").innerHTML = renderPlans();
+  document.getElementById("campaigns").innerHTML = renderCampaigns();
+  document.getElementById("sessions").innerHTML = renderSessions();
+  document.getElementById("events").innerHTML = renderEvents();
+  document.getElementById("raw").textContent = JSON.stringify({
+    state,
+    latest_canonical_release: latest?.canonical || null,
+    registered_capabilities: ResearchPlanModel.registries
+  }, null, 2);
+  renderScenario();
+}
+
+function dispatch(action) {
+  state = ResearchPlanModel.reducer(state, action);
+  render();
+}
+
+function buildFreeplay() {
+  const root = document.getElementById("freeplay");
+  root.innerHTML = "";
+  actions.forEach(action => {
+    const button = document.createElement("button");
+    button.textContent = action.label;
+    if (action.danger) button.classList.add("danger");
+    button.addEventListener("click", () => dispatch(action));
+    root.appendChild(button);
+  });
+}
+
+function selectScenario(id) {
+  activeScenario = id;
+  scenarioStep = 0;
+  state = ResearchPlanModel.initialState();
+  render();
+}
+
+function renderScenario() {
+  const scenario = scenarios.find(s => s.id === activeScenario);
+  document.getElementById("tabs").innerHTML = scenarios.map(s => `<button data-tab="${esc(s.id)}" class="${s.id === activeScenario ? "active" : ""}">${esc(s.title)}</button>`).join("");
+  document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => selectScenario(button.dataset.tab)));
+  document.getElementById("scenarioCopy").textContent = scenario.copy;
+  const root = document.getElementById("steps");
+  root.innerHTML = "";
+  scenario.steps.forEach((step, index) => {
+    const button = document.createElement("button");
+    button.textContent = `${index + 1}. ${step[1]}`;
+    button.disabled = index !== scenarioStep;
+    if (index < scenarioStep) button.classList.add("done");
+    button.addEventListener("click", () => {
+      const action = Object.assign({ type: step[0] }, step[2] || {});
+      state = ResearchPlanModel.reducer(state, action);
+      scenarioStep += 1;
+      render();
+    });
+    root.appendChild(button);
+  });
+}
+
+buildFreeplay();
+render();
+</script>
+</body>
+</html>
