@@ -22,17 +22,19 @@
     "current_marker_threshold": 0.6,
     "current_marker_grid_tolerance": 58.0,
     "marker_grid_tolerance": 50.0,
-    "fixed_grid_translation_limit": 4,
+    "fixed_grid_translation_limit": 48,
+    "fixed_grid_translation_tolerance": 50.0,
     "empty_multi_suppression_radius": 12,
     "fixed_grid_hit_tolerance": 25.0,
     "ocr_column_width": 77,
-    "ocr_row_center_offset_y": 29,
-    "ocr_row_height": 40,
+    "ocr_row_center_offset_y": 25,
+    "ocr_row_height": 60,
     "ocr_grid_tolerance": 25.0,
     "ocr_merge_max_gap": 16,
+    "ocr_merge_max_overlap": 6,
     "ocr_merge_min_vertical_overlap": 0.5,
     "ocr_merge_max_center_y_delta": 8.0,
     "ocr_similarity_threshold": 0.72,
     "ocr_similarity_margin": 0.12,
-    "ocr_short_exact_length": 2
+    "ocr_short_exact_length": 3
 }

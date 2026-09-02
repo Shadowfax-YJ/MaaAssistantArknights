@@ -1,0 +1,32 @@
+{
+    "stage_name": "急不可耐",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[4, 5], [3, 1]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [1, 5],
+            "direction": "right"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [2, 4],
+            "direction": "up"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [8, 2],
+            "direction": "left"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [5, 5],
+            "direction": "left"
+        }
+    ]
+}

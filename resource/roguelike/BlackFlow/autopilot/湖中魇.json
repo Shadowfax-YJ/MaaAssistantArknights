@@ -1,0 +1,32 @@
+{
+    "stage_name": "湖中魇",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "侦测器",
+            "locations": [[4, 3]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [3, 3],
+            "direction": "right"
+        },
+        {
+            "groups": ["机械师"],
+            "location": [6, 5],
+            "direction": "up"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [7, 4],
+            "direction": "up"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [4, 4],
+            "direction": "right"
+        }
+    ]
+}

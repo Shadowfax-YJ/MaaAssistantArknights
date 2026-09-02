@@ -1,0 +1,32 @@
+{
+    "stage_name": "猎犬病原",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[2, 1], [1, 1]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [3, 3],
+            "direction": "right"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [3, 2],
+            "direction": "right"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [4, 3],
+            "direction": "right"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [2, 2],
+            "direction": "left"
+        }
+    ]
+}

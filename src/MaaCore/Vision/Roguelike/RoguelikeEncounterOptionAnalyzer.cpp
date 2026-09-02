@@ -6,6 +6,56 @@
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
 #include "Vision/RegionOCRer.h"
+#include "Vision/Roguelike/BlackFlow/BlackFlowOptionHeaderRules.h"
+
+namespace
+{
+asst::MultiMatcher::ResultsVec detect_blackflow_light_option_headers(const cv::Mat& image)
+{
+    using namespace asst;
+
+    const std::string theme { RoguelikeTheme::BlackFlow };
+    const MatchTaskPtr option_task =
+        Task.get<MatchTaskInfo>(theme + "@RoguelikeEncounterOptionAnalyzer-Option");
+    const MatchTaskPtr header_task =
+        Task.get<MatchTaskInfo>(theme + "@RoguelikeEncounterOptionAnalyzer-OptionHeaderBar");
+
+    Rect probe_rect {
+        option_task->roi.x + option_task->roi.width + 10,
+        header_task->roi.y,
+        90,
+        image.rows - (WindowHeightDefault - header_task->roi.height),
+    };
+    if (probe_rect.x < 0 || probe_rect.y < 0 || probe_rect.width <= 0 || probe_rect.height <= 0 ||
+        probe_rect.x + probe_rect.width > image.cols || probe_rect.y + probe_rect.height > image.rows) {
+        Log.warn("BlackFlow encounter light-header probe ROI is out of bounds:", probe_rect);
+        return {};
+    }
+
+    cv::Mat hsv;
+    cv::cvtColor(make_roi(image, probe_rect), hsv, cv::COLOR_BGR2HSV);
+    cv::Mat light_mask;
+    cv::inRange(hsv, cv::Scalar(0, 0, 180), cv::Scalar(180, 96, 255), light_mask);
+
+    cv::Mat row_means;
+    cv::reduce(light_mask, row_means, 1, cv::REDUCE_AVG, CV_64F);
+    std::vector<double> light_row_ratios(static_cast<std::size_t>(row_means.rows));
+    for (int row = 0; row < row_means.rows; ++row) {
+        light_row_ratios[static_cast<std::size_t>(row)] = row_means.at<double>(row, 0) / 255.0;
+    }
+
+    MultiMatcher::ResultsVec result;
+    for (const auto& band : blackflow::find_blackflow_light_header_bands(light_row_ratios, probe_rect.y)) {
+        // 第一行是标题栏的暗色边框，不属于亮色连通域。
+        const int header_y = (std::max)(header_task->roi.y, band.y - 1);
+        result.emplace_back(
+            Rect { header_task->roi.x, header_y, header_task->roi.width, 40 },
+            band.score,
+            "BlackFlowLightOptionHeader");
+    }
+    return result;
+}
+} // namespace
 
 bool asst::RoguelikeEncounterOptionAnalyzer::analyze()
 {
@@ -98,6 +148,11 @@ bool asst::RoguelikeEncounterOptionAnalyzer::analyze()
     m_result = std::move(result);
 
     return true;
+}
+
+bool asst::RoguelikeEncounterOptionAnalyzer::has_options() const
+{
+    return analyze_options(m_image).has_value();
 }
 
 std::optional<int> asst::RoguelikeEncounterOptionAnalyzer::merge_image(const cv::Mat& new_img)
@@ -279,11 +334,30 @@ asst::MultiMatcher::ResultsVecOpt asst::RoguelikeEncounterOptionAnalyzer::analyz
     option_analyze_roi.height = image.rows - (WindowHeightDefault - option_analyze_roi.height);
     option_analyzer.set_roi(option_analyze_roi);
 
-    if (!option_analyzer.analyze()) {
-        return std::nullopt;
+    MultiMatcher::ResultsVec option_analyze_result;
+    if (option_analyzer.analyze()) {
+        option_analyze_result = option_analyzer.get_result();
     }
 
-    MultiMatcher::ResultsVec option_analyze_result = option_analyzer.get_result();
+    if (m_theme == RoguelikeTheme::BlackFlow) {
+        for (auto&& light_header : detect_blackflow_light_option_headers(image)) {
+            const bool already_matched = std::ranges::any_of(option_analyze_result, [&](const auto& matched_header) {
+                return std::abs(matched_header.rect.y - light_header.rect.y) <= 4;
+            });
+            if (!already_matched) {
+                Log.info(
+                    "RoguelikeEncounterOptionAnalyzer | Found option header by light-bar structure:",
+                    light_header.rect,
+                    "score",
+                    light_header.score);
+                option_analyze_result.emplace_back(std::move(light_header));
+            }
+        }
+    }
+
+    if (option_analyze_result.empty()) {
+        return std::nullopt;
+    }
     sort_by_horizontal_(option_analyze_result); // 按照垂直方向排序（从上到下）
 
     return option_analyze_result;

@@ -1,6 +1,7 @@
 #include "BlackFlowRoutingTaskPlugin.h"
 
 #include "BlackFlowRoutingLoop.h"
+#include "BlackFlowAutomationCollectionRules.h"
 
 #include "Config/TaskData.h"
 #include "Utils/Logger.hpp"
@@ -28,6 +29,7 @@ void BlackFlowRoutingTaskPlugin::reset_in_run_variables()
 {
     m_pending = PendingWork::None;
     m_page_recovery_attempted = false;
+    m_floor_recovery_attempted = false;
 }
 
 bool BlackFlowRoutingTaskPlugin::_run()
@@ -49,6 +51,19 @@ bool BlackFlowRoutingTaskPlugin::_run()
         return true;
     }
 
+    if (m_session->profile() == "automation_collection") {
+        const auto core_operator = m_config->status().opers.find(std::string(AutomationCollectionCoreOperator));
+        const bool elite_two =
+            core_operator != m_config->status().opers.end() && core_operator->second.elite >= 2;
+        std::string fact_error;
+        if (!m_session->set_automation_collection_core_operator_elite_two(elite_two, &fact_error)) {
+            m_session->fail("core_operator_status_sync_failed", fact_error, FailureDisposition::RestartRun);
+            Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@StrategyTerminated-Enter");
+            report_outputs();
+            return true;
+        }
+    }
+
     const RoutingCycleOutcome cycle = work == PendingWork::ResumePendingMove
                                           ? execute_pending_routing_cycle(*m_session, *m_port)
                                           : execute_routing_cycle(*m_session, *m_port);
@@ -61,8 +76,16 @@ bool BlackFlowRoutingTaskPlugin::_run()
             m_page_recovery_attempted = true;
             Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@RecoverMap-Enter");
         }
+        else if (!m_floor_recovery_attempted) {
+            // 页面已经把角色送进下一层、但页面身份未能提前表达这种语义时，旧楼层模板必然建图失败。
+            // 放弃整局前再 OCR 一次顶部楼层名。这里只是探测：保留当前楼层，让 set_current_floor
+            // 用实际层号决定是否换代；若仍在同层，不得伪造新地图代或追忆四层。
+            m_floor_recovery_attempted = true;
+            Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@NextLevel-Enter");
+        }
         else {
             m_page_recovery_attempted = false;
+            m_floor_recovery_attempted = false;
             m_session->fail("map_rebuild_failed", cycle.error, FailureDisposition::RestartRun);
             Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@StrategyTerminated-Enter");
         }
@@ -70,8 +93,14 @@ bool BlackFlowRoutingTaskPlugin::_run()
         return true;
     }
     m_page_recovery_attempted = false;
+    m_floor_recovery_attempted = false;
     if (cycle.status == RoutingCycleStatus::MovementInventoryObservationRequired) {
         Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@MovementInventoryCheck");
+        report_outputs();
+        return true;
+    }
+    if (cycle.status == RoutingCycleStatus::DirectExhaustionRequired) {
+        Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@DirectExhaust-Enter");
         report_outputs();
         return true;
     }

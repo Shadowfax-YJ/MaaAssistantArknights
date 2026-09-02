@@ -17,7 +17,15 @@ bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& d
         return false;
     }
 
-    if (!details.get("details", "task", "").ends_with("Roguelike@TraderRandomShopping")) {
+    const std::string task = details.get("details", "task", "");
+    const bool shopping_entry =
+        task.ends_with("Roguelike@TraderRandomShopping") || task == "BlackFlow@Roguelike@TraderShoppingResume";
+    if (!shopping_entry) {
+        return false;
+    }
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection) {
+        // 自动化收集由专用商店插件按白名单和余额预留规则处理，不能让通用购物优先级抢先点击。
         return false;
     }
     else if (m_config->get_mode() == RoguelikeMode::Investment) {
@@ -231,4 +239,3 @@ bool asst::RoguelikeShoppingTaskPlugin::buy_once()
     */
     return true;
 }
-

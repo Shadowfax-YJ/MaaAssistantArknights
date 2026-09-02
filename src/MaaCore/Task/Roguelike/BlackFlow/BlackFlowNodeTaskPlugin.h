@@ -20,9 +20,9 @@ private:
     {
         None,
         BindDispatch,
+        RecordPageContent,
         ApplyResult,
         RecoverMapCompleted,
-        RecoverMapFailed,
     };
 
     void restore_node_completion_action();

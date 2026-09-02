@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -273,6 +275,10 @@ struct MissionState
 enum class RoutePreference
 {
     MinimizeIntermediateInteractions,
+    MaximizeRevealedNodes,
+    MaximizeEffectiveNodes,
+    IgnoreBattleTieBreaks,
+    OptimizeProcessingMoves,
 };
 
 struct GrantedScrap
@@ -311,10 +317,11 @@ struct PolicyProfile
     std::vector<std::string> modules;
     std::vector<StrategyTerminalRule> terminal_rules;
     std::string failure_action = "stop_run";
-    // 走出本层与耗尽行动力结局相同的层。这些层没有锁定目标的那几轮不再为出口预留行动力，
-    // 路线一直走到付不起下一步为止。
+    // 允许路线把行动力用尽的层。这些层没有锁定目标的那几轮不再为出口预留行动力，
+    // 路线一直走到付不起下一步为止。这里的 terminal 仅指路线搜索的端点；行动力耗尽后仍要进入追猎，
+    // 不会因此把策略或整局判为完成。
     //
-    // 按层声明而非整体开关：策略可能只在部分层这样收工，例如只打第二、四层的追猎，
+    // 按层声明而非整体开关：策略可能只在部分层允许进入追猎，
     // 区间表达不了这种层集合。必须抵达终点的层一律不要列进来。
     std::unordered_set<int> no_AP_is_terminal_floors;
 };
@@ -331,10 +338,11 @@ struct ResolvedPolicy
     std::vector<GrantedScrap> granted_scraps;
     std::vector<StrategyTerminalRule> terminal_rules;
     std::string failure_action = "stop_run";
-    // 走出本层与耗尽行动力结局相同的层。这些层没有锁定目标的那几轮不再为出口预留行动力，
-    // 路线一直走到付不起下一步为止。
+    // 允许路线把行动力用尽的层。这些层没有锁定目标的那几轮不再为出口预留行动力，
+    // 路线一直走到付不起下一步为止。这里的 terminal 仅指路线搜索的端点；行动力耗尽后仍要进入追猎，
+    // 不会因此把策略或整局判为完成。
     //
-    // 按层声明而非整体开关：策略可能只在部分层这样收工，例如只打第二、四层的追猎，
+    // 按层声明而非整体开关：策略可能只在部分层允许进入追猎，
     // 区间表达不了这种层集合。必须抵达终点的层一律不要列进来。
     std::unordered_set<int> no_AP_is_terminal_floors;
 };
@@ -364,6 +372,22 @@ struct PlannedRouteStep
     int action_points_after = 0;
 };
 
+// 一次随机移动结果对应的一条完整安全路线。PolicyCandidate 保留各维度的保守值用于
+// 展示与安全诊断；真正排序时，对这里的全部结果逐维取期望并沿用同一套字典序。
+struct PolicyRouteOutcome
+{
+    int revealed_node_count = 0;
+    int effective_node_count = 0;
+    int battle_count = 0;
+    int intermediate_interaction_count = 0;
+    int processing_move_count = 0;
+    int persistent_processing_move_count = 0;
+    std::array<int, ProcessingMovementSlotCount> processing_move_counts {};
+    int route_length = 0;
+    int movement_action_count = 0;
+    std::unordered_map<std::string, int> milestone_progress;
+};
+
 struct PolicyCandidate
 {
     MoveCandidate move;
@@ -371,17 +395,24 @@ struct PolicyCandidate
     bool legal = true;
     bool safe = false;
     int development_score = 0;
+    // 从本轮观测时仍未知的节点中，整条安全路线至少能新揭示的数量。
+    int revealed_node_count = 0;
+    // 整条路线的有效落点保守计分；具体权重由 BlackFlowRevealSemantics 统一定义，按节点去重，徒步中间节点不计。
+    int effective_node_count = 0;
     int risk_score = 0;
     int battle_count = 0;
     int intermediate_interaction_count = 0;
     int processing_move_count = 0;
     // 只计跨层保留的加工品。过期的下楼即作废，省下来没有意义。
     int persistent_processing_move_count = 0;
-    int estimated_duration = 0;
+    std::array<int, ProcessingMovementSlotCount> processing_move_counts {};
+    int route_length = 0;
     std::unordered_map<std::string, int> milestone_progress;
     std::vector<std::string> immediate_milestone_ids;
     std::vector<NodeId> planned_route;
     std::vector<PlannedRouteStep> planned_route_steps;
+    std::vector<NodeId> revealed_nodes;
+    std::vector<PolicyRouteOutcome> route_outcomes;
 };
 
 enum class DecisionReasonCategory
@@ -395,6 +426,25 @@ enum class DecisionReasonCategory
     TieBreak,
 };
 
+struct PolicyCandidateSummary
+{
+    MoveCandidate move;
+    std::vector<int> lexicographic_score;
+    std::vector<std::string> lexicographic_score_labels;
+    int revealed_node_count = 0;
+    int effective_node_count = 0;
+    int battle_count = 0;
+    int processing_move_count = 0;
+    int persistent_processing_move_count = 0;
+    std::array<int, ProcessingMovementSlotCount> processing_move_counts {};
+    int route_length = 0;
+    int risk_score = 0;
+    std::vector<PlannedRouteStep> planned_route_steps;
+    std::vector<NodeId> revealed_nodes;
+    std::vector<std::int64_t> expected_lexicographic_score_sum;
+    std::size_t route_outcome_count = 1;
+};
+
 struct PolicyDecision
 {
     std::optional<MoveCandidate> selected;
@@ -402,6 +452,7 @@ struct PolicyDecision
     std::vector<PlannedRouteStep> planned_route_steps;
     std::unordered_map<std::string, int> planned_milestone_progress;
     std::vector<MoveCandidate> runners_up;
+    std::vector<PolicyCandidateSummary> candidate_summaries;
     std::vector<std::string> rejected;
     std::unordered_map<std::string, std::size_t> rejection_counts;
     std::size_t total_candidates = 0;
@@ -428,6 +479,14 @@ public:
         const std::vector<PolicyCandidate>& candidates) const;
 };
 
+// 自动化收集的落点硬禁令。一层不限制作战落点，包括尚未探明的未知凶戾；
+// 二层起禁止未知凶戾、普通作战和紧急作战。“居民”据点（BattleSavage）不在禁令内。
+[[nodiscard]] std::unordered_set<NodeType> automation_collection_forbidden_landing_types(int floor);
+
+// 自动化收集的全图移动保留量必须进入路线搜索，不能只过滤当前首步；
+// 否则路线可以用一步徒步做垫步，再在模拟的第二步消耗应保留的加工品。
+[[nodiscard]] int automation_collection_reserved_full_map_charges(int floor) noexcept;
+
 [[nodiscard]] bool rule_is_active(const PolicyRule& rule, const FactStore& facts);
 [[nodiscard]] bool
     rule_matches_candidate(const PolicyRule& rule, const FactStore& facts, const FactStore& candidate_facts);
@@ -444,4 +503,3 @@ public:
 [[nodiscard]] std::string_view to_string(MilestoneStatus status) noexcept;
 [[nodiscard]] std::string_view to_string(DecisionReasonCategory category) noexcept;
 } // namespace asst::blackflow
-

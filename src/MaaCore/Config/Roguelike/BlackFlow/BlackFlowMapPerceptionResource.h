@@ -28,10 +28,14 @@ private:
     std::optional<std::filesystem::path> m_template_manifest_path;
     std::optional<std::filesystem::path> m_edge_config_path;
     std::optional<std::filesystem::path> m_runtime_manifest_path;
+    std::optional<std::filesystem::path> m_topology_path;
+    std::optional<std::filesystem::path> m_ideal_model_path;
     std::optional<std::filesystem::path> m_model_path;
     std::optional<std::filesystem::path> m_pending_template_manifest_path;
     std::optional<std::filesystem::path> m_pending_edge_config_path;
     std::optional<std::filesystem::path> m_pending_runtime_manifest_path;
+    std::optional<std::filesystem::path> m_pending_topology_path;
+    std::optional<std::filesystem::path> m_pending_ideal_model_path;
     std::optional<std::filesystem::path> m_pending_model_path;
     std::weak_ptr<const blackflow::perception::BlackFlowMapAnalyzer> m_analyzer;
     std::map<std::string, std::string> m_dependency_errors;

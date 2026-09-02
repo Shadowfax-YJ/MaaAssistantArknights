@@ -49,6 +49,8 @@ private:
     //   is_rtl: 滑动方向 (true: 从右向左; false: 从左向右，需要先滑动到最左侧)
     // 返回值: 招募结果 (true: 成功; false: 失败)
     bool recruit_appointed_char(const std::string& char_name, bool is_rtl = false);
+    // 自动化收集固定四人队伍：当前页看到目标就立即招募，否则再逐页查找。
+    bool recruit_automation_collection_char();
     // 选择干员
     void select_oper(const battle::roguelike::Recruitment& oper);
     // 找出给定的 Offset 组所有满足条件的干员

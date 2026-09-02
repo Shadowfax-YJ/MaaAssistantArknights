@@ -66,18 +66,22 @@ struct NodeDetectorConfig
     double guard_ring_min_score_gain = 0.15;
     std::size_t guard_ring_minimum_anchor_count = 2;
     int fixed_grid_translation_limit = 4;
+    double fixed_grid_translation_tolerance = 50.0;
     int empty_multi_suppression_radius = 12;
     double fixed_grid_hit_tolerance = 25.0;
     int ocr_column_width = 77;
-    int ocr_row_center_offset_y = 29;
-    int ocr_row_height = 40;
+    // 标题中心约在节点中心下方 21px。上下额外保留背景上下文，避免 DBDetector
+    // 在紧贴裁剪边界时把“紧急作战”收缩成只有 43x9 的“作占”框。
+    int ocr_row_center_offset_y = 25;
+    int ocr_row_height = 60;
     double ocr_grid_tolerance = 25.0;
     int ocr_merge_max_gap = 16;
+    int ocr_merge_max_overlap = 6;
     double ocr_merge_min_vertical_overlap = 0.50;
     double ocr_merge_max_center_y_delta = 8.0;
     double ocr_similarity_threshold = 0.72;
     double ocr_similarity_margin = 0.12;
-    int ocr_short_exact_length = 2;
+    int ocr_short_exact_length = 3;
 };
 
 struct NodeDetectionResult
@@ -101,7 +105,11 @@ class NodeDetector
 {
 public:
     NodeDetector(const RecognitionBridge& bridge, NodeDetectorConfig config);
-    NodeDetectionResult detect(const cv::Mat& image, int rows, int columns) const;
+    NodeDetectionResult detect(
+        const cv::Mat& image,
+        int rows,
+        int columns,
+        std::optional<cv::Point2d> forced_translation = std::nullopt) const;
     cv::Mat draw_overlay(const cv::Mat& image, const NodeDetectionResult& result) const;
 
     static std::optional<GridGeometry> fixed_grid(int rows, int columns);

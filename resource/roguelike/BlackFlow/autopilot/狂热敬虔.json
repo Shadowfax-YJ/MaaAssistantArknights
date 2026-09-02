@@ -1,0 +1,31 @@
+{
+    "stage_name": "狂热敬虔",
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [7, 5],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [6, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [5, 2],
+            "direction": "up"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [2, 1],
+            "direction": "down"
+        },
+        {
+            "groups": ["古米"],
+            "location": [7, 6],
+            "direction": "left"
+        }
+    ]
+}

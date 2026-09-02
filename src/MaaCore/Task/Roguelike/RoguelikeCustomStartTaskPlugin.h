@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+
 #include "AbstractRoguelikeTaskPlugin.h"
 
 namespace asst
@@ -6,10 +8,11 @@ namespace asst
 enum class RoguelikeCustomType
 {
     None,
-    Squad,    // 分队类型， like 指挥分队, 矛头分队, etc
-    Reward,   // 奖励类型， like 热水壶, 演讲稿, etc
-    Roles,    // 职业类型， like 先手必胜, 稳扎稳打, etc
-    CoreChar, // 首选干员， 干员名
+    Squad,           // 分队类型， like 指挥分队, 矛头分队, etc
+    Reward,          // 奖励类型， like 热水壶, 演讲稿, etc
+    Roles,           // 职业类型， like 先手必胜, 稳扎稳打, etc
+    CoreChar,        // 首选干员， 干员名
+    CoreCharVoucher, // 自动化收集的核心干员招募券
     // CoCoreChar,  // 次选干员， 干员名
 };
 
@@ -36,15 +39,23 @@ public:
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
     virtual bool load_params([[maybe_unused]] const json::value& params) override;
     void set_custom(RoguelikeCustomType type, std::string custom);
+    void set_blackflow_start_reward_observer(std::function<void(std::string_view)> observer)
+    {
+        m_blackflow_start_reward_observer = std::move(observer);
+    }
 
 protected:
     virtual bool _run() override;
+    virtual void reset_in_run_variables() override;
 
 private:
     bool hijack_squad();
     bool hijack_reward();
     bool hijack_roles();
     bool hijack_core_char();
+    bool hijack_core_char_voucher();
+    bool hijack_recruit_role_for(const std::string& char_name);
+    bool hijack_recruit_role(const std::string& role_ocr_name);
     std::vector<std::string> get_select_list() const;
 
 private:
@@ -54,5 +65,7 @@ private:
 
     std::string m_squad;
     std::string m_collectible_mode_squad;
+    bool m_automation_collection_core_char_voucher_selected = false;
+    std::function<void(std::string_view)> m_blackflow_start_reward_observer;
 };
 }

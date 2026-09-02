@@ -30,6 +30,10 @@
             "description": "可跨层保留的全图移动加工品"
         },
         {
+            "id": "automation_collection_full_map_movement",
+            "description": "自动化收集预留的全图移动：结构性原理、老妈妈的融雪、一次性喷气背包"
+        },
+        {
             "id": "persistent_long_range_movement",
             "description": "可跨层保留的长距离移动加工品"
         },
@@ -85,6 +89,12 @@
             "scope": "run"
         },
         {
+            "name": "automation_collection_full_map_count",
+            "type": "int",
+            "scope": "run",
+            "description": "结构性原理、老妈妈的融雪、一次性喷气背包的剩余总飞行次数"
+        },
+        {
             "name": "floor_development_exhausted",
             "type": "bool",
             "scope": "floor"
@@ -103,6 +113,12 @@
             "name": "basic_e2_team",
             "type": "bool",
             "scope": "run"
+        },
+        {
+            "name": "automation_collection_core_operator_elite_two",
+            "type": "bool",
+            "scope": "run",
+            "description": "自动化收集核心干员凯尔希·思衡托当前已精英二"
         },
         {
             "name": "investment_completed",
@@ -253,19 +269,19 @@
             "name": "candidate.movement",
             "type": "string",
             "scope": "candidate",
-            "description": "候选首步使用的移动方式 ID"
+            "description": "候选首个动作使用的移动方式 ID"
         },
         {
             "name": "candidate.move_edges",
             "type": "int",
             "scope": "candidate",
-            "description": "候选首步徒步经过的确认边数；加工品移动为 0"
+            "description": "候选首个动作徒步经过的确认边数；加工品移动为 0"
         },
         {
             "name": "candidate.requires_movement_switch",
             "type": "bool",
             "scope": "candidate",
-            "description": "执行候选首步前是否需要切换移动方式"
+            "description": "执行候选首个动作前是否需要切换移动方式"
         },
         {
             "name": "candidate.light_reveal_count",
@@ -329,7 +345,7 @@
     "modules": [
         {
             "id": "common_navigation",
-            "description": "公共安全、出口时机、商店回避和加工品触发规则",
+            "description": "公共安全、出口时机、秘境行商回避和加工品触发规则",
             "rules": [
                 {
                     "id": "avoid_empty_scrap_shop",
@@ -755,7 +771,7 @@
             "rules": [
                 {
                     "id": "investment_keep_short_walk",
-                    "description": "商店距离不超过两格时保持徒步",
+                    "description": "诡意行商距离不超过两格时保持徒步",
                     "kind": "prefer",
                     "tier": "resource_reserve",
                     "rank": 0,
@@ -786,7 +802,7 @@
                 },
                 {
                     "id": "investment_use_m11_for_direct_shop",
-                    "description": "没有短途徒步方案时使用结构性原理直达商店",
+                    "description": "没有短途徒步方案时使用结构性原理直达诡意行商",
                     "kind": "prefer",
                     "tier": "resource_reserve",
                     "rank": 1,
@@ -809,7 +825,7 @@
             "milestones": [
                 {
                     "id": "investment_shop",
-                    "description": "以最少战斗和最短时间抵达第一层固定普通商店",
+                    "description": "以最少战斗和最短时间抵达第一层固定诡意行商",
                     "floor_window": [1, 1],
                     "rank": 0,
                     "count": 1,
@@ -831,7 +847,7 @@
         },
         {
             "id": "burn_investment_shop",
-            "description": "刷等级时先去一层商店：拿得到结构性原理就硬性要求，拿不到则按权重择优",
+            "description": "刷等级时先去一层诡意行商：拿得到结构性原理就硬性要求，拿不到则按权重择优",
             "granted_scraps": [
                 {
                     "movement": "rogue_6_scrap_M_11",
@@ -878,7 +894,7 @@
             "rules": [
                 {
                     "id": "burn_require_shop_when_flight_guaranteed",
-                    "description": "开局配置保证精二机械师时，一层的路线必须经过商店",
+                    "description": "开局配置保证精二机械师时，一层的路线必须经过诡意行商",
                     "kind": "require",
                     "tier": "strategy_constraint",
                     "rank": 0,
@@ -1002,7 +1018,7 @@
             "milestones": [
                 {
                     "id": "burn_floor1_shop",
-                    "description": "权重按「值得为商店多绕两步」定价，够不到商店时这一维不参与排序",
+                    "description": "权重按「值得为诡意行商多绕两步」定价，够不到诡意行商时这一维不参与排序",
                     "kind": "preferred",
                     "floor_window": [1, 1],
                     "rank": 0,
@@ -1048,7 +1064,7 @@
             "rules": [
                 {
                     "id": "baby_use_processing_item_for_floor1_shop",
-                    "description": "第一层优先使用当前背包中的可用加工品抵达普通商店",
+                    "description": "第一层优先使用当前背包中的可用加工品抵达诡意行商",
                     "kind": "prefer",
                     "tier": "resource_reserve",
                     "rank": 0,
@@ -1083,7 +1099,7 @@
                 },
                 {
                     "id": "baby_walk_after_floor1_shop",
-                    "description": "第一层检查商店后优先徒步探索并保留加工品",
+                    "description": "第一层检查诡意行商后优先徒步探索并保留加工品",
                     "kind": "prefer",
                     "tier": "resource_reserve",
                     "rank": 0,
@@ -1354,7 +1370,7 @@
                 },
                 {
                     "id": "baby_floor2_shops",
-                    "description": "第二层经过普通商店时继续优先获取种子",
+                    "description": "第二层经过诡意行商时继续优先获取种子",
                     "kind": "preferred",
                     "floor_window": [2, 2],
                     "rank": 0,
@@ -1367,7 +1383,7 @@
                 },
                 {
                     "id": "baby_floor3_shops",
-                    "description": "第三层经过普通商店时卖货、刷新并尽量购买种子",
+                    "description": "第三层经过诡意行商时卖货、刷新并尽量购买种子",
                     "kind": "preferred",
                     "floor_window": [3, 3],
                     "rank": 0,
@@ -1542,6 +1558,145 @@
                     "completion": "condition"
                 }
             ]
+        },
+        {
+            "id": "automation_collection_route",
+            "description": "采集对局路线数据：优先满足分层终点约束并保留全图移动；当前观测无安全终点路线时临时探索，下一轮重新尝试终点",
+            "route_preferences": [
+                "maximize_revealed_nodes",
+                "maximize_effective_nodes",
+                "ignore_battle_tiebreaks",
+                "optimize_processing_moves"
+            ],
+            "rules": [
+                {
+                    "id": "automation_collection_avoid_regular_battles_after_floor1",
+                    "description": "第二层起禁止进入未知凶戾、作战和紧急作战；居民据点始终允许进入，第一层不避开这些节点",
+                    "kind": "forbid",
+                    "tier": "risk",
+                    "rank": 0,
+                    "when": {
+                        "fact": "current_floor",
+                        "op": "ge",
+                        "value": 2
+                    },
+                    "candidate_if": {
+                        "any": [
+                            {
+                                "fact": "candidate.node_type",
+                                "op": "eq",
+                                "value": "hide_battle"
+                            },
+                            {
+                                "fact": "candidate.node_type",
+                                "op": "eq",
+                                "value": "battle_normal"
+                            },
+                            {
+                                "fact": "candidate.node_type",
+                                "op": "eq",
+                                "value": "battle_elite"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "id": "automation_collection_preserve_full_map_floor_budget",
+                    "description": "第一、二、三层分别严格保留至少三、二、一次指定全图移动；现有数量不足时保留全部",
+                    "kind": "forbid",
+                    "tier": "resource_reserve",
+                    "rank": 0,
+                    "when": {
+                        "any": [
+                            {
+                                "all": [
+                                    {
+                                        "fact": "current_floor",
+                                        "op": "eq",
+                                        "value": 1
+                                    },
+                                    {
+                                        "fact": "automation_collection_full_map_count",
+                                        "op": "le",
+                                        "value": 3
+                                    }
+                                ]
+                            },
+                            {
+                                "all": [
+                                    {
+                                        "fact": "current_floor",
+                                        "op": "eq",
+                                        "value": 2
+                                    },
+                                    {
+                                        "fact": "automation_collection_full_map_count",
+                                        "op": "le",
+                                        "value": 2
+                                    }
+                                ]
+                            },
+                            {
+                                "all": [
+                                    {
+                                        "fact": "current_floor",
+                                        "op": "eq",
+                                        "value": 3
+                                    },
+                                    {
+                                        "fact": "automation_collection_full_map_count",
+                                        "op": "le",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "candidate_if": {
+                        "any": [
+                            {
+                                "fact": "candidate.movement",
+                                "op": "eq",
+                                "value": "rogue_6_scrap_M_08"
+                            },
+                            {
+                                "fact": "candidate.movement",
+                                "op": "eq",
+                                "value": "rogue_6_scrap_M_09"
+                            },
+                            {
+                                "fact": "candidate.movement",
+                                "op": "eq",
+                                "value": "rogue_6_scrap_M_11"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "reserves": [
+                {
+                    "id": "automation_collection_keep_one_full_map_through_floor4",
+                    "resource": "automation_collection_full_map_movement",
+                    "minimum": 1,
+                    "active_if": {
+                        "fact": "current_floor",
+                        "op": "eq",
+                        "value": 4
+                    }
+                }
+            ],
+            "milestones": [
+                {
+                    "id": "automation_collection_floor1_shop",
+                    "description": "第一层的完整路线必须经过诡意行商",
+                    "enforcement": "hard",
+                    "floor_window": [1, 1],
+                    "rank": 0,
+                    "selector": {
+                        "node_types": ["shop"]
+                    }
+                }
+            ]
         }
     ],
     "profiles": [
@@ -1553,7 +1708,7 @@
         },
         {
             "id": "investment",
-            "description": "第一层以战斗次数最少、预计时间最短的完整路线抵达固定普通商店",
+            "description": "第一层以战斗次数最少、预计时间最短的完整路线抵达固定诡意行商",
             "modules": ["common_navigation", "investment_route"],
             "terminal_rules": [
                 {
@@ -1634,7 +1789,7 @@
         },
         {
             "id": "baby_animal",
-            "description": "第一层检查普通商店，第二、三层探索并进入秘境行商培育种子",
+            "description": "第一层检查诡意行商，第二、三层探索并进入秘境行商培育种子",
             "modules": ["common_navigation", "baby_animal_route"],
             "terminal_rules": [
                 {
@@ -1677,6 +1832,15 @@
             "failure_action": "restart_current_run",
             "no_AP_is_terminal": {
                 "floors": [3]
+            }
+        },
+        {
+            "id": "automation_collection",
+            "description": "收集对局路线数据：分层最大化未知节点揭示数、按层保留指定全图移动，并在每次观测后重新优先尝试安全终点路线",
+            "modules": ["automation_collection_route"],
+            "failure_action": "restart_current_run",
+            "no_AP_is_terminal": {
+                "floors": [5]
             }
         },
         {

@@ -11,4 +11,7 @@
 *.yml    text eol=lf
 *.yaml   text eol=lf
 
+# PP-OCRv6's CTC dictionary ends with the literal U+0020 class.
+resource/PaddleOCR/rec/keys.txt -whitespace
+
 *.sh     text eol=lf

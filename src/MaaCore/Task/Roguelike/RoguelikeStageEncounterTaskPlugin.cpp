@@ -1,5 +1,11 @@
 #include "RoguelikeStageEncounterTaskPlugin.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <random>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "Config/Roguelike/RoguelikeStageEncounterConfig.h"
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
@@ -8,6 +14,7 @@
 #include "Task/ProcessTask.h"
 #include "Task/Roguelike/Map/RoguelikeBoskyPassageMap.h"
 #include "Utils/DebugImageHelper.hpp"
+#include "Utils/FuzzyTextMatcher.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
@@ -41,11 +48,17 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 {
     LogTraceFunction;
 
+    m_lake_fairy_plan.reset();
+    m_lake_fairy_initial_choice_index = 0;
+    m_lake_fairy_unique_choice_selected = false;
+
     const std::string& theme = m_config->get_theme();
     std::vector<std::string> event_names = RoguelikeStageEncounter.get_event_names(theme);
 
     if (theme == RoguelikeTheme::BlackFlow) {
-        Task.set_task_base("BlackFlow@Roguelike@StageEncounterResult", "BlackFlow@Roguelike@RecoveryFailed");
+        // 任何事件识别/选项处理失败都先退回地图重建现场，不能直接落进没有策略结果的终止节点。
+        // 若退图本身失败，RecoverMapFailed 会登记为“重开本局”，由长期挂机策略正常收尾。
+        Task.set_task_base("BlackFlow@Roguelike@StageEncounterResult", "BlackFlow@Roguelike@RecoverMap-Enter");
     }
 
     const std::string themed_ocr_task = theme + "@Roguelike@StageEncounterOcr";
@@ -57,24 +70,36 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
         return false;
     }
 
-    cv::Mat image = ctrler()->get_image();
-    OCRer name_analyzer(image);
-    name_analyzer.set_task_info(event_name_task_ptr);
-    name_analyzer.set_required(event_names);
-
-    if (!name_analyzer.analyze()) {
-        Log.error("Unknown Event");
-        callback(AsstMsg::SubTaskExtraInfo, basic_info_with_what("EncounterOcrError"));
-        return true;
+    constexpr int EventNameOcrAttempts = 3;
+    constexpr int EventNameOcrRetryDelay = 700;
+    cv::Mat image;
+    std::string current_event_name;
+    for (int attempt = 1; attempt <= EventNameOcrAttempts; ++attempt) {
+        image = ctrler()->get_image();
+        OCRer name_analyzer(image);
+        name_analyzer.set_task_info(event_name_task_ptr);
+        name_analyzer.set_required(event_names);
+        if (name_analyzer.analyze() && !name_analyzer.get_result().empty()) {
+            current_event_name = name_analyzer.get_result().front().text;
+            break;
+        }
+        if (attempt < EventNameOcrAttempts) {
+            Log.warn("Unknown Event, retrying title OCR", attempt, "of", EventNameOcrAttempts);
+            sleep(EventNameOcrRetryDelay);
+            if (need_exit()) {
+                return false;
+            }
+        }
     }
 
-    const auto& result_vec = name_analyzer.get_result();
-    if (result_vec.empty()) {
-        Log.error("Unknown Event");
+    if (current_event_name.empty()) {
+        Log.error("Unknown Event after title OCR retries");
+        save_img(image, "event title OCR failed");
+        auto info = basic_info_with_what("EncounterOcrError");
+        info["details"]["attempts"] = EventNameOcrAttempts;
+        callback(AsstMsg::SubTaskExtraInfo, info);
         return true;
     }
-
-    std::string current_event_name = result_vec.front().text;
 
     // 处理主事件及其链式 next_event
     while (!current_event_name.empty()) {
@@ -121,13 +146,34 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     size_t choose_option = process_task(event, special_val);
+    std::optional<std::vector<std::string>> planned_choice_order;
+    if (theme == RoguelikeTheme::BlackFlow && m_blackflow_encounter_choice_provider) {
+        if (const auto planned_choice = m_blackflow_encounter_choice_provider(event.name);
+            planned_choice.has_value()) {
+            choose_option = *planned_choice;
+        }
+    }
+    if (theme == RoguelikeTheme::BlackFlow && m_blackflow_encounter_choice_order_provider) {
+        planned_choice_order = m_blackflow_encounter_choice_order_provider(event.name);
+        if (planned_choice_order.has_value()) {
+            Log.info("Event:", event.name, "planned configured choice order", json::array(*planned_choice_order));
+        }
+    }
     Log.info("Event:", event.name, "special_val", special_val, "choose option", choose_option);
 
     auto info = basic_info_with_what("RoguelikeEvent");
     info["details"]["name"] = event.name;
     info["details"]["default_choose"] = event.default_choose;
     info["details"]["choose_option"] = choose_option;
+    if (planned_choice_order.has_value()) {
+        info["details"]["planned_choice_order"] = json::array(*planned_choice_order);
+    }
     callback(AsstMsg::SubTaskExtraInfo, info);
+    // 插件 callback 只会上报给外部调用方，不会再广播给同一 ProcessTask 的其他插件。
+    // 需要页面内容的主题专用逻辑必须通过显式观察器接收事件名。
+    if (m_event_observer) {
+        m_event_observer(event.name);
+    }
 
     // 萨卡兹内容拓展 II，#11861
     if (event.name.starts_with("魂灵见闻：")) {
@@ -173,7 +219,245 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     // 界园与黑流树海通过识别实际选项列表选择事件选项。
     if (theme == RoguelikeTheme::JieGarden || theme == RoguelikeTheme::BlackFlow) {
         reset_option_list_and_view_data();
-        if (update_option_list()) {
+        if (update_option_list(event.name)) {
+            if (theme == RoguelikeTheme::BlackFlow && event.name == blackflow::LakeFairyEventName) {
+                return handle_blackflow_lake_fairy(event);
+            }
+            if (!event.choice_groups.empty()) {
+                std::unordered_set<size_t> grouped_choices;
+                std::vector<std::string> grouped_ocr_candidates;
+                for (const auto& candidate_group : event.choice_groups) {
+                    for (const auto& candidate_choice : candidate_group.choices) {
+                        if (const auto* candidate_text = std::get_if<std::string>(&candidate_choice)) {
+                            grouped_ocr_candidates.emplace_back(*candidate_text);
+                        }
+                    }
+                }
+                const auto resolve_grouped_choice = [&](int configured_choice) -> std::optional<size_t> {
+                    const auto option_count = static_cast<std::int64_t>(m_option_list.size());
+                    const std::int64_t resolved_choice = configured_choice > 0
+                        ? static_cast<std::int64_t>(configured_choice)
+                        : option_count + static_cast<std::int64_t>(configured_choice) + 1;
+                    if (resolved_choice <= 0 || resolved_choice > option_count) {
+                        return std::nullopt;
+                    }
+                    return static_cast<size_t>(resolved_choice);
+                };
+
+                for (const auto& group : event.choice_groups) {
+                    std::vector<size_t> resolved_group_choices;
+                    std::unordered_map<std::string, size_t> resolved_group_choice_texts;
+                    const auto append_grouped_choice = [&](size_t grouped_choice) {
+                        if (!grouped_choices.emplace(grouped_choice).second) {
+                            Log.warn(
+                                "Event:",
+                                event.name,
+                                "Option",
+                                grouped_choice,
+                                "is already assigned to an earlier group");
+                            return;
+                        }
+                        resolved_group_choices.emplace_back(grouped_choice);
+                    };
+
+                    for (const auto& configured_choice : group.choices) {
+                        std::optional<size_t> grouped_choice_opt;
+                        if (const auto* choice_index = std::get_if<int>(&configured_choice)) {
+                            grouped_choice_opt = resolve_grouped_choice(*choice_index);
+                        }
+                        else if (const auto* choice_text = std::get_if<std::string>(&configured_choice)) {
+                            const auto option_it =
+                                std::ranges::find_if(m_option_list, [&](const OptionAnalyzer::Option& option) {
+                                    return option.text == *choice_text;
+                                });
+                            if (option_it != m_option_list.end()) {
+                                grouped_choice_opt = std::distance(m_option_list.begin(), option_it) + 1;
+                            }
+                            else {
+                                std::optional<size_t> fuzzy_choice;
+                                utils::FuzzyTextMatch fuzzy_match;
+                                bool ambiguous = false;
+                                for (size_t option_index = 0; option_index < m_option_list.size(); ++option_index) {
+                                    const auto match = utils::fuzzy_match_ocr_text(
+                                        m_option_list[option_index].text,
+                                        grouped_ocr_candidates);
+                                    if (!match.accepted || match.canonical != *choice_text) {
+                                        continue;
+                                    }
+                                    if (fuzzy_choice.has_value()) {
+                                        ambiguous = true;
+                                        break;
+                                    }
+                                    fuzzy_choice = option_index + 1;
+                                    fuzzy_match = match;
+                                }
+                                if (!ambiguous && fuzzy_choice.has_value()) {
+                                    grouped_choice_opt = fuzzy_choice;
+                                    Log.info(
+                                        "Event:",
+                                        event.name,
+                                        "Grouped OCR text",
+                                        *choice_text,
+                                        "fuzzy matched",
+                                        m_option_list[*fuzzy_choice - 1].text,
+                                        "distance",
+                                        fuzzy_match.edit_distance,
+                                        "similarity",
+                                        fuzzy_match.similarity);
+                                }
+                                else if (ambiguous) {
+                                    Log.warn(
+                                        "Event:",
+                                        event.name,
+                                        "Grouped OCR text",
+                                        *choice_text,
+                                        "fuzzy matched multiple options; rejecting ambiguous match");
+                                }
+                            }
+                        }
+
+                        if (!grouped_choice_opt) {
+                            if (const auto* choice_index = std::get_if<int>(&configured_choice)) {
+                                Log.warn(
+                                    "Event:",
+                                    event.name,
+                                    "Grouped choice",
+                                    *choice_index,
+                                    "cannot be resolved for",
+                                    m_option_list.size(),
+                                    "option(s)");
+                            }
+                            else {
+                                Log.warn(
+                                    "Event:",
+                                    event.name,
+                                    "Grouped OCR text",
+                                    std::get<std::string>(configured_choice),
+                                    "does not match any option");
+                            }
+                            continue;
+                        }
+                        append_grouped_choice(grouped_choice_opt.value());
+                        if (const auto* choice_text = std::get_if<std::string>(&configured_choice)) {
+                            resolved_group_choice_texts.insert_or_assign(*choice_text, grouped_choice_opt.value());
+                        }
+                    }
+
+                    if (group.choice_range) {
+                        const auto range_begin_opt = resolve_grouped_choice(group.choice_range->first);
+                        const auto range_end_opt = resolve_grouped_choice(group.choice_range->second);
+                        if (!range_begin_opt || !range_end_opt) {
+                            Log.warn(
+                                "Event:",
+                                event.name,
+                                "Grouped range cannot be resolved for",
+                                m_option_list.size(),
+                                "option(s)");
+                        }
+                        else {
+                            const size_t range_begin = range_begin_opt.value();
+                            const size_t range_end = range_end_opt.value();
+                            for (size_t grouped_choice = range_begin;;) {
+                                append_grouped_choice(grouped_choice);
+                                if (grouped_choice == range_end) {
+                                    break;
+                                }
+                                if (range_begin < range_end) {
+                                    ++grouped_choice;
+                                }
+                                else {
+                                    --grouped_choice;
+                                }
+                            }
+                        }
+                    }
+
+                    if (planned_choice_order.has_value()) {
+                        std::vector<size_t> planned_group_choices;
+                        std::unordered_set<size_t> appended_planned_choices;
+                        for (const std::string& configured_text : *planned_choice_order) {
+                            const auto resolved = resolved_group_choice_texts.find(configured_text);
+                            if (resolved == resolved_group_choice_texts.end() ||
+                                !appended_planned_choices.emplace(resolved->second).second) {
+                                continue;
+                            }
+                            planned_group_choices.emplace_back(resolved->second);
+                        }
+                        // 名称计划是权威候选集：没有列出的配置项代表安全评估已明确排除。
+                        // grouped_choices 仍保留完整显式组，避免被排除项又落入隐式最终回退。
+                        resolved_group_choices = std::move(planned_group_choices);
+                    }
+
+                    if (group.random) {
+                        static thread_local std::mt19937 random_engine(std::random_device {}());
+                        std::shuffle(resolved_group_choices.begin(), resolved_group_choices.end(), random_engine);
+                    }
+
+                    if (theme == RoguelikeTheme::BlackFlow &&
+                        event.name == blackflow::GoldStasisEventName) {
+                        const auto context = m_blackflow_encounter_context_provider
+                                                 ? m_blackflow_encounter_context_provider()
+                                                 : std::nullopt;
+                        const bool core_operator_elite_two =
+                            context.has_value() && context->core_operator_elite_two;
+                        std::ranges::stable_sort(
+                            resolved_group_choices,
+                            [&](size_t lhs, size_t rhs) {
+                                return blackflow::gold_stasis_choice_priority_bucket(
+                                           m_option_list[lhs - 1].text,
+                                           core_operator_elite_two) <
+                                       blackflow::gold_stasis_choice_priority_bucket(
+                                           m_option_list[rhs - 1].text,
+                                           core_operator_elite_two);
+                            });
+                        if (core_operator_elite_two) {
+                            Log.info(
+                                "Event: 金色凝滞 | defer 查看无人机 and 向泉水许愿 behind all other choices");
+                        }
+                    }
+
+                    for (const size_t grouped_choice : resolved_group_choices) {
+                        if (!m_option_list[grouped_choice - 1].enabled) {
+                            Log.info("Event:", event.name, "Grouped choice", grouped_choice, "is disabled");
+                            continue;
+                        }
+                        if (!select_analyzed_option(grouped_choice - 1)) {
+                            continue;
+                        }
+
+                        if (theme == RoguelikeTheme::BlackFlow) {
+                            Task.set_task_base(
+                                "BlackFlow@Roguelike@StageEncounterResult",
+                                "BlackFlow@Roguelike@StageEncounterReward");
+                        }
+                        return next_event(group.next_event.value_or(event.next_event));
+                    }
+                }
+
+                if (planned_choice_order.has_value()) {
+                    // 权威名称计划中的所有候选都未能选择时宁可让本轮失败/重试，也不能把
+                    // OCR 未成功归组的危险代价项当成普通未覆盖选项再次捞回来。
+                    return std::nullopt;
+                }
+
+                // 隐式最终回退组：从后向前尝试所有未被显式组覆盖的可用选项，继承事件级 next_event。
+                for (size_t fallback_choice = m_option_list.size(); fallback_choice > 0; --fallback_choice) {
+                    if (grouped_choices.contains(fallback_choice) || !m_option_list[fallback_choice - 1].enabled) {
+                        continue;
+                    }
+                    if (!select_analyzed_option(fallback_choice - 1)) {
+                        continue;
+                    }
+                    if (theme == RoguelikeTheme::BlackFlow) {
+                        Task.set_task_base(
+                            "BlackFlow@Roguelike@StageEncounterResult",
+                            "BlackFlow@Roguelike@StageEncounterReward");
+                    }
+                    return next_event(event.next_event);
+                }
+                return std::nullopt;
+            }
+
             size_t choice = 0; // 以 0 作为无效 index。
             if (theme == RoguelikeTheme::BlackFlow) {
                 if (choose_option > 0 && choose_option <= m_option_list.size() &&
@@ -182,11 +466,11 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 }
                 else {
                     const auto enabled_it =
-                        std::ranges::find_if(m_option_list, [](const OptionAnalyzer::Option& option) {
+                        std::ranges::find_if(m_option_list.rbegin(), m_option_list.rend(), [](const auto& option) {
                             return option.enabled;
                         });
-                    if (enabled_it != m_option_list.end()) {
-                        choice = std::distance(m_option_list.begin(), enabled_it) + 1;
+                    if (enabled_it != m_option_list.rend()) {
+                        choice = static_cast<size_t>(std::distance(m_option_list.begin(), enabled_it.base()));
                     }
                 }
             }
@@ -226,16 +510,16 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                         "BlackFlow@Roguelike@StageEncounterResult",
                         "BlackFlow@Roguelike@StageEncounterReward");
                 }
-                return next_event(event);
+                return next_event(event.next_event);
             }
 
             if (theme == RoguelikeTheme::BlackFlow) {
-                for (choice = 1; choice <= m_option_list.size(); ++choice) {
+                for (choice = m_option_list.size(); choice > 0; --choice) {
                     if (m_option_list[choice - 1].enabled && select_analyzed_option(choice - 1)) {
                         Task.set_task_base(
                             "BlackFlow@Roguelike@StageEncounterResult",
                             "BlackFlow@Roguelike@StageEncounterReward");
-                        return next_event(event);
+                        return next_event(event.next_event);
                     }
                 }
                 return std::nullopt;
@@ -244,7 +528,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
             // 界园兜底：从下到上依次选择。
             for (choice = m_option_list.size(); choice > 0; --choice) {
                 if (m_option_list[choice - 1].enabled && select_analyzed_option(choice - 1)) {
-                    return next_event(event);
+                    return next_event(event.next_event);
                 }
             }
         }
@@ -291,7 +575,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     if (hp_disappeared) {
-        return next_event(event);
+        return next_event(event.next_event);
     }
 
     // 兜底处理，从 option_num-option_num 点到 1-1
@@ -323,6 +607,78 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     }
 
     return event.next_event.empty() ? std::nullopt : std::optional { event.next_event };
+}
+
+std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_blackflow_lake_fairy(
+    const Config::RoguelikeEvent& event)
+{
+    if (!m_lake_fairy_plan.has_value()) {
+        const std::optional<blackflow::LakeFairyContext> context =
+            m_blackflow_encounter_context_provider ? m_blackflow_encounter_context_provider() : std::nullopt;
+        if (!context.has_value()) {
+            Log.warn("Event: 湖中仙女 | encounter context unavailable; use the conservative branch");
+        }
+        const blackflow::LakeFairyContext resolved_context = context.value_or(blackflow::LakeFairyContext {});
+        m_lake_fairy_plan = blackflow::make_lake_fairy_choice_plan(resolved_context);
+        Log.info(
+            "Event: 湖中仙女 | locked branch",
+            resolved_context.core_operator_elite_two && resolved_context.ingots >= 3
+                ? "first option four times"
+                : "first option, then second option",
+            "core operator elite two",
+            resolved_context.core_operator_elite_two,
+            "ingots",
+            resolved_context.ingots);
+    }
+
+    size_t choice = 0;
+    bool selecting_unique_choice = false;
+    if (m_lake_fairy_initial_choice_index < m_lake_fairy_plan->initial_choice_count) {
+        choice = m_lake_fairy_plan->initial_choices[m_lake_fairy_initial_choice_index];
+    }
+    else {
+        if (m_lake_fairy_unique_choice_selected) {
+            Log.error("Event: 湖中仙女 | options remain after selecting the expected final unique option");
+            return std::nullopt;
+        }
+        const auto enabled_count = std::ranges::count_if(m_option_list, [](const auto& option) {
+            return option.enabled;
+        });
+        if (enabled_count != 1) {
+            Log.error(
+                "Event: 湖中仙女 | expected one enabled follow-up option, got",
+                enabled_count,
+                "from",
+                m_option_list.size(),
+                "recognized options");
+            return std::nullopt;
+        }
+        const auto unique = std::ranges::find_if(m_option_list, [](const auto& option) { return option.enabled; });
+        choice = static_cast<size_t>(std::distance(m_option_list.begin(), unique)) + 1;
+        selecting_unique_choice = true;
+    }
+
+    if (choice == 0 || choice > m_option_list.size() || !m_option_list[choice - 1].enabled) {
+        Log.error(
+            "Event: 湖中仙女 | planned option",
+            choice,
+            "is unavailable among",
+            m_option_list.size(),
+            "recognized options");
+        return std::nullopt;
+    }
+    if (!select_analyzed_option(choice - 1)) {
+        return std::nullopt;
+    }
+
+    if (selecting_unique_choice) {
+        m_lake_fairy_unique_choice_selected = true;
+    }
+    else {
+        ++m_lake_fairy_initial_choice_index;
+    }
+    Task.set_task_base("BlackFlow@Roguelike@StageEncounterResult", "BlackFlow@Roguelike@StageEncounterReward");
+    return next_event(event.next_event);
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::satisfies_condition(
@@ -413,7 +769,7 @@ int asst::RoguelikeStageEncounterTaskPlugin::hp(const cv::Mat& image) const
     return utils::chars_to_number(res_vec_opt->text, hp_val) ? hp_val : 0;
 }
 
-bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
+bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list(std::string_view event_name)
 {
     LogTraceFunction;
 
@@ -425,7 +781,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
     cv::Mat image = ctrler()->get_image();
     RoguelikeEncounterOptionAnalyzer analyzer(image);
     analyzer.set_theme(theme);
-    for (size_t swipe_times = 0; swipe_times < MAX_SWIPE_TIMES && !need_exit(); ++swipe_times) {
+    const size_t max_swipe_times =
+        theme == RoguelikeTheme::BlackFlow ? BLACKFLOW_MAX_SWIPE_TIMES : MAX_SWIPE_TIMES;
+    for (size_t swipe_times = 0; swipe_times < max_swipe_times && !need_exit(); ++swipe_times) {
         move_forward();
         image = ctrler()->get_image();
         const std::optional<int> ret = analyzer.merge_image(image);
@@ -439,6 +797,10 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list()
 
     if (!analyzer.analyze()) {
         return false;
+    }
+
+    if (m_event_capture_observer && !analyzer.get_stitched_image().empty()) {
+        m_event_capture_observer(event_name, analyzer.get_stitched_image());
     }
 
     m_option_list = analyzer.get_result();
@@ -629,26 +991,67 @@ void asst::RoguelikeStageEncounterTaskPlugin::move_backward()
     ProcessTask(*this, { m_config->get_theme() + "@RoguelikeEncounter-MoveUp" }).run();
 }
 
-std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(const Config::RoguelikeEvent& event)
+std::optional<std::string>
+    asst::RoguelikeStageEncounterTaskPlugin::next_event(const std::string& next_event_name)
 {
     LogTraceFunction;
 
-    if (event.next_event.empty()) {
+    if (next_event_name.empty()) {
         return std::nullopt;
     }
 
     const auto& task = Task.get("Roguelike@StageEncounterJudgeClick");
+    const bool is_blackflow = m_config->get_theme() == RoguelikeTheme::BlackFlow;
+    const auto observe_page_state = [&]() {
+        const cv::Mat image = ctrler()->get_image();
+        bool map_visible = false;
+        if (is_blackflow) {
+            for (const std::string_view map_task : {
+                     std::string_view { "BlackFlow@Roguelike@MapPrepare-Ready" },
+                     std::string_view { "BlackFlow@Roguelike@MapPrepare-ZoomOut" },
+                }) {
+                Matcher map_matcher(image);
+                map_matcher.set_task_info(std::string { map_task });
+                if (map_matcher.analyze().has_value()) {
+                    map_visible = true;
+                    break;
+                }
+            }
+        }
+        return blackflow::classify_chained_encounter_page(is_blackflow, map_visible, hp(image) >= 0);
+    };
+    const auto stop_if_returned_to_map = [&]() {
+        if (observe_page_state() != blackflow::ChainedEncounterPageState::MapReturned) {
+            return false;
+        }
+        Log.info("BlackFlow chained encounter returned to map; finish event without another click");
+        return true;
+    };
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 2; ++j) {
+            // 地图和事件页都有生命值 HUD，不能再用 hp() 单独判断链式事件是否已经出现。
+            // 每次点击前后都判图；有些选项会在本次点击后直接退回地图。
+            if (stop_if_returned_to_map()) {
+                return std::nullopt;
+            }
             ctrler()->click(task->specific_rect);
             sleep(500);
+            if (stop_if_returned_to_map()) {
+                return std::nullopt;
+            }
         }
-        if (hp(ctrler()->get_image()) >= 0) {
-            Log.debug("HP restored, going to next_event:", event.next_event);
+        if (observe_page_state() == blackflow::ChainedEncounterPageState::EventReady) {
+            Log.debug("HP restored, going to next_event:", next_event_name);
             // 多点一次，确保选项恢复
+            if (stop_if_returned_to_map()) {
+                return std::nullopt;
+            }
             ctrler()->click(task->specific_rect);
             sleep(500);
-            return event.next_event;
+            if (stop_if_returned_to_map()) {
+                return std::nullopt;
+            }
+            return next_event_name;
         }
     }
 

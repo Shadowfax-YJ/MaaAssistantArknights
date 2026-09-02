@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 
 #include "MaaUtils/NoWarningCV.hpp"
@@ -21,6 +22,18 @@ MAA_SUPPRESS_CV_WARNINGS_END
 
 namespace asst
 {
+
+namespace
+{
+
+bool uses_ppocrv6_small_detector(const std::filesystem::path& model_path)
+{
+    std::ifstream input(model_path.parent_path() / "version.txt");
+    std::string version;
+    return input && std::getline(input, version) && version.starts_with("PP-OCRv6_small_det");
+}
+
+}
 
 struct OcrPack::Impl
 {
@@ -236,6 +249,15 @@ bool OcrPack::check_and_load()
         std::string(),
         det_option,
         fastdeploy::ModelFormat::ONNX);
+
+    if (uses_ppocrv6_small_detector(m_impl->det_model_path)) {
+        // PP-OCRv6 Small detection defaults. Keeping FastDeploy's older
+        // 0.3/0.6/1.5 defaults drops small map labels before recognition.
+        m_impl->det->GetPostprocessor().SetDetDBThresh(0.2);
+        m_impl->det->GetPostprocessor().SetDetDBBoxThresh(0.45);
+        m_impl->det->GetPostprocessor().SetDetDBUnclipRatio(1.4);
+        m_impl->det->GetPostprocessor().SetDetDBScoreMode("fast");
+    }
 
     m_impl->rec = std::make_unique<fastdeploy::vision::ocr::Recognizer>(
         platform::path_to_utf8_string(m_impl->rec_model_path),

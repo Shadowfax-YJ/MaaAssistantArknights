@@ -1,0 +1,32 @@
+{
+    "stage_name": "遗忘时间",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[4, 1], [7, 3]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [3, 1],
+            "direction": "right"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [7, 4],
+            "direction": "up"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [2, 2],
+            "direction": "right"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [6, 5],
+            "direction": "up"
+        }
+    ]
+}

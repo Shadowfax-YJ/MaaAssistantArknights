@@ -222,6 +222,8 @@
     <system:String x:Key="RoguelikeStrategyBlackFlowExp">레벨 우선, 빠르게 3구역으로 이동</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowInvestment">오리지늄각뿔 투자, 투자 완료 후 자동 종료</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowBabyAnimal">포대기 동물 육성</system:String>
+    <system:String x:Key="RoguelikeStrategyBlackFlowAutomationCollection">플레이 데이터 자동 수집</system:String>
+    <system:String x:Key="RoguelikeAutomationCollectionStartingOperators">메커니스트 + 凯尔希·思衡托</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTarget">목표 포대기 동물</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetCat">포대기의 고양이</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetFeatheredSerpent">포대기의 깃털 뱀</system:String>

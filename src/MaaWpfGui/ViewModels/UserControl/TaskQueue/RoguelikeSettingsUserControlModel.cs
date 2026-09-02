@@ -65,6 +65,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
         UpdateRoguelikeSquadList();
         UpdateRoguelikeStartWithAllDict();
         UpdateRoguelikeCoreCharList();
+        ApplyAutomationCollectionSettings();
     }
 
     private void UpdateRoguelikeDifficultyList()
@@ -116,6 +117,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                 new() { Display = LocalizationHelper.GetString("RoguelikeStrategyBlackFlowExp"), Value = Mode.Exp },
                 new() { Display = LocalizationHelper.GetString("RoguelikeStrategyBlackFlowInvestment"), Value = Mode.Investment },
                 new() { Display = LocalizationHelper.GetString("RoguelikeStrategyBlackFlowBabyAnimal"), Value = Mode.BlackFlowBabyAnimal },
+                new() { Display = LocalizationHelper.GetString("RoguelikeStrategyBlackFlowAutomationCollection"), Value = Mode.BlackFlowAutomationCollection },
             ];
         }
         else
@@ -450,7 +452,31 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
 
             SetTaskConfig<RoguelikeTask>(t => t.Mode == value, t => t.Mode = value);
             UpdateRoguelikeSquadList();
+            ApplyAutomationCollectionSettings();
         }
+    }
+
+    [PropertyDependsOn(nameof(RoguelikeMode), nameof(RoguelikeTheme))]
+    public bool RoguelikeAutomationCollectionSettingsLocked =>
+        RoguelikeTheme == Theme.BlackFlow && RoguelikeMode == Mode.BlackFlowAutomationCollection;
+
+    [PropertyDependsOn(nameof(RoguelikeMode), nameof(RoguelikeTheme))]
+    public bool RoguelikeStartWithSeedSettingsVisible =>
+        RoguelikeTheme == Theme.JieGarden && !RoguelikeAutomationCollectionSettingsLocked;
+
+    private void ApplyAutomationCollectionSettings()
+    {
+        if (!RoguelikeAutomationCollectionSettingsLocked)
+        {
+            return;
+        }
+
+        RoguelikeDifficulty = AsstRoguelikeTask.AutomationCollectionDifficulty;
+        RoguelikeInvestmentEnabled = false;
+        RoguelikeStartWithSeed = false;
+        RoguelikeSquad = "堡垒战术分队";
+        RoguelikeRoles = "坚不可摧";
+        RoguelikeCoreChar = "凯尔希·思衡托";
     }
 
     /// <summary>
@@ -909,6 +935,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
         "investment" => LocalizationHelper.GetString("RoguelikeStrategyBlackFlowInvestment"),
         "burn" or "burn_with_investment" => LocalizationHelper.GetString("RoguelikeStrategyBlackFlowExp"),
         "baby_animal" => LocalizationHelper.GetString("RoguelikeStrategyBlackFlowBabyAnimal"),
+        "automation_collection" => LocalizationHelper.GetString("RoguelikeStrategyBlackFlowAutomationCollection"),
         _ => LocalizationHelper.GetString("BlackFlowStrategyUnknown"),
     };
 
@@ -1019,9 +1046,16 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
         "floor_recognition_failed" => LocalizationHelper.GetString("BlackFlowOutcomeFloorRecognitionFailed"),
         "movement_inventory_observation_failed" => LocalizationHelper.GetString("BlackFlowOutcomeMovementInventoryFailed"),
         "movement_selection_failed" => LocalizationHelper.GetString("BlackFlowOutcomeMovementSelectionFailed"),
+        "movement_selection_proposal_failed" => LocalizationHelper.GetString("BlackFlowOutcomeMovementSelectionProposalFailed"),
         "node_dispatch_failed" => LocalizationHelper.GetString("BlackFlowOutcomeNodeDispatchFailed"),
         "node_result_failed" => LocalizationHelper.GetString("BlackFlowOutcomeNodeResultFailed"),
+        "move_confirmation_state_failed" => LocalizationHelper.GetString("BlackFlowOutcomeMoveConfirmationStateFailed"),
+        "battle_intel_preview_failed" => LocalizationHelper.GetString("BlackFlowOutcomeBattleIntelPreviewFailed"),
+        "core_operator_status_sync_failed" => LocalizationHelper.GetString("BlackFlowOutcomeCoreOperatorStatusSyncFailed"),
+        "automation_collection_pursuit_unsupported" => LocalizationHelper.GetString("BlackFlowOutcomePursuitUnsupported"),
         "internal_failure" => LocalizationHelper.GetString("BlackFlowOutcomeInternalFailure"),
+        _ when !string.IsNullOrWhiteSpace(outcome) =>
+            LocalizationHelper.GetStringFormat("BlackFlowOutcomeUnknownCode", outcome),
         _ => LocalizationHelper.GetString("BlackFlowOutcomeUnknown"),
     };
 
@@ -1048,6 +1082,8 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
         "BlackFlow perception and task port is not attached" => LocalizationHelper.GetString("BlackFlowTerminationPerceptionPortUnavailable"),
         "map rebuild failed twice" => LocalizationHelper.GetString("BlackFlowTerminationMapRebuildFailedTwice"),
         "preview replanning exceeded the finite candidate limit" => LocalizationHelper.GetString("BlackFlowTerminationPlanningRetryExhausted"),
+        _ when !string.IsNullOrWhiteSpace(reason) =>
+            LocalizationHelper.GetStringFormat("BlackFlowTerminationDetail", reason),
         _ => LocalizationHelper.GetString("BlackFlowTerminationUnknown"),
     };
 
@@ -1202,7 +1238,9 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
 
             case "BlackFlowRoutingWarning":
                 {
-                    var warning = subTaskDetails?["code"]?.ToString() switch
+                    var warningCode = subTaskDetails?["code"]?.ToString();
+                    var warningMessage = subTaskDetails?["message"]?.ToString();
+                    var warning = warningCode switch
                     {
                         "map_rebuild_failed" => LocalizationHelper.GetString("BlackFlowWarningMapRebuildFailed"),
                         "page_recovery_failed" => LocalizationHelper.GetString("BlackFlowWarningPageRecoveryFailed"),
@@ -1214,6 +1252,14 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                         "inferred_edge_selected" => LocalizationHelper.GetString("BlackFlowWarningInferredEdge"),
                         "post_move_mismatch" => LocalizationHelper.GetString("BlackFlowWarningPostMoveMismatch"),
                         "identity_conflict" => LocalizationHelper.GetString("BlackFlowWarningIdentityConflict"),
+                        "reveal_consistency_mismatch" => LocalizationHelper.GetString("BlackFlowWarningRevealConsistencyMismatch"),
+                        "forbidden_landing" => LocalizationHelper.GetString("BlackFlowWarningForbiddenLanding"),
+                        "preview_has_no_confirmed_safe_route" => LocalizationHelper.GetString("BlackFlowWarningPreviewNoSafeRoute"),
+                        "entered_page_identity_conflict" => LocalizationHelper.GetString("BlackFlowWarningEnteredPageIdentityConflict"),
+                        _ when !string.IsNullOrWhiteSpace(warningCode) && !string.IsNullOrWhiteSpace(warningMessage) =>
+                            LocalizationHelper.GetStringFormat("BlackFlowWarningUnknownDetails", warningCode, warningMessage),
+                        _ when !string.IsNullOrWhiteSpace(warningCode) =>
+                            LocalizationHelper.GetStringFormat("BlackFlowWarningUnknownCode", warningCode),
                         _ => LocalizationHelper.GetString("BlackFlowWarningUnknown"),
                     };
                     Instances.TaskQueueViewModel.AddLog(warning, UiLogColor.Warning);

@@ -1,0 +1,31 @@
+{
+    "stage_name": "赤金厄运",
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [7, 1],
+            "direction": "down"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [9, 3],
+            "direction": "down"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [5, 2],
+            "direction": "right"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [9, 2],
+            "direction": "left"
+        },
+        {
+            "groups": ["古米"],
+            "location": [8, 1],
+            "direction": "right"
+        }
+    ]
+}

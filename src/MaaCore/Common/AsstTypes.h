@@ -697,6 +697,7 @@ struct OcrTaskInfo : public TaskInfo
     constexpr OcrTaskInfo& operator=(OcrTaskInfo&&) noexcept = default;
     std::vector<std::string> text;                   // 文字的容器，匹配到这里面任一个，就算匹配上了
     bool full_match = false;                         // 是否需要全匹配，否则搜索到子串就算匹配上了
+    bool fuzzy_match = false;                        // 是否在候选全集中进行带歧义保护的编辑距离匹配
     bool is_ascii = false;                           // 是否启用字符数字模型
     bool without_det = false;                        // 是否不使用检测模型
     bool replace_full = false;                       // 匹配之后，是否将整个字符串replace（false是只替换match的部分）

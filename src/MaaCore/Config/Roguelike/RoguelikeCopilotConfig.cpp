@@ -11,6 +11,7 @@ bool asst::RoguelikeCopilotConfig::load(const std::filesystem::path& path)
 {
     LogTraceFunction;
 
+    m_loading_theme = path.parent_path().filename().string();
     bool ret = true;
     Logger::level::trace.set_enabled(false);
     for (auto& entry : std::filesystem::recursive_directory_iterator(path)) {
@@ -20,6 +21,7 @@ bool asst::RoguelikeCopilotConfig::load(const std::filesystem::path& path)
         ret &= AbstractConfig::load(entry.path());
     }
     Logger::level::trace.set_enabled(true);
+    m_loading_theme.clear();
     return ret;
 }
 
@@ -32,13 +34,39 @@ std::optional<CombatData> asst::RoguelikeCopilotConfig::get_stage_data(const std
     return it->second;
 }
 
+std::vector<std::string> asst::RoguelikeCopilotConfig::get_stage_names(const std::string& theme) const
+{
+    std::vector<std::string> names;
+    const auto theme_stages = m_stage_names_by_theme.find(theme);
+    if (theme_stages == m_stage_names_by_theme.end()) {
+        return names;
+    }
+    names.reserve(theme_stages->second.size());
+    for (const std::string& name : theme_stages->second) {
+        names.emplace_back(name);
+    }
+    std::ranges::sort(names);
+    return names;
+}
+
 bool asst::RoguelikeCopilotConfig::parse(const json::value& json)
 {
 #ifdef ASST_DEBUG
     LogTraceFunction;
 #endif
 
+    if (json.is_array()) {
+        bool ret = true;
+        for (const auto& stage : json.as_array()) {
+            ret &= parse(stage);
+        }
+        return ret;
+    }
+
     std::string stage_name = json.at("stage_name").as_string();
+    if (!m_loading_theme.empty()) {
+        m_stage_names_by_theme[m_loading_theme].emplace(stage_name);
+    }
     CombatData data;
     data.stage_name = stage_name;
     // clang-format off
@@ -178,9 +206,10 @@ bool asst::RoguelikeCopilotConfig::parse(const json::value& json)
         }
     }
 
-    if (auto opt = json.find<json::array>("deploy_plan")) {
+    const auto parse_deploy_plan = [&](json::array& raw_plan,
+                                       std::unordered_map<std::string, std::vector<DeployInfoWithRank>>& plan) {
         int rank = 1;
-        for (auto& deploy_info : opt.value()) {
+        for (auto& deploy_info : raw_plan) {
             DeployInfoWithRank info;
             info.location = Point(deploy_info["location"][0].as_integer(), deploy_info["location"][1].as_integer());
             const std::string& direction_str = deploy_info.get("direction", "none");
@@ -195,14 +224,71 @@ bool asst::RoguelikeCopilotConfig::parse(const json::value& json)
                 std::string group_name = group.as_string();
                 info.rank = rank;
                 rank++;
-                if (data.deploy_plan.contains(group_name)) {
-                    data.deploy_plan[group_name].emplace_back(info);
+                if (plan.contains(group_name)) {
+                    plan[group_name].emplace_back(info);
                 }
                 else {
-                    data.deploy_plan[group_name] = std::vector<DeployInfoWithRank> {};
-                    data.deploy_plan[group_name].emplace_back(info);
+                    plan[group_name] = std::vector<DeployInfoWithRank> {};
+                    plan[group_name].emplace_back(info);
                 }
             }
+        }
+    };
+
+    data.deploy_plan_only = json.get("deploy_plan_only", false);
+    if (auto opt = json.find<json::array>("deploy_plan")) {
+        parse_deploy_plan(opt.value(), data.deploy_plan);
+    }
+
+    if (auto opt = json.find<json::value>("preparation")) {
+        CombatData::Preparation preparation;
+        if (auto plan = opt->find<json::array>("deploy_plan")) {
+            parse_deploy_plan(plan.value(), preparation.deploy_plan);
+        }
+        if (auto shift = opt->find<json::array>("battle_camera_shift")) {
+            if (shift->size() != 2) {
+                Log.error("battle_camera_shift should contain exactly two numbers");
+                return false;
+            }
+            preparation.battle_camera_shift = { shift.value()[0].as_double(), shift.value()[1].as_double() };
+        }
+        data.preparation = std::move(preparation);
+    }
+
+    if (auto opt = json.find<json::array>("virtual_auto_skill_devices")) {
+        for (const auto& raw_device : opt.value()) {
+            const std::string& name = raw_device.at("name").as_string();
+            const int skill_times = raw_device.get("skill_times", 0);
+            if (skill_times < 0) {
+                Log.error("virtual_auto_skill_devices skill_times should be non-negative");
+                return false;
+            }
+            const auto& locations = raw_device.at("locations").as_array();
+            for (const auto& location : locations) {
+                if (!location.is_array() || location.as_array().size() != 2) {
+                    Log.error("virtual_auto_skill_devices location should contain exactly two integers");
+                    return false;
+                }
+                data.virtual_auto_skill_devices.emplace_back(
+                    VirtualAutoSkillDevice {
+                        .name = name,
+                        .location = Point(location[0].as_integer(), location[1].as_integer()),
+                        .skill_times = skill_times,
+                    });
+            }
+        }
+    }
+    if (auto opt = json.find<json::array>("deploy_after_virtual_auto_skill")) {
+        if (opt->size() != 2) {
+            Log.error("deploy_after_virtual_auto_skill should contain exactly two integers");
+            return false;
+        }
+        data.deploy_after_virtual_auto_skill = Point(opt.value()[0].as_integer(), opt.value()[1].as_integer());
+        if (std::ranges::none_of(data.virtual_auto_skill_devices, [&](const VirtualAutoSkillDevice& device) {
+                return device.location == *data.deploy_after_virtual_auto_skill;
+            })) {
+            Log.error("deploy_after_virtual_auto_skill should reference a configured virtual device");
+            return false;
         }
     }
 
@@ -215,6 +301,20 @@ bool asst::RoguelikeCopilotConfig::parse(const json::value& json)
                 info.kill_upper_bound = condition.value()[1].as_integer();
             }
             data.retreat_plan.emplace_back(info);
+        }
+    }
+
+    if (auto opt = json.find<json::array>("skill_stop_plan")) {
+        for (auto& skill_stop_info : opt.value()) {
+            DeployInfoWithRank info;
+            info.location = Point(
+                skill_stop_info["location"][0].as_integer(),
+                skill_stop_info["location"][1].as_integer());
+            if (auto condition = skill_stop_info.find<json::array>("condition")) {
+                info.kill_lower_bound = condition.value()[0].as_integer();
+                info.kill_upper_bound = condition.value()[1].as_integer();
+            }
+            data.skill_stop_plan.emplace_back(info);
         }
     }
 

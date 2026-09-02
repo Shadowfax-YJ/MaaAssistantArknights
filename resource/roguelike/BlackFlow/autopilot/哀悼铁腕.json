@@ -1,0 +1,31 @@
+{
+    "stage_name": "哀悼铁腕",
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [9, 1],
+            "direction": "down"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [9, 2],
+            "direction": "down"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [8, 2],
+            "direction": "down"
+        },
+        {
+            "groups": ["古米"],
+            "location": [9, 4],
+            "direction": "down"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [8, 6],
+            "direction": "up"
+        }
+    ]
+}

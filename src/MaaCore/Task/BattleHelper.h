@@ -42,6 +42,9 @@ protected:
 
     virtual bool do_strategic_action(const cv::Mat& reusable = cv::Mat());
 
+    // 仅在技能点击成功后回调；派生任务可据此记录固定装置的实际触发次数。
+    virtual void on_auto_skill_activated(const battle::OperNameTag&, const Point&) {}
+
     bool calc_tiles_info(const std::string& stage_name, double shift_x = 0, double shift_y = 0);
 
     bool pause();
@@ -115,6 +118,10 @@ protected:
 
     // 注册已部署干员及位置
     void register_deployed_oper(battle::Role role, const std::string& name, const Point& loc);
+    // 注册固定在场上的虚拟自动开技能单位，不计入实际部署干员
+    bool register_virtual_auto_skill_oper(const std::string& name, const Point& loc, int skill_times = 0);
+    // 指定坐标上的虚拟单位是否已至少成功释放过一次技能
+    [[nodiscard]] bool virtual_auto_skill_activated(const Point& loc) const noexcept;
     // 从场上干员和已占用格子中移除冷却中的干员
     void remove_cooling_from_battlefield(const battle::DeploymentOper& oper);
 
@@ -125,6 +132,9 @@ protected:
     Point m_skill_button_pos;
     Point m_retreat_button_pos;
     bool m_has_multi_stages = false;
+    // 准备阶段切换到偏移后的正式战斗视口时，场上技能就绪分类已使用正确的偏移坐标，
+    // 旧的顶部视图二次确认仍按通用视口截取，会把真阳性误判为未就绪。
+    bool m_direct_ready_skill_confirmation = false;
     // 技能用法, <可unknown职业,名称> -> <用法>
     std::unordered_map<battle::OperNameTag, battle::SkillUsage> m_skill_usage;
     // 技能使用次数, <可unknown职业,名称> -> <次数>
@@ -148,7 +158,8 @@ protected:
     std::vector<battle::DeploymentOper> m_cur_deployment_opers;
 
     std::map<battle::OperNameTag, Point> m_battlefield_opers; // 已部署的干员, <实际职业,名称> -> <坐标>
-    std::map<Point, battle::OperNameTag> m_used_tiles;        // 已占用的格子, <坐标> -> <实际职业,名称>
+    std::map<battle::OperNameTag, Point> m_virtual_auto_skill_opers; // 固定装置等虚拟单位, <虚拟名称> -> <坐标>
+    std::map<Point, battle::OperNameTag> m_used_tiles; // 已占用的格子, <坐标> -> <实际单位>; 虚拟装置可与干员同格
 
 private:
     InstHelper m_inst_helper;

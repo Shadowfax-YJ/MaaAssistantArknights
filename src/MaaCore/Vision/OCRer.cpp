@@ -10,6 +10,7 @@
 #include "Config/TaskData.h"
 #include "MaaUtils/Encoding.h"
 #include "MaaUtils/NoWarningCV.hpp"
+#include "Utils/FuzzyTextMatcher.h"
 #include "Utils/Logger.hpp"
 
 using namespace asst;
@@ -129,6 +130,51 @@ bool OCRer::filter_and_replace_by_required_(Result& res) const
     }
     auto& ocr_config = OcrConfig::get_instance();
     auto equ_text = ocr_config.process_equivalence_class(res.text);
+
+    if (m_params.fuzzy_match) {
+        std::vector<std::string> candidates;
+        candidates.reserve(m_params.required.size());
+        for (const auto& candidate : m_params.required) {
+            candidates.emplace_back(candidate.second);
+        }
+        const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(equ_text, candidates);
+        if (!match.accepted) {
+            Log.debug(
+                "OCR fuzzy match rejected",
+                "captured",
+                res.text,
+                "best",
+                match.canonical,
+                "similarity",
+                match.similarity,
+                "runner up",
+                match.runner_up,
+                "margin",
+                match.similarity - match.runner_up_similarity);
+            return false;
+        }
+        const auto canonical = std::ranges::find_if(m_params.required, [&](const auto& candidate) {
+            return candidate.second == match.canonical;
+        });
+        if (canonical == m_params.required.end()) {
+            return false;
+        }
+        const std::string captured = res.text;
+        res.text = canonical->first;
+        if (!match.exact) {
+            Log.info(
+                "OCR fuzzy matched",
+                "captured",
+                captured,
+                "canonical",
+                res.text,
+                "distance",
+                match.edit_distance,
+                "similarity",
+                match.similarity);
+        }
+        return true;
+    }
 
     if (m_params.full_match) {
         auto required = m_params.required | std::views::transform([&](const auto& str) { return str.second; });

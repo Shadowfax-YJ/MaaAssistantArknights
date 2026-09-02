@@ -1,0 +1,37 @@
+{
+    "stage_name": "灌水贤者",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[7, 1], [7, 2]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [3, 3],
+            "direction": "up"
+        },
+        {
+            "groups": ["机械师"],
+            "location": [7, 2],
+            "direction": "up"
+        },
+        {
+            "groups": ["机械师"],
+            "location": [6, 2],
+            "direction": "left"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [5, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [5, 3],
+            "direction": "left"
+        }
+    ]
+}

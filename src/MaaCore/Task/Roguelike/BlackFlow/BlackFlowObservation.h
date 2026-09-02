@@ -20,6 +20,14 @@ struct PerceptionNodeObservation
     std::string displayed_name;
     double confidence = 0.0;
     std::string existence_source;
+    std::string identity_source;
+    bool detected_by_vision = false;
+    bool confirmed_by_topology = false;
+    bool visually_hidden = false;
+    bool identity_from_topology = false;
+    bool identity_from_prediction = false;
+    std::string prediction_rule;
+    bool natural_reveal_suppressed = false;
     Rect icon_rect;
     std::optional<Rect> text_rect;
     std::string marker_type;
@@ -61,6 +69,20 @@ struct BlackFlowMapObservation
     std::int64_t artifact_io_us = 0;
     int attempt_count = 0;
     int retry_count = 0;
+    std::string topology_template_id;
+    std::string topology_source_digest;
+    int topology_base_edge_count = 0;
+    int topology_extra_edge_count = 0;
+    int topology_match_score = 0;
+    std::string utopia_status;
+    std::string utopia_reason;
+    std::string utopia_ideology;
+    std::string utopia_policy;
+    std::optional<GridPosition> ideal_source;
+    std::vector<GridPosition> ideal_domain;
+    std::vector<GridPosition> observed_ideal_domain;
+    double ideal_source_score_margin = 0.0;
+    bool ideal_source_heads_agree = false;
 };
 
 struct PerceptionSummary
@@ -77,6 +99,11 @@ struct PerceptionSummary
     std::int64_t recognition_us = 0;
     int attempt_count = 0;
     int retry_count = 0;
+    std::string topology_template_id;
+    std::string topology_source_digest;
+    int topology_base_edge_count = 0;
+    int topology_extra_edge_count = 0;
+    int topology_match_score = 0;
 };
 
 struct NormalizedPerceptionObservation

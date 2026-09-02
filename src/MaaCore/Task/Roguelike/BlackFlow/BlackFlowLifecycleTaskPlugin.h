@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlackFlowTaskPluginBase.h"
+#include "BlackFlowLifecycleRules.h"
 
 namespace asst::blackflow
 {
@@ -17,16 +18,21 @@ protected:
     virtual bool _run() override;
 
 private:
+    void finish_current_run(bool start_next_run);
+
     enum class PendingWork
     {
         None,
+        PrepareRecoveryRetry,
         RecordCurrentFloor,
+        ResolveHuntedAction,
         ResolveTerminalAction,
         ResetAfterAbandon,
     };
 
     mutable PendingWork m_pending = PendingWork::None;
     mutable json::value m_pending_details;
+    mutable std::string m_recovery_retry_target;
     mutable std::string m_terminal_trigger;
     mutable std::string m_terminal_pre_task;
     bool m_stop_after_abandon = false;

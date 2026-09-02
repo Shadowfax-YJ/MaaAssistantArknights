@@ -58,11 +58,16 @@ bool BlackFlowMapPerceptionResource::load(
     const auto template_manifest_path = path / "templates" / "manifest.json";
     const auto edge_config_path = path / "edge.json";
     const auto runtime_manifest_path = path / "corridor_net.runtime.json";
+    const auto topology_path = path / "topology.json";
+    const auto ideal_model_path = path / "ideal_domain.safetensors";
     const bool template_manifest_available = std::filesystem::is_regular_file(template_manifest_path);
     const bool edge_config_available = std::filesystem::is_regular_file(edge_config_path);
     const bool runtime_manifest_available = std::filesystem::is_regular_file(runtime_manifest_path);
+    const bool topology_available = std::filesystem::is_regular_file(topology_path);
+    const bool ideal_model_available = std::filesystem::is_regular_file(ideal_model_path);
     const bool model_available = model_path.has_value() && std::filesystem::is_regular_file(*model_path);
-    if (!template_manifest_available && !edge_config_available && !runtime_manifest_available && !model_available) {
+    if (!template_manifest_available && !edge_config_available && !runtime_manifest_available && !topology_available &&
+        !ideal_model_available && !model_available) {
         Log.trace(
             __FUNCTION__,
             "BlackFlow map perception resource layer contains no applicable component",
@@ -85,6 +90,12 @@ bool BlackFlowMapPerceptionResource::load(
         if (runtime_manifest_available) {
             update_current_path(m_runtime_manifest_path, m_pending_runtime_manifest_path, runtime_manifest_path);
         }
+        if (topology_available) {
+            update_current_path(m_topology_path, m_pending_topology_path, topology_path);
+        }
+        if (ideal_model_available) {
+            update_current_path(m_ideal_model_path, m_pending_ideal_model_path, ideal_model_path);
+        }
         if (model_available) {
             update_current_path(m_model_path, m_pending_model_path, *model_path);
         }
@@ -99,8 +110,13 @@ bool BlackFlowMapPerceptionResource::load(
     const bool runtime_manifest_changed =
         runtime_manifest_available &&
         update_pending_path(m_runtime_manifest_path, m_pending_runtime_manifest_path, runtime_manifest_path);
+    const bool topology_changed =
+        topology_available && update_pending_path(m_topology_path, m_pending_topology_path, topology_path);
+    const bool ideal_model_changed = ideal_model_available &&
+                                     update_pending_path(m_ideal_model_path, m_pending_ideal_model_path, ideal_model_path);
     const bool model_changed = model_available && update_pending_path(m_model_path, m_pending_model_path, *model_path);
-    if (template_manifest_changed || edge_config_changed || runtime_manifest_changed || model_changed) {
+    if (template_manifest_changed || edge_config_changed || runtime_manifest_changed || topology_changed ||
+        ideal_model_changed || model_changed) {
         Log.warn(
             __FUNCTION__,
             "BlackFlow map perception resources changed while the analyzer is in use; "
@@ -111,6 +127,10 @@ bool BlackFlowMapPerceptionResource::load(
             edge_config_changed,
             "runtime manifest changed",
             runtime_manifest_changed,
+            "topology changed",
+            topology_changed,
+            "ideal model changed",
+            ideal_model_changed,
             "model changed",
             model_changed);
     }
@@ -146,6 +166,8 @@ std::shared_ptr<const blackflow::perception::BlackFlowMapAnalyzer>
     apply_pending_path(m_template_manifest_path, m_pending_template_manifest_path);
     apply_pending_path(m_edge_config_path, m_pending_edge_config_path);
     apply_pending_path(m_runtime_manifest_path, m_pending_runtime_manifest_path);
+    apply_pending_path(m_topology_path, m_pending_topology_path);
+    apply_pending_path(m_ideal_model_path, m_pending_ideal_model_path);
     apply_pending_path(m_model_path, m_pending_model_path);
     if (!m_template_manifest_path.has_value()) {
         error = "BlackFlow map template manifest is not registered";
@@ -159,13 +181,27 @@ std::shared_ptr<const blackflow::perception::BlackFlowMapAnalyzer>
         error = "BlackFlow map runtime manifest is not registered";
         return nullptr;
     }
+    if (!m_topology_path.has_value()) {
+        error = "BlackFlow map topology library is not registered";
+        return nullptr;
+    }
+    if (!m_ideal_model_path.has_value()) {
+        error = "BlackFlow ideal-domain model is not registered";
+        return nullptr;
+    }
     if (!m_model_path.has_value()) {
         error = "BlackFlow map model is not registered";
         return nullptr;
     }
 
     auto analyzer = std::make_shared<blackflow::perception::BlackFlowMapAnalyzer>();
-    if (!analyzer->load(*m_template_manifest_path, *m_edge_config_path, *m_runtime_manifest_path, error)) {
+    if (!analyzer->load(
+            *m_template_manifest_path,
+            *m_edge_config_path,
+            *m_runtime_manifest_path,
+            *m_topology_path,
+            *m_ideal_model_path,
+            error)) {
         return nullptr;
     }
     m_analyzer = analyzer;

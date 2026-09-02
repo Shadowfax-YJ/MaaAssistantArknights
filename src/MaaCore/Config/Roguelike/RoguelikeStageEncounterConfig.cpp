@@ -1,6 +1,7 @@
 #include "RoguelikeStageEncounterConfig.h"
 
 #include <meojson/json.hpp>
+#include <unordered_set>
 
 #include "Utils/Logger.hpp"
 
@@ -54,6 +55,126 @@ bool asst::RoguelikeStageEncounterConfig::parse(const json::value& json)
             return false;
         }
         event.next_event = event_json.get("next_event", "");
+        if (auto choice_groups_opt = event_json.find("choice_groups");
+            choice_groups_opt && choice_groups_opt->is_array()) {
+            std::unordered_set<int> grouped_choices;
+            std::unordered_set<std::string> grouped_choice_texts;
+            for (const auto& group_json : choice_groups_opt->as_array()) {
+                if (!group_json.is_object()) {
+                    Log.error(
+                        std::format("RoguelikeEncounterConfig | choice group for event {} is not an object", event.name));
+                    return false;
+                }
+
+                const auto choices_opt = group_json.find("choices");
+                const auto range_opt = group_json.find("range");
+                if (static_cast<bool>(choices_opt) == static_cast<bool>(range_opt)) {
+                    Log.error(
+                        std::format(
+                            "RoguelikeEncounterConfig | choice group for event {} must contain exactly one of choices "
+                            "or range",
+                            event.name));
+                    return false;
+                }
+
+                ChoiceGroup group;
+                if (choices_opt) {
+                    if (!choices_opt->is_array() || choices_opt->as_array().empty()) {
+                        Log.error(
+                            std::format(
+                                "RoguelikeEncounterConfig | choice group for event {} has no choices",
+                                event.name));
+                        return false;
+                    }
+
+                    for (const auto& choice_json : choices_opt->as_array()) {
+                        if (choice_json.is_number()) {
+                            const int choice = choice_json.as_integer();
+                            if (choice == 0) {
+                                Log.error(
+                                    std::format(
+                                        "RoguelikeEncounterConfig | grouped choice for event {} must not be zero",
+                                        event.name));
+                                return false;
+                            }
+
+                            if (!grouped_choices.emplace(choice).second) {
+                                Log.error(
+                                    std::format(
+                                        "RoguelikeEncounterConfig | choice {} appears in multiple groups for event "
+                                        "{}",
+                                        choice,
+                                        event.name));
+                                return false;
+                            }
+                            group.choices.emplace_back(choice);
+                        }
+                        else if (choice_json.is_string()) {
+                            std::string choice_text = choice_json.as_string();
+                            if (choice_text.empty()) {
+                                Log.error(
+                                    std::format(
+                                        "RoguelikeEncounterConfig | grouped OCR text for event {} must not be empty",
+                                        event.name));
+                                return false;
+                            }
+                            if (!grouped_choice_texts.emplace(choice_text).second) {
+                                Log.error(
+                                    std::format(
+                                        "RoguelikeEncounterConfig | OCR text {} appears in multiple groups for event "
+                                        "{}",
+                                        choice_text,
+                                        event.name));
+                                return false;
+                            }
+                            group.choices.emplace_back(std::move(choice_text));
+                        }
+                        else {
+                            Log.error(
+                                std::format(
+                                    "RoguelikeEncounterConfig | grouped choice for event {} must be a number or OCR "
+                                    "text",
+                                    event.name));
+                            return false;
+                        }
+                    }
+                }
+                else {
+                    if (!range_opt->is_array() || range_opt->as_array().size() != 2) {
+                        Log.error(
+                            std::format(
+                                "RoguelikeEncounterConfig | choice range for event {} must contain two endpoints",
+                                event.name));
+                        return false;
+                    }
+
+                    const auto range = range_opt->as_array();
+                    const int range_begin = range[0].as_integer();
+                    const int range_end = range[1].as_integer();
+                    if (range_begin == 0 || range_end == 0) {
+                        Log.error(
+                            std::format(
+                                "RoguelikeEncounterConfig | choice range for event {} must not use zero",
+                                event.name));
+                        return false;
+                    }
+                    group.choice_range.emplace(range_begin, range_end);
+                }
+                group.random = group_json.get("random", false);
+                if (const auto next_event_opt = group_json.find("next_event")) {
+                    if (!next_event_opt->is_string()) {
+                        Log.error(
+                            std::format(
+                                "RoguelikeEncounterConfig | next_event for a choice group in event {} must be a "
+                                "string",
+                                event.name));
+                        return false;
+                    }
+                    group.next_event = next_event_opt->as_string();
+                }
+                event.choice_groups.emplace_back(std::move(group));
+            }
+        }
         if (auto fallback_array_opt = event_json.find("fallback_choices");
             fallback_array_opt && fallback_array_opt->is_array()) {
             for (const auto& pair_json : fallback_array_opt->as_array()) {

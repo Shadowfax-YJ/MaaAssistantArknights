@@ -1,0 +1,47 @@
+{
+    "stage_name": "败叶",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[4, 1]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [8, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [8, 2],
+            "direction": "left"
+        },
+        {
+            "groups": ["伊桑"],
+            "location": [6, 1],
+            "direction": "right"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [8, 1],
+            "direction": "left"
+        },
+        {
+            "groups": ["古米"],
+            "location": [9, 1],
+            "direction": "right"
+        }
+    ],
+    "skill_stop_plan": [
+        {
+            "location": [8, 2],
+            "condition": [6, 6]
+        },
+        {
+            "location": [8, 4],
+            "condition": [6, 6]
+        }
+    ]
+}

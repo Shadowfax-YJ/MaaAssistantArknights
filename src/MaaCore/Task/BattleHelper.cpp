@@ -12,6 +12,7 @@
 #include "MaaUtils/NoWarningCV.hpp"
 #include "MaaUtils/Time.hpp"
 #include "Task/ProcessTask.h"
+#include "Task/BattleAutoSkillRules.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Battle/BattlefieldClassifier.h"
 #include "Vision/Battle/BattlefieldMatcher.h"
@@ -51,13 +52,16 @@ void asst::BattleHelper::clear()
     m_last_use_skill_time.clear();
     m_camera_count = 0;
     m_camera_shift = { 0., 0. };
+    m_direct_ready_skill_confirmation = false;
 
     m_in_battle = false;
+    m_in_speedup = false;
     m_kills = 0;
     m_total_kills = 0;
     m_stopwatch_enabled = false;
     m_cur_deployment_opers.clear();
     m_battlefield_opers.clear();
+    m_virtual_auto_skill_opers.clear();
     m_used_tiles.clear();
 }
 
@@ -358,7 +362,11 @@ cv::Mat asst::BattleHelper::get_top_view(const cv::Mat& cam_img, bool side, bool
     };
     std::vector<cv::Point2f> screen_points;
     for (const auto& point : world_points) {
-        cv::Vec3d temp { point.x + (has_multi_stages ? m_map_data.view[0].x : 0), -point.y, Map::TileCalc2::rel_pos_z };
+        cv::Vec3d temp {
+            point.x + (has_multi_stages ? m_map_data.view[0].x : 0) + m_camera_shift.first,
+            -point.y + m_camera_shift.second,
+            Map::TileCalc2::rel_pos_z,
+        };
         auto screen_pt = Map::TileCalc2::world_to_screen(m_map_data, temp, true);
         screen_points.push_back(screen_pt);
     }
@@ -757,9 +765,15 @@ bool asst::BattleHelper::use_all_ready_skill(const cv::Mat& reusable)
     static constexpr auto min_frame_interval = std::chrono::milliseconds(1500);
 
     bool used = false;
+    BattleAutoSkillActivationGuard activation_guard;
     const auto now = std::chrono::steady_clock::now();
     const cv::Mat image = reusable.empty() ? m_inst_helper.ctrler()->get_image() : reusable;
-    for (const auto& [oper_tag, loc] : m_battlefield_opers) {
+    const auto try_use_skill = [&](const battle::OperNameTag& oper_tag, const Point& loc) {
+        if (!activation_guard.should_attempt(loc)) {
+            Log.info("Skip duplicate auto-skill activation on a shared tile", oper_tag.name, loc);
+            return;
+        }
+
         const auto& skill_it = std::ranges::find_if(m_skill_usage, [&](const auto& pair) {
             return (pair.first.role == battle::Role::Unknown || pair.first.role == oper_tag.role) &&
                    pair.first.name == oper_tag.name;
@@ -776,17 +790,17 @@ bool asst::BattleHelper::use_all_ready_skill(const cv::Mat& reusable)
         auto& retry = m_skill_error_count[skill_tag];
         auto& last_use_time = m_last_use_skill_time[oper_tag];
         if (usage != SkillUsage::Possibly && usage != SkillUsage::Times) {
-            continue;
+            return;
         }
 
         if (auto interval = now - last_use_time; min_frame_interval > interval) {
             LogInfo << oper_tag.name << "analyze skill too fast, interval time:"
                     << std::chrono::duration_cast<std::chrono::milliseconds>(interval).count() << " ms";
-            continue;
+            return;
         }
 
         if (!is_skill_ready(loc, image)) {
-            continue;
+            return;
         }
 
         LogInfo << "Skill" << oper_tag.name << "is ready";
@@ -802,11 +816,13 @@ bool asst::BattleHelper::use_all_ready_skill(const cv::Mat& reusable)
                     usage = SkillUsage::NotUse;
                 }
             }
-            continue;
+            return;
         }
+        activation_guard.record_success(loc);
         used = true;
         retry = 0;
         m_last_use_skill_time[oper_tag] = now;
+        on_auto_skill_activated(oper_tag, loc);
 
         if (usage == SkillUsage::Times) {
             times--;
@@ -815,6 +831,13 @@ bool asst::BattleHelper::use_all_ready_skill(const cv::Mat& reusable)
             }
         }
         // image = m_inst_helper.ctrler()->get_image();
+    };
+
+    for (const auto& [oper_tag, loc] : m_battlefield_opers) {
+        try_use_skill(oper_tag, loc);
+    }
+    for (const auto& [oper_tag, loc] : m_virtual_auto_skill_opers) {
+        try_use_skill(oper_tag, loc);
     }
 
     return used;
@@ -991,6 +1014,15 @@ bool asst::BattleHelper::click_skill(int timeout_ms)
         pausing = ProcessTask(this_task(), { "BattlePause" }).run();
     }
 
+    if (timeout_ms == 0 && m_direct_ready_skill_confirmation) {
+        Log.info("Use the already-confirmed ready skill after a shifted battle preparation view");
+        const bool clicked = m_inst_helper.ctrler()->click(m_skill_button_pos);
+        if (pausing) {
+            ProcessTask(this_task(), { "BattlePauseCancel" }).run();
+        }
+        return clicked;
+    }
+
     cv::Mat top_view;
     cv::Mat image;
     int retry = 0;
@@ -1004,11 +1036,11 @@ bool asst::BattleHelper::click_skill(int timeout_ms)
         skill_analyzer.set_task_info("BattleSkillReadyOnClick-TopView");
         skill_analyzer.set_roi({ 250, 250, 250, 250 });
         if (skill_analyzer.analyze()) {
-            m_inst_helper.ctrler()->click(m_skill_button_pos);
+            const bool clicked = m_inst_helper.ctrler()->click(m_skill_button_pos);
             if (pausing) {
                 ProcessTask(this_task(), { "BattlePauseCancel" }).run();
             }
-            return true;
+            return clicked;
         }
         if (timeout_ms > -1) {
             const auto elapsed_ms =
@@ -1199,6 +1231,42 @@ void asst::BattleHelper::register_deployed_oper(battle::Role role, const std::st
     m_used_tiles.emplace(loc, battle::OperNameTag { role, name });
     m_battlefield_opers.emplace(battle::OperNameTag { role, name }, loc);
     m_last_use_skill_time.emplace(battle::OperNameTag { role, name }, std::chrono::steady_clock::time_point());
+}
+
+bool asst::BattleHelper::register_virtual_auto_skill_oper(const std::string& name, const Point& loc, int skill_times)
+{
+    if (!m_normal_tile_info.contains(loc)) {
+        Log.error("No virtual auto-skill device location", name, loc);
+        return false;
+    }
+
+    battle::OperNameTag oper_tag { battle::Role::Unknown, name };
+    if (!m_virtual_auto_skill_opers.emplace(oper_tag, loc).second) {
+        Log.error("Duplicated virtual auto-skill device name", name);
+        return false;
+    }
+
+    m_skill_usage.emplace(
+        oper_tag,
+        skill_times > 0 ? battle::SkillUsage::Times : battle::SkillUsage::Possibly);
+    if (skill_times > 0) {
+        m_skill_times.emplace(oper_tag, skill_times);
+    }
+    m_last_use_skill_time.emplace(oper_tag, std::chrono::steady_clock::time_point());
+    Log.info("Registered virtual auto-skill device", name, loc, "skill times", skill_times);
+    return true;
+}
+
+bool asst::BattleHelper::virtual_auto_skill_activated(const Point& loc) const noexcept
+{
+    return std::ranges::any_of(m_virtual_auto_skill_opers, [&](const auto& entry) {
+        if (entry.second != loc) {
+            return false;
+        }
+        const auto used = m_last_use_skill_time.find(entry.first);
+        return used != m_last_use_skill_time.end() &&
+               used->second != std::chrono::steady_clock::time_point {};
+    });
 }
 
 void asst::BattleHelper::remove_cooling_from_battlefield(const battle::DeploymentOper& oper)

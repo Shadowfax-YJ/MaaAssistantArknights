@@ -15,16 +15,56 @@
             ]
         },
         {
-            "name": "益达",
+            "name": "结构性原理",
+            "doc": "机械师的召唤物",
             "opers": [
                 {
-                    "name": "维什戴尔",
-                    "skill": 3,
-                    "alternate_skill": 2,
+                    "name": "结构性原理"
+                }
+            ]
+        },
+        {
+            "name": "凯尔希·思衡托",
+            "opers": [
+                {
+                    "name": "凯尔希·思衡托",
+                    "skill": 2,
                     "is_key": true,
                     "is_start": true,
                     "recruit_priority": 998,
                     "promote_priority": 1000
+                }
+            ]
+        },
+        {
+            "name": "伊桑",
+            "opers": [
+                {
+                    "name": "伊桑"
+                }
+            ]
+        },
+        {
+            "name": "维什戴尔",
+            "opers": [
+                {
+                    "name": "维什戴尔"
+                }
+            ]
+        },
+        {
+            "name": "卡达",
+            "opers": [
+                {
+                    "name": "卡达"
+                }
+            ]
+        },
+        {
+            "name": "古米",
+            "opers": [
+                {
+                    "name": "古米"
                 }
             ]
         },
@@ -37,19 +77,6 @@
                     "is_key": true,
                     "is_start": true,
                     "recruit_priority": 997,
-                    "promote_priority": 999
-                }
-            ]
-        },
-        {
-            "name": "电弧",
-            "opers": [
-                {
-                    "name": "电弧",
-                    "skill": 2,
-                    "is_start": true,
-                    "is_key": true,
-                    "recruit_priority": 999,
                     "promote_priority": 999
                 }
             ]
@@ -269,7 +296,7 @@
                     "promote_priority": 940,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": -230
                         }
@@ -1189,7 +1216,7 @@
                     "promote_priority": 801,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -200
                         },
@@ -1209,7 +1236,7 @@
                     "promote_priority": 701,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1224,7 +1251,7 @@
                     "promote_priority": 500,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1239,7 +1266,7 @@
                     "promote_priority": 500,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1259,7 +1286,7 @@
                     "promote_priority": 420,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1274,7 +1301,7 @@
                     "promote_priority": 900,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1287,7 +1314,7 @@
                     "promote_priority": 420,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1300,7 +1327,7 @@
                     "promote_priority": 400,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1313,7 +1340,7 @@
                     "promote_priority": 400,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["水陈", "速狙", "益达"],
+                            "groups": ["水陈", "速狙", "维什戴尔"],
                             "threshold": 1,
                             "offset": -300
                         }
@@ -1350,7 +1377,7 @@
                     "promote_priority": 200,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": 10
                         }
@@ -1974,7 +2001,7 @@
                             "offset": -300
                         },
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": 250
                         }
@@ -2676,7 +2703,7 @@
                     "promote_priority": 900,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": -200
                         }
@@ -2691,7 +2718,7 @@
                     "promote_priority": 510,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": -230
                         }
@@ -2760,7 +2787,7 @@
                     "promote_priority": 200,
                     "recruit_priority_offsets": [
                         {
-                            "groups": ["益达"],
+                            "groups": ["维什戴尔"],
                             "threshold": 1,
                             "offset": -10
                         }
@@ -4861,7 +4888,7 @@
     ],
     "team_complete_condition": [
         {
-            "groups": ["益达", "玛恩纳", "新能"],
+            "groups": ["凯尔希·思衡托", "玛恩纳", "新能"],
             "threshold": 2
         },
         {

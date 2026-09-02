@@ -1,1 +1,3 @@
-ch_PP-OCRv3_det_infer
+PP-OCRv6_small_det_onnx_infer
+Source: PaddleOCR 3.7.0 official ONNX package
+DB: thresh=0.2, box_thresh=0.45, unclip_ratio=1.4

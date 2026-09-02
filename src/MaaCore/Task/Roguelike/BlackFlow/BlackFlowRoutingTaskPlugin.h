@@ -25,5 +25,6 @@ private:
 
     mutable PendingWork m_pending = PendingWork::None;
     bool m_page_recovery_attempted = false;
+    bool m_floor_recovery_attempted = false;
 };
 } // namespace asst::blackflow

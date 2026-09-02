@@ -27,6 +27,16 @@ public:
 
 protected:
     void report_outputs();
+    [[nodiscard]] bool run_logging_enabled() const noexcept;
+    bool record_run_event(
+        RunLogLevel level,
+        std::string action,
+        std::string phase,
+        std::string outcome,
+        json::object details = {},
+        std::string task = {},
+        std::shared_ptr<cv::Mat> image = nullptr,
+        bool capture_image = false) const;
 
     std::shared_ptr<BlackFlowSession> m_session;
     std::shared_ptr<IBlackFlowTaskPort> m_port;

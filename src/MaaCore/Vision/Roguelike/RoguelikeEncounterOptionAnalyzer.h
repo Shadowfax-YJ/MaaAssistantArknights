@@ -52,6 +52,14 @@ public:
 
     [[nodiscard]] const Result& get_result() const { return m_result; };
 
+    /// 完成滚动拼接后、用于选项分析的完整事件页图像。
+    [[nodiscard]] const cv::Mat& get_stitched_image() const noexcept { return m_image; }
+
+    /// <summary>
+    /// 当前图像中是否包含事件选项。
+    /// </summary>
+    [[nodiscard]] bool has_options() const;
+
     /// <summary>
     /// 在 <c>image</c> 中匹配 <c>option_templ</c> 所对应的事件选项。
     /// </summary>

@@ -222,6 +222,8 @@
     <system:String x:Key="RoguelikeStrategyBlackFlowExp">刷等級，快速前往第三層</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowInvestment">刷源石錠，投資完成後自動退出</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowBabyAnimal">刷襁褓動物</system:String>
+    <system:String x:Key="RoguelikeStrategyBlackFlowAutomationCollection">對局資料自動化收集</system:String>
+    <system:String x:Key="RoguelikeAutomationCollectionStartingOperators">機械師 + 凱爾希·思衡托</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTarget">目標襁褓動物</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetCat">襁褓中的貓</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetFeatheredSerpent">襁褓羽蛇</system:String>
@@ -1454,6 +1456,12 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowWarningInferredEdge">本次移動使用了低證據連線</system:String>
     <system:String x:Key="BlackFlowWarningPostMoveMismatch">移動後的節點或行動力狀態不一致</system:String>
     <system:String x:Key="BlackFlowWarningIdentityConflict">預覽顯示的節點類型與當前地圖不一致</system:String>
+    <system:String x:Key="BlackFlowWarningRevealConsistencyMismatch">實際揭示的節點與路線規劃預期不一致，已採用當前觀測並重新規劃</system:String>
+    <system:String x:Key="BlackFlowWarningForbiddenLanding">預覽落點觸發當前層的禁止規則，已取消本次移動並重新規劃</system:String>
+    <system:String x:Key="BlackFlowWarningPreviewNoSafeRoute">預覽落點之後沒有確認可行的安全路線，已取消本次移動並重新規劃</system:String>
+    <system:String x:Key="BlackFlowWarningEnteredPageIdentityConflict">進入節點後的頁面類型與地圖記錄不一致，已按當前頁面修正</system:String>
+    <system:String x:Key="BlackFlowWarningUnknownDetails">未識別的路線告警（代碼：{0}）：{1}</system:String>
+    <system:String x:Key="BlackFlowWarningUnknownCode">未識別的路線告警（代碼：{0}）</system:String>
     <system:String x:Key="BlackFlowWarningUnknown">肉鴿出現異常</system:String>
     <system:String x:Key="BlackFlowMilestoneChanged">階段目標：{0}（{1}）</system:String>
     <system:String x:Key="BlackFlowStrategyResult">肉鴿策略結束：{0}（{1}）</system:String>
@@ -1572,9 +1580,15 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowOutcomeFloorRecognitionFailed">樓層識別失敗</system:String>
     <system:String x:Key="BlackFlowOutcomeMovementInventoryFailed">移動加工品識別失敗</system:String>
     <system:String x:Key="BlackFlowOutcomeMovementSelectionFailed">移動加工品選擇失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomeMovementSelectionProposalFailed">無法準備加工品選擇</system:String>
     <system:String x:Key="BlackFlowOutcomeNodeDispatchFailed">節點分派失敗</system:String>
     <system:String x:Key="BlackFlowOutcomeNodeResultFailed">節點結果處理失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomeMoveConfirmationStateFailed">移動確認後的狀態更新失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomeBattleIntelPreviewFailed">無法開啟戰鬥關卡預覽</system:String>
+    <system:String x:Key="BlackFlowOutcomeCoreOperatorStatusSyncFailed">凱爾希·思衡托精二狀態同步失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomePursuitUnsupported">當前樓層的追獵戰尚未適配</system:String>
     <system:String x:Key="BlackFlowOutcomeInternalFailure">內部狀態異常</system:String>
+    <system:String x:Key="BlackFlowOutcomeUnknownCode">未識別的肉鴿異常（代碼：{0}）</system:String>
     <system:String x:Key="BlackFlowOutcomeUnknown">肉鴿出現異常</system:String>
     <system:String x:Key="BlackFlowTerminationInvestmentFinished">投資已經完成，本局結束</system:String>
     <system:String x:Key="BlackFlowTerminationInvestmentShopWindowClosed">已經離開第一層且尚未投資，本局重開</system:String>
@@ -1597,6 +1611,7 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowTerminationPerceptionPortUnavailable">地圖識別與任務介面不可用</system:String>
     <system:String x:Key="BlackFlowTerminationMapRebuildFailedTwice">連續兩次地圖重建失敗</system:String>
     <system:String x:Key="BlackFlowTerminationPlanningRetryExhausted">預覽反覆改變可選路線，已經超過重新規劃次數</system:String>
+    <system:String x:Key="BlackFlowTerminationDetail">具體原因：{0}</system:String>
     <system:String x:Key="BlackFlowTerminationUnknown">詳細原因請查看檔案日誌</system:String>
     <system:String x:Key="RoguelikeEvent">事件:</system:String>
     <system:String x:Key="RoguelikeEncounterOptions">辨識到 {0} 個選項:</system:String>

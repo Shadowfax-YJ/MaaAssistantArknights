@@ -253,6 +253,11 @@ public enum RoguelikeMode
     /// 30001 - 刷襁褓动物（主题专用 GUI 模式）
     /// </summary>
     BlackFlowBabyAnimal = 30001,
+
+    /// <summary>
+    /// 30002 - 自动化收集对局数据（主题专用 GUI 模式）
+    /// </summary>
+    BlackFlowAutomationCollection = 30002,
 }
 
 /// <summary>

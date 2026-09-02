@@ -18,6 +18,11 @@
             "text": "险路小径",
             "display_name": "险路小径",
             "node_type": "evacuate"
+        },
+        {
+            "text": "命运所指",
+            "display_name": "命运所指",
+            "node_type": "incident"
         }
     ],
     "templates": [
@@ -194,7 +199,7 @@
         {
             "file": "BlackFlow@Roguelike@informant.png",
             "marker_type": "informant",
-            "display_name": "线人",
+            "display_name": "线人与线索",
             "role": "node_marker",
             "seed_anchor": false,
             "width": 25,
@@ -206,6 +211,17 @@
             "display_name": "流窜居民",
             "role": "node_marker",
             "seed_anchor": false,
+            "threshold": 0.7,
+            "width": 25,
+            "height": 25
+        },
+        {
+            "file": "BlackFlow@Roguelike@fruit_cache.png",
+            "marker_type": "fruit_cache",
+            "display_name": "藏果地",
+            "role": "node_marker",
+            "seed_anchor": false,
+            "threshold": 0.8,
             "width": 25,
             "height": 25
         },

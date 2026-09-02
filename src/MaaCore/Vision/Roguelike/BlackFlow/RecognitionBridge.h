@@ -8,6 +8,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "Vision/Roguelike/BlackFlow/NodeOcrRules.h"
+
 namespace asst::blackflow::perception
 {
 

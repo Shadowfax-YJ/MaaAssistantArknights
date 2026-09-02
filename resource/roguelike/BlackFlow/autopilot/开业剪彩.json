@@ -1,0 +1,36 @@
+{
+    "stage_name": "开业剪彩",
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [7, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [7, 3],
+            "direction": "down"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [6, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [4, 3],
+            "direction": "up"
+        },
+        {
+            "groups": ["伊桑"],
+            "location": [8, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["古米"],
+            "location": [5, 4],
+            "direction": "left"
+        }
+    ]
+}

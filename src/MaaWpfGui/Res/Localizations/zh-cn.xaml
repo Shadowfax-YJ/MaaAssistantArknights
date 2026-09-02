@@ -222,6 +222,8 @@
     <system:String x:Key="RoguelikeStrategyBlackFlowExp">刷等级，快速飞三层</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowInvestment">刷源石锭，投资完成后自动退出</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowBabyAnimal">刷襁褓动物</system:String>
+    <system:String x:Key="RoguelikeStrategyBlackFlowAutomationCollection">对局数据自动化收集</system:String>
+    <system:String x:Key="RoguelikeAutomationCollectionStartingOperators">机械师 + 凯尔希·思衡托</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTarget">目标襁褓动物</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetCat">襁褓中的猫</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetFeatheredSerpent">襁褓羽蛇</system:String>
@@ -1453,6 +1455,12 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowWarningInferredEdge">本次移动使用了低证据连线</system:String>
     <system:String x:Key="BlackFlowWarningPostMoveMismatch">移动后的节点或行动力状态不一致</system:String>
     <system:String x:Key="BlackFlowWarningIdentityConflict">预览显示的节点类型与当前地图不一致</system:String>
+    <system:String x:Key="BlackFlowWarningRevealConsistencyMismatch">实际揭示的节点与路线规划预期不一致，已采用当前观测并重新规划</system:String>
+    <system:String x:Key="BlackFlowWarningForbiddenLanding">预览落点触发当前层的禁止规则，已取消本次移动并重新规划</system:String>
+    <system:String x:Key="BlackFlowWarningPreviewNoSafeRoute">预览落点之后没有确认可行的安全路线，已取消本次移动并重新规划</system:String>
+    <system:String x:Key="BlackFlowWarningEnteredPageIdentityConflict">进入节点后的页面类型与地图记录不一致，已按当前页面修正</system:String>
+    <system:String x:Key="BlackFlowWarningUnknownDetails">未识别的路线告警（代码：{0}）：{1}</system:String>
+    <system:String x:Key="BlackFlowWarningUnknownCode">未识别的路线告警（代码：{0}）</system:String>
     <system:String x:Key="BlackFlowWarningUnknown">肉鸽出现异常</system:String>
     <system:String x:Key="BlackFlowMilestoneChanged">阶段目标：{0}（{1}）</system:String>
     <system:String x:Key="BlackFlowStrategyResult">肉鸽策略结束：{0}（{1}）</system:String>
@@ -1571,9 +1579,15 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowOutcomeFloorRecognitionFailed">楼层识别失败</system:String>
     <system:String x:Key="BlackFlowOutcomeMovementInventoryFailed">移动加工品识别失败</system:String>
     <system:String x:Key="BlackFlowOutcomeMovementSelectionFailed">移动加工品选择失败</system:String>
+    <system:String x:Key="BlackFlowOutcomeMovementSelectionProposalFailed">无法准备加工品选择</system:String>
     <system:String x:Key="BlackFlowOutcomeNodeDispatchFailed">节点分派失败</system:String>
     <system:String x:Key="BlackFlowOutcomeNodeResultFailed">节点结果处理失败</system:String>
+    <system:String x:Key="BlackFlowOutcomeMoveConfirmationStateFailed">移动确认后的状态更新失败</system:String>
+    <system:String x:Key="BlackFlowOutcomeBattleIntelPreviewFailed">无法打开战斗关卡预览</system:String>
+    <system:String x:Key="BlackFlowOutcomeCoreOperatorStatusSyncFailed">凯尔希·思衡托精二状态同步失败</system:String>
+    <system:String x:Key="BlackFlowOutcomePursuitUnsupported">当前楼层的追猎战尚未适配</system:String>
     <system:String x:Key="BlackFlowOutcomeInternalFailure">内部状态异常</system:String>
+    <system:String x:Key="BlackFlowOutcomeUnknownCode">未识别的肉鸽异常（代码：{0}）</system:String>
     <system:String x:Key="BlackFlowOutcomeUnknown">肉鸽出现异常</system:String>
     <system:String x:Key="BlackFlowTerminationInvestmentFinished">投资已经完成，本局结束</system:String>
     <system:String x:Key="BlackFlowTerminationInvestmentShopWindowClosed">已经离开第一层且尚未投资，本局重开</system:String>
@@ -1596,6 +1610,7 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowTerminationPerceptionPortUnavailable">地图识别与任务接口不可用</system:String>
     <system:String x:Key="BlackFlowTerminationMapRebuildFailedTwice">连续两次地图重建失败</system:String>
     <system:String x:Key="BlackFlowTerminationPlanningRetryExhausted">预览反复改变可选路线，已经超过重新规划次数</system:String>
+    <system:String x:Key="BlackFlowTerminationDetail">具体原因：{0}</system:String>
     <system:String x:Key="BlackFlowTerminationUnknown">详细原因请查看文件日志</system:String>
     <system:String x:Key="RoguelikeEvent">事件:</system:String>
     <system:String x:Key="RoguelikeEncounterOptions">识别到 {0} 个选项:</system:String>

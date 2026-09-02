@@ -88,13 +88,25 @@ struct ScoreOrigin
 struct RankedCandidate
 {
     const PolicyCandidate* candidate = nullptr;
+    std::size_t route_outcome_count = 1;
     std::vector<int> score;
+    std::vector<std::int64_t> expected_score_sum;
     std::vector<ScoreOrigin> origins;
 };
 
 bool score_less(const RankedCandidate& lhs, const RankedCandidate& rhs)
 {
-    return std::lexicographical_compare(lhs.score.begin(), lhs.score.end(), rhs.score.begin(), rhs.score.end());
+    const std::size_t dimensions = std::min(lhs.expected_score_sum.size(), rhs.expected_score_sum.size());
+    for (std::size_t index = 0; index < dimensions; ++index) {
+        const std::int64_t lhs_scaled =
+            lhs.expected_score_sum[index] * static_cast<std::int64_t>(rhs.route_outcome_count);
+        const std::int64_t rhs_scaled =
+            rhs.expected_score_sum[index] * static_cast<std::int64_t>(lhs.route_outcome_count);
+        if (lhs_scaled != rhs_scaled) {
+            return lhs_scaled < rhs_scaled;
+        }
+    }
+    return lhs.expected_score_sum.size() < rhs.expected_score_sum.size();
 }
 } // namespace
 
@@ -428,6 +440,10 @@ ResourceRegistry::ResourceRegistry()
         }
         return total;
     });
+    register_resource("automation_collection_full_map_movement", [](const RunState& state) {
+        return static_cast<std::int64_t>(movement_count(state, MovementKind::M08)) +
+               movement_count(state, MovementKind::M09) + movement_count(state, MovementKind::M11);
+    });
     register_resource("persistent_long_range_movement", [](const RunState& state) {
         std::int64_t total = 0;
         for (const auto& spec : movement_specs()) {
@@ -492,12 +508,43 @@ std::optional<std::int64_t>
             if (id == "persistent_full_map_movement" && persistent_full_map) {
                 --after;
             }
+            if (id == "automation_collection_full_map_movement" &&
+                (movement->kind == MovementKind::M08 || movement->kind == MovementKind::M09 ||
+                 movement->kind == MovementKind::M11)) {
+                --after;
+            }
             if (id == "persistent_long_range_movement" && persistent_long_range) {
                 --after;
             }
         }
     }
     return after;
+}
+
+std::unordered_set<NodeType> automation_collection_forbidden_landing_types(int floor)
+{
+    std::unordered_set<NodeType> result;
+    if (floor >= 2) {
+        result.insert(NodeType::HideBattle);
+        result.insert(NodeType::BattleNormal);
+        result.insert(NodeType::BattleElite);
+    }
+    return result;
+}
+
+int automation_collection_reserved_full_map_charges(int floor) noexcept
+{
+    switch (floor) {
+    case 1:
+        return 3;
+    case 2:
+        return 2;
+    case 3:
+    case 4:
+        return 1;
+    default:
+        return 0;
+    }
 }
 
 bool rule_is_active(const PolicyRule& rule, const FactStore& facts)
@@ -545,9 +592,24 @@ PolicyDecision PolicyExecutor::choose(
     const bool minimize_intermediate_interactions =
         std::ranges::find(policy.route_preferences, RoutePreference::MinimizeIntermediateInteractions) !=
         policy.route_preferences.end();
+    const bool maximize_revealed_nodes =
+        std::ranges::find(policy.route_preferences, RoutePreference::MaximizeRevealedNodes) !=
+        policy.route_preferences.end();
+    const bool maximize_effective_nodes =
+        std::ranges::find(policy.route_preferences, RoutePreference::MaximizeEffectiveNodes) !=
+        policy.route_preferences.end();
+    const bool ignore_battle_tiebreaks =
+        std::ranges::find(policy.route_preferences, RoutePreference::IgnoreBattleTieBreaks) !=
+        policy.route_preferences.end();
+    const bool optimize_processing_moves =
+        std::ranges::find(policy.route_preferences, RoutePreference::OptimizeProcessingMoves) !=
+        policy.route_preferences.end();
     auto reject = [&](const PolicyCandidate& candidate, std::string category, std::string detail) {
         ++decision.rejection_counts[category];
-        decision.rejected.emplace_back(candidate.move.action_id + ": " + std::move(detail));
+        const MovementSpec* movement = find_movement_spec(candidate.move.movement);
+        const std::string candidate_name =
+            movement == nullptr ? "移动候选" : "“" + std::string(movement->name) + "”候选";
+        decision.rejected.emplace_back(candidate_name + "：" + std::move(detail));
     };
     auto category_for_tier = [](PolicyTier tier) {
         switch (tier) {
@@ -573,10 +635,10 @@ PolicyDecision PolicyExecutor::choose(
     std::vector<const PolicyCandidate*> eligible;
     for (const auto& candidate : candidates) {
         if (!candidate.legal) {
-            reject(candidate, "legality", "illegal");
+            reject(candidate, "legality", "当前状态下无法执行");
         }
         else if (!candidate.safe) {
-            reject(candidate, "safety", "no safe terminal route");
+            reject(candidate, "safety", "执行后不存在安全的后续路线");
         }
         else {
             eligible.emplace_back(&candidate);
@@ -599,7 +661,11 @@ PolicyDecision PolicyExecutor::choose(
         for (const PolicyRule* rule : active_rules) {
             const bool matches = rule_matches_candidate(*rule, facts, candidate->facts);
             if ((rule->kind == RuleKind::Forbid && matches) || (rule->kind == RuleKind::Require && !matches)) {
-                reject(*candidate, "hard_policy", "hard policy " + rule->id);
+                reject(
+                    *candidate,
+                    "hard_policy",
+                    rule->description.empty() ? "不满足当前硬性策略约束"
+                                              : "不满足策略约束：“" + rule->description + "”");
                 decisive_hard_rule = decisive_hard_rule == nullptr ? rule : decisive_hard_rule;
                 return true;
             }
@@ -639,7 +705,11 @@ PolicyDecision PolicyExecutor::choose(
             continue;
         }
         for (const PolicyCandidate* candidate : dropped) {
-            reject(*candidate, "resource_reserve", "resource reserve " + reserve.id);
+            reject(
+                *candidate,
+                "resource_reserve",
+                reserve.description.empty() ? "会突破本层的资源预留"
+                                            : "会突破资源预留：“" + reserve.description + "”");
         }
         if (!dropped.empty() && decisive_reserve == nullptr) {
             decisive_reserve = &reserve;
@@ -683,16 +753,51 @@ PolicyDecision PolicyExecutor::choose(
         }
         return std::min(milestone.required_count, mission.progress(milestone.id));
     };
+    const auto route_outcome_count = [](const PolicyCandidate& current) {
+        return std::max<std::size_t>(current.route_outcomes.size(), 1);
+    };
+    const auto outcome_milestone_value = [&](const PolicyRouteOutcome& outcome, const Milestone& milestone) {
+        const auto planned = outcome.milestone_progress.find(milestone.id);
+        if (planned != outcome.milestone_progress.end()) {
+            return std::min(milestone.required_count, planned->second);
+        }
+        return std::min(milestone.required_count, mission.progress(milestone.id));
+    };
+    const auto expected_milestone_value_sum = [&](const PolicyCandidate& current, const Milestone& milestone) {
+        if (current.route_outcomes.empty()) {
+            return static_cast<std::int64_t>(milestone_value(current, milestone));
+        }
+        std::int64_t sum = 0;
+        for (const PolicyRouteOutcome& outcome : current.route_outcomes) {
+            sum += outcome_milestone_value(outcome, milestone);
+        }
+        return sum;
+    };
 
     std::vector<RankedCandidate> ranked;
     for (const PolicyCandidate* candidate : eligible) {
         RankedCandidate entry;
         entry.candidate = candidate;
+        entry.route_outcome_count = route_outcome_count(*candidate);
+        const auto expected_sum = [&](int fallback, const auto& projection) {
+            if (candidate->route_outcomes.empty()) {
+                return static_cast<std::int64_t>(fallback);
+            }
+            std::int64_t sum = 0;
+            for (const PolicyRouteOutcome& outcome : candidate->route_outcomes) {
+                sum += static_cast<std::int64_t>(projection(outcome));
+            }
+            return sum;
+        };
         auto add_score = [&](int value,
                              DecisionReasonCategory category,
                              std::string id,
-                             std::vector<std::string> milestone_ids = {}) {
+                             std::vector<std::string> milestone_ids = {},
+                             std::optional<std::int64_t> expected_value_sum = std::nullopt) {
             entry.score.emplace_back(value);
+            entry.expected_score_sum.emplace_back(
+                expected_value_sum.value_or(
+                    static_cast<std::int64_t>(value) * static_cast<std::int64_t>(entry.route_outcome_count)));
             entry.origins.emplace_back(ScoreOrigin { category, std::move(id), std::move(milestone_ids) });
         };
         // 已锁定的目标占字典序最高位。可行性阶梯已经证明过“锁定之后仍然有安全解”，
@@ -718,13 +823,39 @@ PolicyDecision PolicyExecutor::choose(
                     progress_sum += milestone.weight * value;
                     ++end;
                 }
+                std::int64_t expected_completed_sum = 0;
+                std::int64_t expected_progress_sum = 0;
+                if (candidate->route_outcomes.empty()) {
+                    expected_completed_sum = completed;
+                    expected_progress_sum = progress_sum;
+                }
+                else {
+                    for (const PolicyRouteOutcome& outcome : candidate->route_outcomes) {
+                        for (std::size_t index = begin; index < end; ++index) {
+                            const Milestone& milestone = *bindings[index];
+                            const int value = outcome_milestone_value(outcome, milestone);
+                            expected_completed_sum += value >= milestone.required_count ? 1 : 0;
+                            expected_progress_sum += milestone.weight * value;
+                        }
+                    }
+                }
                 std::vector<std::string> group_milestone_ids;
                 group_milestone_ids.reserve(end - begin);
                 for (std::size_t index = begin; index < end; ++index) {
                     group_milestone_ids.emplace_back(bindings[index]->id);
                 }
-                add_score(-completed, DecisionReasonCategory::StrategyEnd, {}, group_milestone_ids);
-                add_score(-progress_sum, DecisionReasonCategory::StrategyEnd, {}, group_milestone_ids);
+                add_score(
+                    -completed,
+                    DecisionReasonCategory::StrategyEnd,
+                    {},
+                    group_milestone_ids,
+                    -expected_completed_sum);
+                add_score(
+                    -progress_sum,
+                    DecisionReasonCategory::StrategyEnd,
+                    {},
+                    group_milestone_ids,
+                    -expected_progress_sum);
                 begin = end;
             }
         };
@@ -749,32 +880,58 @@ PolicyDecision PolicyExecutor::choose(
                     progress_sum += milestone.weight * milestone_value(*candidate, milestone);
                     ++end;
                 }
-                const auto group_reward = [&](const PolicyCandidate& current) {
-                    int value = 0;
+                const auto expected_group_reward_sum = [&](const PolicyCandidate& current) {
+                    std::int64_t value = 0;
                     for (std::size_t index = begin; index < end; ++index) {
                         const Milestone& milestone = *active_milestones[index];
-                        value += milestone.weight * milestone_value(current, milestone);
+                        value += milestone.weight * expected_milestone_value_sum(current, milestone);
                     }
                     return value;
                 };
-                const int reference = group_reward(*eligible.front());
+                const std::int64_t reference = expected_group_reward_sum(*eligible.front());
+                const std::size_t reference_count = route_outcome_count(*eligible.front());
                 const bool varies = std::ranges::any_of(eligible, [&](const PolicyCandidate* other) {
-                    return group_reward(*other) != reference;
+                    return expected_group_reward_sum(*other) * static_cast<std::int64_t>(reference_count) !=
+                           reference * static_cast<std::int64_t>(route_outcome_count(*other));
                 });
                 if (varies) {
+                    const std::int64_t expected_progress_sum = expected_group_reward_sum(*candidate);
+                    const std::int64_t expected_composite_sum =
+                        expected_sum(candidate->route_length, [](const PolicyRouteOutcome& outcome) {
+                            return outcome.route_length;
+                        }) +
+                        (ignore_battle_tiebreaks
+                             ? 0
+                             : expected_sum(candidate->battle_count, [](const PolicyRouteOutcome& outcome) {
+                                   return outcome.battle_count;
+                               })) +
+                        expected_sum(candidate->processing_move_count, [](const PolicyRouteOutcome& outcome) {
+                            return outcome.processing_move_count;
+                        }) +
+                        (minimize_intermediate_interactions
+                             ? expected_sum(
+                                   candidate->intermediate_interaction_count,
+                                   [](const PolicyRouteOutcome& outcome) {
+                                       return outcome.intermediate_interaction_count;
+                                   })
+                             : 0) -
+                        expected_progress_sum;
                     std::vector<std::string> group_milestone_ids;
                     group_milestone_ids.reserve(end - begin);
                     for (std::size_t index = begin; index < end; ++index) {
                         group_milestone_ids.emplace_back(active_milestones[index]->id);
                     }
                     add_score(
-                        candidate->estimated_duration + candidate->battle_count + candidate->processing_move_count +
+                        candidate->route_length +
+                            (ignore_battle_tiebreaks ? 0 : candidate->battle_count) +
+                            candidate->processing_move_count +
                             (minimize_intermediate_interactions ? candidate->intermediate_interaction_count : 0) -
                             progress_sum,
                         category,
                         {},
-                        group_milestone_ids);
-                    add_score(-progress_sum, category, {}, group_milestone_ids);
+                        group_milestone_ids,
+                        expected_composite_sum);
+                    add_score(-progress_sum, category, {}, group_milestone_ids, -expected_progress_sum);
                 }
                 begin = end;
             }
@@ -788,6 +945,26 @@ PolicyDecision PolicyExecutor::choose(
                     DecisionReasonCategory::ResourceReserve,
                     rule->id);
             }
+        }
+        if (maximize_revealed_nodes) {
+            add_score(
+                -candidate->revealed_node_count,
+                DecisionReasonCategory::Development,
+                "revealed_node_count",
+                {},
+                -expected_sum(candidate->revealed_node_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.revealed_node_count;
+                }));
+        }
+        if (maximize_effective_nodes) {
+            add_score(
+                -candidate->effective_node_count,
+                DecisionReasonCategory::Development,
+                "effective_node_count",
+                {},
+                -expected_sum(candidate->effective_node_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.effective_node_count;
+                }));
         }
         append_milestone_groups(MilestoneKind::Preferred, DecisionReasonCategory::PreferredGoal);
         append_milestone_groups(MilestoneKind::Opportunistic, DecisionReasonCategory::Development);
@@ -804,22 +981,90 @@ PolicyDecision PolicyExecutor::choose(
                 add_score(candidate->development_score, DecisionReasonCategory::Development, "development_score");
             }
         }
-        add_score(candidate->battle_count, DecisionReasonCategory::RiskAvoidance, "battle_count");
+        if (!ignore_battle_tiebreaks) {
+            add_score(
+                candidate->battle_count,
+                DecisionReasonCategory::RiskAvoidance,
+                "battle_count",
+                {},
+                expected_sum(candidate->battle_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.battle_count;
+                }));
+        }
         if (minimize_intermediate_interactions) {
             add_score(
                 candidate->intermediate_interaction_count,
                 DecisionReasonCategory::TieBreak,
-                "intermediate_interaction_count");
+                "intermediate_interaction_count",
+                {},
+                expected_sum(candidate->intermediate_interaction_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.intermediate_interaction_count;
+                }));
         }
-        // 行动力本层用不完就作废，残值为零；跨层保留的加工品省下来下一层还能用，残值为正。
-        // 所以收益打平时先比加工品，再比步数，不能反过来。
+        // 先少用能带到下一层的加工品；这项打平后，总使用数越大就代表层末失效加工品
+        // 用得越充分。路线长度最后才比较。
         add_score(
             candidate->persistent_processing_move_count,
             DecisionReasonCategory::ResourceReserve,
-            "persistent_processing_move_count");
-        add_score(candidate->estimated_duration, DecisionReasonCategory::TieBreak, "estimated_duration");
-        add_score(candidate->processing_move_count, DecisionReasonCategory::ResourceReserve, "processing_move_count");
-        add_score(candidate->risk_score, DecisionReasonCategory::RiskAvoidance, "risk_score");
+            "persistent_processing_move_count",
+            {},
+            expected_sum(candidate->persistent_processing_move_count, [](const PolicyRouteOutcome& outcome) {
+                return outcome.persistent_processing_move_count;
+            }));
+        if (optimize_processing_moves) {
+            add_score(
+                -candidate->processing_move_count,
+                DecisionReasonCategory::ResourceReserve,
+                "processing_move_count",
+                {},
+                -expected_sum(candidate->processing_move_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.processing_move_count;
+                }));
+            // 类别和总用量都打平后，从强到弱逐项少用：这样实际消耗顺序就是
+            // 本层失效优先于跨层保留，同类别内低价值优先于高价值。
+            for (const MovementKind movement : ProcessingMovementStrengthOrder) {
+                const int count = candidate->processing_move_counts[static_cast<std::size_t>(movement)];
+                add_score(
+                    count,
+                    DecisionReasonCategory::ResourceReserve,
+                    "processing_semantic." + std::string(to_string(movement)),
+                    {},
+                    expected_sum(count, [movement](const PolicyRouteOutcome& outcome) {
+                        return outcome.processing_move_counts[static_cast<std::size_t>(movement)];
+                    }));
+            }
+        }
+        add_score(
+            candidate->route_length,
+            DecisionReasonCategory::TieBreak,
+            "route_length",
+            {},
+            expected_sum(candidate->route_length, [](const PolicyRouteOutcome& outcome) {
+                return outcome.route_length;
+            }));
+        // 一次徒步可以跨过多个透明节点。总边数相同时优先少开几次移动预览，避免把本可一次
+        // 抵达的目标拆成多个没有额外收益的徒步动作。
+        add_score(
+            static_cast<int>(candidate->planned_route_steps.size()),
+            DecisionReasonCategory::TieBreak,
+            "movement_action_count",
+            {},
+            expected_sum(
+                static_cast<int>(candidate->planned_route_steps.size()),
+                [](const PolicyRouteOutcome& outcome) { return outcome.movement_action_count; }));
+        if (!optimize_processing_moves) {
+            add_score(
+                candidate->processing_move_count,
+                DecisionReasonCategory::ResourceReserve,
+                "processing_move_count",
+                {},
+                expected_sum(candidate->processing_move_count, [](const PolicyRouteOutcome& outcome) {
+                    return outcome.processing_move_count;
+                }));
+        }
+        if (!ignore_battle_tiebreaks) {
+            add_score(candidate->risk_score, DecisionReasonCategory::RiskAvoidance, "risk_score");
+        }
         for (const PolicyRule* rule : active_rules) {
             if ((rule->kind == RuleKind::Prefer || rule->kind == RuleKind::TieBreak) &&
                 rule->tier == PolicyTier::TieBreak) {
@@ -848,13 +1093,59 @@ PolicyDecision PolicyExecutor::choose(
     decision.planned_route = ranked.front().candidate->planned_route;
     decision.planned_route_steps = ranked.front().candidate->planned_route_steps;
     decision.planned_milestone_progress = ranked.front().candidate->milestone_progress;
+    decision.candidate_summaries.reserve(ranked.size());
+    for (const RankedCandidate& entry : ranked) {
+        std::vector<std::string> score_labels;
+        score_labels.reserve(entry.origins.size());
+        for (const ScoreOrigin& origin : entry.origins) {
+            if (!origin.id.empty()) {
+                score_labels.emplace_back(origin.id);
+                continue;
+            }
+            if (!origin.milestone_ids.empty()) {
+                std::string label = "milestones:";
+                for (std::size_t index = 0; index < origin.milestone_ids.size(); ++index) {
+                    if (index != 0) {
+                        label += '+';
+                    }
+                    label += origin.milestone_ids[index];
+                }
+                score_labels.emplace_back(std::move(label));
+                continue;
+            }
+            score_labels.emplace_back(to_string(origin.category));
+        }
+        decision.candidate_summaries.emplace_back(
+            PolicyCandidateSummary {
+                entry.candidate->move,
+                entry.score,
+                std::move(score_labels),
+                entry.candidate->revealed_node_count,
+                entry.candidate->effective_node_count,
+                entry.candidate->battle_count,
+                entry.candidate->processing_move_count,
+                entry.candidate->persistent_processing_move_count,
+                entry.candidate->processing_move_counts,
+                entry.candidate->route_length,
+                entry.candidate->risk_score,
+                entry.candidate->planned_route_steps,
+                entry.candidate->revealed_nodes,
+                entry.expected_score_sum,
+                entry.route_outcome_count,
+            });
+    }
     for (std::size_t index = 1; index < std::min<std::size_t>(ranked.size(), 3); ++index) {
         decision.runners_up.emplace_back(ranked[index].candidate->move);
     }
     if (ranked.size() >= 2) {
-        const std::size_t dimensions = std::min(ranked[0].score.size(), ranked[1].score.size());
+        const std::size_t dimensions =
+            std::min(ranked[0].expected_score_sum.size(), ranked[1].expected_score_sum.size());
         for (std::size_t index = 0; index < dimensions; ++index) {
-            if (ranked[0].score[index] == ranked[1].score[index]) {
+            const std::int64_t selected_scaled = ranked[0].expected_score_sum[index] *
+                                                 static_cast<std::int64_t>(ranked[1].route_outcome_count);
+            const std::int64_t runner_up_scaled = ranked[1].expected_score_sum[index] *
+                                                  static_cast<std::int64_t>(ranked[0].route_outcome_count);
+            if (selected_scaled == runner_up_scaled) {
                 continue;
             }
             const ScoreOrigin& origin = ranked[0].origins[index];
@@ -865,8 +1156,10 @@ PolicyDecision PolicyExecutor::choose(
                         return value->id == milestone_id;
                     });
                     if (milestone != active_milestones.end() &&
-                        milestone_value(*ranked[0].candidate, **milestone) !=
-                            milestone_value(*ranked[1].candidate, **milestone)) {
+                        expected_milestone_value_sum(*ranked[0].candidate, **milestone) *
+                                static_cast<std::int64_t>(ranked[1].route_outcome_count) !=
+                            expected_milestone_value_sum(*ranked[1].candidate, **milestone) *
+                                static_cast<std::int64_t>(ranked[0].route_outcome_count)) {
                         decision.decisive_milestone_ids.emplace_back(milestone_id);
                     }
                 }
@@ -972,4 +1265,3 @@ std::string_view to_string(DecisionReasonCategory category) noexcept
     return "tie_break";
 }
 } // namespace asst::blackflow
-

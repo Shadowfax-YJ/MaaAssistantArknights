@@ -22,6 +22,11 @@ void OCRerConfig::set_required(std::vector<std::string> required) noexcept
     }
 }
 
+void OCRerConfig::set_fuzzy_match(bool fuzzy_match) noexcept
+{
+    m_params.fuzzy_match = fuzzy_match;
+}
+
 void OCRerConfig::set_replace(
     const std::vector<std::pair<std::string, std::string>>& replace,
     bool replace_full) noexcept
@@ -100,6 +105,7 @@ void OCRerConfig::_set_task_info(OcrTaskInfo task_info)
 {
     set_required(std::move(task_info.text));
     m_params.full_match = task_info.full_match;
+    m_params.fuzzy_match = task_info.fuzzy_match;
     set_replace(task_info.replace_map, task_info.replace_full);
     m_params.use_char_model = task_info.is_ascii;
     m_params.without_det = task_info.without_det;

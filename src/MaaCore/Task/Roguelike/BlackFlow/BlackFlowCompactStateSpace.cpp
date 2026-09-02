@@ -1,5 +1,8 @@
 #include "BlackFlowCompactStateSpace.h"
 
+#include "BlackFlowPlannerRules.h"
+#include "BlackFlowRevealSemantics.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -56,6 +59,9 @@ bool planner_state_less(const PlannerState& lhs, const PlannerState& rhs) noexce
                lhs.completed_nodes,
                lhs.opened_blockers,
                lhs.consumed_lights,
+               lhs.revealed_hidden_battles,
+               lhs.goal_progress_id,
+               lhs.current_final_bypassed,
                lhs.terminal) <
            std::tie(
                rhs.node,
@@ -63,6 +69,9 @@ bool planner_state_less(const PlannerState& lhs, const PlannerState& rhs) noexce
                rhs.completed_nodes,
                rhs.opened_blockers,
                rhs.consumed_lights,
+               rhs.revealed_hidden_battles,
+               rhs.goal_progress_id,
+               rhs.current_final_bypassed,
                rhs.terminal);
 }
 } // namespace
@@ -81,6 +90,7 @@ bool BlackFlowCompactStateSpace::initialize(
     m_nodes.clear();
     m_confirmed_adjacency.clear();
     m_relaxed_adjacency.clear();
+    m_endpoint_hidden_battle_reveals.clear();
     for (auto& by_source : m_geometric_targets) {
         by_source.clear();
     }
@@ -136,6 +146,8 @@ bool BlackFlowCompactStateSpace::initialize(
                 node->progress,
                 node->traversal,
                 node->identity_state,
+                node->visually_hidden,
+                node_has_explicit_roaming_resident_marker(*node),
                 std::nullopt,
             });
         const PlannerNodeMask node_mask = PlannerNodeMask { 1 } << index;
@@ -163,6 +175,7 @@ bool BlackFlowCompactStateSpace::initialize(
     }
 
     precompute_adjacency(map);
+    precompute_endpoint_hidden_battle_reveals(map);
     precompute_geometry();
 
     m_initial_state.node = run.current_node;
@@ -198,6 +211,17 @@ bool BlackFlowCompactStateSpace::initialize(
         if (found != m_node_indices.end() && m_nodes[found->second].type == NodeType::Light) {
             m_initial_state.consumed_lights |= PlannerNodeMask { 1 } << found->second;
         }
+    }
+    for (std::size_t index = 0; index < m_nodes.size(); ++index) {
+        const Node* node = map.find_node(m_nodes[index].id);
+        if (node != nullptr && node->type == NodeType::HideBattle &&
+            (node->identity_revealed || run.revealed_nodes.contains(node->id))) {
+            m_initial_state.revealed_hidden_battles |= PlannerNodeMask { 1 } << index;
+        }
+    }
+    if (const auto current = node_index(run.current_node);
+        current.has_value() && m_nodes[*current].type == NodeType::Final) {
+        m_initial_state.current_final_bypassed = true;
     }
     m_initial_state.terminal = is_endpoint(m_initial_state);
     m_run = &run;
@@ -242,6 +266,26 @@ void BlackFlowCompactStateSpace::precompute_adjacency(const MapSnapshot& map)
     sort_neighbors(m_relaxed_adjacency);
 }
 
+void BlackFlowCompactStateSpace::precompute_endpoint_hidden_battle_reveals(const MapSnapshot& map)
+{
+    m_endpoint_hidden_battle_reveals.assign(m_nodes.size(), 0);
+    for (std::size_t origin = 0; origin < m_nodes.size(); ++origin) {
+        auto revealed = map.reveal_through_transparent_nodes(m_nodes[origin].id);
+        if (m_nodes[origin].type == NodeType::Light) {
+            const auto light_revealed = map.nodes_within_manhattan(m_nodes[origin].id, LightRevealRadius);
+            for (const NodeId id : light_revealed) {
+                revealed.emplace(id);
+            }
+        }
+        for (const NodeId id : revealed) {
+            const auto found = m_node_indices.find(id);
+            if (found != m_node_indices.end() && m_nodes[found->second].type == NodeType::HideBattle) {
+                m_endpoint_hidden_battle_reveals[origin] |= PlannerNodeMask { 1 } << found->second;
+            }
+        }
+    }
+}
+
 void BlackFlowCompactStateSpace::precompute_geometry()
 {
     for (const MovementSpec& movement : movement_specs()) {
@@ -252,7 +296,8 @@ void BlackFlowCompactStateSpace::precompute_geometry()
         }
         for (std::size_t source = 0; source < m_nodes.size(); ++source) {
             for (std::size_t target = 0; target < m_nodes.size(); ++target) {
-                if (source == target || m_nodes[target].progress == NodeProgress::Removed ||
+                if ((source == target && m_nodes[target].type == NodeType::Empty) ||
+                    m_nodes[target].progress == NodeProgress::Removed ||
                     !geometry_matches(m_nodes[source].position, m_nodes[target].position, movement.range)) {
                     continue;
                 }
@@ -324,7 +369,7 @@ bool BlackFlowCompactStateSpace::targetable_for_walk(const PlannerState& state, 
 {
     const StaticNode& stored = m_nodes[node];
     const NodeProgress progress = effective_progress(state, node);
-    if (!stored.traversal.enterable || progress == NodeProgress::Removed || stored.type == NodeType::Empty) {
+    if (!stored.traversal.enterable || progress == NodeProgress::Removed) {
         return false;
     }
     return progress != NodeProgress::Completed || stored.traversal.repeatable;
@@ -361,7 +406,8 @@ NodeId BlackFlowCompactStateSpace::resolve_landing(std::uint8_t target) const no
 bool BlackFlowCompactStateSpace::is_endpoint(const PlannerState& state) const noexcept
 {
     const auto index = node_index(state.node);
-    return index.has_value() && m_options.final_is_terminal && is_exit_node_type(m_nodes[*index].type);
+    return index.has_value() && m_options.final_is_terminal && is_exit_node_type(m_nodes[*index].type) &&
+           !(m_nodes[*index].type == NodeType::Final && state.current_final_bypassed);
 }
 
 bool BlackFlowCompactStateSpace::is_terminal(const PlannerState& state) const noexcept
@@ -386,6 +432,7 @@ PlannerState BlackFlowCompactStateSpace::transition(
 {
     PlannerState successor = source;
     successor.node = landing;
+    successor.current_final_bypassed = candidate.bypass_final_on_completion;
     if (candidate.movement != MovementKind::Walk) {
         auto& charge = successor.movement_charges[movement_index(candidate.movement)];
         if (charge > 0) {
@@ -393,15 +440,13 @@ PlannerState BlackFlowCompactStateSpace::transition(
         }
     }
 
-    NodeId completed = candidate.target;
-    if (completed == InvalidNodeId) {
-        completed = landing;
-    }
+    // 不可控移动的 target 只是打开预览的激活格；完成、点亮与节点收益都属于实际落点。
+    const NodeId completed = candidate.controllable ? candidate.target : landing;
     const auto index = node_index(completed);
     if (index.has_value()) {
         const PlannerNodeMask node_mask = PlannerNodeMask { 1 } << *index;
         const StaticNode& node = m_nodes[*index];
-        if (!node.traversal.repeatable && node.type != NodeType::Empty) {
+        if (!candidate.bypass_final_on_completion && !node.traversal.repeatable && node.type != NodeType::Empty) {
             successor.completed_nodes |= node_mask;
             successor.opened_blockers &= ~node_mask;
         }
@@ -410,6 +455,12 @@ PlannerState BlackFlowCompactStateSpace::transition(
         }
         if (node.type == NodeType::Light) {
             successor.consumed_lights |= node_mask;
+        }
+    }
+    if (!candidate.terminal_on_completion) {
+        const auto landing_index = node_index(landing);
+        if (landing_index.has_value() && *landing_index < m_endpoint_hidden_battle_reveals.size()) {
+            successor.revealed_hidden_battles |= m_endpoint_hidden_battle_reveals[*landing_index];
         }
     }
     successor.terminal = is_endpoint(successor);
@@ -421,10 +472,7 @@ int BlackFlowCompactStateSpace::outcome_gain(const PlannerState& source, const M
 {
     const MovementSpec* movement = find_movement_spec(candidate.movement);
     int gain = movement == nullptr ? 0 : movement->effect.action_point_gain;
-    NodeId effect_node = candidate.target;
-    if (effect_node == InvalidNodeId) {
-        effect_node = landing;
-    }
+    const NodeId effect_node = candidate.controllable ? candidate.target : landing;
     const auto index = node_index(effect_node);
     if (index.has_value()) {
         gain += node_action_point_gain(source, *index);
@@ -470,6 +518,39 @@ std::optional<std::vector<CompactMoveAction>>
         std::array<int, 64> walk_action_indices;
         walk_action_indices.fill(-1);
         std::array<bool, 64> expanded {};
+        const StaticNode& source_node = m_nodes[source_index];
+        // 实际根状态允许重新进入当前可重复节点。模拟后缀不再展开自移动，既保留游戏
+        // 的合法根动作，也避免单份规划在同一节点上构造无界循环。
+        if (source == m_initial_state && source_node.type != NodeType::Empty &&
+            targetable_for_walk(source, source_index) && node_type_allowed(*walk, source_node.type)) {
+            MoveAction action;
+            action.candidate.action_id =
+                "walk:" + std::to_string(source.node) + ":" + std::to_string(source.node);
+            action.candidate.movement = MovementKind::Walk;
+            action.candidate.source = source.node;
+            action.candidate.target = source.node;
+            action.candidate.landing = resolve_landing(source_index);
+            action.candidate.graph_layer = m_options.graph_layer;
+            if (action.candidate.landing != InvalidNodeId) {
+                action.candidate.path = { source.node };
+                if (source_node.identity_state == NodeIdentityState::Unclassified) {
+                    action.candidate.first_unclassified = source.node;
+                }
+                action.candidate.predicted_action_point_cost = m_run->costs.action_cost(
+                    action.candidate.action_id,
+                    m_run->costs.movement_cost(*walk, action.candidate.path.size()));
+                action.candidate.predicted_action_point_gain = node_action_point_gain(source, source_index);
+                action.candidate.possible_landings.emplace_back(action.candidate.landing);
+                action.candidate.landing_node_types.emplace(action.candidate.landing, source_node.type);
+                action.candidate.landing_action_point_gains.emplace(
+                    action.candidate.landing,
+                    action.candidate.predicted_action_point_gain);
+                action.candidate.terminal_on_completion = is_exit_node_type(source_node.type);
+                action.possible_landings.emplace_back(action.candidate.landing);
+                walk_action_indices[source_index] = static_cast<int>(generated.size());
+                generated.emplace_back(std::move(action));
+            }
+        }
         pending.push_back(WalkFrontier { source_index, {} });
         expanded[source_index] = true;
         while (!pending.empty()) {
@@ -517,6 +598,7 @@ std::optional<std::vector<CompactMoveAction>>
                             m_run->costs.movement_cost(*walk, path.size()));
                         action.candidate.predicted_action_point_gain = node_action_point_gain(source, edge.index);
                         action.candidate.possible_landings.emplace_back(action.candidate.landing);
+                        action.candidate.landing_node_types.emplace(action.candidate.landing, node.type);
                         action.candidate.landing_action_point_gains.emplace(
                             action.candidate.landing,
                             action.candidate.predicted_action_point_gain);
@@ -546,21 +628,42 @@ std::optional<std::vector<CompactMoveAction>>
         if (movement.kind == MovementKind::Walk) {
             continue;
         }
+        if (m_options.reserved_movement_kinds.contains(movement.kind)) {
+            int reserved_charges = 0;
+            for (const MovementKind reserved : m_options.reserved_movement_kinds) {
+                reserved_charges += source.movement_charges[movement_index(reserved)];
+            }
+            if (reserved_charges <= m_options.reserved_movement_charges) {
+                continue;
+            }
+        }
         const int charges = source.movement_charges[movement_index(movement.kind)];
         if (charges <= 0 || m_run->cross_floor_expired.contains(movement.kind)) {
             continue;
         }
 
         std::vector<std::uint8_t> targets;
+        std::vector<std::uint8_t> hidden_noncombat_targets;
         for (const std::uint8_t target : geometric_targets(movement.kind, source_index)) {
-            const NodeType target_type = effective_type(source, target);
-            const bool targetable = target_type == NodeType::Empty
+            const NodeType semantic_type = effective_type(source, target);
+            const NodeType visible_type = movement_visible_node_type(semantic_type, m_nodes[target].visually_hidden);
+            const bool targetable = semantic_type == NodeType::Empty
                                         ? effective_progress(source, target) != NodeProgress::Removed
                                         : targetable_for_walk(source, target);
-            if (!targetable || !node_type_allowed(movement, target_type)) {
+            if (!targetable || !node_type_allowed(movement, visible_type) ||
+                !movement_target_is_currently_selectable(movement.kind, m_nodes[target].visually_hidden) ||
+                (movement.random_target && m_nodes[target].explicit_roaming_resident_marker)) {
                 continue;
             }
             targets.emplace_back(target);
+            if (movement.random_target && visible_type == NodeType::HideInvisible) {
+                hidden_noncombat_targets.emplace_back(target);
+            }
+        }
+        // 与 enumerate_move_actions 保持一致：小八界先使用“未知的诡秘”候选池；只有
+        // 该池为空时才使用全部合法非作战节点。明确流窜居民在入池前排除，疑似重叠保留。
+        if (movement.random_target && !hidden_noncombat_targets.empty()) {
+            targets = std::move(hidden_noncombat_targets);
         }
         if (targets.empty()) {
             continue;
@@ -571,6 +674,8 @@ std::optional<std::vector<CompactMoveAction>>
             action.candidate.action_id = std::string(movement.id) + ":random:" + std::to_string(source.node);
             action.candidate.movement = movement.kind;
             action.candidate.source = source.node;
+            // 与非压缩状态空间一致：target 是打开预览所点击的高亮节点，不代表随机实际落点。
+            action.candidate.target = m_nodes[targets.front()].id;
             action.candidate.predicted_action_point_cost =
                 m_run->costs.action_cost(action.candidate.action_id, m_run->costs.movement_cost(movement));
             action.candidate.predicted_action_point_gain = movement.effect.action_point_gain;
@@ -581,6 +686,7 @@ std::optional<std::vector<CompactMoveAction>>
                     continue;
                 }
                 action.possible_landings.emplace_back(landing);
+                action.candidate.landing_node_types.insert_or_assign(landing, effective_type(source, target));
                 action.candidate.landing_action_point_gains.insert_or_assign(
                     landing,
                     movement.effect.action_point_gain + node_action_point_gain(source, target));
@@ -591,6 +697,9 @@ std::optional<std::vector<CompactMoveAction>>
                 action.possible_landings.end());
             if (!action.possible_landings.empty()) {
                 action.candidate.possible_landings = action.possible_landings;
+                action.candidate.terminal_on_completion = std::ranges::all_of(
+                    action.possible_landings,
+                    [&](NodeId landing) { return move_landing_is_terminal(action.candidate, landing); });
                 generated.emplace_back(std::move(action));
             }
             continue;
@@ -614,6 +723,7 @@ std::optional<std::vector<CompactMoveAction>>
             action.candidate.predicted_action_point_gain =
                 movement.effect.action_point_gain + node_action_point_gain(source, target);
             action.candidate.possible_landings.emplace_back(landing);
+            action.candidate.landing_node_types.emplace(landing, effective_type(source, target));
             action.candidate.landing_action_point_gains.emplace(landing, action.candidate.predicted_action_point_gain);
             action.candidate.controllable = true;
             action.candidate.terminal_on_completion = is_exit_node_type(m_nodes[target].type);
@@ -622,7 +732,22 @@ std::optional<std::vector<CompactMoveAction>>
         }
     }
 
-    struct ConfirmedAdjacentWalk
+    const std::size_t physical_action_count = generated.size();
+    for (std::size_t index = 0; index < physical_action_count; ++index) {
+        const bool can_land_on_final = std::ranges::any_of(
+            generated[index].candidate.possible_landings,
+            [&](NodeId landing) { return move_landing_type(generated[index].candidate, landing) == NodeType::Final; });
+        if (!can_land_on_final) {
+            continue;
+        }
+        MoveAction bypass = generated[index];
+        bypass.candidate.action_id += ":bypass-final";
+        bypass.candidate.terminal_on_completion = false;
+        bypass.candidate.bypass_final_on_completion = true;
+        generated.emplace_back(std::move(bypass));
+    }
+
+    struct ConfirmedWalk
     {
         NodeId target = InvalidNodeId;
         NodeId landing = InvalidNodeId;
@@ -630,7 +755,7 @@ std::optional<std::vector<CompactMoveAction>>
         int action_point_gain = 0;
     };
 
-    std::vector<ConfirmedAdjacentWalk> confirmed_adjacent_walks;
+    std::vector<ConfirmedWalk> confirmed_walks;
     for (const MoveAction& action : generated) {
         if (action.candidate.movement != MovementKind::Walk || action.candidate.path.size() != 1 ||
             action.candidate.uses_unconfirmed_edge || action.candidate.uses_inferred_edge) {
@@ -640,15 +765,18 @@ std::optional<std::vector<CompactMoveAction>>
         if (!target_index.has_value()) {
             continue;
         }
-        const int manhattan = std::abs(m_nodes[source_index].position.row - m_nodes[*target_index].position.row) +
-                              std::abs(m_nodes[source_index].position.column - m_nodes[*target_index].position.column);
-        const auto& confirmed_neighbors = adjacency(GraphLayer::Confirmed, source_index);
-        if (manhattan != 1 || std::ranges::find(confirmed_neighbors, *target_index, &CompactNeighbor::index) ==
-                                  confirmed_neighbors.end()) {
-            continue;
+        const bool self_walk = source_index == *target_index;
+        if (!self_walk) {
+            const int manhattan = std::abs(m_nodes[source_index].position.row - m_nodes[*target_index].position.row) +
+                                  std::abs(m_nodes[source_index].position.column - m_nodes[*target_index].position.column);
+            const auto& confirmed_neighbors = adjacency(GraphLayer::Confirmed, source_index);
+            if (manhattan != 1 || std::ranges::find(confirmed_neighbors, *target_index, &CompactNeighbor::index) ==
+                                      confirmed_neighbors.end()) {
+                continue;
+            }
         }
-        confirmed_adjacent_walks.emplace_back(
-            ConfirmedAdjacentWalk {
+        confirmed_walks.emplace_back(
+            ConfirmedWalk {
                 action.candidate.target,
                 action.candidate.landing,
                 action.candidate.predicted_action_point_cost,
@@ -666,7 +794,7 @@ std::optional<std::vector<CompactMoveAction>>
             movement->effect.ingot_gain != 0) {
             return false;
         }
-        return std::ranges::any_of(confirmed_adjacent_walks, [&](const ConfirmedAdjacentWalk& walk_action) {
+        return std::ranges::any_of(confirmed_walks, [&](const ConfirmedWalk& walk_action) {
             return walk_action.target == action.candidate.target && walk_action.landing == action.candidate.landing &&
                    walk_action.action_point_cost <= action.candidate.predicted_action_point_cost &&
                    walk_action.action_point_gain >= action.candidate.predicted_action_point_gain;
@@ -679,11 +807,26 @@ std::optional<std::vector<CompactMoveAction>>
         if (m_options.forbidden_action_ids.contains(move.candidate.action_id)) {
             continue;
         }
+        const auto forbidden_landing = [&](NodeId id) {
+            const auto index = node_index(id);
+            const bool revealed_before_landing = index.has_value() &&
+                                                 (source.revealed_hidden_battles &
+                                                  (PlannerNodeMask { 1 } << *index)) != 0;
+            return index.has_value() && route_landing_is_forbidden(
+                                            effective_type(source, *index),
+                                            revealed_before_landing,
+                                            m_options.allow_revealed_hidden_battle,
+                                            m_options.forbidden_node_types);
+        };
+        if ((move.candidate.controllable && forbidden_landing(move.candidate.landing)) ||
+            (!move.candidate.controllable && std::ranges::any_of(move.possible_landings, forbidden_landing))) {
+            continue;
+        }
         CompactMoveAction action;
         action.candidate = std::move(move.candidate);
         action.action_point_cost = action.candidate.predicted_action_point_cost;
         for (const NodeId landing : move.possible_landings) {
-            const NodeId target = action.candidate.target == InvalidNodeId ? landing : action.candidate.target;
+            const NodeId target = action.candidate.controllable ? action.candidate.target : landing;
             if (unavailable_target(source, target)) {
                 continue;
             }

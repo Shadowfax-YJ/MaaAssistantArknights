@@ -7,16 +7,89 @@
     },
     "BlackFlow@StartExplore@Roguelike@ChooseOperConfirm": {
         "template": "BlackFlow@Roguelike@ChooseOperConfirm.png",
-        "roi": [1016, 602, 264, 118]
+        "roi": [1016, 602, 264, 118],
+        "reduceOtherTimes": ["BlackFlow@StartExplore@Roguelike@RecruitAnimationWait*50"],
+        "next": [
+            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@RecruitAnimationWait"
+        ]
     },
     "BlackFlow@StartExplore@Roguelike@ChooseOperFlag": {
         "template": "BlackFlow@Roguelike@ChooseOperConfirm.png",
-        "roi": [1016, 602, 264, 118]
+        "roi": [1016, 602, 264, 118],
+        "reduceOtherTimes": ["BlackFlow@StartExplore@Roguelike@RecruitWithoutButton*10"]
     },
     "BlackFlow@StartExplore@Roguelike@RecruitOther": {
         "template": "BlackFlow@Roguelike@Recruit.png"
     },
-    "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton": {},
+    "BlackFlow@StartExplore@Roguelike@RecruitSkip": {
+        "Doc": "开局助战六星演出的 SKIP 对比度低于通用招募演出；显式复用黑流遮罩和阈值，避免命名空间回退到通用高阈值。",
+        "baseTask": "BlackFlow@Roguelike@RecruitSkip",
+        "template": "RecruitSkip.png",
+        "templThreshold": 0.65,
+        "maskRange": [80, 255],
+        "reduceOtherTimes": [
+            "BlackFlow@StartExplore@Roguelike@RecruitAnimationWait*50",
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton*10"
+        ],
+        "next": [
+            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@CoreCharVoucherReady",
+            "BlackFlow@StartExplore@Roguelike@RecruitOther",
+            "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton"
+        ]
+    },
+    "BlackFlow@StartExplore@Roguelike@RecruitAnimationWait": {
+        "Doc": "确认招募后只轮询低对比度 SKIP；十秒内不点击动画画面，超时才交给展示页中央点击兜底。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 200,
+        "maxTimes": 50,
+        "next": [
+            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@RecruitAnimationWait"
+        ],
+        "exceededNext": ["BlackFlow@StartExplore@Roguelike@RecruitWithoutButton"]
+    },
+    "BlackFlow@StartExplore@Roguelike@CoreCharVoucherReady": {
+        "Doc": "只有重新看到招募券页面后才通知插件切换核心干员职业券，避免在招募动画中反复 OCR。",
+        "template": "BlackFlow@Roguelike@Recruit.png",
+        "roi": [80, 470, 1120, 154],
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
+            "BlackFlow@StartExplore@Roguelike@RecruitOther"
+        ]
+    },
+    "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton": {
+        "Doc": "只负责关闭招募展示页；核心干员职业券切换由重新出现的 CoreCharVoucherReady 页面证据触发。",
+        "baseTask": "BlackFlow@Roguelike@RecruitWithoutButton",
+        "specificRect": [550, 300, 180, 120],
+        "next": [
+            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
+            "BlackFlow@StartExplore@Roguelike@CoreCharVoucherReady",
+            "BlackFlow@StartExplore@Roguelike@RecruitOther",
+            "BlackFlow@Roguelike@EnterAfterRecruit",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@NextLevel#next",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton"
+        ],
+        "exceededNext": [
+            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
+            "BlackFlow@StartExplore@Roguelike@CoreCharVoucherReady",
+            "BlackFlow@StartExplore@Roguelike@RecruitOther",
+            "BlackFlow@Roguelike@EnterAfterRecruit",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@NextLevel#next",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut"
+        ]
+    },
     "BlackFlow@Roguelike@Abandon": {
         "template": "BlackFlow@Roguelike@Abandon.png"
     },
@@ -27,13 +100,15 @@
             "BlackFlow@Roguelike@MovePreviewConfirm*3",
             "BlackFlow@Roguelike@MovePreviewWait*3",
             "BlackFlow@Roguelike@MovementInventoryClose*3",
-            "BlackFlow@Roguelike@Page-Door-Wait*10",
+            "BlackFlow@Roguelike@Page-Door-Wait*50",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm*3",
             "BlackFlow@Roguelike@StageTraderInvestSystemEnter*3",
             "BlackFlow@Roguelike@StageTraderInvestCancel*3",
             "BlackFlow@Roguelike@StageTraderInvestSystemLeave*3",
             "BlackFlow@Roguelike@StageTraderLeave*3",
             "BlackFlow@Roguelike@StageTraderLeaveConfirm*3",
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton*10",
+            "BlackFlow@Roguelike@ExitThenAbandon*3",
             "BlackFlow@Roguelike@RecoverMap*3",
             "BlackFlow@Roguelike@RecoverMap-Exit*3",
             "BlackFlow@Roguelike@RecoverMap-Continue*3"
@@ -45,6 +120,7 @@
             "BlackFlow@Roguelike@ChooseDifficulty",
             "BlackFlow@Roguelike@StartExplore",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
             "BlackFlow@Roguelike@NextLevel",
             "BlackFlow@Roguelike@Stages#next",
             "BlackFlow@Roguelike@GetDrops#next",
@@ -55,24 +131,50 @@
             "BlackFlow@Roguelike@Continue",
             "BlackFlow@Roguelike@StartExploreCD",
             "(BlackFlow@Roguelike@IntegratedStrategies)@QuickSwitch@ToTerminal#next",
+            "BlackFlow@Roguelike@ResumeCombatQuickFormation",
+            "BlackFlow@Roguelike@QuickFormation",
             "BlackFlow@Roguelike@ReturnButtons#next",
             "BlackFlow@Roguelike@ReturnConfirm",
+            "BlackFlow@Roguelike@DataSyncConfirm",
             "BlackFlow@Roguelike@StartUpThemes#next"
         ]
     },
     "BlackFlow@Roguelike@CancelNodeSelection": {
         "algorithm": "JustReturn",
-        "sub": ["BlackFlow@Roguelike@CancelNodeSelectionClick*3"],
-        "next": ["BlackFlow@Roguelike@MapPrepare"]
+        "next": [
+            "BlackFlow@Roguelike@CancelNodeSelection-OnMap",
+            "BlackFlow@Roguelike@CancelNodeSelectionClick"
+        ]
     },
     "BlackFlow@Roguelike@CancelNodeSelectionClick": {
+        "Doc": "尝试点击地图空白处关闭节点预览；每次点击后必须识别到完整地图，三次仍未关闭则回主题菜单恢复，不能直接假定成功。",
         "algorithm": "JustReturn",
         "action": "ClickRect",
         "specificRect": [1, 154, 45, 261],
-        "postDelay": 100
+        "postDelay": 300,
+        "maxTimes": 3,
+        "next": [
+            "BlackFlow@Roguelike@CancelNodeSelection-OnMap",
+            "BlackFlow@Roguelike@CancelNodeSelectionClick"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Exit"]
+    },
+    "BlackFlow@Roguelike@CancelNodeSelection-OnMap": {
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
+        "template": [
+            "BlackFlow@Roguelike@MapZoomIn.png",
+            "BlackFlow@Roguelike@MapZoomOut.png"
+        ],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@MapPrepare"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@CancelNodeSelectionClick*3"]
     },
     "BlackFlow@Roguelike@CheckLevel": {
         "text": ["源流堆栈"]
+    },
+    "BlackFlow@Roguelike@StrategyChange_mode30002": {
+        "Doc": "自动化收集的路线由 BlackFlowRoutingTaskPlugin 规划；这里只提供通用策略切换占位，避免按 mode 查找任务时报资源缺失。",
+        "baseTask": "Roguelike@StrategyChange_default"
     },
     "BlackFlow@Roguelike@ChooseDifficulty": {
         "template": "BlackFlow@Roguelike@ChooseDifficulty.png",
@@ -89,15 +191,38 @@
         "next": ["BlackFlow@Roguelike@ChooseOperConfirm", "BlackFlow@Roguelike@ChooseOperConfirm#next"]
     },
     "BlackFlow@Roguelike@ChooseOperConfirm": {
-        "template": "BlackFlow@Roguelike@ChooseOperConfirm.png",
-        "roi": [1016, 602, 264, 118]
+        "Doc": "兼容普通的“确认招募”和增益招募的“招募并增益”，识别到哪个按钮就点击哪个按钮本身。",
+        "template": [
+            "BlackFlow@Roguelike@ChooseOperConfirm.png",
+            "BlackFlow@Roguelike@ChooseOperGainConfirm.png"
+        ],
+        "templThreshold": [0.8, 0.8],
+        "roi": [1016, 602, 264, 118],
+        "next": [
+            "BlackFlow@Roguelike@RecruitSkip",
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
+            "BlackFlow@Roguelike@ChooseOperConfirm"
+        ]
     },
     "BlackFlow@Roguelike@ChooseOperFlag": {
-        "template": "BlackFlow@Roguelike@ChooseOperConfirm.png",
-        "roi": [1016, 602, 264, 118]
+        "Doc": "只通过实际招募按钮确认招募页：兼容普通的“确认招募”和增益招募的“招募并增益”。",
+        "template": [
+            "BlackFlow@Roguelike@ChooseOperConfirm.png",
+            "BlackFlow@Roguelike@ChooseOperGainConfirm.png"
+        ],
+        "templThreshold": [0.8, 0.8],
+        "roi": [900, 0, 380, 720],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@RecruitWithoutButton*10",
+            "BlackFlow@Roguelike@ClickToDrops*20"
+        ]
     },
     "BlackFlow@Roguelike@ClickToDrops": {
-        "specificRect": [600, 600, 25, 25]
+        "Doc": "结算页兜底空点；连续二十次仍未识别到掉落、招募或地图页面时进入公共等待，并在一分钟后重试本动作。",
+        "specificRect": [600, 600, 25, 25],
+        "maxTimes": 20,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@CloseCollection": {
         "Doc": "关掉藏品、资源等获得类弹窗，只在 某任务@(本任务) 的形式下使用。",
@@ -134,10 +259,611 @@
     "BlackFlow@Roguelike@CloseInterview": {
         "template": "BlackFlow@Roguelike@CloseCollection.png"
     },
+    "BlackFlow@Roguelike@AutomationShopAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@AutomationShopBuyConfirm": {
+        "baseTask": "BlackFlow@Roguelike@TraderRandomShoppingConfirm",
+        "template": "Roguelike@TraderRandomShoppingConfirm.png",
+        "next": [
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettle"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopBuyConfirm-Enter": {
+        "algorithm": "JustReturn",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopBuyConfirm",
+            "BlackFlow@Roguelike@AutomationShopBuyUnavailable",
+            "BlackFlow@Roguelike@AutomationShopBuyMissed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopBuyUnavailable": {
+        "baseTask": "Roguelike@TraderRandomShoppingCancel",
+        "template": "Roguelike@StageTraderInvestCancel.png",
+        "roi": [350, 350, 500, 250],
+        "action": "ClickSelf",
+        "next": ["BlackFlow@Roguelike@AutomationShopBuyMissed"]
+    },
+    "BlackFlow@Roguelike@AutomationShopBuyMissed": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopPurchaseSettle": {
+        "Doc": "购买后商品卡片保持原位并置灰；确认任务已等待一秒，这里只留少量缓冲后复用缓存坐标。",
+        "algorithm": "JustReturn",
+        "postDelay": 200,
+        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopDecision": {
+        "algorithm": "JustReturn",
+        "preDelay": 500,
+        "next": ["BlackFlow@Roguelike@AutomationShopAction"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopStillSelling*3"]
+    },
+    "BlackFlow@Roguelike@AutomationShopDecision-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopEnter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopGoods": {
+        "algorithm": "OcrDetect",
+        "Doc": "回到货架顶部时只识别第一排；第二排统一在下半段货架识别和点击。",
+        "roi": [395, 159, 857, 141],
+        "ocrReplace": [
+            ["^垫底座$", "气垫底座"]
+        ],
+        "text": [
+            "沙盘β",
+            "医者-新典训",
+            "医疗招募券",
+            "重装招募券",
+            "精锐重装招募券",
+            "堡垒协议招募券",
+            "特种招募券",
+            "一次性喷气背包",
+            "重弹簧",
+            "种子",
+            "老妈妈的融雪",
+            "坎诺特的触须",
+            "试作外骨骼",
+            "小八界",
+            "气垫底座",
+            "标准引擎",
+            "报废轮子",
+            "报废假肢",
+            "多生苔藓",
+            "雾滚草",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利",
+            "猎犬咖啡",
+            "悲伤的红",
+            "《炎国字汇》",
+            "三尺万象",
+            "医者-自医",
+            "铁卫-侵掠",
+            "迷藏",
+            "“小格兰法洛”"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationShopGoodsBottom": {
+        "baseTask": "BlackFlow@Roguelike@AutomationShopGoods",
+        "Doc": "滑到货架底部后同时识别第二、三排，两排都使用下半段坐标购买。",
+        "roi": [395, 159, 857, 401]
+    },
+    "BlackFlow@Roguelike@AutomationShopGoodsSwipeToTop": {
+        "Doc": "参考事件列表的短促滑动，从货架底部直接回到顶部；顶/底视图之间无需保留中间商品重叠。",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [820, 180, 1, 1],
+        "rectMove": [820, 580, 1, 1],
+        "specialParams": [200, 0, 2, 0],
+        "postDelay": 350
+    },
+    "BlackFlow@Roguelike@AutomationShopGoodsSwipeToBottom": {
+        "Doc": "参考事件列表的短促滑动，以 400 px 行程可靠到达第三排所在的货架底部。",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [820, 580, 1, 1],
+        "rectMove": [820, 180, 1, 1],
+        "specialParams": [200, 0, 2, 0],
+        "postDelay": 350
+    },
+    "BlackFlow@Roguelike@AutomationShopLeave-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@StageTraderLeave"]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefresh": {
+        "template": "Roguelike@StageTraderRefresh.png",
+        "roi": [230, 73, 212, 141],
+        "action": "ClickSelf",
+        "next": ["BlackFlow@Roguelike@AutomationShopRefreshConfirm"]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefresh-Enter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopRefresh",
+            "BlackFlow@Roguelike@AutomationShopLeave-Enter"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefreshCompleted": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefreshConfirm": {
+        "baseTask": "Roguelike@StageTraderRefreshConfirm",
+        "template": [
+            "Roguelike@StageTraderRefreshConfirmNew.png",
+            "Roguelike@StageTraderRefreshConfirm.png"
+        ],
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationShopRefreshCompleted"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefreshPrepare": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": ["BlackFlow@Roguelike@AutomationShopRefresh"]
+    },
+    "BlackFlow@Roguelike@AutomationShopResumeReady": {
+        "Doc": "购买招募券后必须等入队演出结束并实际返回诡意行商，不能用 JustReturn 抢在 RecruitSkip 前恢复购物。",
+        "algorithm": "MatchTemplate",
+        "template": "Roguelike@StageTraderLeave.png",
+        "templThreshold": 0.75,
+        "roi": [985, 443, 295, 204],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@AutomationShopResumeAction"]
+    },
+    "BlackFlow@Roguelike@AutomationShopResumeGeneric": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@TraderRandomShopping"]
+    },
+    "BlackFlow@Roguelike@AutomationShopResumeAction": {
+        "baseTask": "BlackFlow@Roguelike@AutomationShopResumeGeneric"
+    },
+    "BlackFlow@Roguelike@AutomationShopSellAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@AutomationShopSellConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateSellConfirm",
+        "template": "BlackFlow@Roguelike@CultivateSellConfirm.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationShopSellDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopSellConfirm-Enter": {
+        "algorithm": "JustReturn",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopSellConfirm",
+            "BlackFlow@Roguelike@AutomationShopSellMissed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopSellDecision": {
+        "algorithm": "JustReturn",
+        "preDelay": 300,
+        "next": ["BlackFlow@Roguelike@AutomationShopSellAction"]
+    },
+    "BlackFlow@Roguelike@AutomationShopSellItems": {
+        "algorithm": "OcrDetect",
+        "roi": [395, 159, 857, 290],
+        "text": [
+            "血蕈",
+            "雾滚草",
+            "回声玉米",
+            "浪花",
+            "霜晶树",
+            "多生苔藓",
+            "枯苔藓球",
+            "板藤",
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationShopSellMissed": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopSellDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopSellingReady": {
+        "baseTask": "BlackFlow@Roguelike@CultivateSellingFlag",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "next": ["BlackFlow@Roguelike@AutomationShopSellDecision"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopToggleToSell*3"]
+    },
+    "BlackFlow@Roguelike@AutomationShopStillSelling": {
+        "baseTask": "BlackFlow@Roguelike@CultivateStillSelling",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "next": ["BlackFlow@Roguelike@AutomationShopToggleToBuy-Enter"],
+        "exceededNext": ["BlackFlow@Roguelike@AutomationShopLeave-Enter"]
+    },
+    "BlackFlow@Roguelike@AutomationShopToggleToBuy-Enter": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopStillSelling",
+            "BlackFlow@Roguelike@AutomationShopDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopToggleToSell": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopSellingReady",
+            "#self"
+        ],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@AutomationShopLeave-Enter"]
+    },
+    "BlackFlow@Roguelike@AutomationShopToggleToSell-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopToggleToSell"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateAtMost": {
+        "baseTask": "BlackFlow@Roguelike@CultivateAtMost",
+        "template": "BlackFlow@Roguelike@CultivateAtMost.png",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateConfirm"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationCultivateStartButton*3"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateBuyConfirm",
+        "template": "BlackFlow@Roguelike@CultivateBuyConfirm.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationCultivatePurchaseSettle"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyConfirm-Enter": {
+        "algorithm": "JustReturn",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateBuyConfirm",
+            "BlackFlow@Roguelike@AutomationCultivateBuyUnavailable",
+            "BlackFlow@Roguelike@AutomationCultivateBuyMissed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyUnavailable": {
+        "baseTask": "Roguelike@TraderRandomShoppingCancel",
+        "template": "Roguelike@StageTraderInvestCancel.png",
+        "roi": [350, 350, 500, 250],
+        "action": "ClickSelf",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateBuyMissed"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyItems": {
+        "algorithm": "OcrDetect",
+        "roi": [395, 159, 857, 290],
+        "ocrReplace": [
+            ["^垫底座$", "气垫底座"]
+        ],
+        "text": [
+            "一次性喷气背包",
+            "重弹簧",
+            "种子",
+            "老妈妈的融雪",
+            "坎诺特的触须",
+            "试作外骨骼",
+            "小八界",
+            "气垫底座",
+            "标准引擎",
+            "报废轮子",
+            "报废假肢",
+            "多生苔藓",
+            "雾滚草",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyItemsBottom": {
+        "baseTask": "BlackFlow@Roguelike@AutomationCultivateBuyItems",
+        "roi": [395, 300, 857, 260]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateGoodsSwipeToTop": {
+        "Doc": "秘境行商保留原有手势；本次快速顶/底滑动仅用于诡意行商。",
+        "baseTask": "BlackFlow@Roguelike@AutomationShopGoodsSwipeToTop",
+        "specificRect": [820, 245, 1, 1],
+        "rectMove": [820, 565, 1, 1],
+        "specialParams": [350, 1, 3, 0],
+        "postDelay": 350
+    },
+    "BlackFlow@Roguelike@AutomationCultivateGoodsSwipeToBottom": {
+        "Doc": "秘境行商保留原有手势；本次快速顶/底滑动仅用于诡意行商。",
+        "baseTask": "BlackFlow@Roguelike@AutomationShopGoodsSwipeToBottom",
+        "specificRect": [820, 565, 1, 1],
+        "rectMove": [820, 245, 1, 1],
+        "specialParams": [350, 1, 3, 0],
+        "postDelay": 350
+    },
+    "BlackFlow@Roguelike@AutomationCultivateBuyMissed": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivatePurchaseSettle": {
+        "Doc": "购买成功后等待秘境行商货架完成补位动画，再重新识别商品和坐标。",
+        "algorithm": "JustReturn",
+        "postDelay": 1200,
+        "next": ["BlackFlow@Roguelike@AutomationCultivateDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateConfirm",
+        "template": "BlackFlow@Roguelike@CultivateConfirm.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationCultivateConfirmCompleted"
+        ],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationCultivateConfirmCompleted*50"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateAnimationSkip": {
+        "baseTask": "BlackFlow@Roguelike@AnimationSkip",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateConfirmCompleted"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateConfirmCompleted": {
+        "algorithm": "JustReturn",
+        "postDelay": 200,
+        "maxTimes": 50,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateAnimationSkip",
+            "BlackFlow@Roguelike@AutomationCultivateHarvestReady",
+            "#self"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateDecision": {
+        "algorithm": "JustReturn",
+        "preDelay": 300,
+        "next": ["BlackFlow@Roguelike@AutomationCultivateBuyAction"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationCultivateStillSelling*3"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateEnter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateEnsureBuying"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateEnsureBuying": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSellingFlag",
+            "BlackFlow@Roguelike@AutomationCultivateDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateEnsureBuying"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateHarvestConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateHarvestConfirm",
+        "template": "BlackFlow@Roguelike@CultivateConfirm1.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateHarvestReady": {
+        "baseTask": "BlackFlow@Roguelike@CultivateHarvestReady",
+        "template": "BlackFlow@Roguelike@CultivateConfirm1.png",
+        "next": ["BlackFlow@Roguelike@AutomationCultivationResult"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateLeave-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@StageTraderLeave"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateRefresh": {
+        "baseTask": "BlackFlow@Roguelike@CultivateRefresh",
+        "template": "BlackFlow@Roguelike@CultivateRefresh.png",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateRefreshConfirm"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateRefreshCompleted": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateEnsureBuying"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateRefreshConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateRefreshConfirm",
+        "template": "BlackFlow@Roguelike@CultivateRefreshConfirm.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationCultivateRefreshCompleted"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateRefreshPrepare": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": ["BlackFlow@Roguelike@AutomationCultivateRefresh"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellConfirm": {
+        "baseTask": "BlackFlow@Roguelike@CultivateSellConfirm",
+        "template": "BlackFlow@Roguelike@CultivateSellConfirm.png",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@AutomationCultivateSellDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellConfirm-Enter": {
+        "algorithm": "JustReturn",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSellConfirm",
+            "BlackFlow@Roguelike@AutomationCultivateSellMissed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellDecision": {
+        "algorithm": "JustReturn",
+        "preDelay": 300,
+        "next": ["BlackFlow@Roguelike@AutomationCultivateSellAction"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellItems": {
+        "algorithm": "OcrDetect",
+        "roi": [395, 159, 857, 290],
+        "text": [
+            "血蕈",
+            "雾滚草",
+            "回声玉米",
+            "浪花",
+            "霜晶树",
+            "多生苔藓",
+            "枯苔藓球",
+            "板藤",
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellMissed": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateSellDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellingFlag": {
+        "baseTask": "BlackFlow@Roguelike@CultivateSellingFlag",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateStillSelling",
+            "BlackFlow@Roguelike@AutomationCultivateDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateStartButton": {
+        "Doc": "先检查数量弹窗；仅在弹窗不存在且外层按钮仍可见时重试被人物对白吞掉的点击，三次仍未打开则只离开本商店。",
+        "baseTask": "BlackFlow@Roguelike@CultivateStartButton",
+        "postDelay": 600,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateAtMost",
+            "#self"
+        ],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@AutomationCultivateLeave-Enter"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateStartButton-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateStartButton"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateStillSelling": {
+        "baseTask": "BlackFlow@Roguelike@CultivateStillSelling",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateToggleToBuy-Enter"],
+        "exceededNext": ["BlackFlow@Roguelike@AutomationCultivateLeave-Enter"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateToggleToBuy-Enter": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateStillSelling",
+            "BlackFlow@Roguelike@AutomationCultivateDecision"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateToggleToSell": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [986, 123, 214, 25],
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSellingReady",
+            "#self"
+        ],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@AutomationCultivateLeave-Enter"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateToggleToSell-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateToggleToSell"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSellingReady": {
+        "baseTask": "BlackFlow@Roguelike@CultivateSellingFlag",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateSellDecision"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationCultivateToggleToSell*3"]
+    },
+    "BlackFlow@Roguelike@AutomationCultivationResult": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateHarvestConfirm"]
+    },
     "BlackFlow@Roguelike@Continue": {
         "template": "BlackFlow@Roguelike@Continue.png",
         "roi": [995, 565, 198, 104],
         "action": "ClickSelf"
+    },
+    "BlackFlow@Roguelike@AnimationSkip": {
+        "Doc": "培育与曲折密道过场共用的右上角 SKIP。截图坐标按 1920x1080 缩放到任务坐标 1280x720。",
+        "algorithm": "OcrDetect",
+        "roi": [1138, 32, 80, 32],
+        "text": ["SKIP"],
+        "isAscii": true,
+        "fullMatch": true,
+        "action": "ClickSelf",
+        "postDelay": 200
+    },
+    "BlackFlow@Roguelike@MoveConfirmDoorAnimationSkip": {
+        "baseTask": "BlackFlow@Roguelike@AnimationSkip",
+        "next": ["BlackFlow@Roguelike@MoveConfirmDoorAnimationWait"]
+    },
+    "BlackFlow@Roguelike@MoveConfirmDoorMapVisible": {
+        "Doc": "曲折密道过场结束后只确认已经回到地图，把后续重建留给路由器。",
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
+        "template": ["BlackFlow@Roguelike@MapZoomIn.png", "BlackFlow@Roguelike@MapZoomOut.png"],
+        "action": "DoNothing",
+        "next": [],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MoveConfirmDoorAnimationWait*50"]
+    },
+    "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait": {
+        "Doc": "曲折密道属于移动确认中的传送动画，不会进入节点页面派发；在确认路径内轮询 SKIP、藏品弹窗和回图状态。",
+        "algorithm": "JustReturn",
+        "postDelay": 200,
+        "maxTimes": 50,
+        "next": [
+            "BlackFlow@Roguelike@MoveConfirmDoorAnimationSkip",
+            "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MoveConfirmDoorMapVisible",
+            "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@CultivateAtMost": {
         "template": "BlackFlow@Roguelike@CultivateAtMost.png",
@@ -171,12 +897,23 @@
         "template": "BlackFlow@Roguelike@CultivateConfirm.png",
         "roi": [442, 361, 725, 179],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@CultivateConfirmCompleted"]
+        "next": ["#self", "BlackFlow@Roguelike@CultivateConfirmCompleted"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@CultivateConfirmCompleted*50"]
+    },
+    "BlackFlow@Roguelike@CultivateAnimationSkip": {
+        "baseTask": "BlackFlow@Roguelike@AnimationSkip",
+        "next": ["BlackFlow@Roguelike@CultivateConfirmCompleted"]
     },
     "BlackFlow@Roguelike@CultivateConfirmCompleted": {
         "algorithm": "JustReturn",
-        "postDelay": 4000,
-        "next": ["BlackFlow@Roguelike@CultivateHarvestReady"]
+        "postDelay": 200,
+        "maxTimes": 50,
+        "next": [
+            "BlackFlow@Roguelike@CultivateAnimationSkip",
+            "BlackFlow@Roguelike@CultivateHarvestReady",
+            "#self"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@CultivateEnter": {
         "algorithm": "JustReturn",
@@ -202,7 +939,8 @@
             ["^.*三头犬$", "襁褓三头犬"]
         ],
         "text": ["襁褓中的猫", "襁褓羽蛇", "襁褓中的狗", "襁褓三头犬"],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@CultivateHarvestReady": {
         "template": "BlackFlow@Roguelike@CultivateConfirm1.png",
@@ -287,14 +1025,15 @@
             "结构性原理",
             "“简易遥控器”",
             "简易遥控器",
-            "白模鸟",
-            "白模狗",
             "白模鱼",
-            "涂装黎博利",
+            "白模狗",
+            "涂装阿戈尔",
             "涂装佩洛",
-            "涂装阿戈尔"
+            "白模鸟",
+            "涂装黎博利"
         ],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@CultivateSellingFlag": {
         "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
@@ -307,13 +1046,15 @@
         "algorithm": "OcrDetect",
         "roi": [395, 159, 857, 290],
         "text": ["种子"],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@CultivateStartButton": {
         "algorithm": "OcrDetect",
-        "roi": [395, 159, 857, 290],
+        "roi": [420, 275, 200, 100],
         "text": ["开始培育"],
         "fullMatch": true,
+        "fuzzyMatch": true,
         "action": "ClickSelf",
         "next": ["BlackFlow@Roguelike@CultivateAtMost"]
     },
@@ -432,13 +1173,25 @@
         ],
         "fullMatch": true
     },
+    "BlackFlow@Roguelike@CurrentIngots": {
+        "algorithm": "OcrDetect",
+        "roi": [1180, 15, 80, 43],
+        "isAscii": true,
+        "withoutDet": true,
+        "text": []
+    },
     "BlackFlow@Roguelike@DropsFlag": {
+        "Doc": "底部干员页签并非掉落页独占；若转场首帧误将招募列表识别为掉落页，后继会优先重新探测确认招募按钮。识别耗尽后保留当前探索，等待一分钟再重试本动作。",
         "template": "Roguelike@DropsFlag.png",
-        "baseTask": "BlackFlow@Roguelike@DropsFlag_default"
+        "baseTask": "BlackFlow@Roguelike@DropsFlag_default",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@ClickToDrops*20"],
+        "onErrorNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@DropsFlag_default": {
         "template": "Roguelike@DropsFlag.png",
         "next": [
+            "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@GetDropCompleted",
             "BlackFlow@Roguelike@GetDropLeave",
@@ -462,11 +1215,20 @@
             "BlackFlow@Roguelike@RecruitOther"
         ]
     },
+    "BlackFlow@Roguelike@EmployLeave-Enter": {
+        "Doc": "节点动态分发的别名只能安全继承 JustReturn；由本入口转入带自身模板的原应急助力处理器。",
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@EmployLeave"]
+    },
     "BlackFlow@Roguelike@EmployLeave": {
         "template": "BlackFlow@Roguelike@EmployLeave.png",
         "roi": [1099, 541, 179, 86],
         "action": "ClickSelf",
-        "next": ["BlackFlow@Roguelike@EmployLeaveConfirm", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirm",
+            "BlackFlow@Roguelike@Stages-MapReady",
+            "#self"
+        ],
         "maxTimes": 3,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
@@ -490,10 +1252,35 @@
     },
     "BlackFlow@Roguelike@EnteredPageClassification": {
         "algorithm": "OcrDetect",
-        "roi": [100, 160, 505, 372],
+        "roi": [100, 100, 850, 430],
         "withoutDet": false,
-        "text": ["险路尽头", "前瞻性投资系统", "机械师的园圃", "刷新"],
-        "fullMatch": true
+        "text": ["险路尽头", "前瞻性投资系统", "机械师的园圃", "刷新", "零件箱已满", "助战招募", "右侧干员以查看详情"],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationCombat": {
+        "Doc": "未知的凶戾在预览里不会揭示具体战斗；只有快捷编队主界面的快捷编队按钮才是进入作战的可靠证据。",
+        "baseTask": "BattleQuickFormation",
+        "template": "BattleQuickFormation.png",
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationCombatOperatorConfirm": {
+        "Doc": "快捷编队干员详情页的确认按钮只用于识别中间态，不能直接当成已返回快捷编队主界面。",
+        "baseTask": "BattleQuickFormationConfirm",
+        "template": "BattleQuickFormationConfirm.png",
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationCombatOperatorBack": {
+        "Doc": "退出快捷编队的干员详情/列表页；只点击左上角真实返回按钮，禁止在干员卡片区域空点。",
+        "baseTask": "Return",
+        "template": "Return.png",
+        "roi": [0, 0, 180, 80],
+        "action": "ClickSelf",
+        "postDelay": 800
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationRetryWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 1000
     },
     "BlackFlow@Roguelike@EnteredPageClassificationEncounterPrepare": {
         "algorithm": "JustReturn",
@@ -511,6 +1298,19 @@
     "BlackFlow@Roguelike@EnteredPageClassificationEncounterPrepareWait": {
         "algorithm": "JustReturn",
         "postDelay": 1000
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationRewardPrepare": {
+        "Doc": "确认移动后可能先弹出自然物、概念体或加工品详情。先关掉这些正常奖励弹窗，再识别真正的节点页或地图；奖励弹窗不能升级为本局失败。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@EnteredPageClassificationRewardPrepare@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@EnteredPageClassificationRewardPrepare@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@EnteredPageClassificationRewardPrepareDone"
+        ]
+    },
+    "BlackFlow@Roguelike@EnteredPageClassificationRewardPrepareDone": {
+        "algorithm": "JustReturn",
+        "postDelay": 500
     },
     "BlackFlow@Roguelike@Event-BabyCultivationCompleted": {
         "algorithm": "JustReturn",
@@ -537,10 +1337,6 @@
         "next": ["BlackFlow@Roguelike@NodeResultDispatch"]
     },
     "BlackFlow@Roguelike@Event-BasicE2Team": {
-        "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@NodeResultDispatch"]
-    },
-    "BlackFlow@Roguelike@Event-BurnCompleted": {
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@NodeResultDispatch"]
     },
@@ -586,7 +1382,9 @@
     },
     "BlackFlow@Roguelike@ExitThenAbandon": {
         "template": "Roguelike@ExitThenAbandon.png",
-        "next": ["BlackFlow@Roguelike@ExitThenAbandon", "BlackFlow@Roguelike@Abandon"]
+        "maxTimes": 3,
+        "next": ["BlackFlow@Roguelike@Abandon", "BlackFlow@Roguelike@ExitThenAbandon"],
+        "exceededNext": ["BlackFlow@Roguelike@Abandon"]
     },
     "BlackFlow@Roguelike@ExitThenAbandon-Enter": {
         "algorithm": "JustReturn",
@@ -617,7 +1415,12 @@
     },
     "BlackFlow@Roguelike@GetDropCompleted": {
         "template": "BlackFlow@Roguelike@GetDropCompleted.png",
-        "specificRect": [600, 600, 25, 25]
+        "specificRect": [600, 600, 25, 25],
+        "next": [
+            "BlackFlow@Roguelike@GetDrops#next",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@NodeCompletionAction"
+        ]
     },
     "BlackFlow@Roguelike@GetDropLeave": {
         "template": "BlackFlow@Roguelike@GetDropLeave.png"
@@ -632,6 +1435,7 @@
             "BlackFlow@Roguelike@GetDropSelect@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@CloseEvent",
             "BlackFlow@Roguelike@GetDropSelectRecruit",
+            "BlackFlow@Roguelike@GetDropTrophyReward",
             "BlackFlow@Roguelike@GetDrop",
             "BlackFlow@Roguelike@GetDropSelectReward",
             "BlackFlow@Roguelike@ChooseOperFlag",
@@ -642,19 +1446,124 @@
     "BlackFlow@Roguelike@GetDropSelectRecruit": {
         "template": "BlackFlow@Roguelike@GetDropSelectRecruit.png"
     },
+    "BlackFlow@Roguelike@GetDropTrophyReward": {
+        "Doc": "战斗后战利品零件二选一；插件会 OCR 两侧名称和类别，并按配置优先级点击“收下”。",
+        "baseTask": "Roguelike@GetDropSelectReward",
+        "template": "BlackFlow@Roguelike@GetDropTrophyReward.png",
+        "roi": [350, 460, 570, 100],
+        "action": "DoNothing",
+        "postDelay": 1000,
+        "templThreshold": 0.75,
+        "next": [
+            "BlackFlow@Roguelike@GetDropTrophyReward",
+            "BlackFlow@Roguelike@GetDropSelectReward",
+            "BlackFlow@Roguelike@GetDropSelect",
+            "BlackFlow@Roguelike@GetDrop",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
     "BlackFlow@Roguelike@GetDropSelectReward": {
-        "template": "BlackFlow@Roguelike@GetDropSelectReward.png"
+        "template": "BlackFlow@Roguelike@GetDropSelectReward.png",
+        "next": [
+            "BlackFlow@Roguelike@GetDropTrophyReward",
+            "BlackFlow@Roguelike@GetDropSelectReward",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
     },
     "BlackFlow@Roguelike@GetDrops": {
         "next": [
             "BlackFlow@Roguelike@GetDrops@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@GetDrops@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@CloseEvent",
+            "BlackFlow@Roguelike@GetDropTrophyReward",
             "BlackFlow@Roguelike@GetDrop",
             "BlackFlow@Roguelike@GetDropSelectReward",
             "BlackFlow@Roguelike@GetDropSelect",
             "BlackFlow@Roguelike@GetDropRecruit"
         ]
+    },
+    "BlackFlow@Roguelike@TrophyRewardNameOCR": {
+        "Doc": "相对“收下”按钮识别战利品零件名称；具体排序由三个 Priority 任务配置。",
+        "algorithm": "OcrDetect",
+        "roi": [-35, -190, 215, 48],
+        "text": [],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "ocrReplace": [
+            ["^垫底座$", "气垫底座"],
+            ["^简易遥控器$", "“简易遥控器”"]
+        ]
+    },
+    "BlackFlow@Roguelike@TrophyRewardCategoryOCR": {
+        "Doc": "相对“收下”按钮识别战利品零件类别，供名称未识别时兜底。",
+        "algorithm": "OcrDetect",
+        "roi": [-45, -405, 200, 45],
+        "text": ["加工品", "自然物", "概念体"],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@TrophyRewardPriority": {
+        "Doc": "战斗后战利品零件二选一专用的跨类别完整优先级；数组从高到低，白模和涂装概念体均为 R。",
+        "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
+        "text": [
+            "结构性原理",
+            "“简易遥控器”",
+            "一次性喷气背包",
+            "光彩松露",
+            "板藤",
+            "恋家果",
+            "老妈妈的融雪",
+            "重弹簧",
+            "坎诺特的触须",
+            "多生苔藓",
+            "气垫底座",
+            "试作外骨骼",
+            "标准引擎",
+            "小八界",
+            "种子",
+            "报废轮子",
+            "报废假肢",
+            "回声玉米",
+            "霜晶树",
+            "浪花",
+            "雾滚草",
+            "白模鱼",
+            "血蕈",
+            "枯苔藓球",
+            "白模狗",
+            "涂装佩洛",
+            "涂装阿戈尔",
+            "涂装黎博利",
+            "白模鸟",
+            "笼控器"
+        ]
+    },
+    "BlackFlow@Roguelike@InventoryNaturalPriority": {
+        "Doc": "零件箱自然物识别名单及同估价时的保留优先级；不参与战斗后战利品二选一排序。",
+        "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
+        "text": [
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "板藤",
+            "霜晶树",
+            "回声玉米",
+            "多生苔藓",
+            "浪花",
+            "种子",
+            "血蕈",
+            "雾滚草",
+            "枯苔藓球"
+        ]
+    },
+    "BlackFlow@Roguelike@InventoryConceptPriority": {
+        "Doc": "零件箱概念体识别名单及保留优先级；不参与战斗后战利品二选一排序。",
+        "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
+        "text": ["白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛", "白模鸟", "涂装黎博利"]
     },
     "BlackFlow@Roguelike@HuntedConfirm": {
         "template": "BlackFlow@Roguelike@HuntedConfirm.png",
@@ -666,25 +1575,67 @@
     },
     "BlackFlow@Roguelike@HuntedConfirmCompleted": {
         "algorithm": "JustReturn",
-        "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedConfirm*3"],
-        "next": ["BlackFlow@Roguelike@ExitThenAbandon-Enter"]
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@HuntedConfirm*3",
+            "BlackFlow@Roguelike@DirectExhaustConfirm*3",
+            "BlackFlow@Roguelike@HuntedDepart*3"
+        ],
+        "next": ["BlackFlow@Roguelike@HuntedAction"]
+    },
+    "BlackFlow@Roguelike@HuntedAction": {
+        "baseTask": "BlackFlow@Roguelike@ExitThenAbandon-Enter"
+    },
+    "BlackFlow@Roguelike@HuntedBattle-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@HuntedDepart"]
+    },
+    "BlackFlow@Roguelike@HuntedDepart": {
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "ClickSelf",
+        "next": ["#self", "BlackFlow@Roguelike@QuickFormation"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@InitialDrop": {
         "template": "BlackFlow@Roguelike@Confirm.png",
         "roi": [578, 610, 128, 85]
     },
     "BlackFlow@Roguelike@LastReward": {
+        "Doc": "行动奖励：退行补偿——目标生命上限-2，获得1件随机收藏品。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward.png"
     },
+    "BlackFlow@Roguelike@AutomationCollectionPreferredStartReward": {
+        "Doc": "自动化收集行动奖励的完整标题 OCR；襁褓动物卡会比其余三张卡上移，ROI 同时覆盖两条标题高度。代码对 OCR 原文做封闭词表模糊匹配，优先选择襁褓动物，否则从四项允许奖励中随机选择；不再使用卡片模板匹配。",
+        "algorithm": "OcrDetect",
+        "roi": [100, 380, 1100, 130],
+        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationCollectionStartRewardConfirmationPrompt": {
+        "Doc": "奖励卡首次点击后出现的确认提示。按提示框中轴点击同一卡片底部确认勾，不使用带卡片底图的模板。",
+        "algorithm": "OcrDetect",
+        "roi": [100, 520, 1080, 55],
+        "text": ["你确定要这么做"],
+        "fuzzyMatch": true
+    },
     "BlackFlow@Roguelike@LastReward-EnterPoint": {
-        "template": [
-            "BlackFlow@Roguelike@LastReward.png",
-            "BlackFlow@Roguelike@LastReward2.png",
-            "BlackFlow@Roguelike@LastReward3.png",
-            "BlackFlow@Roguelike@LastReward4.png",
-            "BlackFlow@Roguelike@LastReward5.png",
-            "BlackFlow@Roguelike@LastReward6.png"
+        "Doc": "奖励入口只按完整标题 OCR 识别；不再依赖六张奖励卡底图模板。插件会在入口内直接完成二次确认，之后可能弹出收藏品详情、仍有可连续选择的奖励、直接进入职业组合/招募页或进入地图。关闭详情后必须先重新探测本入口，再接续后续页面。",
+        "algorithm": "OcrDetect",
+        "roi": [100, 380, 1100, 130],
+        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "next": [
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@LastReward-EnterPoint",
+            "BlackFlow@Roguelike@RolesDefault",
+            "BlackFlow@Roguelike@LastRewardConfirm",
+            "BlackFlow@Roguelike@RecruitMain",
+            "BlackFlow@Roguelike@Stages#next",
+            "BlackFlow@Roguelike@AbandonConfirm#next"
         ]
     },
     "BlackFlow@Roguelike@LastReward-Strategy": {
@@ -698,22 +1649,27 @@
         ]
     },
     "BlackFlow@Roguelike@LastReward2": {
+        "Doc": "行动奖励：林间代步——获得1件加工品。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward2.png"
     },
     "BlackFlow@Roguelike@LastReward3": {
+        "Doc": "行动奖励：巢寄生——零件箱容量-1，获得1件稀有收藏品。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward3.png"
     },
     "BlackFlow@Roguelike@LastReward4": {
+        "Doc": "行动奖励：未编号物——获得1件普通收藏品。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward4.png"
     },
     "BlackFlow@Roguelike@LastReward5": {
+        "Doc": "行动奖励：调查预付款——获得8源石锭。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward5.png"
     },
     "BlackFlow@Roguelike@LastReward6": {
+        "Doc": "行动奖励：空间租赁——消耗6源石锭，零件箱容量+2。",
         "baseTask": "Roguelike@LastReward",
         "template": "BlackFlow@Roguelike@LastReward6.png"
     },
@@ -723,6 +1679,7 @@
         "next": [
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@LastReward-EnterPoint",
             "BlackFlow@Roguelike@RecruitMain",
             "BlackFlow@Roguelike@Stages#next"
         ]
@@ -793,15 +1750,22 @@
     "BlackFlow@Roguelike@MovePreviewConfirm": {
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
-        "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@MovePreviewConfirmCompleted"],
+        "action": "ClickRect",
+        "specificRect": [1135, 525, 70, 70],
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirmCompleted"
+        ],
         "maxTimes": 3
     },
     "BlackFlow@Roguelike@MovePreviewConfirmCompleted": {
+        "Doc": "移动确认后的统一收尾：等待落点转场，并在节点处理器接管前关闭加工品损毁、获得战利品等居中的 NEXT 详情弹窗以及右上角获得物弹窗。",
         "algorithm": "JustReturn",
         "postDelay": 600,
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirm*3"],
         "next": [
+            "BlackFlow@Roguelike@MovePreviewConfirmCompleted@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MovePreviewConfirmCompleted@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MovePreviewConfirmCompletedDone"
         ]
@@ -819,12 +1783,31 @@
         "fullMatch": true
     },
     "BlackFlow@Roguelike@MovePreviewDisplayedName": {
-        "Doc": "候选词由 roguelike/BlackFlow/node_execution.json 的 preview_names 提供，那里同时给出对应的节点类型。",
+        "Doc": "节点预览的大标题。这里只用它识别会被上方类别“作战”遮蔽的未知凶戾/诡秘；已揭示战斗的大标题是具体关卡名。",
         "algorithm": "OcrDetect",
-        "roi": [912, 101, 195, 96],
+        "roi": [912, 135, 195, 50],
         "withoutDet": false,
         "ocrReplace": [["^秘必境行商$", "秘境行商"]],
         "fullMatch": true,
+        "fuzzyMatch": true,
+        "text": []
+    },
+    "BlackFlow@Roguelike@MovePreviewDisplayedCategory": {
+        "Doc": "节点预览大标题上方的小号节点类别；已揭示战斗依靠这里的“作战/紧急作战”确定节点类型。候选词由 node_execution.json 的 preview_names 提供。",
+        "algorithm": "OcrDetect",
+        "roi": [912, 108, 195, 32],
+        "withoutDet": false,
+        "ocrReplace": [["^秘必境行商$", "秘境行商"]],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "text": []
+    },
+    "BlackFlow@Roguelike@MovePreviewStageName": {
+        "Doc": "节点预览右上角第二行的具体事件/关卡名；战斗情报探查只读取这一行。",
+        "baseTask": "BattleStageName",
+        "roi": [912, 135, 195, 50],
+        "withoutDet": false,
+        "fuzzyMatch": true,
         "text": []
     },
     "BlackFlow@Roguelike@MovePreviewEnter": {
@@ -834,7 +1817,7 @@
     },
     "BlackFlow@Roguelike@MovePreviewWait": {
         "algorithm": "JustReturn",
-        "postDelay": 3000,
+        "postDelay": 150,
         "next": ["BlackFlow@Roguelike@MovePreviewEnter", "BlackFlow@Roguelike@MovePreviewCannotEnter", "#self"],
         "maxTimes": 3
     },
@@ -856,6 +1839,7 @@
         "next": ["BlackFlow@Roguelike@MovementInventoryClose"]
     },
     "BlackFlow@Roguelike@MovementInventoryItems": {
+        "Doc": "按类型扫描零件箱：识别加工品；一旦在新扫描区域看到自然物、概念体或待收集零件空格，就证明加工品区已经结束。",
         "algorithm": "OcrDetect",
         "roi": [348, 132, 930, 495],
         "ocrReplace": [
@@ -875,9 +1859,141 @@
             "坎诺特的触须",
             "结构性原理",
             "简易遥控器",
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "板藤",
+            "霜晶树",
+            "回声玉米",
+            "多生苔藓",
+            "浪花",
+            "种子",
+            "血蕈",
+            "雾滚草",
+            "枯苔藓球",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利",
+            "待收集零件",
             "装载中"
         ],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@MovementInventorySwipe": {
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [1080, 430, 1, 1],
+        "rectMove": [650, 430, 1, 1],
+        "specialParams": [260, 1, 3, 0],
+        "postDelay": 600
+    },
+    "BlackFlow@Roguelike@MovementInventorySwipeToStart": {
+        "baseTask": "BlackFlow@Roguelike@MovementInventorySwipe",
+        "specificRect": [650, 430, 1, 1],
+        "rectMove": [1080, 430, 1, 1]
+    },
+    "BlackFlow@Roguelike@MovementInventoryOverloadPrompt": {
+        "Doc": "移动确认后弹出的零件箱过载提示。现场整行为‘零件箱已满，无法进入下个节点’，因此只做前缀/包含匹配。",
+        "algorithm": "OcrDetect",
+        "roi": [100, 100, 850, 430],
+        "withoutDet": false,
+        "text": ["零件箱已满"],
+        "fullMatch": false,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@MovementInventoryOverloadOpen": {
+        "algorithm": "OcrDetect",
+        "roi": [640, 430, 620, 120],
+        "text": ["确认"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "action": "ClickSelf",
+        "postDelay": 900
+    },
+    "BlackFlow@Roguelike@MovementInventoryOverloadedBanner": {
+        "algorithm": "OcrDetect",
+        "roi": [300, 70, 540, 80],
+        "text": ["当前零件数量过多"],
+        "fullMatch": false,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@MovementInventoryAllItems": {
+        "algorithm": "OcrDetect",
+        "roi": [348, 132, 930, 495],
+        "ocrReplace": [
+            ["^垫底座$", "气垫底座"],
+            ["^次性喷气背包$", "一次性喷气背包"],
+            ["^简易遥控器$", "“简易遥控器”"]
+        ],
+        "text": [
+            "报废轮子", "报废假肢", "标准引擎", "重弹簧", "气垫底座", "试作外骨骼",
+            "小八界", "一次性喷气背包", "老妈妈的融雪", "坎诺特的触须", "结构性原理", "“简易遥控器”",
+            "恋家果", "光彩松露", "笼控器", "板藤", "霜晶树", "回声玉米", "多生苔藓", "浪花", "种子", "血蕈", "雾滚草", "枯苔藓球",
+            "白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛", "白模鸟", "涂装黎博利"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@MovementInventoryDiscardPriority": {
+        "Doc": "零件箱过载时的跨类别丢弃顺序；由战利品二选一的 30 零件保留优先级整体倒序，并将笼控器调整到老妈妈的融雪与恋家果之间。数组从先丢到后丢。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
+        "text": [
+            "白模鸟",
+            "涂装黎博利",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模狗",
+            "枯苔藓球",
+            "血蕈",
+            "白模鱼",
+            "雾滚草",
+            "浪花",
+            "霜晶树",
+            "回声玉米",
+            "报废假肢",
+            "报废轮子",
+            "种子",
+            "小八界",
+            "标准引擎",
+            "试作外骨骼",
+            "气垫底座",
+            "多生苔藓",
+            "坎诺特的触须",
+            "重弹簧",
+            "老妈妈的融雪",
+            "笼控器",
+            "恋家果",
+            "板藤",
+            "光彩松露",
+            "一次性喷气背包",
+            "“简易遥控器”",
+            "结构性原理"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryDiscardButton": {
+        "algorithm": "OcrDetect",
+        "roi": [350, 450, 400, 120],
+        "text": ["丢弃"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "preDelay": 400,
+        "action": "ClickSelf",
+        "postDelay": 800
+    },
+    "BlackFlow@Roguelike@MovementInventoryDiscardDetailWait": {
+        "Doc": "点击零件卡片后等待详情弹层展开；必须发生在丢弃按钮 OCR 之前。",
+        "algorithm": "JustReturn",
+        "postDelay": 700
+    },
+    "BlackFlow@Roguelike@MovementInventoryOverloadClose": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [18, 8, 60, 58],
+        "postDelay": 700
     },
     "BlackFlow@Roguelike@MovementInventoryObservationAction": {
         "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
@@ -983,7 +2099,8 @@
             "剩余2次",
             "剩余3次"
         ],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@MovementPanelOpenClick": {
         "algorithm": "JustReturn",
@@ -991,20 +2108,187 @@
         "specificRect": [1121, 90, 56, 5],
         "postDelay": 500
     },
-    "BlackFlow@Roguelike@MovementPanelSwipe": {
+    "BlackFlow@Roguelike@MapViewportFloor5SwipeLeft": {
         "algorithm": "JustReturn",
         "action": "Swipe",
-        "specificRect": [1024, 590, 1, 1],
-        "rectMove": [1024, 280, 1, 1],
-        "specialParams": [200, 0, 2, 0],
-        "postDelay": 500
+        "specificRect": [900, 350, 1, 1],
+        "rectMove": [250, 350, 1, 1],
+        "specialParams": [300, 1, 3, 0],
+        "postDelay": 300
+    },
+    "BlackFlow@Roguelike@MapCaptureStabilityWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 300
+    },
+    "BlackFlow@Roguelike@UtopiaPanelToggle": {
+        "Doc": "新地图楼层标题左侧固定的实托邦标记；打开标题弹层 OCR 后再次点击同一位置关闭。",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [535, 8, 55, 65],
+        "postDelay": 600
+    },
+    "BlackFlow@Roguelike@UtopiaPanelPolicy": {
+        "algorithm": "OcrDetect",
+        "roi": [505, 100, 58, 42],
+        "withoutDet": false,
+        "fullMatch": false,
+        "fuzzyMatch": true,
+        "text": ["\u6539\u826f", "\u4fee\u6b63", "\u6fc0\u8fdb", "\u589e\u76ca"]
+    },
+    "BlackFlow@Roguelike@UtopiaPanelIdeology": {
+        "algorithm": "OcrDetect",
+        "roi": [563, 100, 130, 42],
+        "withoutDet": false,
+        "fullMatch": false,
+        "fuzzyMatch": true,
+        "text": [
+            "\u9ed1\u6d41\u5730\u8109",
+            "\u503e\u659c\u6c99\u4e18",
+            "\u53bb\u6e29\u680f",
+            "\u5fae\u578b\u80f6\u56ca",
+            "\u50a8\u85cf\u5ba4",
+            "\u6613\u788e\u540c\u76df",
+            "\u505c\u6b62\u70b9",
+            "\u5e0c\u671b\u7684\u6c83\u571f",
+            "\u5f25\u6563\u865a\u96fe",
+            "\u7f8e\u4e3d\u65b0\u5927\u5730"
+        ]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-Exit": {
+        "Doc": "完整确认本层实托邦后，回到主题主菜单再继续探索，强制游戏重绘理想源和完整理想域。",
+        "baseTask": "BlackFlow@Roguelike@ExitThenAbandon",
+        "template": "Roguelike@ExitThenAbandon.png",
+        "roi": [0, 0, 1280, 720],
+        "maxTimes": 3,
+        "next": [
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Continue",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Exit"
+        ],
+        "onErrorNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"],
+        "exceededNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-Continue": {
+        "baseTask": "BlackFlow@Roguelike@Continue",
+        "template": "BlackFlow@Roguelike@Continue.png",
+        "maxTimes": 3,
+        "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Continue",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss"
+        ],
+        "onErrorNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"],
+        "exceededNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@UtopiaMapRefresh-Exit*3"]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [1, 154, 45, 261],
+        "maxTimes": 5,
+        "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@UtopiaMapRefresh-OnMap",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut": {
+        "Doc": "回到地图但仍是大比例尺时，先点击一次缩小地图；完成态必须显示 MapZoomIn 按钮。",
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+        "template": "BlackFlow@Roguelike@MapZoomOut.png",
+        "action": "ClickSelf",
+        "postDelay": 1000,
+        "maxTimes": 1,
+        "next": ["BlackFlow@Roguelike@UtopiaMapRefresh-OnMap"],
+        "onErrorNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"],
+        "exceededNext": ["BlackFlow@Roguelike@UtopiaMapRefresh-Failed"]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-OnMap": {
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
+        "template": ["BlackFlow@Roguelike@MapZoomIn.png"],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@UtopiaMapRefresh-Completed"]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-Completed": {
+        "algorithm": "JustReturn",
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Continue*3",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss*5",
+            "BlackFlow@Roguelike@UtopiaMapRefresh-Exit*3"
+        ]
+    },
+    "BlackFlow@Roguelike@UtopiaMapRefresh-Failed": {
+        "algorithm": "JustReturn"
+    },
+    "BlackFlow@Roguelike@MovementPanelSwipe": {
+        "Doc": "移动方式列表对短促手势会产生明显惯性；使用一张多一点的低速拖动，保留相邻画面重叠并避免跳过加工品。",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [1024, 540, 1, 1],
+        "rectMove": [1024, 360, 1, 1],
+        "specialParams": [300, 0, 2, 0],
+        "postDelay": 250
+    },
+    "BlackFlow@Roguelike@MovementPanelSwipeToStart": {
+        "Doc": "与向下扫描使用同一低速短拖动，减小列表顶部过冲和回弹。",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [1024, 360, 1, 1],
+        "rectMove": [1024, 540, 1, 1],
+        "specialParams": [300, 0, 2, 0],
+        "postDelay": 250
     },
     "BlackFlow@Roguelike@MovementPanelTitle": {
         "algorithm": "OcrDetect",
         "roi": [893, 33, 196, 47],
         "withoutDet": true,
         "text": ["选择移动方式"],
-        "fullMatch": true
+        "fullMatch": true,
+        "fuzzyMatch": true
+    },
+    "BlackFlow@Roguelike@DirectExhaust-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@DirectExhaustOpenPanel"]
+    },
+    "BlackFlow@Roguelike@DirectExhaustOpenPanel": {
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [1121, 90, 56, 5],
+        "postDelay": 500,
+        "next": ["BlackFlow@Roguelike@DirectExhaustButton", "#self"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@DirectExhaustButton": {
+        "algorithm": "OcrDetect",
+        "roi": [1100, 90, 180, 100],
+        "withoutDet": false,
+        "text": ["直接耗尽"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "action": "ClickSelf",
+        "postDelay": 500,
+        "next": ["BlackFlow@Roguelike@DirectExhaustConfirm", "#self"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@DirectExhaustConfirm": {
+        "algorithm": "OcrDetect",
+        "roi": [900, 430, 360, 120],
+        "withoutDet": false,
+        "text": ["确认"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "action": "ClickSelf",
+        "postDelay": 800,
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@DirectExhaustOpenPanel*3",
+            "BlackFlow@Roguelike@DirectExhaustButton*3"
+        ],
+        "next": ["BlackFlow@Roguelike@HuntedConfirm", "#self"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@NextLevel": {
         "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层。",
@@ -1014,11 +2298,15 @@
         "withoutDet": false,
         "text": ["玻利瓦尔肤层", "甜美的伤口", "血色空脉", "受害者腐殖", "卡德霍之颅", "未萌生的摇篮"],
         "fullMatch": true,
+        "fuzzyMatch": true,
         "postDelay": 600,
         "next": [
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@ResumeMovePreviewEnter",
+            "BlackFlow@Roguelike@ResumeMovePreviewCannotEnter",
             "BlackFlow@Roguelike@NextLevel"
         ]
     },
@@ -1073,7 +2361,7 @@
     },
     "BlackFlow@Roguelike@Page-Combat": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@QuickFormation"]
+        "next": ["BlackFlow@Roguelike@ResumeCombatQuickFormation", "BlackFlow@Roguelike@QuickFormation"]
     },
     "BlackFlow@Roguelike@Page-Cultivate": {
         "algorithm": "JustReturn",
@@ -1083,25 +2371,26 @@
         "baseTask": "BlackFlow@Roguelike@NodeDispatch-Unconfigured"
     },
     "BlackFlow@Roguelike@Page-Door": {
-        "Doc": "曲折密道，进去只有一段过场动画，等它放完回到主地图，中途可能弹藏品。",
+        "Doc": "曲折密道，确认后优先识别并点击过场右上角 SKIP；若未识别到则继续等待自然结束，中途可能弹藏品。",
         "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@Page-Door-Wait"]
+    },
+    "BlackFlow@Roguelike@DoorAnimationSkip": {
+        "baseTask": "BlackFlow@Roguelike@AnimationSkip",
         "next": ["BlackFlow@Roguelike@Page-Door-Wait"]
     },
     "BlackFlow@Roguelike@Page-Door-Wait": {
         "algorithm": "JustReturn",
-        "postDelay": 1000,
-        "maxTimes": 10,
+        "postDelay": 200,
+        "maxTimes": 50,
         "next": [
+            "BlackFlow@Roguelike@DoorAnimationSkip",
             "BlackFlow@Roguelike@Page-Door-Wait@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages-MapReady",
             "BlackFlow@Roguelike@Stages-ZoomOut",
             "BlackFlow@Roguelike@Page-Door-Wait"
         ],
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
-    },
-    "BlackFlow@Roguelike@Page-Employ": {
-        "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@EmployLeave"]
     },
     "BlackFlow@Roguelike@Page-Encounter": {
         "baseTask": "BlackFlow@Roguelike@StageEncounterJudgeClick"
@@ -1127,25 +2416,28 @@
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@Stages"]
     },
-    "BlackFlow@Roguelike@Page-PortalFloor1": {
-        "baseTask": "BlackFlow@Roguelike@NodeDispatch-Unconfigured"
-    },
-    "BlackFlow@Roguelike@Page-PortalFloor2": {
-        "baseTask": "BlackFlow@Roguelike@NodeDispatch-Unconfigured"
-    },
-    "BlackFlow@Roguelike@Page-PortalFloor3": {
-        "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@Event-BurnCompleted"]
-    },
     "BlackFlow@Roguelike@Page-SeedPriority": {
         "baseTask": "BlackFlow@Roguelike@NodeDispatch-Unconfigured"
     },
     "BlackFlow@Roguelike@Page-SeedPriorityFloor3": {
         "baseTask": "BlackFlow@Roguelike@NodeDispatch-Unconfigured"
     },
+    "BlackFlow@Roguelike@Page-AutomationShop": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationShopEnter"]
+    },
+    "BlackFlow@Roguelike@Page-AutomationScrapShop": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateEnter"]
+    },
     "BlackFlow@Roguelike@Page-Shop": {
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@StageTraderLeave"]
+    },
+    "BlackFlow@Roguelike@Page-ScrapShop": {
+        "Doc": "非培育策略进入秘境行商时直接离开；刷襁褓继续由 scrap_shop.cultivate 分流到 Page-Cultivate。",
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@CultivateLeave-Enter"]
     },
     "BlackFlow@Roguelike@RecoverMap": {
         "baseTask": "BlackFlow@Roguelike@RecoverMap-Exit",
@@ -1196,16 +2488,30 @@
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@MapPrepare"],
         "reduceOtherTimes": [
+            "BlackFlow@Roguelike@CancelNodeSelectionClick*3",
             "BlackFlow@Roguelike@RecoverMap-Continue*3",
             "BlackFlow@Roguelike@RecoverMap-Dismiss*5",
             "BlackFlow@Roguelike@RecoverMap-Exit*3"
         ]
     },
     "BlackFlow@Roguelike@RecoverMapFailed": {
+        "Doc": "地图返回链耗尽同样视为临时界面故障；等待一分钟后重试实际失败的 RecoverMap 动作，不结束当前探索。",
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@StrategyTerminated"]
+        "next": ["BlackFlow@Roguelike@RecoveryRetryWait"]
     },
     "BlackFlow@Roguelike@RecoveryFailed": {
+        "Doc": "非业务性的界面任务链故障不直接结束探索；生命周期插件记录实际失败动作，并转入一分钟等待后原动作重试。",
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@RecoveryRetryWait"]
+    },
+    "BlackFlow@Roguelike@RecoveryRetryWait": {
+        "Doc": "等待一分钟，让临时 ADB 或模拟器输入异常自行恢复；之后不做全局页面识别，直接执行 RecoveryRetryAction。",
+        "algorithm": "JustReturn",
+        "postDelay": 60000,
+        "next": ["BlackFlow@Roguelike@RecoveryRetryAction"]
+    },
+    "BlackFlow@Roguelike@RecoveryRetryAction": {
+        "Doc": "生命周期插件在等待开始前把本任务的 next 动态改为一分钟前实际失败的动作，并同步重置该动作已耗尽的执行次数。",
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@StrategyTerminated"]
     },
@@ -1216,9 +2522,11 @@
         "template": "BlackFlow@Roguelike@Recruit.png"
     },
     "BlackFlow@Roguelike@RecruitWithoutButton": {
+        "Doc": "只在已识别并点击“跳过”后用于关闭招募展示页；点击屏幕中央安全区域，禁止沿用基类的右上角固定点击。",
+        "specificRect": [550, 300, 180, 120],
         "next": [
             "BlackFlow@Roguelike@RecruitOther",
-            "BlackFlow@Roguelike@TraderRandomShopping",
+            "BlackFlow@Roguelike@TraderShoppingResume",
             "BlackFlow@Roguelike@StageTraderLeave",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ChooseOperFlag",
@@ -1229,8 +2537,53 @@
             "BlackFlow@Roguelike@RecruitWithoutButton"
         ]
     },
+    "BlackFlow@Roguelike@ResumeCombatQuickFormation": {
+        "Doc": "任务若在快捷编队的干员选择页中断，先确认并返回编队页，再交给正常作战编队流程继续。必须排在 Begin 的通用返回按钮之前。",
+        "baseTask": "BattleQuickFormationConfirm",
+        "template": "BattleQuickFormationConfirm.png",
+        "next": ["BlackFlow@Roguelike@QuickFormation"]
+    },
+    "BlackFlow@Roguelike@RecruitSkip": {
+        "baseTask": "Roguelike@RecruitSkip",
+        "Doc": "普通招募与干员进阶演出共用同一组 SKIP 字形；只匹配模板中的高亮字形，忽略不同演出背景。",
+        "template": "RecruitSkip.png",
+        "templThreshold": 0.65,
+        "maskRange": [80, 255],
+        "next": [
+            "BlackFlow@Roguelike@RecruitSkip",
+            "BlackFlow@Roguelike@RecruitOther",
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@RecruitWithoutButton"
+        ]
+    },
     "BlackFlow@Roguelike@ReserveRecruitmentVoucher": {
         "template": "BlackFlow@Roguelike@ReserveRecruitmentVoucher.png"
+    },
+    "BlackFlow@Roguelike@ResumeEncounterPage": {
+        "Doc": "任务在事件选项页被停止后重新启动时，必须先续办事件；这里只接受完整事件名，防止地图纹理或节点文字被短文本模糊匹配成事件页。",
+        "baseTask": "BlackFlow@Roguelike@StageEncounterOcr",
+        "fuzzyMatch": false,
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@StageEncounterJudgeClick"]
+    },
+    "BlackFlow@Roguelike@ResumeMovePreviewEnter": {
+        "Doc": "只有画面确实仍停在可出发的节点预览页时，才撤销节点选择并返回地图；禁止用无条件兜底误伤招募展示页。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@CancelNodeSelection"]
+    },
+    "BlackFlow@Roguelike@ResumeMovePreviewCannotEnter": {
+        "Doc": "只有画面确实仍停在无法抵达的节点预览页时，才撤销节点选择并返回地图；禁止用无条件兜底误伤招募展示页。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewCannotEnter",
+        "template": "BlackFlow@Roguelike@MovePreviewCannotEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@CancelNodeSelection"]
     },
     "BlackFlow@Roguelike@RolesConfirm": {
         "template": "BlackFlow@Roguelike@LastRewardConfirm.png"
@@ -1300,6 +2653,16 @@
         "baseTask": "Roguelike@StageEncounterJudgeClick",
         "next": ["BlackFlow@Roguelike@StageEncounterJudgeClick2"]
     },
+    "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm": {
+        "baseTask": "Roguelike@StageEncounterGiveUpRecruitConfirm",
+        "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
+        "next": [
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
     "BlackFlow@Roguelike@StageEncounterJudgeClick2": {
         "baseTask": "Roguelike@StageEncounterJudgeClick2",
         "next": ["BlackFlow@Roguelike@StageEncounterJudgeOption"]
@@ -1358,31 +2721,99 @@
             "金色凝滞",
             "安眠一隅",
             "线人",
-            "好奇心与死",
+            "好奇心之死",
             "窥视箱中",
             "泪之聚落",
             "调谐仪式",
             "行动奖励",
             "溯源"
         ],
-        "ocrReplace": []
+        "ocrReplace": [],
+        "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@StageEncounterResult": {
-        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+        "Doc": "事件处理失败时先返回地图重新观测；恢复动作耗尽后等待一分钟，再原样重试失败的 RecoverMap 动作。",
+        "baseTask": "BlackFlow@Roguelike@RecoverMap-Enter"
+    },
+    "BlackFlow@Roguelike@BattlePreparationStart": {
+        "Doc": "狭路相逢准备阶段部署完成后，全屏识别并点击开始战斗；不依赖截图分辨率或固定像素坐标。",
+        "algorithm": "OcrDetect",
+        "text": ["开始战斗"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "action": "ClickSelf",
+        "postDelay": 800
     },
     "BlackFlow@Roguelike@StageEncounterReward": {
-        "Doc": "事件选完之后领取奖励，可能连续弹出多个藏品或资源弹窗。",
+        "Doc": "事件选完之后领取奖励，可能连续弹出多个藏品、资源弹窗、直接进入干员招募或转入战斗预览。",
         "algorithm": "JustReturn",
         "next": [
             "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@EmployLeave",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageEncounterBattleDepart",
+            "BlackFlow@Roguelike@Stages-MapReady",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@HuntedConfirm",
             "BlackFlow@Roguelike@CloseEventAfterEncounter"
         ]
+    },
+    "BlackFlow@Roguelike@StageEncounterBattleDepart": {
+        "Doc": "事件选项转入战斗预览后，点击右下角“出发前往”，再交给现有快捷编队与作战链。使用独立次数状态，避免与追猎入口互相影响。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "ClickSelf",
+        "next": ["#self", "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
+    },
+    "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted": {
+        "algorithm": "JustReturn",
+        "postDelay": 600,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterBattleDepart*3"],
+        "next": ["BlackFlow@Roguelike@QuickFormation"]
     },
     "BlackFlow@Roguelike@StageEncounterSpecialClose": {
         "Doc": "同样是关藏品弹窗，供 ClickToDrops 与 DropsFlag 继承下来的列表使用。",
         "template": "BlackFlow@Roguelike@CloseCollection.png",
         "roi": [1, 447, 1275, 166]
+    },
+    "BlackFlow@Roguelike@TraderShoppingResume": {
+        "baseTask": "BlackFlow@Roguelike@AutomationShopResumeReady",
+        "template": "Roguelike@StageTraderLeave.png",
+        "templThreshold": 0.75,
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@AutomationShopResumeAction"]
+    },
+    "BlackFlow@Roguelike@TraderRandomShopping": {
+        "baseTask": "Roguelike@TraderRandomShopping",
+        "template": "Roguelike@TraderRandomShopping.png",
+        "next": [
+            "BlackFlow@Roguelike@TraderRandomShoppingConfirm",
+            "BlackFlow@Roguelike@TraderRandomShoppingCancel",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm"
+        ]
+    },
+    "BlackFlow@Roguelike@TraderRandomShoppingCancel": {
+        "baseTask": "Roguelike@TraderRandomShoppingCancel",
+        "template": "Roguelike@StageTraderInvestCancel.png",
+        "next": ["BlackFlow@Roguelike@StageTraderLeave", "#self"]
+    },
+    "BlackFlow@Roguelike@TraderRandomShoppingConfirm": {
+        "baseTask": "Roguelike@TraderRandomShoppingConfirm",
+        "template": "Roguelike@TraderRandomShoppingConfirm.png",
+        "next": [
+            "BlackFlow@Roguelike@TraderRandomShopping",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "#self",
+            "BlackFlow@Roguelike@TraderRandomShoppingCancel"
+        ]
     },
     "BlackFlow@Roguelike@StageTraderInvest-Wallet": {
         "roi": [1136, 15, 124, 43]
@@ -1404,7 +2835,12 @@
     "BlackFlow@Roguelike@StageTraderInvestSystem": {
         "baseTask": "Roguelike@StageTraderInvestSystem",
         "template": "Roguelike@StageTraderInvestSystem.png",
-        "next": ["BlackFlow@Roguelike@StageTraderInvestSystemEnter", "BlackFlow@Roguelike@StageTraderLeave"]
+        "exceededNext": ["BlackFlow@Roguelike@TraderRandomShopping", "BlackFlow@Roguelike@StageTraderLeave"],
+        "next": [
+            "BlackFlow@Roguelike@StageTraderInvestSystemEnter",
+            "BlackFlow@Roguelike@TraderRandomShopping",
+            "BlackFlow@Roguelike@StageTraderLeave"
+        ]
     },
     "BlackFlow@Roguelike@StageTraderInvestSystemEnter": {
         "baseTask": "Roguelike@StageTraderInvestSystemEnter",
@@ -1433,6 +2869,7 @@
     "BlackFlow@Roguelike@StageTraderLeave": {
         "baseTask": "Roguelike@StageTraderLeave",
         "template": "Roguelike@StageTraderLeave.png",
+        "roi": [985, 443, 295, 204],
         "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirm", "BlackFlow@Roguelike@StageTraderLeave"],
         "maxTimes": 3,
         "reduceOtherTimes": [
@@ -1464,7 +2901,8 @@
             "BlackFlow@Roguelike@MapPrepare-ZoomOut*3",
             "BlackFlow@Roguelike@Stages-ZoomOut*3",
             "BlackFlow@Roguelike@MovementInventoryClose*3",
-            "BlackFlow@Roguelike@Page-Door-Wait*10"
+            "BlackFlow@Roguelike@Page-Door-Wait*50",
+            "BlackFlow@Roguelike@EmployLeave*3"
         ]
     },
     "BlackFlow@Roguelike@Stages-ZoomOut": {
@@ -1482,6 +2920,22 @@
             "BlackFlow@Roguelike@Stages-ZoomOut"
         ]
     },
+    "BlackFlow@Roguelike@StageEnterBattleAgain": {
+        "Doc": "快捷编队确认并返回节点预览后，按模板点击实际的‘出发前往’按钮；概念体激活面板会改变按钮纵向位置，禁止继承通用主题的固定点击坐标。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "ClickSelf",
+        "next": ["#self", "BlackFlow@Roguelike@StageEnterBattleAgainCompleted"],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
+    },
+    "BlackFlow@Roguelike@StageEnterBattleAgainCompleted": {
+        "algorithm": "JustReturn",
+        "postDelay": 600,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEnterBattleAgain*3"],
+        "next": ["BlackFlow@Roguelike@StartAction"]
+    },
     "BlackFlow@Roguelike@StartAction": {
         "template": "Roguelike@StartAction.png",
         "sub": ["BlackFlow@Roguelike@TemporaryOperatorCheck"],
@@ -1497,8 +2951,22 @@
             "BlackFlow@Roguelike@StartAction@LoadingText",
             "BlackFlow@Roguelike@StartAction@LoadingIcon",
             "BlackFlow@Roguelike@StartAction-NextLevel",
+            "BlackFlow@Roguelike@DataSyncConfirm",
             "BlackFlow@Roguelike@StartActionReCheck"
         ]
+    },
+    "BlackFlow@Roguelike@DataSyncConfirm": {
+        "Doc": "追猎等战斗结算后可能出现‘数据已更新，即将进行同步’，确认后继续沿 StartAction 的战后状态机识别。",
+        "algorithm": "OcrDetect",
+        "roi": [430, 285, 420, 105],
+        "ocrReplace": [["[\\s,，。]+", ""]],
+        "text": ["已更新"],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickRect",
+        "specificRect": [570, 445, 140, 95],
+        "postDelay": 1500,
+        "next": ["BlackFlow@Roguelike@StartAction#next"]
     },
     "BlackFlow@Roguelike@StartAction-NextLevel": {
         "baseTask": "BlackFlow@Roguelike@NextLevel",

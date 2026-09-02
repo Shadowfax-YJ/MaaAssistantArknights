@@ -785,7 +785,7 @@
     },
     "Roguelike@GetDropSelect": {
         "Doc": "base_task",
-        "Doc2": "“选择”按钮，有可能是招募二选一，也有收藏品二选一",
+        "Doc2": "“选择”按钮，有可能是招募二选一，也有收藏品二选一或三选一",
         "template": "empty.png",
         "action": "ClickSelf",
         "roi": [0, 471, 1280, 157],
@@ -809,6 +809,7 @@
     },
     "Roguelike@GetDropSelectReward": {
         "Doc": "base_task",
+        "Doc2": "奖励的“获得”按钮，可能是二选一或三选一",
         "template": "empty.png",
         "action": "ClickSelf",
         "roi": [0, 420, 1280, 175],

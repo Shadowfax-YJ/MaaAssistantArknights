@@ -2,6 +2,15 @@
     "schema_version": 3,
     "routes": [
         {
+            "id": "final_encounter_pass",
+            "page_intent": "final.pass",
+            "node_types": ["final"],
+            "rank": 0,
+            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
+            "task": "BlackFlow@Roguelike@Page-FinalEncounter",
+            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
+        },
+        {
             "id": "final_encounter",
             "page_intent": "default",
             "node_types": ["final"],
@@ -13,7 +22,7 @@
         {
             "id": "combat",
             "page_intent": "default",
-            "node_types": ["battle_normal", "battle_elite", "battle_savage", "duel", "hide_battle", "battle_boss"],
+            "node_types": ["battle_normal", "battle_elite", "battle_savage", "hide_battle", "battle_boss"],
             "rank": 0,
             "alias": "BlackFlow@Roguelike@NodeDispatchAction",
             "task": "BlackFlow@Roguelike@Page-Combat",
@@ -22,7 +31,7 @@
         {
             "id": "encounter",
             "page_intent": "default",
-            "node_types": ["incident", "wish", "rest", "sacrifice", "evacuate"],
+            "node_types": ["incident", "wish", "rest", "sacrifice", "evacuate", "duel", "portal"],
             "rank": 0,
             "alias": "BlackFlow@Roguelike@NodeDispatchAction",
             "task": "BlackFlow@Roguelike@Page-Encounter",
@@ -52,7 +61,25 @@
             "node_types": ["employ"],
             "rank": 0,
             "alias": "BlackFlow@Roguelike@NodeDispatchAction",
-            "task": "BlackFlow@Roguelike@Page-Employ",
+            "task": "BlackFlow@Roguelike@EmployLeave-Enter",
+            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
+        },
+        {
+            "id": "automation_collection_shop",
+            "page_intent": "shop.automation_collection",
+            "node_types": ["shop"],
+            "rank": 0,
+            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
+            "task": "BlackFlow@Roguelike@Page-AutomationShop",
+            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
+        },
+        {
+            "id": "automation_collection_scrap_shop",
+            "page_intent": "scrap_shop.automation_collection",
+            "node_types": ["scrap_shop"],
+            "rank": 0,
+            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
+            "task": "BlackFlow@Roguelike@Page-AutomationScrapShop",
             "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
         },
         {
@@ -62,6 +89,15 @@
             "rank": 0,
             "alias": "BlackFlow@Roguelike@NodeDispatchAction",
             "task": "BlackFlow@Roguelike@Page-Shop",
+            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
+        },
+        {
+            "id": "default_scrap_shop",
+            "page_intent": "default",
+            "node_types": ["scrap_shop"],
+            "rank": 0,
+            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
+            "task": "BlackFlow@Roguelike@Page-ScrapShop",
             "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
         },
         {
@@ -191,36 +227,6 @@
             "alias": "BlackFlow@Roguelike@NodeDispatchAction",
             "task": "BlackFlow@Roguelike@Page-Default",
             "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
-        },
-        {
-            "id": "floor1_portal_entry",
-            "page_intent": "portal.enter",
-            "floor_window": [1, 1],
-            "node_types": ["portal"],
-            "rank": 0,
-            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
-            "task": "BlackFlow@Roguelike@Page-PortalFloor1",
-            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
-        },
-        {
-            "id": "floor2_portal_entry",
-            "page_intent": "portal.enter",
-            "floor_window": [2, 2],
-            "node_types": ["portal"],
-            "rank": 0,
-            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
-            "task": "BlackFlow@Roguelike@Page-PortalFloor2",
-            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
-        },
-        {
-            "id": "floor3_portal_entry",
-            "page_intent": "portal.enter",
-            "floor_window": [3, 3],
-            "node_types": ["portal"],
-            "rank": 0,
-            "alias": "BlackFlow@Roguelike@NodeDispatchAction",
-            "task": "BlackFlow@Roguelike@Page-PortalFloor3",
-            "completion_task": "BlackFlow@Roguelike@LegacyCompletion-NodePage"
         }
     ],
     "task_results": [
@@ -245,22 +251,6 @@
                     "kind": "set",
                     "fact": "strategy_result_code",
                     "value": "investment_completed"
-                }
-            ],
-            "result_kind": "page_completed"
-        },
-        {
-            "task": "BlackFlow@Roguelike@Event-BurnCompleted",
-            "signals": [
-                {
-                    "kind": "set",
-                    "fact": "burn_completed",
-                    "value": true
-                },
-                {
-                    "kind": "set",
-                    "fact": "strategy_result_code",
-                    "value": "burn_completed"
                 }
             ],
             "result_kind": "page_completed"
@@ -534,6 +524,10 @@
         },
         {
             "text": "不期而遇",
+            "node_type": "incident"
+        },
+        {
+            "text": "命运所指",
             "node_type": "incident"
         },
         {

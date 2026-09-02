@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <queue>
 #include <stack>
 
@@ -9,6 +10,7 @@
 #include "Config/Miscellaneous/TilePack.h"
 #include "MaaUtils/NoWarningCVMat.hpp"
 #include "Task/BattleHelper.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowBattleRules.h"
 
 namespace asst
 {
@@ -27,6 +29,21 @@ public:
         const std::shared_ptr<RoguelikeControlTaskPlugin>& control);
     virtual ~RoguelikeBattleTaskPlugin() override = default;
 
+    void set_stage_observer(std::function<void(std::string_view)> observer)
+    {
+        m_stage_observer = std::move(observer);
+    }
+
+    void set_battle_result_observer(std::function<void(std::string_view, int)> observer)
+    {
+        m_battle_result_observer = std::move(observer);
+    }
+
+    void set_virtual_auto_skill_observer(std::function<void(std::string_view)> observer)
+    {
+        m_virtual_auto_skill_observer = std::move(observer);
+    }
+
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
 
 protected:
@@ -35,6 +52,7 @@ protected:
     virtual AbstractTask& this_task() override { return *this; }
 
     virtual void clear() override;
+    virtual void on_auto_skill_activated(const battle::OperNameTag& oper, const Point& location) override;
     bool do_once(const cv::Mat& image, const cv::Mat& image_prev);
 
     struct DeployPlanInfo
@@ -55,6 +73,9 @@ protected:
 
     bool do_best_deploy();
     bool calc_stage_info();
+    bool run_preparation_phase();
+    bool register_virtual_auto_skill_devices();
+    void stop_planned_skills();
 
     void all_melee_retreat();
 
@@ -161,9 +182,19 @@ protected:
     };
 
     std::priority_queue<DroneTile> m_need_clear_tiles;
+    std::unordered_map<std::string, std::vector<battle::roguelike::DeployInfoWithRank>> m_preparation_deploy_plan;
+    std::pair<double, double> m_battle_camera_shift = { 0., 0. };
+    bool m_deploy_plan_only = false;
+    std::vector<battle::roguelike::VirtualAutoSkillDevice> m_virtual_auto_skill_devices;
+    std::optional<Point> m_deploy_after_virtual_auto_skill;
     std::unordered_map<std::string, std::vector<battle::roguelike::DeployInfoWithRank>> m_deploy_plan;
     std::vector<battle::roguelike::DeployInfoWithRank> m_retreat_plan;
+    std::vector<battle::roguelike::DeployInfoWithRank> m_skill_stop_plan;
     std::unordered_map<battle::OperNameTag, std::chrono::steady_clock::time_point> m_deployed_time;
+    std::function<void(std::string_view)> m_stage_observer;
+    std::function<void(std::string_view, int)> m_battle_result_observer;
+    std::function<void(std::string_view)> m_virtual_auto_skill_observer;
+    blackflow::BattleTotalKillsAggregator m_total_kills_aggregator;
 
     // 缓存干员精英
     std::unordered_map<std::string, int64_t> m_oper_elite;

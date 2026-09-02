@@ -2,13 +2,20 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <meojson/json.hpp>
 
 #include "BlackFlowPolicy.h"
+
+namespace cv
+{
+class Mat;
+}
 
 namespace asst::blackflow
 {
@@ -22,6 +29,9 @@ enum class DiagnosticLevel
 enum class DiagnosticTrigger
 {
     RoutineObservation,
+    RoutingDecision,
+    BattleStageObservation,
+    ProcessingItemObservation,
     RebuildConflict,
     InferredEdgeSelected,
     PreviewCostMismatch,
@@ -46,8 +56,15 @@ struct DiagnosticArtifactRequest
     std::string observation_id;
     std::string decision_id;
     std::string transaction_id;
+    bool include_captured_image = false;
     bool include_images = false;
     json::object snapshot;
+    struct EvidenceImage
+    {
+        std::string role;
+        std::shared_ptr<cv::Mat> image;
+    };
+    std::vector<EvidenceImage> evidence_images;
 };
 
 struct BlackFlowTelemetryEvent

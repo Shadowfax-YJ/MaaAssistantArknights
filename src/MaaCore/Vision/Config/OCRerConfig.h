@@ -14,6 +14,7 @@ public:
     {
         std::vector<std::pair<std::string, std::string>> required; // raw, equivalent
         bool full_match = false;
+        bool fuzzy_match = false;
         std::vector<std::pair<std::string, std::string>> replace;
         bool replace_full = false;
         bool without_det = false;
@@ -34,6 +35,7 @@ public:
     void set_params(Params params);
 
     void set_required(std::vector<std::string> required) noexcept;
+    void set_fuzzy_match(bool fuzzy_match) noexcept;
     void set_replace(
         const std::vector<std::pair<std::string, std::string>>& replace,
         bool replace_full = false) noexcept;

@@ -11,6 +11,9 @@ bool asst::RoguelikeRecruitImageAnalyzer::analyze()
 {
     LogTraceFunction;
 
+    m_result.clear();
+    m_detected_names.clear();
+
     TemplDetOCRer analyzer(m_image);
     analyzer.set_task_info("RoguelikeRecruitOcrFlag", "RoguelikeRecruitOcr");
     analyzer.set_replace(
@@ -33,6 +36,8 @@ bool asst::RoguelikeRecruitImageAnalyzer::analyze()
 
     sort_by_vertical_(*result_opt);
     for (const auto& res : *result_opt) {
+        m_detected_names.emplace(res.text);
+
         int elite = match_elite(res.rect);
         int level = match_level(bbb_image, res.rect);
 

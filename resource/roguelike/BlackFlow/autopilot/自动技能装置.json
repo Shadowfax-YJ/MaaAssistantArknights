@@ -1,0 +1,170 @@
+[
+    {
+        "stage_name": "虫虫游戏厅",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 3], [2, 4]] }
+        ]
+    },
+    {
+        "stage_name": "无主地",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[6, 1], [6, 3]] }
+        ]
+    },
+    {
+        "stage_name": "本性难移",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 6], [6, 3]] }
+        ]
+    },
+    {
+        "stage_name": "远北猎场",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[8, 3], [8, 4]] }
+        ]
+    },
+    {
+        "stage_name": "枝头陷阱",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 5], [7, 2]] }
+        ]
+    },
+    {
+        "stage_name": "预算否决",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[7, 5], [9, 2]] }
+        ]
+    },
+    {
+        "stage_name": "生存习性",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[9, 3], [3, 4]] }
+        ]
+    },
+    {
+        "stage_name": "辟路行进",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[4, 4], [6, 4]] }
+        ]
+    },
+    {
+        "stage_name": "趁火打劫",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 4], [4, 1]] }
+        ]
+    },
+    {
+        "stage_name": "焦土之家",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[4, 5], [7, 1]] }
+        ]
+    },
+    {
+        "stage_name": "黑色逆流",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[6, 3], [5, 4]] }
+        ]
+    },
+    {
+        "stage_name": "未来见闻",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[4, 5], [7, 1]] }
+        ]
+    },
+    {
+        "stage_name": "种植园惊魂",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[3, 6], [3, 2]] }
+        ]
+    },
+    {
+        "stage_name": "选边站",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[4, 2], [6, 2]] }
+        ]
+    },
+    {
+        "stage_name": "诞生礼",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 5], [2, 5]] }
+        ]
+    },
+    {
+        "stage_name": "暴力押运",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 4], [5, 4]] }
+        ]
+    },
+    {
+        "stage_name": "长刀寒夜",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[5, 3], [6, 3]] }
+        ]
+    },
+    {
+        "stage_name": "侵占家园",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 2], [5, 6]] }
+        ]
+    },
+    {
+        "stage_name": "一步之遥",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[3, 3], [7, 3]] }
+        ]
+    },
+    {
+        "stage_name": "物欲遮天",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 6], [3, 6]] }
+        ]
+    },
+    {
+        "stage_name": "恶意讨薪",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[5, 1], [5, 5]] }
+        ]
+    },
+    {
+        "stage_name": "送别仪式",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 4], [1, 5]] }
+        ]
+    },
+    {
+        "stage_name": "彼处水如酒",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 6], [1, 5]] }
+        ]
+    },
+    {
+        "stage_name": "丛林法则",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[11, 1], [10, 1]] }
+        ]
+    },
+    {
+        "stage_name": "过度繁殖",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 6], [1, 5]] }
+        ]
+    },
+    {
+        "stage_name": "命运共享",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[3, 1], [2, 1]] }
+        ]
+    },
+    {
+        "stage_name": "同域共存",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[1, 4], [3, 4]] }
+        ]
+    },
+    {
+        "stage_name": "活木",
+        "virtual_auto_skill_devices": [
+            { "name": "丰饶树冢", "locations": [[2, 3], [1, 6]] }
+        ]
+    }
+]

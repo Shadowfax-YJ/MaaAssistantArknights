@@ -50,6 +50,12 @@ std::string_view to_string(DiagnosticTrigger trigger) noexcept
     switch (trigger) {
     case DiagnosticTrigger::RoutineObservation:
         return "routine_observation";
+    case DiagnosticTrigger::RoutingDecision:
+        return "routing_decision";
+    case DiagnosticTrigger::BattleStageObservation:
+        return "battle_stage_observation";
+    case DiagnosticTrigger::ProcessingItemObservation:
+        return "processing_item_observation";
     case DiagnosticTrigger::RebuildConflict:
         return "rebuild_conflict";
     case DiagnosticTrigger::InferredEdgeSelected:

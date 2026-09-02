@@ -7,8 +7,10 @@
 #include <utility>
 
 #include <nlohmann/json.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "Config/TemplResource.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowOcrFragmentRules.h"
 #include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
 
@@ -563,9 +565,17 @@ RecognitionBridge::OcrMatch RecognitionBridge::match_ocr_text(
     output.node_type = best->node_type;
     output.runner_up_name = second ? second->display_name : std::string();
     output.exact = input_codepoints == best->codepoints;
-    const bool short_label = static_cast<int>(best->codepoints.size()) <= std::max(0, short_exact_length);
-    output.accepted = output.exact || (!short_label && output.similarity >= minimum_similarity &&
-                                       output.similarity - output.runner_up_similarity >= minimum_margin);
+    const std::size_t edit_distance = levenshtein_distance(input_codepoints, best->codepoints);
+    output.accepted = accept_node_ocr_label_match(
+        output.exact,
+        input_codepoints.size(),
+        best->codepoints.size(),
+        edit_distance,
+        output.similarity,
+        output.runner_up_similarity,
+        minimum_similarity,
+        minimum_margin,
+        short_exact_length);
     return output;
 }
 
@@ -596,7 +606,25 @@ std::vector<OcrHit> RecognitionBridge::recognize_row(const cv::Mat& image, const
         return hits;
     }
 
-    asst::OCRer analyzer(image, asst::Rect(roi.x, roi.y, roi.width, roi.height));
+    const cv::Mat row_image = image(roi);
+    const double inference_scale = node_ocr_inference_scale(row_image.cols, row_image.rows);
+    cv::Mat inference_image;
+    if (inference_scale > 1.0) {
+        cv::resize(
+            row_image,
+            inference_image,
+            cv::Size(
+                static_cast<int>(std::lround(row_image.cols * inference_scale)),
+                static_cast<int>(std::lround(row_image.rows * inference_scale))),
+            0.0,
+            0.0,
+            cv::INTER_LINEAR);
+    }
+    else {
+        inference_image = row_image;
+    }
+
+    asst::OCRer analyzer(inference_image);
     analyzer.set_without_det(false);
     analyzer.set_use_raw(true);
     const auto results = analyzer.analyze();
@@ -604,13 +632,18 @@ std::vector<OcrHit> RecognitionBridge::recognize_row(const cv::Mat& image, const
         return hits;
     }
     for (const auto& result : *results) {
+        const int left = roi.x + static_cast<int>(std::lround(result.rect.x / inference_scale));
+        const int top = roi.y + static_cast<int>(std::lround(result.rect.y / inference_scale));
+        const int right = roi.x + static_cast<int>(std::lround((result.rect.x + result.rect.width) / inference_scale));
+        const int bottom =
+            roi.y + static_cast<int>(std::lround((result.rect.y + result.rect.height) / inference_scale));
         hits.push_back(
             { result.text,
               normalize_chinese(result.text).second,
               {},
               {},
               {},
-              cv::Rect(result.rect.x, result.rect.y, result.rect.width, result.rect.height),
+              cv::Rect(left, top, std::max(1, right - left), std::max(1, bottom - top)),
               result.score,
               0.0,
               0.0,

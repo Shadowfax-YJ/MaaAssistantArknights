@@ -1,46 +1,237 @@
 {
     "theme": "BlackFlow",
     "stage": [
-        { "name": "未涉足之树", "choose": 3 },
-        { "name": "回滚文明", "choose": 3 },
-        { "name": "无人商店" },
-        { "name": "三重身" },
-        { "name": "思乡心切", "choose": 2 },
-        { "name": "划算买卖", "choose": 2 },
-        { "name": "鸭托邦", "choose": 3 },
-        { "name": "传奇团伙", "choose": 2 },
-        { "name": "湖中仙女", "choose": 2 },
-        { "name": "洞中宝", "choose": 2 },
-        { "name": "桑尼的邀请" },
-        { "name": "色味不同源" },
-        { "name": "货从口出" },
-        { "name": "沉重的契约" },
-        { "name": "敲动杠杆" },
-        { "name": "血衣之下", "choose": 4 },
-        { "name": "擒与缚" },
-        { "name": "沉寂之屋" },
-        { "name": "黑诞", "choose": 3 },
-        { "name": "呼吸的红苔" },
-        { "name": "被歌颂的影子", "choose": 2 },
-        { "name": "愈创之心" },
-        { "name": "临时中介所", "choose": 3 },
-        { "name": "和平守卫者" },
-        { "name": "独活", "choose": 2 },
-        { "name": "原始娱乐", "choose": 2 },
-        { "name": "掠夺成性", "choose": 2 },
         {
-            "name": "险路尽头",
-            "option_num": 1,
+            "name": "未涉足之树"
+        },
+        {
+            "name": "回滚文明"
+        },
+        {
+            "name": "无人商店",
+            "choice_groups": [
+                {
+                    "choices": [
+                        -1
+                    ],
+                    "next_event": "无人商店-2"
+                }
+            ]
+        },
+        {
+            "name": "无人商店-2"
+        },
+        {
+            "name": "三重身",
             "choose": 1
         },
-        { "name": "金色凝滞" },
-        { "name": "安眠一隅" },
-        { "name": "线人", "choose": 2 },
-        { "name": "好奇心与死" },
-        { "name": "窥视箱中" },
-        { "name": "泪之聚落" },
-        { "name": "调谐仪式" },
-        { "name": "行动奖励" },
-        { "name": "溯源" }
+        {
+            "name": "思乡心切",
+            "choose": 1,
+            "next_event": "思乡心切-2"
+        },
+        {
+            "name": "思乡心切-2"
+        },
+        {
+            "name": "划算买卖",
+            "choose": 1,
+            "next_event": "划算买卖-2"
+        },
+        {
+            "name": "划算买卖-2"
+        },
+        {
+            "name": "鸭托邦",
+            "choose": 2,
+            "next_event": "鸭托邦-2"
+        },
+        {
+            "name": "鸭托邦-2"
+        },
+        {
+            "name": "传奇团伙"
+        },
+        {
+            "name": "湖中仙女",
+            "next_event": "湖中仙女"
+        },
+        {
+            "name": "洞中宝"
+        },
+        {
+            "name": "桑尼的邀请"
+        },
+        {
+            "name": "色味不同源",
+            "choose": 1
+        },
+        {
+            "name": "货从口出",
+            "choice_groups": [
+                {
+                    "range": [
+                        1,
+                        -2
+                    ],
+                    "random": true
+                }
+            ]
+        },
+        {
+            "name": "沉重的契约",
+            "choose": 2
+        },
+        {
+            "name": "敲动杠杆",
+            "choice_groups": [
+                {
+                    "choices": [
+                        2,
+                        1,
+                        3
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "血衣之下",
+            "choose": 2
+        },
+        {
+            "name": "擒与缚",
+            "choose": 1
+        },
+        {
+            "name": "沉寂之屋",
+            "choice_groups": [
+                {
+                    "choices": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "黑诞"
+        },
+        {
+            "name": "呼吸的红苔",
+            "choice_groups": [
+                {
+                    "choices": [
+                        "尝试驱赶猎狗",
+                        "将种子埋在此处",
+                        "快逃"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "被歌颂的影子",
+            "next_event": "被歌颂的影子",
+            "choice_groups": [
+                {
+                    "choices": [
+                        "加入它们"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "愈创之心",
+            "choice_groups": [
+                {
+                    "choices": [
+                        "比对像素小猫和树干刻痕",
+                        "紧紧拥抱愈创木",
+                        "让这里有一个秋千",
+                        "检测此地有无危险",
+                        "闭上眼感受宁静"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "临时中介所"
+        },
+        {
+            "name": "和平守卫者",
+            "choose": 1,
+            "next_event": "和平守卫者-2"
+        },
+        {
+            "name": "和平守卫者-2",
+            "choose": 2
+        },
+        {
+            "name": "独活",
+            "choose": 1,
+            "next_event": "独活-2"
+        },
+        {
+            "name": "独活-2",
+            "choose": 2
+        },
+        {
+            "name": "原始娱乐",
+            "choose": 1,
+            "next_event": "原始娱乐-2"
+        },
+        {
+            "name": "原始娱乐-2"
+        },
+        {
+            "name": "掠夺成性",
+            "choose": 1,
+            "next_event": "掠夺成性-2"
+        },
+        {
+            "name": "掠夺成性-2"
+        },
+        {
+            "name": "险路尽头",
+            "choose": 1
+        },
+        {
+            "name": "金色凝滞",
+            "choice_groups": [
+                {
+                    "choices": [
+                        "抚摸静止的小动物",
+                        "查看无人机",
+                        "坐下休息",
+                        "整理行囊",
+                        "向泉水许愿",
+                        "采样金色泉水"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "安眠一隅",
+            "next_event": "安眠一隅"
+        },
+        {
+            "name": "线人",
+            "choose": 2
+        },
+        {
+            "name": "好奇心之死"
+        },
+        {
+            "name": "窥视箱中"
+        },
+        {
+            "name": "泪之聚落"
+        },
+        {
+            "name": "调谐仪式"
+        },
+        {
+            "name": "溯源"
+        }
     ]
 }

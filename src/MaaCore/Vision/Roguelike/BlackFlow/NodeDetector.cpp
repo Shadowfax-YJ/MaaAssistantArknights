@@ -1,5 +1,9 @@
 #include "Vision/Roguelike/BlackFlow/NodeDetector.h"
 
+#include "Vision/Roguelike/BlackFlow/BlackFlowTopologyMatcher.h"
+
+#include "Task/Roguelike/BlackFlow/BlackFlowOcrFragmentRules.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -99,11 +103,16 @@ bool can_merge_ocr_hits(
     const OcrHit& left,
     const OcrHit& right,
     int maximum_gap,
+    int maximum_overlap,
     double minimum_vertical_overlap,
     double maximum_center_y_delta)
 {
-    const int horizontal_gap = right.rect.x - (left.rect.x + left.rect.width);
-    if (horizontal_gap < 0 || horizontal_gap > maximum_gap) {
+    if (!node_ocr_fragments_have_mergeable_horizontal_gap(
+            left.rect.x,
+            left.rect.width,
+            right.rect.x,
+            maximum_gap,
+            maximum_overlap)) {
         return false;
     }
     const double center_y_delta =
@@ -175,6 +184,10 @@ std::optional<GridGeometry> NodeDetector::fixed_grid(int rows, int columns)
     }
     if (rows == 5 && columns == 10) {
         return make_grid(rows, columns, 121.0, 141.0, 100.75, 100.25);
+    }
+    if (rows == 5 && columns == 9) {
+        // 五层统一左划至右侧视野尽头；9 列模板与 10 列模板共用右边界。
+        return make_grid(rows, columns, 221.75, 141.0, 100.75, 100.25);
     }
     return std::nullopt;
 }
@@ -256,6 +269,7 @@ NodeDetector::CellEvaluation NodeDetector::evaluate_cell(
         node.kind = NodeKind::Large;
         node.type = special->node_type;
         node.display_name = special->display_name;
+        node.identity_source = "special_template";
         node.confidence = special->score;
         node.visual_center = special->center();
         node.visual_half_width = 0.5F * static_cast<float>(special->rect.width);
@@ -270,6 +284,7 @@ NodeDetector::CellEvaluation NodeDetector::evaluate_cell(
         node.kind = NodeKind::Large;
         node.type = ocr->node_type;
         node.display_name = ocr->matched_name;
+        node.identity_source = "ocr";
         node.confidence = ocr->score;
         const cv::Size visual_size = m_bridge.visual_size_for(node.type);
         if (!visual_size.empty()) {
@@ -292,6 +307,7 @@ NodeDetector::CellEvaluation NodeDetector::evaluate_cell(
         node.kind = NodeKind::Small;
         node.type = "empty";
         node.display_name.clear();
+        node.identity_source = "empty_template";
         node.confidence = empty->score;
         node.visual_center = empty->center();
         node.visual_half_width = 0.5F * static_cast<float>(empty->rect.width);
@@ -323,7 +339,11 @@ NodeDetector::CellEvaluation NodeDetector::evaluate_cell(
     return result;
 }
 
-NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int columns) const
+NodeDetectionResult NodeDetector::detect(
+    const cv::Mat& image,
+    int rows,
+    int columns,
+    std::optional<cv::Point2d> forced_translation) const
 {
     NodeDetectionResult output;
     output.refinement_mode = GridRefinementMode::FixedGrid;
@@ -338,7 +358,16 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
     output.seed_grid = *baseline;
 
     const cv::Rect map_roi = m_config.map_roi & cv::Rect(0, 0, image.cols, image.rows);
-    const RecognitionScoreAtlas atlas = m_bridge.build_score_atlas(image, map_roi);
+    const int marker_top = current_marker_atlas_top(
+        map_roi.y,
+        m_bridge.current_marker_template().visual_size.height);
+    const cv::Rect marker_roi = cv::Rect(
+                                    map_roi.x,
+                                    marker_top,
+                                    map_roi.width,
+                                    map_roi.y + map_roi.height - marker_top) &
+                                cv::Rect(0, 0, image.cols, image.rows);
+    const RecognitionScoreAtlas atlas = m_bridge.build_score_atlas(image, marker_roi);
     const std::vector<TemplateHit> empty_hits = m_bridge.query_multi(
         atlas,
         map_roi,
@@ -354,7 +383,7 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
         m_config.empty_multi_suppression_radius);
     std::vector<std::optional<TemplateHit>> seed_empty(output.seed_grid.centers.size());
     for (const auto& hit : translation_empty_hits) {
-        const auto index = nearest_cell(output.seed_grid, hit.center(), m_config.fixed_grid_hit_tolerance);
+        const auto index = nearest_cell(output.seed_grid, hit.center(), m_config.fixed_grid_translation_tolerance);
         if (!index) {
             continue;
         }
@@ -373,14 +402,18 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
         offsets_x.push_back(offset.x);
         offsets_y.push_back(offset.y);
     }
-    const double translation_x = std::clamp(
-        median(std::move(offsets_x)),
-        -static_cast<double>(m_config.fixed_grid_translation_limit),
-        static_cast<double>(m_config.fixed_grid_translation_limit));
-    const double translation_y = std::clamp(
-        median(std::move(offsets_y)),
-        -static_cast<double>(m_config.fixed_grid_translation_limit),
-        static_cast<double>(m_config.fixed_grid_translation_limit));
+    const double translation_x = forced_translation.has_value()
+                                     ? forced_translation->x
+                                     : std::clamp(
+                                           median(std::move(offsets_x)),
+                                           -static_cast<double>(m_config.fixed_grid_translation_limit),
+                                           static_cast<double>(m_config.fixed_grid_translation_limit));
+    const double translation_y = forced_translation.has_value()
+                                     ? forced_translation->y
+                                     : std::clamp(
+                                           median(std::move(offsets_y)),
+                                           -static_cast<double>(m_config.fixed_grid_translation_limit),
+                                           static_cast<double>(m_config.fixed_grid_translation_limit));
     output.grid = translate_grid(output.seed_grid, translation_x, translation_y);
 
     std::vector<std::optional<TemplateHit>> cell_empty(output.grid.centers.size());
@@ -406,23 +439,28 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
         const cv::Point2f last = output.grid.centers[static_cast<std::size_t>(row * columns + columns - 1)];
         const int left = static_cast<int>(std::lround(first.x - half_column_width));
         const int right = static_cast<int>(std::lround(last.x + half_column_width));
-        const int top =
-            static_cast<int>(std::lround(first.y + m_config.ocr_row_center_offset_y - 0.5 * m_config.ocr_row_height));
+        const int top = node_ocr_row_top(first.y, m_config.ocr_row_center_offset_y, m_config.ocr_row_height);
         const cv::Rect row_roi =
             cv::Rect(left, top, right - left, m_config.ocr_row_height) & cv::Rect(0, 0, image.cols, image.rows);
 
+        // PaddleOCR 会把“居民据点”“先行一步”等标题切成两个相邻框。先按列的
+        // Voronoi 区间分配碎片，再只在同一列内拼框。整行直接拼接会把相邻节点的
+        // 两个完整标题（间距常只有 12~16px）错误合成一个字符串，两个节点一起丢失。
         std::vector<std::vector<OcrHit>> column_fragments(static_cast<std::size_t>(columns));
         for (auto hit : m_bridge.recognize_row(image, row_roi)) {
             output.ocr_diagnostics.push_back(hit);
             if (hit.normalized_text.empty()) {
                 continue;
             }
-            const auto index = nearest_cell(output.grid, hit.center(), m_config.ocr_grid_tolerance, row);
-            if (!index) {
+            const auto column = node_ocr_fragment_column(
+                hit.center().x,
+                output.grid.origin_x,
+                output.grid.spacing_x,
+                columns);
+            if (!column.has_value()) {
                 continue;
             }
-            const std::size_t column = *index - static_cast<std::size_t>(row * columns);
-            column_fragments[column].push_back(std::move(hit));
+            column_fragments[static_cast<std::size_t>(*column)].push_back(std::move(hit));
         }
 
         for (int column = 0; column < columns; ++column) {
@@ -440,6 +478,7 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
                                                 merged_hits.back(),
                                                 fragment,
                                                 m_config.ocr_merge_max_gap,
+                                                m_config.ocr_merge_max_overlap,
                                                 m_config.ocr_merge_min_vertical_overlap,
                                                 m_config.ocr_merge_max_center_y_delta)) {
                     merge_ocr_hit(merged_hits.back(), fragment);
@@ -451,6 +490,11 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
 
             const std::size_t index = static_cast<std::size_t>(row * columns + column);
             for (auto& merged : merged_hits) {
+                // The merged center must still be reasonably close to its column.  This rejects
+                // icons/timers that happen to lie in the same Voronoi interval as the title.
+                if (std::abs(merged.center().x - output.grid.centers[index].x) > m_config.ocr_grid_tolerance) {
+                    continue;
+                }
                 OcrHit matched = m_bridge.match_ocr_hit(
                     std::move(merged),
                     m_config.ocr_similarity_threshold,
@@ -533,39 +577,45 @@ NodeDetectionResult NodeDetector::detect(const cv::Mat& image, int rows, int col
         else if (node.marker_type == "savage") {
             node.evidence.push_back("maa_savage_marker_score_atlas");
         }
+        else if (node.marker_type == "fruit_cache") {
+            node.evidence.push_back("maa_fruit_cache_marker_score_atlas");
+        }
     }
 
-    const TemplateHit marker_hit = m_bridge.query_best(atlas, map_roi, m_bridge.current_marker_template());
+    TemplateHit marker_hit;
+    std::size_t marker_node_index = 0;
+    for (std::size_t index = 0; index < output.grid.centers.size(); ++index) {
+        const TemplateHit candidate = m_bridge.query_best_near(
+            atlas,
+            marker_roi,
+            m_bridge.current_marker_template(),
+            output.grid.centers[index],
+            m_config.current_marker_grid_tolerance);
+        if (candidate.score > marker_hit.score) {
+            marker_hit = candidate;
+            marker_node_index = index;
+        }
+    }
     if (marker_hit.score >= m_config.current_marker_threshold && marker_hit.rect.area() > 0) {
-        double best_distance = std::numeric_limits<double>::infinity();
-        std::size_t best_index = 0;
-        for (std::size_t index = 0; index < output.grid.centers.size(); ++index) {
-            const double distance = cv::norm(marker_hit.center() - output.grid.centers[index]);
-            if (distance < best_distance) {
-                best_distance = distance;
-                best_index = index;
-            }
+        Node& node = output.nodes[marker_node_index];
+        node.current_marker = true;
+        node.current_marker_score = marker_hit.score;
+        node.evidence.push_back("maa_current_marker_score_atlas");
+        if (!node.exists || marker_hit.score > node.existence_confidence) {
+            node.exists = true;
+            node.existence_confidence = marker_hit.score;
+            node.existence_source = "current_marker_template";
         }
-        if (best_distance <= m_config.current_marker_grid_tolerance) {
-            Node& node = output.nodes[best_index];
-            node.current_marker = true;
-            node.current_marker_score = marker_hit.score;
-            node.evidence.push_back("maa_current_marker_score_atlas");
-            if (!node.exists || marker_hit.score > node.existence_confidence) {
-                node.exists = true;
-                node.existence_confidence = marker_hit.score;
-                node.existence_source = "current_marker_template";
-            }
-            if (node.kind == NodeKind::Unknown) {
-                node.kind = NodeKind::Small;
-                node.type = "empty";
-                node.confidence = marker_hit.score;
-                node.presence_frame_hits = 1;
-                node.empty_frame_hits = 1;
-            }
-            output.current_marker_node_id = node.id;
-            output.current_marker_score = marker_hit.score;
+        if (node.kind == NodeKind::Unknown) {
+            node.kind = NodeKind::Small;
+            node.type = "empty";
+            node.identity_source = "current_marker_empty";
+            node.confidence = marker_hit.score;
+            node.presence_frame_hits = 1;
+            node.empty_frame_hits = 1;
         }
+        output.current_marker_node_id = node.id;
+        output.current_marker_score = marker_hit.score;
     }
     return output;
 }
@@ -578,6 +628,19 @@ cv::Mat NodeDetector::draw_overlay(const cv::Mat& image, const NodeDetectionResu
                                  : node.kind == NodeKind::Large ? cv::Scalar(255, 180, 0)
                                  : node.kind == NodeKind::Small ? cv::Scalar(0, 220, 0)
                                                                 : cv::Scalar(0, 140, 255);
+        const cv::Scalar evidence_color = node.confirmed_by_topology && node.detected_by_vision
+                                              ? cv::Scalar(80, 230, 220)
+                                          : node.confirmed_by_topology ? cv::Scalar(255, 160, 40)
+                                          : node.detected_by_vision    ? cv::Scalar(200, 80, 255)
+                                                                       : cv::Scalar(100, 100, 100);
+        const char* evidence_label = node.confirmed_by_topology && node.detected_by_vision
+                                         ? "T+V"
+                                     : node.confirmed_by_topology ? "T"
+                                     : node.detected_by_vision    ? "V"
+                                                                  : "-";
+        const int evidence_radius = static_cast<int>(
+            std::lround(std::max(node.visual_half_width, node.visual_half_height) + 5.0F));
+        cv::circle(overlay, node.visual_center, evidence_radius, evidence_color, 2, cv::LINE_AA);
         cv::ellipse(
             overlay,
             node.visual_center,
@@ -592,7 +655,8 @@ cv::Mat NodeDetector::draw_overlay(const cv::Mat& image, const NodeDetectionResu
             cv::LINE_AA);
         cv::circle(overlay, node.visual_center, 2, color, cv::FILLED, cv::LINE_AA);
         std::ostringstream label;
-        label << node.row << ',' << node.column << ' ' << node.type << ' ' << to_string(node.state);
+        label << node.row << ',' << node.column << ' ' << node.type << ' ' << to_string(node.state) << " ["
+              << evidence_label << ']';
         if (node.current_marker) {
             label << " current";
         }
@@ -615,6 +679,15 @@ cv::Mat NodeDetector::draw_overlay(const cv::Mat& image, const NodeDetectionResu
         cv::Point(40, 70),
         cv::FONT_HERSHEY_SIMPLEX,
         0.55,
+        cv::Scalar(255, 255, 255),
+        1,
+        cv::LINE_AA);
+    cv::putText(
+        overlay,
+        "node evidence: T=topology V=vision",
+        cv::Point(40, 88),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.42,
         cv::Scalar(255, 255, 255),
         1,
         cv::LINE_AA);

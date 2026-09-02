@@ -24,6 +24,8 @@ namespace MaaWpfGui.Models.AsstTasks;
 /// </summary>
 public class AsstRoguelikeTask : AsstBaseTask
 {
+    internal const int AutomationCollectionDifficulty = 6;
+
     public override AsstTaskType TaskType => AsstTaskType.Roguelike;
 
     /// <summary>
@@ -206,18 +208,40 @@ public class AsstRoguelikeTask : AsstBaseTask
 
     public override (AsstTaskType TaskType, JObject Params) Serialize()
     {
+        bool isAutomationCollection =
+            Theme == RoguelikeTheme.BlackFlow && Mode == RoguelikeMode.BlackFlowAutomationCollection;
+        string squad = isAutomationCollection ? "堡垒战术分队" : Squad;
+        string roles = isAutomationCollection ? "坚不可摧" : Roles;
+        string coreChar = isAutomationCollection ? "凯尔希·思衡托" : CoreChar;
+        int difficulty = isAutomationCollection ? AutomationCollectionDifficulty : Difficulty;
+        bool investmentEnabled = !isAutomationCollection && InvestmentEnabled;
+        string? startWithSeed = isAutomationCollection ? null : StartWithSeed;
+
         var taskParams = new JObject
         {
             ["mode"] = (int)Mode,
             ["theme"] = Theme.ToString(),
-            ["difficulty"] = Difficulty,
+            ["difficulty"] = difficulty,
             ["starts_count"] = Starts,
-            ["investment_enabled"] = InvestmentEnabled,
+            ["investment_enabled"] = investmentEnabled,
         };
+
+        if (Theme == RoguelikeTheme.BlackFlow &&
+            Mode is RoguelikeMode.BlackFlowBabyAnimal or RoguelikeMode.BlackFlowAutomationCollection)
+        {
+            taskParams["blackflow_strategy"] = Mode == RoguelikeMode.BlackFlowAutomationCollection
+                ? "automation_collection"
+                : "baby_animal";
+        }
+
+        if (isAutomationCollection)
+        {
+            taskParams["blackflow_diagnostics"] = "full";
+            taskParams["blackflow_diagnostic_image_limit"] = 100;
+        }
 
         if (Theme == RoguelikeTheme.BlackFlow && Mode == RoguelikeMode.BlackFlowBabyAnimal)
         {
-            taskParams["blackflow_strategy"] = "baby_animal";
             taskParams["blackflow_cultivation_target"] = BlackFlowCultivationTarget switch
             {
                 RoguelikeBlackFlowCultivationTarget.Cat => "swaddled_cat",
@@ -228,26 +252,26 @@ public class AsstRoguelikeTask : AsstBaseTask
             };
         }
 
-        if (InvestmentEnabled)
+        if (investmentEnabled)
         {
             taskParams["investment_with_more_score"] = InvestmentWithMoreScore;
             taskParams["investments_count"] = InvestmentCount;
             taskParams["stop_when_investment_full"] = InvestmentStopWhenFull;
         }
 
-        if (Squad.Length > 0)
+        if (squad.Length > 0)
         {
-            taskParams["squad"] = Squad;
+            taskParams["squad"] = squad;
         }
 
-        if (Roles.Length > 0)
+        if (roles.Length > 0)
         {
-            taskParams["roles"] = Roles;
+            taskParams["roles"] = roles;
         }
 
-        if (CoreChar.Length > 0)
+        if (coreChar.Length > 0)
         {
-            taskParams["core_char"] = CoreChar;
+            taskParams["core_char"] = coreChar;
         }
 
         if (Mode == RoguelikeMode.Exp)
@@ -299,9 +323,9 @@ public class AsstRoguelikeTask : AsstBaseTask
         taskParams["use_support"] = UseSupport;
         taskParams["use_nonfriend_support"] = UseSupportNonFriend;
         taskParams["refresh_trader_with_dice"] = Theme == RoguelikeTheme.Mizuki && RefreshTraderWithDice;
-        if (!string.IsNullOrEmpty(StartWithSeed))
+        if (!string.IsNullOrEmpty(startWithSeed))
         {
-            taskParams["start_with_seed"] = StartWithSeed;
+            taskParams["start_with_seed"] = startWithSeed;
         }
 
         return (TaskType, taskParams);

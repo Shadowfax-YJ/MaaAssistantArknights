@@ -1,0 +1,26 @@
+{
+    "stage_name": "陌生旅伴",
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [5, 4],
+            "direction": "right"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [7, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [6, 2],
+            "direction": "down"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [7, 2],
+            "direction": "down"
+        }
+    ]
+}

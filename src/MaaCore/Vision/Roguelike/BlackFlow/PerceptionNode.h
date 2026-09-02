@@ -58,10 +58,13 @@ struct Node
     bool exists = false;
     double existence_confidence = 0.0;
     std::string existence_source = "none";
+    bool detected_by_vision = false;
+    bool confirmed_by_topology = false;
     NodeKind kind = NodeKind::Unknown;
     VisualState state = VisualState::Unknown;
     std::string type = "null";
     std::string display_name;
+    std::string identity_source = "none";
     double confidence = 0.0;
     double empty_score = 0.0;
     double large_score = 0.0;
@@ -80,6 +83,11 @@ struct Node
     bool ocr_exact_match = false;
     bool current_marker = false;
     double current_marker_score = 0.0;
+    bool visually_hidden = false;
+    bool identity_from_topology = false;
+    bool identity_from_prediction = false;
+    std::string prediction_rule;
+    bool natural_reveal_suppressed = false;
     std::string marker_type;
     std::string marker_display_name;
     double marker_score = 0.0;

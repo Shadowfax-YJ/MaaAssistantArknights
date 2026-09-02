@@ -1,0 +1,34 @@
+{
+    "stage_name": "枯枝",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "丰饶树冢",
+            "locations": [[7, 4]],
+            "skill_times": 1
+        }
+    ],
+    "deploy_after_virtual_auto_skill": [7, 4],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["卡达"],
+            "location": [8, 5],
+            "direction": "left"
+        },
+        {
+            "groups": ["机械师"],
+            "location": [8, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [7, 6],
+            "direction": "left"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [7, 4],
+            "direction": "left"
+        }
+    ]
+}

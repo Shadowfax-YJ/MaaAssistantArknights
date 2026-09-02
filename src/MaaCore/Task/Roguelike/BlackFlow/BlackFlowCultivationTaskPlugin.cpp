@@ -1,5 +1,7 @@
 #include "BlackFlowCultivationTaskPlugin.h"
 
+#include "BlackFlowAutomationStoreRules.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <string_view>
@@ -135,8 +137,22 @@ bool BlackFlowCultivationTaskPlugin::_run()
     if (work == PendingWork::SellDecision) {
         Task.set_task_base(std::string(SellAction), std::string(ToggleToBuyTask));
         const auto items = recognize(ctrler()->get_image(), std::string(SellItemsTask));
-        if (!items.empty()) {
-            ctrler()->click(items.front().rect);
+        const auto sellable = std::ranges::find_if(items, [](const TextRect& item) {
+            return merchant_sale_allowed(item.text);
+        });
+        if (sellable != items.end()) {
+            record_run_event(
+                RunLogLevel::Info,
+                "cultivation.sale.select",
+                "started",
+                "pending",
+                json::object { { "name", sellable->text },
+                               { "rect", json::array { sellable->rect.x, sellable->rect.y,
+                                                       sellable->rect.width, sellable->rect.height } } },
+                "BlackFlowCultivation",
+                nullptr,
+                true);
+            ctrler()->click(sellable->rect);
             Task.set_task_base(std::string(SellAction), std::string(SellConfirmEntry));
         }
         return true;
@@ -150,6 +166,17 @@ bool BlackFlowCultivationTaskPlugin::_run()
             std::ranges::find_if(shelf_seeds, [this](const TextRect& seed) { return !already_purchased(seed.rect); });
 
         if (available != shelf_seeds.end() && wallet >= SeedPrice) {
+            record_run_event(
+                RunLogLevel::Info,
+                "cultivation.seed.purchase.select",
+                "started",
+                "pending",
+                json::object { { "name", available->text },
+                               { "wallet", wallet },
+                               { "rect", json::array { available->rect.x, available->rect.y,
+                                                       available->rect.width, available->rect.height } } },
+                "BlackFlowCultivation",
+                std::make_shared<cv::Mat>(image));
             ctrler()->click(available->rect);
             m_pending_purchase = available->rect;
             Task.set_task_base(std::string(BuyAction), std::string(BuyConfirmEntry));
@@ -193,11 +220,29 @@ bool BlackFlowCultivationTaskPlugin::_run()
 
     if (work == PendingWork::ClickAtMost) {
         if (const auto hit = get_hit_detail<Matcher::Result>(); hit != nullptr) {
+            record_run_event(
+                RunLogLevel::Info,
+                "cultivation.select-all-seeds",
+                "started",
+                "pending",
+                json::object { { "click_count", AtMostClickTimes },
+                               { "rect", json::array { hit->rect.x, hit->rect.y, hit->rect.width, hit->rect.height } } },
+                "BlackFlowCultivation",
+                get_hit_image());
             int times = AtMostClickTimes;
             while (times-- > 0) {
                 ctrler()->click(hit->rect);
                 sleep(RepeatedClickInterval);
             }
+            record_run_event(
+                RunLogLevel::Info,
+                "cultivation.select-all-seeds",
+                "completed",
+                "success",
+                json::object { { "click_count", AtMostClickTimes } },
+                "BlackFlowCultivation",
+                nullptr,
+                true);
         }
         return true;
     }

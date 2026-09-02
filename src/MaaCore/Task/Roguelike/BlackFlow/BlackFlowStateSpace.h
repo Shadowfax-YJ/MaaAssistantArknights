@@ -31,7 +31,12 @@ struct PlannerState
     PlannerNodeMask completed_nodes = 0;
     PlannerNodeMask opened_blockers = 0;
     PlannerNodeMask consumed_lights = 0;
+    // 只跟踪会影响避战合法性的揭示状态；其他未知节点的揭示收益由 RouteLabel 记录。
+    PlannerNodeMask revealed_hidden_battles = 0;
     SafetyGoalProgressId goal_progress_id = InvalidSafetyGoalProgressId;
+    // 只有当前站在“选择路过”的险路尽头时为 true；离开后自动清除，之后仍可重新
+    // 进入同一尽头并选择真正下层。它不能写进 completed_nodes。
+    bool current_final_bypassed = false;
     bool terminal = false;
 
     bool operator==(const PlannerState&) const noexcept = default;
@@ -48,6 +53,11 @@ struct StateExpansionOptions
     // 目标做没做完由 safety_goal 的合取项回答，不会因为策略目标暂时不存在就让求解无终点。
     std::unordered_set<NodeId> strategy_terminal_nodes;
     std::unordered_set<std::string> forbidden_action_ids;
+    std::unordered_set<NodeType> forbidden_node_types;
+    // 调用方把未知凶戾列为禁区时，可选择豁免抵达前已被先前落点揭示的后续落点。
+    bool allow_revealed_hidden_battle = false;
+    std::unordered_set<MovementKind> reserved_movement_kinds;
+    int reserved_movement_charges = 0;
     GraphLayer graph_layer = GraphLayer::Confirmed;
     bool final_is_terminal = true;
     // 行动力耗尽视为合法收工。走出本层与耗尽行动力结局相同的策略打开它，
@@ -96,6 +106,8 @@ public:
     [[nodiscard]] bool is_terminal_node(NodeId node) const noexcept;
     [[nodiscard]] bool is_completed(SafetyStateId id, NodeId node) const noexcept;
     [[nodiscard]] bool is_light_consumed(SafetyStateId id, NodeId node) const noexcept;
+    // 与 PlannerState 中的节点位图使用同一索引；路线收益标签复用它以避免维护第二套映射。
+    [[nodiscard]] std::optional<PlannerNodeMask> node_mask(NodeId node) const noexcept { return bit(node); }
     [[nodiscard]] const std::vector<OnDemandSafetyAction>* actions(SafetyStateId id, std::string* error = nullptr);
 
     [[nodiscard]] std::size_t state_count() const noexcept { return m_states.size(); }

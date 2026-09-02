@@ -14,6 +14,19 @@
         "src/MaaCore/Utils/Algorithm.hpp",
         "unit_test/MaaCore/AlgorithmTest.cpp"
       ]
+    },
+    {
+      "id": "maa-black-flow-routing-test",
+      "name": "BlackFlow routing",
+      "buildTarget": "maa-black-flow-routing-test",
+      "ctestRegex": "^blackflow-routing::",
+      "paths": [
+        "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.h",
+        "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPlanner.cpp",
+        "src/MaaCore/Vision/Roguelike/BlackFlow/BlackFlowMapAnalyzer.cpp",
+        "src/MaaCore/Vision/Roguelike/BlackFlow/BlackFlowTopologyMatcher.h",
+        "unit_test/MaaCore/BlackFlowRoutingTest.cpp"
+      ]
     }
   ]
 }

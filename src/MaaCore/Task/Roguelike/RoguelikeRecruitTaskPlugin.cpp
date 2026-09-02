@@ -4,6 +4,7 @@
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
@@ -44,7 +45,10 @@ bool asst::RoguelikeRecruitTaskPlugin::verify(AsstMsg msg, const json::value& de
 
 bool asst::RoguelikeRecruitTaskPlugin::load_params(const json::value& params)
 {
-    m_start_roles = params.get("roles", std::string());
+    const bool automation_collection = m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+                                       m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection;
+    m_start_roles = automation_collection ? std::string(blackflow::AutomationCollectionRoles)
+                                          : params.get("roles", std::string());
     return true;
 }
 
@@ -107,6 +111,14 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
         return true;
     }
 
+    const bool automation_collection =
+        theme == RoguelikeTheme::BlackFlow && mode == RoguelikeMode::BlackFlowAutomationCollection;
+
+    // 自动化收集的第一张固定为重装券；机械师是辅助开局干员，不占用 core_char。
+    if (automation_collection && m_initail_recruit && m_recruit_count == 1 && recruit_appointed_char("机械师")) {
+        return true;
+    }
+
     // 时光之末的特殊用法
     if (theme == RoguelikeTheme::JieGarden && squad == "指挥分队" && difficulty >= 3) {
         if (mode == RoguelikeMode::Investment ||
@@ -141,8 +153,17 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
         }
     }
 
-    if (m_initail_recruit && m_recruit_count == 1) {
-        if (m_config->get_use_support()) { // 是否使用助战干员开局
+    const int core_char_recruit_count = automation_collection ? 2 : 1;
+    if (m_initail_recruit && m_recruit_count == core_char_recruit_count) {
+        if (automation_collection) {
+            // 「使用助战」是明确的来源选择：勾选后直接进入助战列表，不再先扫描自有干员。
+            const bool recruited = m_config->get_use_support() ? recruit_support_char() : recruit_own_char();
+            if (recruited) {
+                m_starts_complete = true;
+                return true;
+            }
+        }
+        else if (m_config->get_use_support()) { // 是否使用助战干员开局
             if (recruit_support_char()) {
                 m_starts_complete = true;
                 return true;
@@ -154,6 +175,34 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
                 return true;
             }
         }
+    }
+
+    if (automation_collection) {
+        const auto& recruited_operators = m_config->status().opers;
+        const auto operator_recruited = [&](std::string_view name) {
+            return recruited_operators.contains(std::string(name));
+        };
+        const auto operator_elite_two = [&](std::string_view name) {
+            const auto iter = recruited_operators.find(std::string(name));
+            return iter != recruited_operators.end() && iter->second.elite >= 2;
+        };
+        const blackflow::AutomationCollectionTeamProgress team_progress {
+            .first_operator_elite_two = operator_elite_two(blackflow::AutomationCollectionFirstOperator),
+            .caster_operator_recruited = operator_recruited(blackflow::AutomationCollectionCasterOperator),
+            .core_operator_elite_two = operator_elite_two(blackflow::AutomationCollectionCoreOperator),
+            .defender_operator_recruited = operator_recruited(blackflow::AutomationCollectionDefenderOperator),
+            .specialist_operator_recruited = operator_recruited(blackflow::AutomationCollectionSpecialistOperator),
+        };
+        if (blackflow::automation_collection_team_complete(team_progress)) {
+            Log.info(__FUNCTION__, "| Fixed five-person team is complete; give up voucher without scanning operators");
+            return ProcessTask(*this, { "BlackFlow@RoguelikeRecruit-GiveUp" }).run();
+        }
+    }
+
+    // 自动化收集不需要比较无关候选的优先级：招募券页面已经限定了可选范围，当前页出现
+    // 尚未入队的五人队目标或可晋升目标时立即选择；只有没看到目标时才继续翻页。
+    if (automation_collection) {
+        return recruit_automation_collection_char();
     }
 
     bool team_full_without_rookie = m_config->status().team_full_without_rookie;
@@ -261,8 +310,14 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
         int max_oper_x = 0;
         for (const auto& oper_info : oper_list) {
             oper_names.emplace(oper_info.name);
-
             max_oper_x = std::max(max_oper_x, oper_info.rect.x);
+
+            // 自动化收集只构建固定的五人队伍。这里必须在所有通用优先级和
+            // “十次招募后放开限制”的兜底之前过滤，否则其他干员仍可能重新成为候选。
+            if (automation_collection && !blackflow::is_automation_collection_operator(oper_info.name)) {
+                continue;
+            }
+
             // 查询上次识别位置
             const auto& rect_it = last_oper_rects.find(oper_info.name);
             if (rect_it == last_oper_rects.cend()) {
@@ -457,6 +512,11 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
     if (recruit_list.empty()) {
         Log.trace(__FUNCTION__, "| No oper in recruit list.");
 
+        if (automation_collection) {
+            Log.info(__FUNCTION__, "| No operator from the automation collection team is available; give up voucher");
+            return ProcessTask(*this, { "BlackFlow@RoguelikeRecruit-GiveUp" }).run();
+        }
+
         // 如果划动过，先划回最左边
         if (i != 0) {
             swipe_to_the_left_of_operlist(i + 1);
@@ -635,6 +695,114 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_appointed_char(const std::string&
     Log.info(__FUNCTION__, "| Cannot find oper `" + char_name + "`");
     swipe_to_the_left_of_operlist(i + 1);
     return false;
+}
+
+bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char()
+{
+    LogTraceFunction;
+
+    const auto& chars_map = m_config->status().opers;
+    auto select_visible_target = [&](const std::vector<battle::roguelike::Recruitment>& opers) -> bool {
+        for (const auto& oper : opers) {
+            const auto owned_it = chars_map.find(oper.name);
+            const bool already_recruited = owned_it != chars_map.end();
+            const int owned_elite = already_recruited ? owned_it->second.elite : 0;
+            if (!blackflow::should_recruit_visible_automation_collection_operator(
+                    oper.name,
+                    already_recruited,
+                    owned_elite,
+                    oper.elite)) {
+                continue;
+            }
+
+            Log.info(
+                __FUNCTION__,
+                "| Visible automation collection target found; recruit immediately:",
+                oper.name,
+                "owned elite",
+                owned_elite,
+                "displayed elite",
+                oper.elite);
+            select_oper(oper);
+            return true;
+        }
+        return false;
+    };
+
+    // 先看进入招募页时已经显示的内容。命中目标时不复位、不继续扫描。
+    {
+        RoguelikeRecruitImageAnalyzer analyzer(ctrler()->get_image());
+        if (analyzer.analyze() && select_visible_target(analyzer.get_result())) {
+            return true;
+        }
+    }
+
+    // 当前页没有目标时才处理方舟偶尔没有从列表最左端打开的问题，然后逐页查找。
+    swipe_to_the_left_of_operlist();
+
+    const int swipe_times = blackflow::automation_collection_recruit_scan_limit(
+        Task.get("RoguelikeRecruitSwipeMaxTime")->max_times);
+    blackflow::AutomationCollectionRecruitPageTracker page_tracker;
+    int completed_swipes = 0;
+    while (true) {
+        if (need_exit()) {
+            return false;
+        }
+
+        RoguelikeRecruitImageAnalyzer analyzer(ctrler()->get_image());
+        const bool analysis_succeeded = analyzer.analyze();
+        const auto& opers = analyzer.get_result();
+        if (analysis_succeeded && select_visible_target(opers)) {
+            return true;
+        }
+
+        int max_oper_x = 700;
+        if (analysis_succeeded) {
+            for (const auto& oper : opers) {
+                max_oper_x = std::max(max_oper_x, oper.rect.x);
+            }
+            Log.info(
+                __FUNCTION__,
+                "| Page",
+                completed_swipes,
+                "has no eligible fixed-team target; oper list:",
+                analyzer.get_detected_names());
+        }
+        else {
+            Log.trace(
+                __FUNCTION__,
+                "| Page",
+                completed_swipes,
+                "recruit list analyse failed; detected names:",
+                analyzer.get_detected_names());
+        }
+
+        const auto action =
+            page_tracker.observe(analyzer.get_detected_names(), analysis_succeeded, completed_swipes);
+        if (action == blackflow::AutomationCollectionRecruitPageAction::RetrySamePage) {
+            Log.trace(__FUNCTION__, "| Recruit page is not stable; retry without swiping");
+            sleep(Task.get("RoguelikeRecruitOperListSlowlySwipeToTheRight")->post_delay);
+            continue;
+        }
+        if (action == blackflow::AutomationCollectionRecruitPageAction::StopAtSeenPage) {
+            Log.trace(__FUNCTION__, "| Seen recruit page remained stable after a swipe; stop searching");
+            break;
+        }
+        if (completed_swipes >= swipe_times) {
+            Log.trace(__FUNCTION__, "| Reached configured maximum recruit-list swipes");
+            break;
+        }
+
+        const int swipe_distance = analysis_succeeded
+            ? blackflow::automation_collection_recruit_swipe_distance(max_oper_x)
+            : blackflow::automation_collection_recruit_swipe_distance(700);
+        slowly_swipe(false, swipe_distance);
+        sleep(Task.get("RoguelikeCustom-HijackCoChar")->post_delay);
+        ++completed_swipes;
+    }
+
+    Log.info(__FUNCTION__, "| No eligible operator from the fixed five-person team; give up voucher");
+    return ProcessTask(*this, { "BlackFlow@RoguelikeRecruit-GiveUp" }).run();
 }
 
 bool asst::RoguelikeRecruitTaskPlugin::recruit_support_char()

@@ -788,6 +788,12 @@ asst::TaskPtr asst::TaskData::generate_ocr_task_info(
     }
 #endif
     utils::get_and_check_value_or(name, task_json, "fullMatch", ocr_task_info_ptr->full_match, default_ptr->full_match);
+    utils::get_and_check_value_or(
+        name,
+        task_json,
+        "fuzzyMatch",
+        ocr_task_info_ptr->fuzzy_match,
+        default_ptr->fuzzy_match);
     utils::get_and_check_value_or(name, task_json, "isAscii", ocr_task_info_ptr->is_ascii, default_ptr->is_ascii);
     utils::get_and_check_value_or(
         name,
@@ -1018,6 +1024,7 @@ asst::OcrTaskConstPtr asst::TaskData::_default_ocr_task_info()
 {
     auto ocr_task_info_ptr = std::make_shared<OcrTaskInfo>();
     ocr_task_info_ptr->full_match = false;
+    ocr_task_info_ptr->fuzzy_match = false;
     ocr_task_info_ptr->is_ascii = false;
     ocr_task_info_ptr->without_det = false;
     ocr_task_info_ptr->replace_full = false;
@@ -1083,7 +1090,7 @@ bool asst::TaskData::syntax_check(const std::string& task_name, const json::valu
               "specialParams", "sub",         "subErrorIgnored", "highResolutionSwipeFix",
 
               // specific
-              "cache",         "fullMatch",   "isAscii",         "ocrReplace",   "rectMove",
+              "cache",         "fullMatch",   "fuzzyMatch",      "isAscii",       "ocrReplace",   "rectMove",
               "replaceFull",   "roi",         "text",            "withoutDet",   "useRaw",
               "binThreshold",
           } },

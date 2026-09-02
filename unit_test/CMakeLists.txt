@@ -35,3 +35,29 @@ target_link_libraries(maa-algorithm-test PRIVATE Catch2::Catch2WithMain)
 target_include_directories(maa-algorithm-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
 
 catch_discover_tests(maa-algorithm-test TEST_PREFIX "algorithm::")
+
+add_executable(maa-black-flow-routing-test
+    MaaCore/BlackFlowRoutingTest.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowCompactStateSpace.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowObservation.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPageIdentity.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPlanner.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPolicy.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyGoal.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyValue.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowStateSpace.cpp
+)
+
+target_compile_features(maa-black-flow-routing-test PRIVATE cxx_std_20)
+target_link_libraries(maa-black-flow-routing-test PRIVATE Catch2::Catch2WithMain)
+target_include_directories(maa-black-flow-routing-test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include
+)
+if(MSVC)
+    target_compile_options(maa-black-flow-routing-test PRIVATE /utf-8)
+endif()
+
+catch_discover_tests(maa-black-flow-routing-test TEST_PREFIX "blackflow-routing::")

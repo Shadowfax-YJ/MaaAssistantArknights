@@ -32,6 +32,19 @@ void BlackFlowNodeTaskPlugin::restore_node_completion_action()
 
 bool BlackFlowNodeTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
+    if (msg == AsstMsg::SubTaskExtraInfo && m_session != nullptr && m_session->page_context().has_value() &&
+        m_session->page_context()->stage == PageExecutionStage::Running) {
+        const std::string what = details.get("what", std::string());
+        const std::string content = details.get("details", "name", "");
+        const NodeType type = m_session->page_context()->node_type;
+        const bool supported = (what == "StageInfo" && is_combat_node_type(type)) ||
+                               (what == "RoguelikeEvent" && !is_combat_node_type(type));
+        if (supported && !content.empty()) {
+            m_pending = PendingWork::RecordPageContent;
+            m_pending_details = details;
+            return true;
+        }
+    }
     if (details.get("subtask", std::string()) != "ProcessTask") {
         return false;
     }
@@ -46,11 +59,6 @@ bool BlackFlowNodeTaskPlugin::verify(AsstMsg msg, const json::value& details) co
     }
     if (msg == AsstMsg::SubTaskCompleted && task == "BlackFlow@Roguelike@RecoverMapCompleted") {
         m_pending = PendingWork::RecoverMapCompleted;
-        m_pending_details = details;
-        return true;
-    }
-    if (msg == AsstMsg::SubTaskCompleted && task == "BlackFlow@Roguelike@RecoverMapFailed") {
-        m_pending = PendingWork::RecoverMapFailed;
         m_pending_details = details;
         return true;
     }
@@ -119,6 +127,17 @@ bool BlackFlowNodeTaskPlugin::_run()
         return true;
     }
 
+    if (work == PendingWork::RecordPageContent) {
+        const std::string source = m_pending_details.get("what", std::string());
+        const std::string content = m_pending_details.get("details", "name", "");
+        std::string error;
+        if (!m_session->observe_page_content(content, source, &error)) {
+            Log.warn("BlackFlow page content observation ignored", error);
+        }
+        report_outputs();
+        return true;
+    }
+
     if (work == PendingWork::ApplyResult) {
         restore_node_completion_action();
         const std::string task = m_pending_details.get("details", "task", "");
@@ -157,12 +176,6 @@ bool BlackFlowNodeTaskPlugin::_run()
         return true;
     }
 
-    if (work == PendingWork::RecoverMapFailed) {
-        restore_node_completion_action();
-        m_session->fail("page_recovery_failed", "map recovery task reported failure", FailureDisposition::RestartRun);
-        report_outputs();
-        return true;
-    }
     return true;
 }
 } // namespace asst::blackflow

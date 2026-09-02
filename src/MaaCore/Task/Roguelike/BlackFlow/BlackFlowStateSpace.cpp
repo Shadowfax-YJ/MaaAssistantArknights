@@ -1,6 +1,8 @@
 #include "BlackFlowStateSpace.h"
 
 #include "BlackFlowCompactStateSpace.h"
+#include "BlackFlowPlannerRules.h"
+#include "BlackFlowRevealSemantics.h"
 
 #include <algorithm>
 
@@ -87,6 +89,7 @@ PlannerState transition_state(
 {
     PlannerState successor = source;
     successor.node = landing;
+    successor.current_final_bypassed = action.candidate.bypass_final_on_completion;
     if (action.candidate.movement != MovementKind::Walk) {
         auto& charge = successor.movement_charges[movement_index(action.candidate.movement)];
         if (charge > 0) {
@@ -94,17 +97,16 @@ PlannerState transition_state(
         }
     }
 
-    NodeId completed = action.candidate.target;
-    if (completed == InvalidNodeId) {
-        completed = landing;
-    }
+    // 不可控移动的 target 只是打开预览的激活格；完成、点亮与节点收益都属于实际落点。
+    const NodeId completed = action.candidate.controllable ? action.candidate.target : landing;
     const Node* node = map.find_node(completed);
     const auto bit = node_bit(node_indices, completed);
     if (node == nullptr || !bit.has_value()) {
         return successor;
     }
 
-    if (!node->traversal.repeatable && node->type != NodeType::Empty) {
+    if (!action.candidate.bypass_final_on_completion && !node->traversal.repeatable &&
+        node->type != NodeType::Empty) {
         successor.completed_nodes |= *bit;
         successor.opened_blockers &= ~*bit;
     }
@@ -114,6 +116,24 @@ PlannerState transition_state(
 
     if (node->type == NodeType::Light) {
         successor.consumed_lights |= *bit;
+    }
+
+    if (!action.candidate.terminal_on_completion && landing != InvalidNodeId) {
+        auto revealed = map.reveal_through_transparent_nodes(landing);
+        const Node* landed = map.find_node(landing);
+        if (landed != nullptr && landed->type == NodeType::Light) {
+            const auto light_revealed = map.nodes_within_manhattan(landing, LightRevealRadius);
+            for (const NodeId id : light_revealed) {
+                revealed.emplace(id);
+            }
+        }
+        for (const NodeId id : revealed) {
+            const Node* revealed_node = map.find_node(id);
+            const auto revealed_bit = node_bit(node_indices, id);
+            if (revealed_node != nullptr && revealed_node->type == NodeType::HideBattle && revealed_bit.has_value()) {
+                successor.revealed_hidden_battles |= *revealed_bit;
+            }
+        }
     }
     return successor;
 }
@@ -127,10 +147,7 @@ int action_gain(
 {
     const MovementSpec* movement = find_movement_spec(action.candidate.movement);
     int gain = movement == nullptr ? 0 : movement->effect.action_point_gain;
-    NodeId effect_node = action.candidate.target;
-    if (effect_node == InvalidNodeId) {
-        effect_node = landing;
-    }
+    const NodeId effect_node = action.candidate.controllable ? action.candidate.target : landing;
     const Node* node = map.find_node(effect_node);
     const auto bit = node_bit(node_indices, effect_node);
     if (node != nullptr && bit.has_value() && node->type == NodeType::Light && (source.consumed_lights & *bit) == 0) {
@@ -150,7 +167,7 @@ bool revealed_by_consumed_light(
         if (light.type != NodeType::Light || !light_mask.has_value() || (state.consumed_lights & *light_mask) == 0) {
             continue;
         }
-        const auto revealed = map.nodes_within_manhattan(light_id, 2);
+        const auto revealed = map.nodes_within_manhattan(light_id, LightRevealRadius);
         if (std::ranges::find(revealed, node) != revealed.end()) {
             return true;
         }
@@ -170,7 +187,7 @@ int unknown_big_nodes_revealed(
         return 0;
     }
     int count = 0;
-    for (const NodeId id : map.nodes_within_manhattan(light, 2)) {
+    for (const NodeId id : map.nodes_within_manhattan(light, LightRevealRadius)) {
         const Node* candidate = map.find_node(id);
         const auto candidate_mask = node_bit(node_indices, id);
         if (candidate == nullptr || candidate->type == NodeType::Empty || candidate->identity_revealed ||
@@ -272,7 +289,7 @@ std::optional<ProjectedMoveOutcome> project_move_outcome(
     }
 
     outcome.run.visited_nodes.emplace(move.target);
-    if (!target->traversal.repeatable && target->type != NodeType::Empty) {
+    if (!move.bypass_final_on_completion && !target->traversal.repeatable && target->type != NodeType::Empty) {
         outcome.run.node_progress.insert_or_assign(move.target, NodeProgress::Completed);
     }
     if (target->type == NodeType::Light && !outcome.run.consumed_one_time_nodes.contains(move.target)) {
@@ -280,7 +297,7 @@ std::optional<ProjectedMoveOutcome> project_move_outcome(
         const auto revealed = map.nodes_within_manhattan(move.target, 2);
         outcome.run.revealed_nodes.insert(revealed.begin(), revealed.end());
     }
-    if (move.movement != MovementKind::Walk && is_combat_node_type(target->type) &&
+    if (move.movement != MovementKind::Walk && is_route_battle_node_type(target->type) &&
         outcome.run.resources.white_model_birds > 0) {
         --outcome.run.resources.white_model_birds;
     }
@@ -299,7 +316,9 @@ std::size_t PlannerStateHash::operator()(const PlannerState& state) const noexce
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.completed_nodes));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.opened_blockers));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.consumed_lights));
+    seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.revealed_hidden_battles));
     seed = combine_hash(seed, std::hash<SafetyGoalProgressId> {}(state.goal_progress_id));
+    seed = combine_hash(seed, std::hash<bool> {}(state.current_final_bypassed));
     return combine_hash(seed, std::hash<bool> {}(state.terminal));
 }
 
@@ -367,6 +386,11 @@ bool OnDemandStateGraph::initialize(
 
     PlannerState initial;
     initial.node = run.current_node;
+    if (const Node* current = map.find_node(run.current_node); current != nullptr && current->type == NodeType::Final) {
+        // 能观察到仍停留在本层尽头，就说明上一次选择的是“路过”；真正进入尽头不会
+        // 再产生这张同层地图。
+        initial.current_final_bypassed = true;
+    }
     if (m_options.safety_goal != nullptr) {
         initial.goal_progress_id = m_options.initial_goal_progress_id != InvalidSafetyGoalProgressId
                                        ? m_options.initial_goal_progress_id
@@ -402,6 +426,14 @@ bool OnDemandStateGraph::initialize(
         const auto node_mask = bit(node_id);
         if (node != nullptr && node_mask.has_value() && node->type == NodeType::Light) {
             initial.consumed_lights |= *node_mask;
+        }
+    }
+    for (const NodeId node_id : m_indexed_nodes) {
+        const Node* node = map.find_node(node_id);
+        const auto node_mask = bit(node_id);
+        if (node != nullptr && node->type == NodeType::HideBattle && node_mask.has_value() &&
+            (node->identity_revealed || run.revealed_nodes.contains(node_id))) {
+            initial.revealed_hidden_battles |= *node_mask;
         }
     }
 
@@ -443,7 +475,8 @@ RunState OnDemandStateGraph::materialize(const PlannerState& state) const
 bool OnDemandStateGraph::state_is_endpoint(const PlannerState& state) const noexcept
 {
     const Node* node = m_map->find_node(state.node);
-    return node != nullptr && m_options.final_is_terminal && is_exit_node_type(node->type);
+    return node != nullptr && m_options.final_is_terminal && is_exit_node_type(node->type) &&
+           !(node->type == NodeType::Final && state.current_final_bypassed);
 }
 
 // 成功状态是「站在合法收工点」与「锁定目标已满足」的合取。
@@ -467,12 +500,12 @@ bool OnDemandStateGraph::is_terminal(SafetyStateId id) const noexcept
     return id < m_states.size() && m_states[id].terminal;
 }
 
-// 行动力耗尽是否构成合法收工。它无法写进 state_is_goal：PlannerState 不带行动力，
+// 行动力耗尽是否构成合法的路线搜索端点。它无法写进 state_is_goal：PlannerState 不带行动力，
 // 而目标谓词只看状态，判不出「还剩几点」。
 //
 // 因此这里回答的是更粗的一问——本轮的安全层是否还有约束对象。锁定目标非空时安全层照常
-// 保证走到目标；锁定目标为空时，走到哪里停都算收工，安全层没有可证的命题，N 恒为零。
-// 调用方据此短路求解，并把「再也付不起任何一步」当作路线终点。
+// 保证走到目标；锁定目标为空时，安全层不再证明物理出口可达，N 恒为零。
+// 调用方据此短路求解，并把「再也付不起任何一步」当作路线终点，随后仍由任务链进入追猎。
 bool OnDemandStateGraph::exhaustion_terminates() const noexcept
 {
     return m_options.no_AP_is_terminal &&
@@ -535,7 +568,7 @@ const std::vector<OnDemandSafetyAction>* OnDemandStateGraph::actions(SafetyState
                 for (const CompactActionOutcome& compact_outcome : compact_action.outcomes) {
                     PlannerState successor = compact_outcome.successor;
                     const NodeId entered =
-                        action.candidate.target == InvalidNodeId ? successor.node : action.candidate.target;
+                        action.candidate.controllable ? action.candidate.target : successor.node;
                     if (!advance_goal_progress(
                             *m_map,
                             *m_run,
@@ -578,11 +611,40 @@ const std::vector<OnDemandSafetyAction>* OnDemandStateGraph::actions(SafetyState
                 if (m_options.forbidden_action_ids.contains(move.candidate.action_id)) {
                     continue;
                 }
+                if (m_options.reserved_movement_kinds.contains(move.candidate.movement)) {
+                    int reserved_charges = 0;
+                    for (const MovementKind reserved : m_options.reserved_movement_kinds) {
+                        if (const auto found = run.resources.movement_charges.find(reserved);
+                            found != run.resources.movement_charges.end() &&
+                            !run.cross_floor_expired.contains(reserved)) {
+                            reserved_charges += found->second;
+                        }
+                    }
+                    if (reserved_charges <= m_options.reserved_movement_charges) {
+                        continue;
+                    }
+                }
+                const auto forbidden_landing = [&](NodeId id) {
+                    const Node* node = m_map->find_node(id);
+                    const auto node_mask = bit(id);
+                    const bool revealed_before_landing =
+                        node_mask.has_value() && (source.revealed_hidden_battles & *node_mask) != 0;
+                    return node != nullptr && route_landing_is_forbidden(
+                                                  node->type,
+                                                  revealed_before_landing,
+                                                  m_options.allow_revealed_hidden_battle,
+                                                  m_options.forbidden_node_types);
+                };
+                if ((move.candidate.controllable && forbidden_landing(move.candidate.landing)) ||
+                    (!move.candidate.controllable &&
+                     std::ranges::any_of(move.possible_landings, forbidden_landing))) {
+                    continue;
+                }
                 OnDemandSafetyAction action;
                 action.candidate = move.candidate;
                 action.action_point_cost = move.candidate.predicted_action_point_cost;
                 for (const NodeId landing : move.possible_landings) {
-                    const NodeId target = move.candidate.target == InvalidNodeId ? landing : move.candidate.target;
+                    const NodeId target = move.candidate.controllable ? move.candidate.target : landing;
                     if (unavailable_target(*m_map, source, m_node_indices, target)) {
                         continue;
                     }

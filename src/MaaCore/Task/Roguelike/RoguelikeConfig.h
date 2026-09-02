@@ -41,7 +41,8 @@ enum class RoguelikeMode
     FindPlaytime = 20001, // 20001 - 刷常乐节点，第一层进洞，找不到需要的节点就重开
 
     // ------------------ 黑流树海主题专用模式 ------------------
-    BlackFlowBabyAnimal = 30001 // 30001 - 刷襁褓动物
+    BlackFlowBabyAnimal = 30001,          // 30001 - 刷襁褓动物
+    BlackFlowAutomationCollection = 30002 // 30002 - 自动化收集对局数据
 };
 
 struct RoguelikeOper
@@ -99,7 +100,7 @@ public:
     {
         if (theme == RoguelikeTheme::BlackFlow) {
             return mode == RoguelikeMode::Exp || mode == RoguelikeMode::Investment ||
-                   mode == RoguelikeMode::BlackFlowBabyAnimal;
+                   mode == RoguelikeMode::BlackFlowBabyAnimal || mode == RoguelikeMode::BlackFlowAutomationCollection;
         }
         return mode == RoguelikeMode::Exp || mode == RoguelikeMode::Investment || mode == RoguelikeMode::Collectible ||
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||

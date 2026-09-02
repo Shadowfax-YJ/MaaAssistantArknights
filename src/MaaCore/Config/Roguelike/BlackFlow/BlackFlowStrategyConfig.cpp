@@ -123,6 +123,18 @@ RoutePreference parse_route_preference(const std::string& value)
     if (value == "minimize_intermediate_interactions") {
         return RoutePreference::MinimizeIntermediateInteractions;
     }
+    if (value == "maximize_revealed_nodes") {
+        return RoutePreference::MaximizeRevealedNodes;
+    }
+    if (value == "maximize_effective_nodes") {
+        return RoutePreference::MaximizeEffectiveNodes;
+    }
+    if (value == "ignore_battle_tiebreaks") {
+        return RoutePreference::IgnoreBattleTieBreaks;
+    }
+    if (value == "optimize_processing_moves") {
+        return RoutePreference::OptimizeProcessingMoves;
+    }
     invalid_config("unknown route preference: " + value);
 }
 

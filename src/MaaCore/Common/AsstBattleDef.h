@@ -531,8 +531,21 @@ struct ForceDeployDirection
     std::unordered_set<Role> role = {};
 };
 
+struct VirtualAutoSkillDevice
+{
+    std::string name;
+    Point location;
+    int skill_times = 0; // 0 表示不限制；正数表示成功释放指定次数后停止自动开技
+};
+
 struct CombatData
 {
+    struct Preparation
+    {
+        std::unordered_map<std::string, std::vector<DeployInfoWithRank>> deploy_plan;
+        std::pair<double, double> battle_camera_shift = { 0., 0. };
+    };
+
     std::string stage_name;
     std::vector<ReplacementHome> replacement_home;
     std::unordered_set<Point> blacklist_location;
@@ -542,8 +555,13 @@ struct CombatData
     int stop_deploy_blocking_num = INT_MAX;
     int force_deploy_air_defense_num = 0;
     bool force_ban_medic = false;
+    bool deploy_plan_only = false;
+    std::optional<Preparation> preparation;
+    std::vector<VirtualAutoSkillDevice> virtual_auto_skill_devices;
+    std::optional<Point> deploy_after_virtual_auto_skill;
     std::unordered_map<std::string, std::vector<DeployInfoWithRank>> deploy_plan;
     std::vector<DeployInfoWithRank> retreat_plan;
+    std::vector<DeployInfoWithRank> skill_stop_plan;
 };
 
 struct Recruitment

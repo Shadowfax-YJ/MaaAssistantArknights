@@ -1,0 +1,37 @@
+{
+    "stage_name": "冰冷流亡",
+    "virtual_auto_skill_devices": [
+        {
+            "name": "禁锢装置",
+            "locations": [[6, 5]]
+        }
+    ],
+    "deploy_plan_only": true,
+    "deploy_plan": [
+        {
+            "groups": ["机械师"],
+            "location": [7, 3],
+            "direction": "left"
+        },
+        {
+            "groups": ["凯尔希·思衡托"],
+            "location": [7, 4],
+            "direction": "left"
+        },
+        {
+            "groups": ["结构性原理"],
+            "location": [4, 6],
+            "direction": "left"
+        },
+        {
+            "groups": ["卡达"],
+            "location": [5, 5],
+            "direction": "up"
+        },
+        {
+            "groups": ["古米"],
+            "location": [8, 3],
+            "direction": "left"
+        }
+    ]
+}

@@ -1,6 +1,7 @@
 #include "RoguelikeBattleTaskPlugin.h"
 
 #include <chrono>
+#include <format>
 #include <future>
 #include <ranges>
 #include <vector>
@@ -13,7 +14,10 @@
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowBattleRules.h"
+#include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
 #include "Utils/Logger.hpp"
+#include "Vision/OCRer.h"
 #include "Vision/RegionOCRer.h"
 
 using namespace asst::battle;
@@ -63,15 +67,49 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
         return false;
     }
 
+    const bool has_preparation_camera_animation = !m_preparation_deploy_plan.empty();
+    if (!run_preparation_phase()) {
+        return false;
+    }
+
+    if (has_preparation_camera_animation) {
+        // “开始战斗”按钮消失早于战场镜头平移和输入锁结束。此时立即识别并拖拽
+        // 会出现日志记录了部署、实际卡片仍留在部署栏的假成功。
+        Log.info("Waiting for battle camera transition before combat actions", m_stage_name);
+        sleep(static_cast<int>(blackflow::PreparationCombatSettleDelayMs));
+    }
+
     if (!update_deployment(true)) {
         Log.error("update deployment failed");
         return false;
     }
+    if (!register_virtual_auto_skill_devices()) {
+        return false;
+    }
 
     cache_oper_elite_status();
-    speed_up();
+    bool double_speed_confirmed = false;
+    if (!has_preparation_camera_animation) {
+        double_speed_confirmed = blackflow::ensure_double_speed(
+            [&]() { return check_in_speedup(); },
+            [&]() { return speed_up(); },
+            [&]() { sleep(500); },
+            3);
+        if (!double_speed_confirmed) {
+            Log.warn("Failed to confirm battle double speed during initial retries", m_stage_name);
+        }
+    }
+    else {
+        Log.info("Deferring double-speed toggle until the preparation camera animation settles", m_stage_name);
+    }
+    // 这是期望状态；若剧情或对话再次退出二倍速，BattleHelper 会按此状态恢复。
+    m_in_speedup = true;
     bool timeout = false;
     auto start_time = std::chrono::steady_clock::now();
+    blackflow::DoubleSpeedRetrySchedule double_speed_retry(has_preparation_camera_animation);
+    if (!double_speed_confirmed && !has_preparation_camera_animation) {
+        double_speed_retry.mark_attempt(0);
+    }
     cv::Mat image, image_prev;
     while (!need_exit()) {
         // 不在战斗场景，且已使用过了干员，说明已经打完了，就结束循环
@@ -79,9 +117,39 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
         if (!do_once(image, image_prev) && !m_first_deploy) {
             break;
         }
+        auto duration = std::chrono::steady_clock::now() - start_time;
+        const auto elapsed_ms = static_cast<std::size_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
+        if (double_speed_retry.due(double_speed_confirmed, elapsed_ms)) {
+            // The duel preparation view leaves a camera-pan/input-lock animation after
+            // "start battle" disappears. Retry in the live battle loop instead of
+            // exhausting all clicks while that animation is still swallowing input.
+            double_speed_retry.mark_attempt(elapsed_ms);
+            if (check_in_speedup(image)) {
+                double_speed_confirmed = true;
+            }
+            else if (speed_up()) {
+                sleep(500);
+                double_speed_confirmed = check_in_speedup();
+            }
+            if (double_speed_confirmed) {
+                Log.info(
+                    "Battle double speed confirmed after camera transition",
+                    m_stage_name,
+                    "elapsed_ms",
+                    elapsed_ms);
+            }
+            else {
+                Log.trace(
+                    "Battle double speed is still unavailable; will retry",
+                    m_stage_name,
+                    "elapsed_ms",
+                    elapsed_ms);
+            }
+        }
+
         image_prev = std::move(image);
 
-        auto duration = std::chrono::steady_clock::now() - start_time;
         if (!timeout && duration > 8min) {
             timeout = true;
             Log.info("Timeout, retreat!");
@@ -95,8 +163,16 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
             break;
         }
     }
+    const std::optional<int> aggregated_total_kills = m_total_kills_aggregator.result();
+    if (aggregated_total_kills.has_value() && m_battle_result_observer) {
+        m_battle_result_observer(m_stage_name, *aggregated_total_kills);
+    }
     // 通知战斗结束，无论成功与否
     auto info = basic_info_with_what("RoguelikeCombatEnd");
+    if (aggregated_total_kills.has_value()) {
+        info["details"]["stage_name"] = m_stage_name;
+        info["details"]["total_kills"] = *aggregated_total_kills;
+    }
     callback(AsstMsg::SubTaskExtraInfo, info);
     return true;
 }
@@ -132,6 +208,8 @@ bool asst::RoguelikeBattleTaskPlugin::calc_stage_info()
     bool calced = false;
 
     const auto stage_name_task_ptr = Task.get("BattleStageName");
+    const std::vector<std::string> stage_name_candidates =
+        RoguelikeCopilot.get_stage_names(m_config->get_theme());
     sleep(stage_name_task_ptr->pre_delay);
 
     auto start = std::chrono::steady_clock::now();
@@ -156,23 +234,36 @@ bool asst::RoguelikeBattleTaskPlugin::calc_stage_info()
                                                                      "ISW-DU",
                                                                      "ISW-SP",
                                                                      std::string() };
-        TilePack::LevelKey stage_key;
-        stage_key.name = text;
-
-        for (const std::string& code : RoguelikeStageCode) {
-            stage_key.code = code;
-            if (!Tile.find(stage_key)) {
-                continue;
+        const auto load_stage = [&](const std::string& stage_name) {
+            TilePack::LevelKey stage_key;
+            stage_key.name = stage_name;
+            for (const std::string& code : RoguelikeStageCode) {
+                stage_key.code = code;
+                if (!Tile.find(stage_key)) {
+                    continue;
+                }
+                calced = true;
+                m_stage_name = stage_name;
+                m_map_data = TilePack::find_level(stage_key).value_or(Map::Level {});
+                auto calc_result = TilePack::calc(m_map_data);
+                m_normal_tile_info = std::move(calc_result.normal_tile_info);
+                m_side_tile_info = std::move(calc_result.side_tile_info);
+                m_retreat_button_pos = calc_result.retreat_button;
+                m_skill_button_pos = calc_result.skill_button;
+                m_has_multi_stages = calc_result.has_multi_stages;
+                return;
             }
-            calced = true;
-            m_stage_name = text;
-            m_map_data = TilePack::find_level(stage_key).value_or(Map::Level {});
-            auto calc_result = TilePack::calc(m_map_data);
-            m_normal_tile_info = std::move(calc_result.normal_tile_info);
-            m_side_tile_info = std::move(calc_result.side_tile_info);
-            m_retreat_button_pos = calc_result.retreat_button;
-            m_skill_button_pos = calc_result.skill_button;
-            break;
+        };
+
+        // Preserve exact matches for stages without a theme-specific copilot entry. Only when
+        // TilePack rejects the raw OCR text do we normalize it against the closed theme stage list.
+        load_stage(text);
+        if (!calced) {
+            const auto resolved = resolve_roguelike_battle_stage_name(text, stage_name_candidates);
+            if (resolved.has_value() && *resolved != text) {
+                Log.info("Fuzzy normalized roguelike battle stage name", text, "->", *resolved);
+                load_stage(*resolved);
+            }
         }
 
         if (calced) {
@@ -206,8 +297,16 @@ bool asst::RoguelikeBattleTaskPlugin::calc_stage_info()
         m_force_air_defense = AirDefenseData { .stop_blocking_deploy_num = opt->stop_deploy_blocking_num,
                                                .deploy_air_defense_num = opt->force_deploy_air_defense_num,
                                                .ban_medic = opt->force_ban_medic };
+        m_deploy_plan_only = opt->deploy_plan_only;
+        if (opt->preparation) {
+            m_preparation_deploy_plan = opt->preparation->deploy_plan;
+            m_battle_camera_shift = opt->preparation->battle_camera_shift;
+        }
+        m_virtual_auto_skill_devices = opt->virtual_auto_skill_devices;
+        m_deploy_after_virtual_auto_skill = opt->deploy_after_virtual_auto_skill;
         m_deploy_plan = opt->deploy_plan;
         m_retreat_plan = opt->retreat_plan;
+        m_skill_stop_plan = opt->skill_stop_plan;
     }
     if (m_homes.empty()) {
         for (const auto& [loc, side] : m_normal_tile_info) {
@@ -245,8 +344,210 @@ bool asst::RoguelikeBattleTaskPlugin::calc_stage_info()
     details["name"] = m_stage_name;
     details["size"] = m_side_tile_info.size();
     callback(AsstMsg::SubTaskExtraInfo, cb_info);
+    // 与事件回调相同，插件 callback 不会回流给其他插件；显式通知需要记录关卡名的主题会话。
+    if (m_stage_observer) {
+        m_stage_observer(m_stage_name);
+    }
 
     return true;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
+{
+    if (m_preparation_deploy_plan.empty()) {
+        return true;
+    }
+
+    Log.info("Run battle preparation phase", m_stage_name);
+    if (!update_deployment(true)) {
+        Log.error("Failed to update deployment during battle preparation");
+        return false;
+    }
+
+    std::unordered_set<Point> target_locations;
+    for (const auto& infos : m_preparation_deploy_plan | std::views::values) {
+        for (const auto& info : infos) {
+            target_locations.emplace(info.location);
+        }
+    }
+
+    auto combat_deploy_plan = std::move(m_deploy_plan);
+    auto combat_retreat_plan = std::move(m_retreat_plan);
+    m_deploy_plan = m_preparation_deploy_plan;
+    m_retreat_plan.clear();
+
+    const auto restore_combat_plan = [&]() {
+        m_deploy_plan = std::move(combat_deploy_plan);
+        m_retreat_plan = std::move(combat_retreat_plan);
+    };
+
+    const auto start_time = std::chrono::steady_clock::now();
+    const auto timeout = std::chrono::seconds(Config.get_options().battle_start_timeout_seconds);
+    while (!need_exit() && std::chrono::steady_clock::now() - start_time < timeout) {
+        const bool completed = std::ranges::all_of(target_locations, [&](const Point& location) {
+            return m_used_tiles.contains(location);
+        });
+        if (completed) {
+            break;
+        }
+
+        const size_t deployed_count = m_used_tiles.size();
+        if (!do_best_deploy()) {
+            Log.error("No available operator matches the battle preparation deploy plan", m_stage_name);
+            restore_combat_plan();
+            return false;
+        }
+        if (m_used_tiles.size() == deployed_count) {
+            update_deployment(false);
+            sleep(100);
+        }
+    }
+
+    const bool completed =
+        std::ranges::all_of(target_locations, [&](const Point& location) { return m_used_tiles.contains(location); });
+    restore_combat_plan();
+    if (!completed) {
+        Log.error("Timed out while deploying operators in battle preparation", m_stage_name);
+        return false;
+    }
+
+    const std::string start_task = m_config->get_theme() + "@Roguelike@BattlePreparationStart";
+    if (!ProcessTask(*this, { start_task }).set_task_delay(0).set_retry_times(5).run()) {
+        Log.error("Failed to click the battle preparation start button", m_stage_name);
+        return false;
+    }
+
+    int consecutive_misses = 0;
+    const auto transition_start = std::chrono::steady_clock::now();
+    const auto start_task_ptr = Task.get(start_task);
+    while (!need_exit() && std::chrono::steady_clock::now() - transition_start < timeout) {
+        OCRer start_analyzer(ctrler()->get_image());
+        start_analyzer.set_task_info(start_task_ptr);
+        if (start_analyzer.analyze()) {
+            consecutive_misses = 0;
+        }
+        else if (++consecutive_misses >= 2) {
+            break;
+        }
+        sleep(200);
+    }
+    if (consecutive_misses < 2) {
+        Log.error("Timed out while waiting for the battle preparation view to close", m_stage_name);
+        return false;
+    }
+
+    // Preparation deployments do not belong to the combat phase. Keep the stage/configuration,
+    // but rebuild all runtime battlefield state after the game switches to the combat view.
+    m_cur_deployment_opers.clear();
+    m_battlefield_opers.clear();
+    m_used_tiles.clear();
+    m_skill_usage.clear();
+    m_skill_times.clear();
+    m_skill_error_count.clear();
+    m_last_use_skill_time.clear();
+    m_deployed_time.clear();
+    m_need_clear_tiles = decltype(m_need_clear_tiles)();
+    m_in_battle = false;
+    m_kills = 0;
+    m_total_kills = 0;
+    m_first_deploy = true;
+
+    const blackflow::BattleFixedControls unshifted_controls {
+        .retreat_button = m_retreat_button_pos,
+        .skill_button = m_skill_button_pos,
+        .has_multi_stages = m_has_multi_stages,
+    };
+    m_camera_shift = m_battle_camera_shift;
+    auto calc_result = TilePack::calc(m_map_data, -m_camera_shift.first, m_camera_shift.second);
+    m_normal_tile_info = std::move(calc_result.normal_tile_info);
+    m_side_tile_info = std::move(calc_result.side_tile_info);
+    const auto fixed_controls = blackflow::fixed_battle_controls_after_camera_shift(
+        unshifted_controls,
+        blackflow::BattleFixedControls {
+            .retreat_button = calc_result.retreat_button,
+            .skill_button = calc_result.skill_button,
+            .has_multi_stages = calc_result.has_multi_stages,
+        });
+    m_retreat_button_pos = fixed_controls.retreat_button;
+    m_skill_button_pos = fixed_controls.skill_button;
+    m_has_multi_stages = fixed_controls.has_multi_stages;
+    m_direct_ready_skill_confirmation = blackflow::should_use_direct_ready_skill_confirmation(
+        !m_preparation_deploy_plan.empty(),
+        m_battle_camera_shift);
+
+    Log.info(
+        "Battle preparation completed",
+        m_stage_name,
+        "camera shift",
+        m_battle_camera_shift.first,
+        m_battle_camera_shift.second);
+    return true;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::register_virtual_auto_skill_devices()
+{
+    for (size_t index = 0; index < m_virtual_auto_skill_devices.size(); ++index) {
+        const auto& device = m_virtual_auto_skill_devices[index];
+        const std::string virtual_name = std::format("virtual-device:{}#{}", device.name, index + 1);
+        if (!register_virtual_auto_skill_oper(virtual_name, device.location, device.skill_times)) {
+            Log.error("Failed to register virtual auto-skill device", device.name, device.location);
+            return false;
+        }
+    }
+    return true;
+}
+
+void asst::RoguelikeBattleTaskPlugin::on_auto_skill_activated(
+    const battle::OperNameTag& oper,
+    const Point&)
+{
+    constexpr std::string_view Prefix = "virtual-device:";
+    if (m_virtual_auto_skill_observer == nullptr || !std::string_view(oper.name).starts_with(Prefix)) {
+        return;
+    }
+    std::string_view device_name(oper.name);
+    device_name.remove_prefix(Prefix.size());
+    if (const std::size_t instance_suffix = device_name.rfind('#'); instance_suffix != std::string_view::npos) {
+        device_name = device_name.substr(0, instance_suffix);
+    }
+    if (!device_name.empty()) {
+        m_virtual_auto_skill_observer(device_name);
+    }
+}
+
+void asst::RoguelikeBattleTaskPlugin::stop_planned_skills()
+{
+    for (auto iter = m_skill_stop_plan.begin(); iter != m_skill_stop_plan.end();) {
+        if (m_kills < iter->kill_lower_bound || m_kills > iter->kill_upper_bound) {
+            ++iter;
+            continue;
+        }
+
+        const auto oper = m_used_tiles.find(iter->location);
+        if (oper == m_used_tiles.end() || m_virtual_auto_skill_opers.contains(oper->second)) {
+            Log.warn("No deployed operator for planned skill stop", iter->location, "kills", m_kills);
+            ++iter;
+            continue;
+        }
+
+        // 关闭按钮不一定具有“技能就绪”外观，因此这里选择场上干员后直接点击固定技能按钮，
+        // 不走 click_skill 的就绪识别，也不修改该干员后续的自动开技能设置。
+        if (!click_oper_on_battlefield(iter->location)) {
+            Log.warn("Failed to select operator for planned skill stop", oper->second, iter->location);
+            ++iter;
+            continue;
+        }
+        const bool clicked = ctrler()->click(m_skill_button_pos);
+        cancel_oper_selection();
+        if (!clicked) {
+            Log.warn("Failed to click planned skill stop", oper->second, iter->location);
+            ++iter;
+            continue;
+        }
+
+        Log.info("Stopped operator skill by plan", oper->second, iter->location, "kills", m_kills);
+        iter = m_skill_stop_plan.erase(iter);
+    }
 }
 
 asst::battle::LocationType
@@ -435,10 +736,46 @@ bool asst::RoguelikeBattleTaskPlugin::do_best_deploy()
                          << "but now waiting for cost.";
                 return true;
             }
-            deploy_oper(deploy_plan.role, deploy_plan.oper_name, deploy_plan.placed, deploy_plan.direction);
+            if (!deploy_oper(deploy_plan.role, deploy_plan.oper_name, deploy_plan.placed, deploy_plan.direction)) {
+                Log.warn("Failed to send planned deployment gesture", deploy_plan.oper_name, deploy_plan.placed);
+                return true;
+            }
+
+            // BattleHelper 会在发出拖拽后先乐观登记场上状态。失败的拖拽仍会让卡片
+            // 保持选中并暂时不可用，因此必须先取消选中，再重新观察部署栏。
+            const bool selection_cleared = asst::BattleHelper::cancel_oper_selection();
+            const bool deployment_observed = update_deployment(false);
+            const auto visible_oper = std::ranges::find_if(m_cur_deployment_opers, [&](const auto& oper) {
+                return oper.role == deploy_plan.role && oper.name == deploy_plan.oper_name;
+            });
+            const bool card_visible = visible_oper != m_cur_deployment_opers.end();
+            const bool card_cooling = card_visible && visible_oper->cooling;
+            const bool card_available = card_visible && visible_oper->available;
+            if (!deployment_observed ||
+                !blackflow::deployment_attempt_confirmed(
+                    selection_cleared,
+                    card_visible,
+                    card_cooling,
+                    card_available)) {
+                const battle::OperNameTag failed_tag { deploy_plan.role, deploy_plan.oper_name };
+                m_used_tiles.erase(deploy_plan.placed);
+                m_battlefield_opers.erase(failed_tag);
+                m_last_use_skill_time.erase(failed_tag);
+                Log.warn(
+                    "Planned deployment was not confirmed; retrying",
+                    deploy_plan.oper_name,
+                    deploy_plan.placed,
+                    "observation",
+                    deployment_observed,
+                    "selection cleared",
+                    selection_cleared,
+                    "card visible/cooling/available",
+                    card_visible,
+                    card_cooling,
+                    card_available);
+                return true;
+            }
             battle::OperNameTag oper_tag { deploy_plan.role, deploy_plan.oper_name };
-            // 防止滑动丢失(有些物体比如鸟笼没有方向),点一下右下角费用那里
-            asst::BattleHelper::cancel_oper_selection();
             // 开始计时
             auto deployed_time = std::chrono::steady_clock::now();
             m_deployed_time.insert_or_assign(oper_tag, deployed_time);
@@ -470,8 +807,22 @@ bool asst::RoguelikeBattleTaskPlugin::do_once(const cv::Mat& image, const cv::Ma
 
     prev_frame_time = std::chrono::steady_clock::now();
 
-    if (!m_first_deploy) {
+    const bool waiting_for_virtual_auto_skill = m_deploy_after_virtual_auto_skill.has_value() &&
+                                                !virtual_auto_skill_activated(*m_deploy_after_virtual_auto_skill);
+    if (!m_first_deploy || !m_virtual_auto_skill_opers.empty()) {
         use_all_ready_skill(image);
+    }
+
+    if (m_deploy_after_virtual_auto_skill.has_value() &&
+        blackflow::virtual_auto_skill_transition_requires_refresh(
+            waiting_for_virtual_auto_skill,
+            virtual_auto_skill_activated(*m_deploy_after_virtual_auto_skill))) {
+        Log.info(
+            "Virtual auto-skill changed deployment resources; refreshing before deployment",
+            m_stage_name,
+            *m_deploy_after_virtual_auto_skill);
+        m_first_deploy = false;
+        return true;
     }
 
     std::unordered_set<std::string> pre_cooling;
@@ -501,7 +852,20 @@ bool asst::RoguelikeBattleTaskPlugin::do_once(const cv::Mat& image, const cv::Ma
         return false;
     }
     update_cost(image, image_prev);
-    update_kills(image, image_prev);
+    if (update_kills(image, image_prev)) {
+        m_total_kills_aggregator.observe(m_total_kills);
+    }
+    stop_planned_skills();
+
+    if (m_deploy_after_virtual_auto_skill.has_value() &&
+        !virtual_auto_skill_activated(*m_deploy_after_virtual_auto_skill)) {
+        Log.trace(
+            "Waiting for virtual auto-skill before deployment",
+            m_stage_name,
+            *m_deploy_after_virtual_auto_skill);
+        m_first_deploy = false;
+        return true;
+    }
 
     std::unordered_set<std::string> cur_cooling;
     size_t cur_available_count = 0;   // without drones
@@ -522,6 +886,12 @@ bool asst::RoguelikeBattleTaskPlugin::do_once(const cv::Mat& image, const cv::Ma
     }
 
     if (do_best_deploy()) { // 这是新的部署逻辑，更加精确
+        m_first_deploy = false;
+        return true;
+    }
+
+    if (m_deploy_plan_only) {
+        // Exact stage plans, including an empty plan, must not spill over into the generic auto-deploy strategy.
         m_first_deploy = false;
         return true;
     }
@@ -818,7 +1188,10 @@ std::optional<asst::battle::DeploymentOper> asst::RoguelikeBattleTaskPlugin::cal
 void asst::RoguelikeBattleTaskPlugin::all_melee_retreat()
 {
     std::vector<Point> retreat_locs {};
-    for (const auto& loc : m_used_tiles | std::views::keys) {
+    for (const auto& [loc, oper_tag] : m_used_tiles) {
+        if (m_virtual_auto_skill_opers.contains(oper_tag)) {
+            continue;
+        }
         auto& tile_info = m_normal_tile_info[loc];
         auto& type = tile_info.buildable;
         if (type == battle::LocationType::Melee || type == battle::LocationType::All) {
@@ -833,6 +1206,7 @@ void asst::RoguelikeBattleTaskPlugin::all_melee_retreat()
 void asst::RoguelikeBattleTaskPlugin::clear()
 {
     BattleHelper::clear();
+    m_total_kills_aggregator.clear();
     m_stage_name.clear();
 
     m_homes.clear();
@@ -850,8 +1224,14 @@ void asst::RoguelikeBattleTaskPlugin::clear()
     m_medic_for_home_index.clear();
     m_urgent_home_index = decltype(m_urgent_home_index)();
     m_need_clear_tiles = decltype(m_need_clear_tiles)();
+    m_preparation_deploy_plan.clear();
+    m_battle_camera_shift = { 0., 0. };
+    m_deploy_plan_only = false;
+    m_virtual_auto_skill_devices.clear();
+    m_deploy_after_virtual_auto_skill.reset();
     m_deploy_plan.clear();
     m_retreat_plan.clear();
+    m_skill_stop_plan.clear();
     m_deployed_time.clear();
 
     m_oper_elite.clear();

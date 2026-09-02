@@ -11,6 +11,45 @@
 
 namespace asst::blackflow
 {
+NodeType move_landing_type(const MoveCandidate& candidate, NodeId landing) noexcept
+{
+    const auto found = candidate.landing_node_types.find(landing);
+    return found == candidate.landing_node_types.end() ? NodeType::Unknown : found->second;
+}
+
+bool move_landing_is_terminal(const MoveCandidate& candidate, NodeId landing) noexcept
+{
+    return is_exit_node_type(move_landing_type(candidate, landing));
+}
+
+bool move_preview_updates_target_identity(const MoveCandidate& candidate) noexcept
+{
+    // 定向移动的预览标题描述的是玩家点选的目标；小八界的点选节点只负责激活随机移动，
+    // 既不是承诺落点，也不能因为标题揭示了它就取消本次随机移动并重规划。
+    return candidate.controllable;
+}
+
+bool is_generic_battle_name(NodeType type, std::string_view name) noexcept
+{
+    if (type == NodeType::BattleNormal || type == NodeType::BattleElite) {
+        return name.empty() || name == "作战" || name == "紧急作战";
+    }
+    if (type == NodeType::BattleBoss) {
+        return name.empty() || name == "险路恶敌";
+    }
+    return false;
+}
+
+std::string_view battle_stage_name(const Node& node) noexcept
+{
+    if ((node.type != NodeType::BattleNormal && node.type != NodeType::BattleElite &&
+         node.type != NodeType::BattleBoss) ||
+        is_generic_battle_name(node.type, node.name)) {
+        return {};
+    }
+    return node.name;
+}
+
 namespace
 {
 const std::vector<NodeType> AllTargetTypes = {
@@ -22,15 +61,34 @@ const std::vector<NodeType> AllTargetTypes = {
 };
 
 const std::vector<NodeType> NonCombatTargetTypes = {
-    NodeType::Door,  NodeType::Employ, NodeType::Expedition, NodeType::HideInvisible, NodeType::Incident,
-    NodeType::Light, NodeType::Portal, NodeType::Rest,       NodeType::Sacrifice,     NodeType::ScrapShop,
-    NodeType::Shop,  NodeType::Wish,   NodeType::Empty,      NodeType::Evacuate,      NodeType::Final,
+    NodeType::Duel,  NodeType::Door,   NodeType::Employ,     NodeType::Expedition, NodeType::HideInvisible,
+    NodeType::Incident, NodeType::Light, NodeType::Portal,   NodeType::Rest,       NodeType::Sacrifice,
+    NodeType::ScrapShop, NodeType::Shop, NodeType::Wish,     NodeType::Empty,      NodeType::Evacuate,
+    NodeType::Final,
 };
 
 const std::vector<NodeType> ShopTargetTypes = {
     NodeType::ScrapShop,
     NodeType::Shop,
 };
+
+std::string normalize_preview_identity_name(std::string_view name)
+{
+    std::string normalized(name);
+    std::erase(normalized, '"');
+    for (const std::string_view quote : { std::string_view("“"), std::string_view("”") }) {
+        for (std::size_t position = normalized.find(quote); position != std::string::npos;
+             position = normalized.find(quote, position)) {
+            normalized.erase(position, quote.size());
+        }
+    }
+    return normalized;
+}
+
+bool preview_identity_names_equal(std::string_view map_name, std::string_view preview_name)
+{
+    return normalize_preview_identity_name(map_name) == normalize_preview_identity_name(preview_name);
+}
 
 bool same_edge(const Edge& lhs, const Edge& rhs) noexcept
 {
@@ -74,7 +132,7 @@ NodeType effective_node_type(const Node& node, const RunState& state) noexcept
 bool is_targetable(const Node& node, const RunState& state) noexcept
 {
     const NodeProgress progress = effective_progress(node, state);
-    if (!node.traversal.enterable || progress == NodeProgress::Removed || node.type == NodeType::Empty) {
+    if (!node.traversal.enterable || progress == NodeProgress::Removed) {
         return false;
     }
     return progress != NodeProgress::Completed || node.traversal.repeatable;
@@ -134,6 +192,12 @@ bool MapSnapshot::upsert_node(Node node)
     const auto expected = make_stable_node_id(node.floor, node.position);
     if (!expected.has_value() || *expected != node.id) {
         return false;
+    }
+    // 林间空地在游戏地图上不绘制标题，但节点身份本身仍有正式名称。
+    // 统一在模型边界补全，避免地图 OCR 的“无文字”与移动预览的“林间空地”
+    // 被误判成两种身份并触发无休止的取消预览/重规划。
+    if (node.type == NodeType::Empty) {
+        node.name = EmptyNodeName;
     }
     const auto existing = m_nodes.find(node.id);
     if (existing != m_nodes.end() && existing->second == node) {
@@ -245,6 +309,11 @@ std::unordered_set<NodeId> MapSnapshot::reveal_through_transparent_nodes(NodeId 
             if (node == nullptr || node->progress == NodeProgress::Removed) {
                 continue;
             }
+            // 弥散虚雾只阻止理想域内未揭示节点作为连线视野收益。直接进入的 origin
+            // 已在队列中，会正常揭示本身；之前已经揭示的透明域内节点仍可传递视野。
+            if (node->natural_reveal_suppressed && !node->identity_revealed) {
+                continue;
+            }
             const bool inserted = revealed.emplace(neighbor).second;
             if (inserted && !node->traversal.blocks_vision) {
                 pending.emplace(neighbor);
@@ -334,7 +403,66 @@ bool MapSnapshot::validate(std::string* error) const
     return true;
 }
 
+std::optional<LinkedEncounterReturnResolution> resolve_linked_encounter_return(
+    const MapSnapshot& before,
+    const MapSnapshot& after,
+    NodeId known_event_node,
+    NodeId current_node,
+    NodeType linked_type,
+    const std::vector<NodeId>& target_hypotheses) noexcept
+{
+    if (current_node == InvalidNodeId || linked_type == NodeType::Unknown ||
+        std::ranges::find(target_hypotheses, current_node) == target_hypotheses.end() ||
+        after.find_node(current_node) == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto became_empty = [&](NodeId id) {
+        const Node* previous = before.find_node(id);
+        const Node* current = after.find_node(id);
+        return id != current_node && previous != nullptr && current != nullptr &&
+               previous->type != NodeType::Empty && previous->progress == NodeProgress::Active &&
+               current->type == NodeType::Empty;
+    };
+
+    NodeId event_node = known_event_node;
+    if (event_node != InvalidNodeId) {
+        // 可控移动在进页前已经由事务锁定原事件格；回图 OCR 是否及时把它画成空地
+        // 不影响身份归属，页面完成阶段会负责把当前地图语义补成空地。
+        if (event_node == current_node || before.find_node(event_node) == nullptr) {
+            return std::nullopt;
+        }
+    }
+    else {
+        for (const auto& [id, node] : before.nodes()) {
+            (void)node;
+            if (!became_empty(id)) {
+                continue;
+            }
+            if (event_node != InvalidNodeId) {
+                // 小八界没有传送前落点；多于一个节点同时变为空地时不能猜。
+                return std::nullopt;
+            }
+            event_node = id;
+        }
+        if (event_node == InvalidNodeId) {
+            return std::nullopt;
+        }
+    }
+
+    return LinkedEncounterReturnResolution {
+        .event_node = event_node,
+        .linked_node = current_node,
+        .linked_type = linked_type,
+    };
+}
+
 bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
+{
+    return merge(batch, MapMergePurpose::CurrentObservation, error);
+}
+
+bool NormalizedMap::merge(const MapObservationBatch& batch, MapMergePurpose purpose, std::string* error)
 {
     if (batch.floor < 1) {
         if (error != nullptr) {
@@ -361,6 +489,46 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
         const Node* current = working.m_snapshot.find_node(*id);
         const bool preserve_door_identity = current != nullptr && current->type == NodeType::Door &&
                                             observed.type.has_value() && *observed.type != NodeType::Door;
+        const bool topology_empty_fallback =
+            observed.identity_source.has_value() && *observed.identity_source == "map_topology_no_ocr_empty";
+        const bool preserve_reliable_identity =
+            purpose == MapMergePurpose::ExplorationNotebook && current != nullptr &&
+            current->type != NodeType::Unknown && current->type != NodeType::Empty && observed.type.has_value() &&
+            (*observed.type == NodeType::Unknown || *observed.type == NodeType::Empty ||
+             (topology_empty_fallback && current->type != NodeType::Empty));
+        // 战斗情报探查或战斗插件得到的是具体关卡名；后续地图 OCR/模板只能再次看到泛型
+        // “作战/紧急作战/险路恶敌”。探索笔记不得让同类型的弱观测降级覆盖具体关卡名。
+        const bool preserve_battle_stage_name =
+            purpose == MapMergePurpose::ExplorationNotebook && current != nullptr &&
+            !battle_stage_name(*current).empty() && observed.type.has_value() && *observed.type == current->type &&
+            (!observed.name.has_value() || is_generic_battle_name(*observed.type, *observed.name));
+        // 当前地图的一帧节点文字 OCR 偶发漏检时，拓扑兜底只能证明“这里有一个节点”，
+        // 不能把此前由现场 OCR 已确认、仍处于 Active 的非空节点抹成林间空地。节点完成后
+        // progress 会先由事件流改为 Completed，此时再接受现场空地观测。
+        const bool current_has_active_observed_identity =
+            purpose == MapMergePurpose::CurrentObservation && current != nullptr &&
+            current->progress == NodeProgress::Active && current->type != NodeType::Unknown &&
+            current->type != NodeType::Empty && current->identity_revealed && topology_empty_fallback &&
+            (current->identity_source == "ocr" || current->identity_source == "move_preview_ocr" ||
+             current->identity_source == "event_name" || current->identity_source == "entered_page");
+        // 模板固定身份描述的是未完成时的原始地图。非重复节点结算成林间空地后，
+        // 后续观测若仍因模板把它标回作战/商店，当前观测地图必须保留结算后的空地语义。
+        const bool preserve_completed_empty =
+            purpose == MapMergePurpose::CurrentObservation && current != nullptr &&
+            current->type == NodeType::Empty && current->progress == NodeProgress::Completed &&
+            current->identity_source == "node_resolution_becomes_empty" && observed.identity_source.has_value() &&
+            (*observed.identity_source == "map_template_fixed_identity" ||
+             *observed.identity_source == "ideal_source_emergency_prediction" ||
+             *observed.identity_source == "initial_roaming_resident_prediction");
+        // 移动预览 OCR 已经看到了节点的实际标题。关闭预览后的下一次地图重建仍会再次套用模板初始身份，
+        // 这里必须保留预览纠正，直到地图 OCR 或节点结算给出更新的现场事实。
+        const bool preserve_preview_identity =
+            purpose == MapMergePurpose::CurrentObservation && current != nullptr &&
+            current->identity_source == "move_preview_ocr" && observed.identity_source.has_value() &&
+            *observed.identity_source == "map_template_fixed_identity";
+        const bool preserve_identity =
+            preserve_door_identity || preserve_reliable_identity || current_has_active_observed_identity ||
+            preserve_completed_empty || preserve_preview_identity || preserve_battle_stage_name;
         Node node = current == nullptr ? Node {} : *current;
         if (current == nullptr) {
             node.id = *id;
@@ -368,7 +536,7 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
             node.position = observed.position;
             node.traversal = default_traversal_for(NodeType::Unknown);
         }
-        if (observed.type.has_value() && !preserve_door_identity) {
+        if (observed.type.has_value() && !preserve_identity) {
             const bool newly_classified = node.type == NodeType::Unknown && *observed.type != NodeType::Unknown;
             node.type = *observed.type;
             if (!observed.traversal.has_value() &&
@@ -376,31 +544,65 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
                 node.traversal = default_traversal_for(node.type);
             }
         }
-        if (observed.name.has_value() && !preserve_door_identity) {
+        if (observed.name.has_value() && !preserve_identity) {
             node.name = *observed.name;
+        }
+        if (observed.fate_event.has_value() && !preserve_identity) {
+            node.fate_event = *observed.fate_event;
         }
         if (observed.progress.has_value()) {
             node.progress = *observed.progress;
         }
-        if (observed.traversal.has_value() && !preserve_door_identity) {
+        if (observed.traversal.has_value() && !preserve_identity) {
             node.traversal = *observed.traversal;
         }
-        if (observed.identity_state.has_value() && !preserve_door_identity) {
+        if (observed.identity_state.has_value() && !preserve_identity) {
             node.identity_state = *observed.identity_state;
         }
-        if (observed.identity_revealed.has_value() && !preserve_door_identity) {
+        if (observed.identity_revealed.has_value() && !preserve_identity) {
             node.identity_revealed = *observed.identity_revealed;
         }
-        if (observed.marker_type.has_value()) {
+        if (observed.visually_hidden.has_value() && !preserve_identity) {
+            node.visually_hidden = *observed.visually_hidden;
+        }
+        if (observed.identity_from_topology.has_value() && !preserve_identity) {
+            node.identity_from_topology = *observed.identity_from_topology;
+        }
+        if (observed.identity_from_prediction.has_value() && !preserve_identity) {
+            node.identity_from_prediction = *observed.identity_from_prediction;
+        }
+        if (observed.prediction_rule.has_value() && !preserve_identity) {
+            node.prediction_rule = *observed.prediction_rule;
+        }
+        if (observed.natural_reveal_suppressed.has_value()) {
+            node.natural_reveal_suppressed = *observed.natural_reveal_suppressed;
+        }
+        if (observed.existence_source.has_value()) {
+            node.existence_source = *observed.existence_source;
+        }
+        if (observed.identity_source.has_value() && !preserve_identity) {
+            node.identity_source = *observed.identity_source;
+        }
+        if (observed.detected_by_vision.has_value()) {
+            node.detected_by_vision = *observed.detected_by_vision;
+        }
+        if (observed.confirmed_by_topology.has_value()) {
+            node.confirmed_by_topology = *observed.confirmed_by_topology;
+        }
+        if (purpose == MapMergePurpose::CurrentObservation && observed.marker_type.has_value()) {
             node.marker_type = *observed.marker_type;
         }
-        if (observed.marker_display_name.has_value()) {
+        if (purpose == MapMergePurpose::CurrentObservation && observed.marker_display_name.has_value()) {
             node.marker_display_name = *observed.marker_display_name;
         }
-        if (observed.marker_score.has_value()) {
+        if (purpose == MapMergePurpose::CurrentObservation && observed.marker_score.has_value()) {
             node.marker_score = *observed.marker_score;
         }
-        if (observed.badged.has_value() && !preserve_door_identity) {
+        if (purpose == MapMergePurpose::CurrentObservation &&
+            observed.marker_resident_overlap_possible.has_value()) {
+            node.marker_resident_overlap_possible = *observed.marker_resident_overlap_possible;
+        }
+        if (observed.badged.has_value() && !preserve_identity) {
             node.badged = *observed.badged;
         }
         if (observed.transfer_target.has_value() && observed.transfer_target->has_value()) {
@@ -449,16 +651,33 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
         if (current == nullptr || current->type == NodeType::Door) {
             continue;
         }
+        // 探索笔记记录“这个位置曾经是什么”。完整地图里未再出现的已知节点通常只是
+        // 结算后变成空地，不能据此抹掉已经记录的事件/关卡身份。
+        if (purpose == MapMergePurpose::ExplorationNotebook && current->type != NodeType::Unknown &&
+            current->type != NodeType::Empty) {
+            continue;
+        }
         Node empty = *current;
         empty.type = NodeType::Empty;
-        empty.name.clear();
+        empty.name = EmptyNodeName;
         empty.progress = NodeProgress::Active;
         empty.traversal = default_traversal_for(NodeType::Empty);
         empty.identity_state = NodeIdentityState::Classified;
         empty.identity_revealed = true;
+        empty.fate_event = false;
+        empty.visually_hidden = false;
+        empty.identity_from_topology = false;
+        empty.identity_from_prediction = false;
+        empty.prediction_rule.clear();
+        empty.natural_reveal_suppressed = false;
+        empty.existence_source = "covered_position_without_observed_node";
+        empty.identity_source = "covered_position_without_observed_node";
+        empty.detected_by_vision = false;
+        empty.confirmed_by_topology = false;
         empty.marker_type.clear();
         empty.marker_display_name.clear();
         empty.marker_score = 0.0;
+        empty.marker_resident_overlap_possible = false;
         empty.badged = false;
 
         working.m_snapshot.upsert_node(std::move(empty));
@@ -517,8 +736,10 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, std::string* error)
         const bool edge_covered = batch.coverage == ObservationCoverage::FullMap ||
                                   (first != nullptr && second != nullptr && covered.contains(first->position) &&
                                    covered.contains(second->position));
+        const bool persistent_observed_extra =
+            edge.knowledge == EdgeKnowledge::Confirmed && edge.evidence.decision_source == "observed_extra_edge";
         if (edge_covered && edge.knowledge != EdgeKnowledge::Absent &&
-            !edge.evidence.forced_by_connectivity_constraint) {
+            !edge.evidence.forced_by_connectivity_constraint && !persistent_observed_extra) {
             Edge absent = edge;
             absent.knowledge = EdgeKnowledge::Absent;
             missing_edges.emplace_back(std::move(absent));
@@ -577,11 +798,23 @@ std::optional<Rect> ViewportObservation::clickable_rect(
     return observation == nullptr ? std::nullopt : std::optional<Rect>(observation->icon_rect);
 }
 
+bool ViewportObservation::rebind_map_revision_after_semantic_update(
+    std::uint64_t expected_previous_revision,
+    std::uint64_t updated_revision) noexcept
+{
+    if (m_map_revision != expected_previous_revision || updated_revision < expected_previous_revision) {
+        return false;
+    }
+    m_map_revision = updated_revision;
+    return true;
+}
+
 NodeTraversal default_traversal_for(NodeType type) noexcept
 {
     switch (type) {
     case NodeType::Empty:
-        return { false, false, false, false };
+        // 林间空地可以成为一次移动的落点，也可以重复进入；它仍然对徒步路径透明且不触发页面。
+        return { false, false, true, true };
     case NodeType::Door:
         return { false, false, true, true };
     case NodeType::Shop:
@@ -592,15 +825,109 @@ NodeTraversal default_traversal_for(NodeType type) noexcept
     }
 }
 
+bool completed_node_becomes_empty(bool repeatable, std::optional<bool> explicit_becomes_empty) noexcept
+{
+    return explicit_becomes_empty.value_or(!repeatable);
+}
+
+bool should_apply_revealed_preview_identity(const Node& current, const MovePreview& preview) noexcept
+{
+    return preview.identity_revealed && preview.displayed_type != NodeType::Unknown &&
+           (!current.identity_revealed || current.type != preview.displayed_type ||
+            !preview_identity_names_equal(current.name, preview.displayed_name));
+}
+
+bool preview_confirms_roaming_resident(const Node& current, const MovePreview& preview) noexcept
+{
+    if (!current.identity_revealed || is_route_battle_node_type(current.type) ||
+        preview.displayed_type != NodeType::BattleNormal || !preview.identity_revealed) {
+        return false;
+    }
+    // 只信任已经由现场文字/页面确认的节点身份。模板或规则身份与预览冲突时仍应走
+    // 原来的身份纠正流程，不能一概解释成流窜“居民”。
+    const bool reliable_non_battle_identity =
+        current.identity_source == "ocr" || current.identity_source == "move_preview_ocr" ||
+        current.identity_source == "event_name" || current.identity_source == "entered_page";
+    return reliable_non_battle_identity;
+}
+
 bool is_transfer_node(NodeType type) noexcept
 {
     return type == NodeType::Door;
 }
 
+PageContentEffect classify_page_content_effect(std::string_view source, std::string_view content) noexcept
+{
+    if (source != "RoguelikeEvent") {
+        return {};
+    }
+
+    static constexpr std::array<std::string_view, 28> IncidentEvents = {
+        "桑尼的邀请",
+        "色味不同源",
+        "货从口出",
+        "沉重的契约",
+        "敲动杠杆",
+        "血衣之下",
+        "擒与缚",
+        "沉寂之屋",
+        "黑诞",
+        "呼吸的红苔",
+        "被歌颂的影子",
+        "愈创之心",
+        "思乡心切",
+        "划算买卖",
+        "鸭托邦",
+        "传奇团伙",
+        "湖中仙女",
+        "洞中宝",
+        "临时中介所",
+        "和平守卫者",
+        "和平守卫者-2",
+        "独活",
+        "独活-2",
+        "线人",
+        "泪之聚落",
+        "好奇心之死",
+        "窥视箱中",
+        "调谐仪式",
+    };
+    if (std::ranges::find(IncidentEvents, content) != IncidentEvents.end()) {
+        return { NodeType::Incident, false, true };
+    }
+    if (content == "未涉足之树") {
+        return { NodeType::Expedition, false, true };
+    }
+    if (content == "回滚文明") {
+        return { NodeType::Sacrifice, false, true };
+    }
+    if (content == "无人商店" || content == "无人商店-2") {
+        return { NodeType::Wish, false, true };
+    }
+    if (content == "溯源") {
+        return { NodeType::Portal, false, true };
+    }
+    if (content == "原始娱乐" || content == "掠夺成性") {
+        return { NodeType::Duel, false, true };
+    }
+    if (content == "金色凝滞") {
+        return { NodeType::Rest, false, true };
+    }
+    if (content == "三重身") {
+        return { NodeType::Evacuate, true, true };
+    }
+    if (content == "险路尽头") {
+        return { NodeType::Final, false, true };
+    }
+    if (content == "安眠一隅") {
+        return { std::nullopt, true, false };
+    }
+    return {};
+}
+
 bool is_combat_node_type(NodeType type) noexcept
 {
-    return type == NodeType::BattleNormal || type == NodeType::BattleElite || type == NodeType::BattleSavage ||
-           type == NodeType::Duel || type == NodeType::HideBattle || type == NodeType::BattleBoss;
+    return is_route_battle_node_type(type);
 }
 
 // 能离开当前区域进入下一层的三种节点。险路小径通常亏损，一般不走，
@@ -848,14 +1175,16 @@ bool is_in_geometric_range(
     const MovementSpec& movement,
     GraphLayer layer)
 {
-    if (source == target) {
-        return false;
-    }
     const Node* source_node = map.find_node(source);
     const Node* target_node = map.find_node(target);
     if (source_node == nullptr || target_node == nullptr || target_node->progress == NodeProgress::Removed ||
         source_node->floor != target_node->floor) {
         return false;
+    }
+    // 地图重建后，只要当前位置仍显示为非空节点，它也是合法的下一次选择目标。
+    // 徒步的原地动作由动作枚举器单独生成；所有加工品都把原地视为几何范围内。
+    if (source == target) {
+        return movement.kind != MovementKind::Walk && target_node->type != NodeType::Empty;
     }
     const int row_delta = std::abs(target_node->position.row - source_node->position.row);
     const int column_delta = std::abs(target_node->position.column - source_node->position.column);
@@ -884,8 +1213,7 @@ std::vector<NodeId>
     const RunState empty_state;
     std::vector<NodeId> result;
     for (const auto& [id, node] : map.nodes()) {
-        if (id != source && is_targetable(node, empty_state) &&
-            is_in_geometric_range(map, source, id, movement, layer)) {
+        if (is_targetable(node, empty_state) && is_in_geometric_range(map, source, id, movement, layer)) {
             result.emplace_back(id);
         }
     }
@@ -924,6 +1252,40 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         std::deque<WalkFrontier> queue;
         std::unordered_map<NodeId, std::size_t> walk_action_indices;
         std::unordered_set<NodeId> expanded;
+        const Node* source_node = map.find_node(state.current_node);
+        // 非空可重复节点允许原地再次进入；是否值得这么做由路线排序决定，不能在动作
+        // 枚举层把游戏中的合法动作删掉。
+        if (source_node != nullptr && source_node->type != NodeType::Empty &&
+            is_targetable(*source_node, state) && node_type_allowed(*walk, source_node->type)) {
+            MoveAction action;
+            action.candidate.action_id =
+                "walk:" + std::to_string(state.current_node) + ":" + std::to_string(state.current_node);
+            action.candidate.movement = MovementKind::Walk;
+            action.candidate.source = state.current_node;
+            action.candidate.target = state.current_node;
+            action.candidate.landing = resolve_landing(map, state.current_node);
+            action.candidate.graph_layer = layer;
+            if (action.candidate.landing != InvalidNodeId) {
+                // 路径保留一个当前位置元素，使原地选择仍按一次徒步计费，并在诊断中可见。
+                action.candidate.path = { state.current_node };
+                if (source_node->identity_state == NodeIdentityState::Unclassified) {
+                    action.candidate.first_unclassified = state.current_node;
+                }
+                action.candidate.predicted_action_point_cost = state.costs.action_cost(
+                    action.candidate.action_id,
+                    state.costs.movement_cost(*walk, action.candidate.path.size()));
+                action.candidate.predicted_action_point_gain = predicted_node_gain(*source_node, state);
+                action.candidate.possible_landings.emplace_back(action.candidate.landing);
+                action.candidate.landing_node_types.emplace(action.candidate.landing, source_node->type);
+                action.candidate.landing_action_point_gains.emplace(
+                    action.candidate.landing,
+                    action.candidate.predicted_action_point_gain);
+                action.candidate.terminal_on_completion = is_exit_node_type(source_node->type);
+                action.possible_landings.emplace_back(action.candidate.landing);
+                walk_action_indices.emplace(state.current_node, result.size());
+                result.emplace_back(std::move(action));
+            }
+        }
         queue.push_back({ state.current_node, {} });
         expanded.emplace(state.current_node);
         while (!queue.empty()) {
@@ -974,6 +1336,7 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
                             state.costs.movement_cost(*walk, path.size()));
                         action.candidate.predicted_action_point_gain = predicted_node_gain(*node, state);
                         action.candidate.possible_landings.emplace_back(action.candidate.landing);
+                        action.candidate.landing_node_types.emplace(action.candidate.landing, node->type);
                         action.candidate.landing_action_point_gains.emplace(
                             action.candidate.landing,
                             action.candidate.predicted_action_point_gain);
@@ -1007,16 +1370,29 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         }
 
         std::vector<NodeId> targets;
+        std::vector<NodeId> hidden_noncombat_targets;
         for (const auto& [id, node] : map.nodes()) {
-            const NodeType target_type = effective_node_type(node, state);
-            const bool targetable = target_type == NodeType::Empty
+            const NodeType semantic_type = effective_node_type(node, state);
+            const NodeType visible_type = movement_visible_node_type(semantic_type, node.visually_hidden);
+            const bool targetable = semantic_type == NodeType::Empty
                                         ? effective_progress(node, state) != NodeProgress::Removed
                                         : is_targetable(node, state);
-            if (id == state.current_node || !targetable || !node_type_allowed(movement, target_type) ||
+            if (!targetable || !node_type_allowed(movement, visible_type) ||
+                !movement_target_is_currently_selectable(movement.kind, node.visually_hidden) ||
+                (movement.random_target && node_has_explicit_roaming_resident_marker(node)) ||
                 !is_in_geometric_range(map, state.current_node, id, movement, GraphLayer::Confirmed)) {
                 continue;
             }
             targets.emplace_back(id);
+            if (movement.random_target && visible_type == NodeType::HideInvisible) {
+                hidden_noncombat_targets.emplace_back(id);
+            }
+        }
+        // 小八界优先随机到仍显示为“未知的诡秘”的非作战节点；只有不存在这种候选时，
+        // 才退化为全部合法非作战节点。明确带流窜居民标记的节点在建立这两个候选池前
+        // 已经排除，可能重叠但未确认的标记仍须保留。
+        if (movement.random_target && !hidden_noncombat_targets.empty()) {
+            targets = std::move(hidden_noncombat_targets);
         }
         std::ranges::sort(targets);
         if (targets.empty()) {
@@ -1028,6 +1404,9 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
             action.candidate.action_id = std::string(movement.id) + ":random:" + std::to_string(state.current_node);
             action.candidate.movement = movement.kind;
             action.candidate.source = state.current_node;
+            // 随机移动仍要在地图上点击一个受该移动方式高亮的节点来打开预览；这个节点只负责
+            // 触发 UI，实际落点继续由 possible_landings 的完整随机池描述。
+            action.candidate.target = targets.front();
             action.candidate.predicted_action_point_cost =
                 state.costs.action_cost(action.candidate.action_id, state.costs.movement_cost(movement));
             action.candidate.predicted_action_point_gain = movement.effect.action_point_gain;
@@ -1037,6 +1416,9 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
                 const Node* target_node = map.find_node(target);
                 if (landing != InvalidNodeId && target_node != nullptr) {
                     action.possible_landings.emplace_back(landing);
+                    action.candidate.landing_node_types.insert_or_assign(
+                        landing,
+                        effective_node_type(*target_node, state));
                     action.candidate.landing_action_point_gains.insert_or_assign(
                         landing,
                         movement.effect.action_point_gain + predicted_node_gain(*target_node, state));
@@ -1048,6 +1430,9 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
                 action.possible_landings.end());
             if (!action.possible_landings.empty()) {
                 action.candidate.possible_landings = action.possible_landings;
+                action.candidate.terminal_on_completion = std::ranges::all_of(
+                    action.possible_landings,
+                    [&](NodeId landing) { return move_landing_is_terminal(action.candidate, landing); });
                 result.emplace_back(std::move(action));
             }
             continue;
@@ -1075,6 +1460,7 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
             action.candidate.predicted_action_point_gain =
                 movement.effect.action_point_gain + predicted_node_gain(*target_node, state);
             action.candidate.possible_landings.emplace_back(landing);
+            action.candidate.landing_node_types.emplace(landing, effective_node_type(*target_node, state));
             action.candidate.landing_action_point_gains.emplace(landing, action.candidate.predicted_action_point_gain);
             action.candidate.controllable = true;
             action.candidate.terminal_on_completion = is_exit_node_type(target_node->type);
@@ -1083,7 +1469,24 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         }
     }
 
-    struct ConfirmedAdjacentWalk
+    // “险路尽头”同一次地图移动有两种页面结算：进入下一层，或选择第三项路过并
+    // 回到本层。规划器必须看到两个语义不同、成本相同的动作，才能决定页面选项。
+    const std::size_t physical_action_count = result.size();
+    for (std::size_t index = 0; index < physical_action_count; ++index) {
+        const bool can_land_on_final = std::ranges::any_of(
+            result[index].candidate.possible_landings,
+            [&](NodeId landing) { return move_landing_type(result[index].candidate, landing) == NodeType::Final; });
+        if (!can_land_on_final) {
+            continue;
+        }
+        MoveAction bypass = result[index];
+        bypass.candidate.action_id += ":bypass-final";
+        bypass.candidate.terminal_on_completion = false;
+        bypass.candidate.bypass_final_on_completion = true;
+        result.emplace_back(std::move(bypass));
+    }
+
+    struct ConfirmedWalk
     {
         NodeId target = InvalidNodeId;
         NodeId landing = InvalidNodeId;
@@ -1091,7 +1494,7 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         int action_point_gain = 0;
     };
 
-    std::vector<ConfirmedAdjacentWalk> confirmed_adjacent_walks;
+    std::vector<ConfirmedWalk> confirmed_walks;
     for (const MoveAction& action : result) {
         if (action.candidate.movement != MovementKind::Walk || action.candidate.path.size() != 1 ||
             action.candidate.uses_unconfirmed_edge || action.candidate.uses_inferred_edge) {
@@ -1099,16 +1502,21 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         }
         const Node* source = map.find_node(action.candidate.source);
         const Node* target = map.find_node(action.candidate.target);
-        const Edge* edge = map.find_edge(action.candidate.source, action.candidate.target);
-        if (source == nullptr || target == nullptr || edge == nullptr ||
-            !edge_visible_in_layer(*edge, GraphLayer::Confirmed) ||
-            std::abs(source->position.row - target->position.row) +
-                    std::abs(source->position.column - target->position.column) !=
-                1) {
+        if (source == nullptr || target == nullptr) {
             continue;
         }
-        confirmed_adjacent_walks.emplace_back(
-            ConfirmedAdjacentWalk {
+        const bool self_walk = action.candidate.source == action.candidate.target;
+        if (!self_walk) {
+            const Edge* edge = map.find_edge(action.candidate.source, action.candidate.target);
+            if (edge == nullptr || !edge_visible_in_layer(*edge, GraphLayer::Confirmed) ||
+                std::abs(source->position.row - target->position.row) +
+                        std::abs(source->position.column - target->position.column) !=
+                    1) {
+                continue;
+            }
+        }
+        confirmed_walks.emplace_back(
+            ConfirmedWalk {
                 action.candidate.target,
                 action.candidate.landing,
                 action.candidate.predicted_action_point_cost,
@@ -1126,7 +1534,7 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
             movement->effect.ingot_gain != 0) {
             return false;
         }
-        return std::ranges::any_of(confirmed_adjacent_walks, [&](const ConfirmedAdjacentWalk& walk_action) {
+        return std::ranges::any_of(confirmed_walks, [&](const ConfirmedWalk& walk_action) {
             return walk_action.target == action.candidate.target && walk_action.landing == action.candidate.landing &&
                    walk_action.action_point_cost <= action.candidate.predicted_action_point_cost &&
                    walk_action.action_point_gain >= action.candidate.predicted_action_point_gain;
@@ -1147,8 +1555,13 @@ std::optional<MoveTransaction> MoveTransaction::propose(
         }
         return std::nullopt;
     }
-    if (proposal.controllable && (proposal.target == InvalidNodeId || proposal.landing == InvalidNodeId ||
-                                  map.find_node(proposal.target) == nullptr)) {
+    if (proposal.target == InvalidNodeId || map.find_node(proposal.target) == nullptr) {
+        if (error != nullptr) {
+            *error = "move proposal references an invalid preview target node";
+        }
+        return std::nullopt;
+    }
+    if (proposal.controllable && proposal.landing == InvalidNodeId) {
         if (error != nullptr) {
             *error = "controllable move proposal references an invalid target node";
         }
@@ -1160,8 +1573,7 @@ std::optional<MoveTransaction> MoveTransaction::propose(
         }
         return std::nullopt;
     }
-    if (proposal.controllable &&
-        !viewport.clickable_rect(proposal.target, map.revision, viewport.viewport_revision()).has_value()) {
+    if (!viewport.clickable_rect(proposal.target, map.revision, viewport.viewport_revision()).has_value()) {
         if (error != nullptr) {
             *error = "move proposal has no current viewport coordinate";
         }
@@ -1251,12 +1663,47 @@ bool MoveTransaction::observe(MoveObservation observation, std::string* error)
                                      ? observation.current_node == m_proposal.landing
                                      : std::ranges::find(m_proposal.possible_landings, observation.current_node) !=
                                            m_proposal.possible_landings.end();
-    // 走出口之后落点在下一层，本层的 landing 无从比对，只能用楼层推进来确认。
-    const bool advanced_after_terminal = observation.floor == m_source_floor + 1 && is_exit_node_type(m_target_type);
+    const bool linked_origin_matches = observation.linked_encounter_origin_node != InvalidNodeId &&
+                                       observation.linked_encounter_origin_node != observation.current_node &&
+                                       (m_proposal.controllable
+                                            ? observation.linked_encounter_origin_node == m_proposal.landing
+                                            : std::ranges::find(
+                                                  m_proposal.possible_landings,
+                                                  observation.linked_encounter_origin_node) !=
+                                                  m_proposal.possible_landings.end());
+    const bool relocated_by_resolved_linked_encounter = m_stage == MoveTransactionStage::PageResolved &&
+                                                        returned_to_same_floor && linked_origin_matches;
+    // 走出口之后落点在下一层，本层的 landing 无从比对。定向移动可直接使用 target 类型；
+    // 小八界则由已经接管的节点页面把实际落点语义写入 landed_type。
+    const bool observed_terminal = is_exit_node_type(m_target_type) || is_exit_node_type(observation.landed_type);
+    const bool advanced_after_terminal = observation.floor == m_source_floor + 1 && observed_terminal;
+    // 第三层追猎既可能发生在节点页面结算之后，也可能在最后一点行动力耗尽时抢先于落点页面触发。
+    // 胜利时不会再回到第三层地图，所以最后一次非出口移动只能用经生命周期确认的四层首观测来收尾；
+    // 没有显式确认的普通跨层仍按不匹配处理。
+    const bool advanced_after_adapted_pursuit = observation.floor == m_source_floor + 1 &&
+                                                 observation.advanced_via_adapted_pursuit;
+    // 未揭示的诡秘在事务创建时还不是出口类型，但页面结算可能把探索直接送进下一层。
+    // 只有会话同时确认“页面已结算”和“NextLevel 恰好推进一层”才会设置该信号。
+    const bool advanced_after_resolved_page = m_stage == MoveTransactionStage::PageResolved &&
+                                              observation.floor == m_source_floor + 1 &&
+                                              observation.advanced_via_resolved_page;
+    // “追忆”会让四层终点进入另一张四层地图。楼层不变且新图入口不可能等于旧图终点，
+    // 因而只能由会话根据刚完成的 NextLevel 生命周期显式授权。
+    const bool renewed_same_floor_after_terminal = m_stage == MoveTransactionStage::PageResolved &&
+                                                   observation.floor == m_source_floor &&
+                                                   observed_terminal &&
+                                                   observation.renewed_same_floor_after_terminal;
     const bool stage_accepts_observation =
         m_stage == MoveTransactionStage::Committed || m_stage == MoveTransactionStage::PageResolved;
     if (!stage_accepts_observation || observation.viewport_revision <= m_viewport_revision ||
-        !((returned_to_same_floor && landing_matches) || advanced_after_terminal)) {
+        !((returned_to_same_floor && landing_matches) || advanced_after_terminal ||
+          advanced_after_adapted_pursuit || advanced_after_resolved_page || renewed_same_floor_after_terminal)) {
+        if (relocated_by_resolved_linked_encounter && stage_accepts_observation &&
+            observation.viewport_revision > m_viewport_revision) {
+            m_observation = std::move(observation);
+            m_stage = MoveTransactionStage::Observed;
+            return true;
+        }
         if (error != nullptr) {
             *error = "next map observation does not match the committed move";
         }
@@ -1298,7 +1745,16 @@ bool MoveTransaction::apply(RunState& state, std::string* error)
         }
         return false;
     }
-    if (!m_proposal.controllable && !m_proposal.landing_action_point_gains.contains(m_observation->current_node)) {
+    // 不可控移动留在本层时，当前节点必须仍属于规划时枚举出的随机落点；但如果节点页面已经
+    // 通过受信任的生命周期推进到下一层，观测到的是新层起点，不可能出现在上一层的落点表中。
+    // MoveTransaction::observe 已经校验过这类跨层必须带有终点/页面结算/适配追猎信号。
+    const bool observes_same_map_landing = m_observation->floor == m_source_floor &&
+                                            !m_observation->renewed_same_floor_after_terminal;
+    const NodeId movement_landing = m_observation->linked_encounter_origin_node == InvalidNodeId
+                                        ? m_observation->current_node
+                                        : m_observation->linked_encounter_origin_node;
+    if (!m_proposal.controllable && observes_same_map_landing &&
+        !m_proposal.landing_action_point_gains.contains(movement_landing)) {
         if (error != nullptr) {
             *error = "uncontrollable move observation has no matching action-point outcome";
         }
@@ -1319,13 +1775,8 @@ bool MoveTransaction::apply(RunState& state, std::string* error)
             }
             return false;
         }
-        --charge->second;
-        if (charge->second == 0) {
-            state.resources.movement_charges.erase(charge);
-            if (state.active_movement == m_proposal.movement) {
-                state.active_movement.reset();
-            }
-        }
+        // 剩余次数由下一次零件箱星星观测重建。这里不猜测具体消耗了哪一件同类实例，
+        // 也不再用事务结算修改库存事实；规划器自己的搜索状态仍会逐步扣除聚合次数。
     }
     state.resources.action_points = m_observation->action_points;
     state.resources.hope += movement->effect.hope_gain;
@@ -1334,7 +1785,8 @@ bool MoveTransaction::apply(RunState& state, std::string* error)
     state.current_node = m_observation->current_node;
 
     const bool processing_move = m_proposal.movement != MovementKind::Walk;
-    if (processing_move && is_combat_node_type(m_observation->landed_type) && state.resources.white_model_birds > 0) {
+    if (processing_move && is_route_battle_node_type(m_observation->landed_type) &&
+        state.resources.white_model_birds > 0) {
         --state.resources.white_model_birds;
     }
     if (state.resources != resources_before) {
@@ -1415,4 +1867,3 @@ std::string_view to_string(MovementKind kind) noexcept
     return spec == nullptr ? std::string_view("unknown") : spec->id;
 }
 } // namespace asst::blackflow
-

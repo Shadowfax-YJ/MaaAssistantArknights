@@ -222,6 +222,8 @@
     <system:String x:Key="RoguelikeStrategyBlackFlowExp">レベル稼ぎ、素早く第3層へ</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowInvestment">源石錠稼ぎ、投資完了後に自動退出</system:String>
     <system:String x:Key="RoguelikeStrategyBlackFlowBabyAnimal">襁褓動物を育成</system:String>
+    <system:String x:Key="RoguelikeStrategyBlackFlowAutomationCollection">プレイデータ自動収集</system:String>
+    <system:String x:Key="RoguelikeAutomationCollectionStartingOperators">機械師 + 凯尔希·思衡托</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTarget">育成する襁褓動物</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetCat">襁褓の猫</system:String>
     <system:String x:Key="RoguelikeBlackFlowCultivationTargetFeatheredSerpent">襁褓の羽蛇</system:String>

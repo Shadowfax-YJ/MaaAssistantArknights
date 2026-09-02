@@ -6,6 +6,7 @@
 #include <fstream>
 #include <numeric>
 #include <stdexcept>
+#include <string_view>
 
 #include <nlohmann/json.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -544,18 +545,67 @@ cv::Mat EdgeDetector::draw_overlay(
             edge.node_b >= static_cast<int>(nodes.size())) {
             continue;
         }
-        draw_dashed_line(
+        const cv::Point2f first = nodes[static_cast<std::size_t>(edge.node_a)].center;
+        const cv::Point2f second = nodes[static_cast<std::size_t>(edge.node_b)].center;
+        cv::Scalar color;
+        std::string_view label;
+        bool dashed = false;
+        int thickness = 2;
+        if (edge.decision_source == "observed_extra_edge") {
+            color = cv::Scalar(40, 150, 255);
+            label = "V extra";
+            thickness = 3;
+        }
+        else if (edge.decision_source == "map_template_base_edge" && edge.cnn_connected) {
+            color = cv::Scalar(80, 230, 220);
+            label = "T+V";
+        }
+        else if (edge.decision_source == "map_template_base_edge") {
+            color = cv::Scalar(255, 160, 40);
+            label = "T";
+            dashed = true;
+        }
+        else {
+            color = cv::Scalar(200, 80, 255);
+            label = "V";
+            dashed = edge.forced_by_connectivity_constraint;
+        }
+        if (dashed) {
+            draw_dashed_line(overlay, first, second, color, thickness);
+        }
+        else {
+            cv::line(overlay, first, second, color, thickness, cv::LINE_AA);
+        }
+        const cv::Point2f midpoint = (first + second) * 0.5F;
+        cv::putText(
             overlay,
-            nodes[static_cast<std::size_t>(edge.node_a)].center,
-            nodes[static_cast<std::size_t>(edge.node_b)].center,
-            cv::Scalar(0, 255, 80),
-            1);
+            std::string(label),
+            midpoint + cv::Point2f(3.0F, -3.0F),
+            cv::FONT_HERSHEY_SIMPLEX,
+            0.3,
+            color,
+            1,
+            cv::LINE_AA);
     }
     for (const Node& node : nodes) {
         if (node.exists) {
-            cv::circle(overlay, node.center, 3, cv::Scalar(0, 255, 80), cv::FILLED, cv::LINE_AA);
+            const cv::Scalar color = node.confirmed_by_topology && node.detected_by_vision
+                                         ? cv::Scalar(80, 230, 220)
+                                     : node.confirmed_by_topology ? cv::Scalar(255, 160, 40)
+                                     : node.detected_by_vision    ? cv::Scalar(200, 80, 255)
+                                                                  : cv::Scalar(100, 100, 100);
+            cv::circle(overlay, node.center, 3, color, cv::FILLED, cv::LINE_AA);
         }
     }
+    cv::putText(
+        overlay,
+        "edge evidence: T=template V=vision orange=retained extra",
+        cv::Point(40, 106),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.42,
+        cv::Scalar(255, 255, 255),
+        1,
+        cv::LINE_AA);
     return overlay;
 }
 

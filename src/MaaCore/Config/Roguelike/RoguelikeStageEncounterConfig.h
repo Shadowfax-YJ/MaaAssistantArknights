@@ -2,6 +2,8 @@
 
 #include "Config/AbstractConfig.h"
 
+#include <optional>
+#include <variant>
 #include <vector>
 
 #include "Common/AsstBattleDef.h"
@@ -50,6 +52,16 @@ public:
         Vision vision; // 现在只有Vision解析，之后要改成requirements且支持多个条件判断同一个选择
     };
 
+    struct ChoiceGroup
+    {
+        using Choice = std::variant<int, std::string>;
+
+        std::vector<Choice> choices; // 序号或 OCR 文本，组内按顺序尝试
+        std::optional<std::pair<int, int>> choice_range; // 包含首尾的范围，与 choices 二选一
+        bool random = false;
+        std::optional<std::string> next_event; // 仅选中本组中的选项时覆盖事件级 next_event
+    };
+
     struct RoguelikeEvent
     {
         std::string name;
@@ -58,6 +70,7 @@ public:
         size_t default_choose = 0;
         std::vector<ChoiceRequire> choice_require;
         std::string next_event;
+        std::vector<ChoiceGroup> choice_groups;
 
         std::vector<std::pair<size_t, size_t>>
             fallback_choices; // 备用选项，格式为 (选项数量，选择的选项)，有些事件的选项数量可变
