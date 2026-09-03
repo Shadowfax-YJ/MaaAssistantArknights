@@ -173,6 +173,50 @@ TEST_CASE("BlackFlow run log stores only stable semantic screenshots")
     REQUIRE_FALSE(run_log_frame_is_stable(BlackFlowRunLogStableFrameMaximumMeanDifference + 0.01));
 }
 
+TEST_CASE("BlackFlow eerie merchant capture keeps the full page while extending the scrolled shelf")
+{
+    const std::vector<EerieStoreStitchAnchor> top_goods {
+        { "一次性喷气背包", 612, 181 },
+        { "堡垒协议招募券", 824, 181 },
+        { "波纹之手", 612, 390 },
+        { "小格兰法洛", 824, 390 },
+    };
+    const std::vector<EerieStoreStitchAnchor> bottom_goods {
+        { "波纹之手", 612, 181 },
+        { "小格兰法洛", 824, 181 },
+        { "医者-自医", 612, 390 },
+        { "医者-新典训", 824, 390 },
+    };
+
+    const auto offset = eerie_store_scroll_offset(top_goods, bottom_goods);
+    REQUIRE(offset == 209);
+
+    const auto layout = eerie_store_stitch_layout(1280, 720, asst::Rect { 395, 159, 857, 401 }, *offset);
+    REQUIRE(layout.has_value());
+    REQUIRE(layout->output_width == 1280);
+    REQUIRE(layout->output_height == 929);
+    REQUIRE(layout->base_source == asst::Rect { 0, 0, 1280, 720 });
+    REQUIRE(layout->base_destination == asst::Rect { 0, 0, 1280, 720 });
+    REQUIRE(layout->continuation_source == asst::Rect { 395, 159, 885, 561 });
+    REQUIRE(layout->continuation_destination == asst::Rect { 395, 368, 885, 561 });
+
+    REQUIRE(
+        eerie_store_scroll_offset(
+            std::vector<EerieStoreStitchAnchor> {
+                { "第一排甲", 612, 181 },
+                { "第二排甲", 612, 390 },
+            },
+            std::vector<EerieStoreStitchAnchor> {
+                { "第二排乙", 612, 181 },
+                { "第三排乙", 612, 390 },
+            }) == 209);
+    REQUIRE_FALSE(
+        eerie_store_scroll_offset(
+            std::vector<EerieStoreStitchAnchor> { { "第一排甲", 612, 181 } },
+            std::vector<EerieStoreStitchAnchor> { { "医者-地缘策略", 1036, 390 } })
+            .has_value());
+}
+
 TEST_CASE("BlackFlow move preview recognition waits for a stable displayed state")
 {
     using enum MovePreviewFrameState;
@@ -573,7 +617,8 @@ TEST_CASE("BlackFlow eerie merchant settles refreshes and relocates a cached goo
     REQUIRE(source.find("ShopDecisionEntry") != std::string::npos);
     REQUIRE(source.find("queue_eerie_store_snapshot(\"initial\"") != std::string::npos);
     REQUIRE(source.find("queue_eerie_store_snapshot(\"after_refresh\"") != std::string::npos);
-    REQUIRE(source.find("capture_pending_eerie_store_snapshot(top_image, bottom_image)") != std::string::npos);
+    REQUIRE(source.find("capture_pending_eerie_store_snapshot(") != std::string::npos);
+    REQUIRE(source.find("top_capture_goods, bottom_goods") != std::string::npos);
 }
 
 TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
@@ -666,16 +711,41 @@ TEST_CASE("BlackFlow persists resolved hidden-node identity as a routing-history
     std::ifstream history_file(
         repository_root / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowMapObservationSource.cpp",
         std::ios::binary);
+    std::ifstream session_file(
+        repository_root / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSession.cpp",
+        std::ios::binary);
     REQUIRE(telemetry_file);
     REQUIRE(history_file);
+    REQUIRE(session_file);
     const std::string telemetry {
         std::istreambuf_iterator<char>(telemetry_file),
         std::istreambuf_iterator<char>() };
     const std::string history {
         std::istreambuf_iterator<char>(history_file),
         std::istreambuf_iterator<char>() };
+    const std::string session {
+        std::istreambuf_iterator<char>(session_file),
+        std::istreambuf_iterator<char>() };
     REQUIRE(telemetry.find("node_identity_resolved") != std::string::npos);
     REQUIRE(history.find("DiagnosticTrigger::NodeIdentityResolved") != std::string::npos);
+    REQUIRE(session.find("diagnostic_node_identity_checkpoint_required(") != std::string::npos);
+    REQUIRE(session.find("notebook_identity_updated && first_content") == std::string::npos);
+}
+
+TEST_CASE("BlackFlow checkpoints identity when an entered event title was already observed")
+{
+    // classify_entered_event_name() seeds observed_contents before RoguelikeEvent reports the
+    // same title. It is not the first content callback, but changing the notebook from
+    // hide_invisible to evacuate still has to produce the final old-floor checkpoint.
+    const EnteredPageObservation entered = classify_entered_event_name("三重身");
+    REQUIRE(entered.event_name == "三重身");
+    const std::vector<std::string> observed_contents { *entered.event_name };
+    REQUIRE_FALSE(observed_contents.empty());
+    const PageContentEffect effect = classify_page_content_effect("RoguelikeEvent", "三重身");
+    REQUIRE(effect.resolved_type == NodeType::Evacuate);
+    REQUIRE(diagnostic_node_identity_checkpoint_required(true, effect.resolved_type.has_value()));
+    REQUIRE_FALSE(diagnostic_node_identity_checkpoint_required(false, true));
+    REQUIRE_FALSE(diagnostic_node_identity_checkpoint_required(true, false));
 }
 
 TEST_CASE("BlackFlow battle total kills uses the mode and latest observation as tie breaker")
@@ -1634,42 +1704,24 @@ TEST_CASE("BlackFlow treats an unopened utopia panel as an optional absent marke
         UtopiaPanelInspectionDisposition::Incomplete);
 }
 
-TEST_CASE("BlackFlow refreshes the map after confirming an active utopia")
+TEST_CASE("BlackFlow does not leave exploration after confirming an active utopia")
 {
     const std::filesystem::path repository_root =
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
 
-    REQUIRE(tasks->contains("BlackFlow@Roguelike@UtopiaMapRefresh-Exit"));
-    REQUIRE(tasks->contains("BlackFlow@Roguelike@UtopiaMapRefresh-Continue"));
-    REQUIRE(tasks->contains("BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut"));
-    REQUIRE(tasks->contains("BlackFlow@Roguelike@UtopiaMapRefresh-OnMap"));
-    REQUIRE(tasks->at("BlackFlow@Roguelike@UtopiaMapRefresh-Exit")
-                .get("next", std::vector<std::string> {}) ==
-            std::vector<std::string> {
-                "BlackFlow@Roguelike@UtopiaMapRefresh-Continue",
-                "BlackFlow@Roguelike@UtopiaMapRefresh-Exit",
-            });
-
-    const auto& dismiss = tasks->at("BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss");
-    REQUIRE(dismiss.get("next", std::vector<std::string> {}) ==
-            std::vector<std::string> {
-                "BlackFlow@Roguelike@UtopiaMapRefresh-OnMap",
-                "BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut",
-                "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss",
-            });
-
-    const auto& zoom_out = tasks->at("BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut");
-    REQUIRE(zoom_out.get("template", std::string {}) ==
-            "BlackFlow@Roguelike@MapZoomOut.png");
-    REQUIRE(zoom_out.get("action", std::string {}) == "ClickSelf");
-    REQUIRE(zoom_out.get("next", std::vector<std::string> {}) ==
-            std::vector<std::string> { "BlackFlow@Roguelike@UtopiaMapRefresh-OnMap" });
-
-    const auto& on_map = tasks->at("BlackFlow@Roguelike@UtopiaMapRefresh-OnMap");
-    REQUIRE(on_map.get("template", std::vector<std::string> {}) ==
-            std::vector<std::string> { "BlackFlow@Roguelike@MapZoomIn.png" });
+    for (const auto* task : {
+             "BlackFlow@Roguelike@UtopiaMapRefresh-Exit",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-Continue",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-Dismiss",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-ZoomOut",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-OnMap",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-Completed",
+             "BlackFlow@Roguelike@UtopiaMapRefresh-Failed",
+         }) {
+        REQUIRE_FALSE(tasks->contains(task));
+    }
 }
 
 TEST_CASE("BlackFlow move confirmation handles the leave-region confirmation dialog")
@@ -2130,9 +2182,8 @@ TEST_CASE("BlackFlow floor five normalizes the viewport and tries every supporte
 
 TEST_CASE("BlackFlow keeps the normalized floor-five viewport after a parts-box round trip")
 {
-    REQUIRE(should_normalize_map_viewport(true, false, false));
-    REQUIRE_FALSE(should_normalize_map_viewport(true, true, false));
-    REQUIRE(should_normalize_map_viewport(true, true, true));
+    REQUIRE(should_normalize_map_viewport(true, false));
+    REQUIRE_FALSE(should_normalize_map_viewport(true, true));
 }
 
 TEST_CASE("BlackFlow resets cached topology when a same-floor recollection creates a new map generation")
@@ -3013,6 +3064,42 @@ TEST_CASE("BlackFlow event title classification backfills hidden page identity")
     const EnteredPageObservation unknown = classify_entered_event_name("尚未收录的事件");
     REQUIRE(unknown.event_name == "尚未收录的事件");
     REQUIRE(unknown.classified_type == NodeType::Incident);
+}
+
+TEST_CASE("BlackFlow entered-page classifier fast-paths ordinary event titles")
+{
+    const EnteredPageObservation typed_event = classify_entered_page_texts({ "掠夺成性" });
+    REQUIRE(typed_event.event_name == "掠夺成性");
+    REQUIRE(typed_event.classified_type == NodeType::Duel);
+
+    const EnteredPageObservation ordinary_event = classify_entered_page_texts({ "行动奖励" });
+    REQUIRE(ordinary_event.event_name == "行动奖励");
+    REQUIRE(ordinary_event.classified_type == NodeType::Incident);
+
+    const EnteredPageObservation operator_picker =
+        classify_entered_page_texts({ "助战招募", "掠夺成性" });
+    REQUIRE(operator_picker.combat_operator_selection_open);
+    REQUIRE_FALSE(operator_picker.event_name.has_value());
+    REQUIRE_FALSE(operator_picker.classified_type.has_value());
+
+    const EnteredPageObservation transitioning_frame =
+        classify_entered_page_texts({ "险路尽头", "原始娱乐" });
+    REQUIRE_FALSE(transitioning_frame.classification_conflict);
+    REQUIRE_FALSE(transitioning_frame.classified_type.has_value());
+
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const auto broad_whitelist = tasks->at("BlackFlow@Roguelike@EnteredPageClassification")
+                                     .get("text", std::vector<std::string> {});
+    const auto event_whitelist = tasks->at("BlackFlow@Roguelike@StageEncounterOcr")
+                                     .get("text", std::vector<std::string> {});
+    for (const std::string& event_name : event_whitelist) {
+        INFO(event_name);
+        REQUIRE(std::ranges::find(broad_whitelist, event_name) != broad_whitelist.end());
+    }
 }
 
 TEST_CASE("BlackFlow event and shop OCR use guarded fuzzy matching")

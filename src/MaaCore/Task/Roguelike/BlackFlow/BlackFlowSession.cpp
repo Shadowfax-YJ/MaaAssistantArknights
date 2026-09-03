@@ -4523,7 +4523,9 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
     m_telemetry_events.emplace_back(BlackFlowTelemetryEvent { "BlackFlowNodeContentObserved", details });
     // 未知诡秘可能在页面结算后直接跨层。身份虽然已经写入当前层探索笔记，但如果
     // 不在切换笔记前持久化一次，最终 routing-history 仍只会留下进入前的未知节点。
-    if (notebook_identity_updated && first_content && effect.resolved_type.has_value()) {
+    if (diagnostic_node_identity_checkpoint_required(
+            notebook_identity_updated,
+            effect.resolved_type.has_value())) {
         details["reason_category"] = "node_identity_resolved";
         details["reason_detail"] = "事件标题已回写节点具体类型与名称";
         append_map_visualization(details);

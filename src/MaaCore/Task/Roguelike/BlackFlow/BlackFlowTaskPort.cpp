@@ -50,8 +50,6 @@ constexpr std::string_view MapReadyTask = "BlackFlow@Roguelike@MapPrepare-Ready"
 constexpr std::string_view UtopiaPanelToggleTask = "BlackFlow@Roguelike@UtopiaPanelToggle";
 constexpr std::string_view UtopiaPanelPolicyTask = "BlackFlow@Roguelike@UtopiaPanelPolicy";
 constexpr std::string_view UtopiaPanelIdeologyTask = "BlackFlow@Roguelike@UtopiaPanelIdeology";
-constexpr std::string_view UtopiaMapRefreshTask = "BlackFlow@Roguelike@UtopiaMapRefresh-Exit";
-constexpr std::string_view UtopiaMapRefreshCompletedTask = "BlackFlow@Roguelike@UtopiaMapRefresh-Completed";
 constexpr std::string_view MovementPanelTitleTask = "BlackFlow@Roguelike@MovementPanelTitle";
 constexpr std::string_view MovePreviewEnterTask = "BlackFlow@Roguelike@MovePreviewEnter";
 constexpr std::string_view MovePreviewCannotEnterTask = "BlackFlow@Roguelike@MovePreviewCannotEnter";
@@ -961,14 +959,12 @@ bool BlackFlowTaskPort::refresh(
         }
 
         BlackFlowObservationRequest current_request = request;
-        bool map_refreshed = false;
         if (request.inspect_utopia) {
             UtopiaPanelObservation utopia;
             if (!inspect_utopia_for_generation(
                     request.map_generation,
                     utopia,
                     image,
-                    map_refreshed,
                     error)) {
                 return false;
             }
@@ -980,8 +976,7 @@ bool BlackFlowTaskPort::refresh(
             viewport.has_value() &&
             should_normalize_map_viewport(
                 viewport->before_every_capture,
-                request.viewport_already_normalized,
-                map_refreshed)) {
+                request.viewport_already_normalized)) {
             for (int swipe = 0; swipe < viewport->swipe_left_count; ++swipe) {
                 std::string swipe_error;
                 if (!m_task_context->execute({ std::string(FloorFiveViewportSwipeLeftTask) }, &swipe_error)) {
@@ -997,8 +992,7 @@ bool BlackFlowTaskPort::refresh(
                 return false;
             }
         }
-        else if (viewport.has_value() && viewport->before_every_capture &&
-                 request.viewport_already_normalized && !map_refreshed) {
+        else if (viewport.has_value() && viewport->before_every_capture && request.viewport_already_normalized) {
             Log.info(
                 "BlackFlow reuses the normalized map viewport after closing the parts box",
                 "floor",
@@ -2483,10 +2477,8 @@ bool BlackFlowTaskPort::inspect_utopia_for_generation(
     std::uint64_t map_generation,
     UtopiaPanelObservation& observation,
     cv::Mat& stable_map_image,
-    bool& map_refreshed,
     std::string* error)
 {
-    map_refreshed = false;
     if (m_utopia_generation == map_generation) {
         observation = m_utopia_observation;
         return true;
@@ -2537,33 +2529,16 @@ bool BlackFlowTaskPort::inspect_utopia_for_generation(
         return false;
     }
 
-    // 游戏偶尔只绘制部分理想域而漏掉理想源特效。实托邦标题已经完整确认后，
-    // 确定地回到主题主菜单再继续探索，让游戏重新生成完整的地图表现。该流程与
-    // 页面异常时的 RecoverMap 兜底严格分开，避免把正常刷新误记成故障恢复。
-    std::string refresh_error;
-    if (!m_task_context->execute({ std::string(UtopiaMapRefreshTask) }, &refresh_error) ||
-        !m_task_context->last_task().ends_with(UtopiaMapRefreshCompletedTask)) {
-        set_error(
-            error,
-            "utopia map refresh did not return to the map: " +
-                (refresh_error.empty() ? m_task_context->last_task() : refresh_error));
-        return false;
-    }
-    map_refreshed = true;
-
-    // 回到主菜单再继续探索是有外部副作用的操作：一旦刷新链确认已经回到缩小后的
-    // 地图，本代实托邦就已经处理完毕。必须在后续稳定截图之前提交缓存；否则一次
-    // 瞬时遮挡或截图不稳定会让地图重建重试再次执行整段主菜单刷新，形成死循环。
-    m_utopia_generation = map_generation;
-    m_utopia_observation = recognized;
-    observation = recognized;
-
     if (!m_task_context->capture_stable_map(stable_map_image, error)) {
         return false;
     }
 
+    m_utopia_generation = map_generation;
+    m_utopia_observation = recognized;
+    observation = recognized;
+
     Log.info(
-        "BlackFlow utopia title recognized and map refreshed through the main menu",
+        "BlackFlow utopia title recognized",
         "generation",
         map_generation,
         "policy",
@@ -2616,12 +2591,14 @@ bool BlackFlowTaskPort::classify_entered_page(
             observation.combat_operator_selection_open = true;
             observation.matched_texts.emplace_back("干员选择确认按钮");
         }
-        if (observation.classified_type.has_value() || observation.classification_conflict ||
-            observation.inventory_overloaded) {
+        if (observation.classification_conflict || observation.inventory_overloaded) {
             return EnteredPageProbe::Classified;
         }
         if (observation.combat_operator_selection_open) {
             return EnteredPageProbe::CombatOperatorSelection;
+        }
+        if (observation.classified_type.has_value()) {
+            return EnteredPageProbe::Classified;
         }
         return EnteredPageProbe::Unknown;
     };

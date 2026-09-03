@@ -24,6 +24,11 @@ EnteredPageObservation classify_entered_page_texts(std::vector<std::string> matc
     const bool shop = texts.contains("前瞻性投资系统") && texts.contains("刷新");
     const bool scrap_shop = texts.contains("机械师的园圃");
     const bool emergency_aid = texts.size() == 1 && texts.contains("刷新");
+    std::vector<std::string> event_titles;
+    std::ranges::copy_if(texts, std::back_inserter(event_titles), [](const std::string& text) {
+        const PageContentEffect effect = classify_page_content_effect("RoguelikeEvent", text);
+        return effect.resolved_type.has_value() || effect.changes_floor || !effect.has_landing;
+    });
     // “右侧干员以查看详情”和“助战招募”属于快捷编队展开后的干员选择界面，
     // 不是战斗身份本身。只有回到快捷编队主界面并命中其专用模板后才能确认战斗。
     observation.combat_operator_selection_open =
@@ -36,7 +41,9 @@ EnteredPageObservation classify_entered_page_texts(std::vector<std::string> matc
         observation.classification_conflict = true;
     }
     else if (final) {
-        observation.classified_type = NodeType::Final;
+        if (event_titles.size() == 1) {
+            observation.classified_type = NodeType::Final;
+        }
     }
     else if (shop) {
         observation.classified_type = NodeType::Shop;
@@ -46,6 +53,17 @@ EnteredPageObservation classify_entered_page_texts(std::vector<std::string> matc
     }
     else if (emergency_aid) {
         observation.classified_type = NodeType::Employ;
+    }
+    else if (!observation.combat_operator_selection_open && !observation.inventory_overloaded) {
+        // 首帧大框与事件标题框共享同一份事件名白名单。固定页面标志优先；若它们均未命中，
+        // 已知事件标题可直接恢复页面身份，不必再经历两轮等待、奖励探测和中央推进点击。
+        // 转场中若背景地图和当前事件同时露出两个标题，则不分类，让调用方进入原兜底链，
+        // 避免误用背景节点。
+        if (event_titles.size() == 1) {
+            EnteredPageObservation event = classify_entered_event_name(event_titles.front());
+            event.matched_texts = std::move(observation.matched_texts);
+            return event;
+        }
     }
     return observation;
 }

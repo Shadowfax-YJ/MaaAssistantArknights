@@ -2,6 +2,7 @@
 
 #include "Assistant.h"
 #include "Controller.h"
+#include "ControllerRecoveryPolicy.h"
 #include "MaaUtils/NoWarningCV.hpp"
 #include <cmath>
 #include <cstdint>
@@ -78,9 +79,13 @@ std::optional<std::string> asst::AdbController::reconnect(const std::string& cmd
         reconnect_info["details"]["times"] = i;
         callback(AsstMsg::ConnectionInfo, reconnect_info);
 
-        sleep(10 * 1000);
-        if (need_exit()) {
-            break;
+        // The first retry should start immediately. Later retries retain the
+        // grace period for an emulator whose adbd is still coming back up.
+        if (i != 0) {
+            sleep(10 * 1000);
+            if (need_exit()) {
+                break;
+            }
         }
         auto reconnect_ret = call_command(m_adb.connect, 60LL * 1000, false /* 禁止重连避免无限递归 */);
         if (need_exit()) {
@@ -92,6 +97,18 @@ std::optional<std::string> asst::AdbController::reconnect(const std::string& cmd
             is_reconnect_success = reconnect_str.find("error") == std::string::npos;
         }
         if (is_reconnect_success) {
+            // `adb connect` may print "already connected" while the transport is
+            // still offline. Verify that this device can execute a cheap command
+            // before repeating a potentially long socket-based screencap.
+            auto probe_ret = call_command(
+                m_conn_ctx.replace_cmd(m_conn_ctx.adb_cfg.uuid),
+                5LL * 1000,
+                false /* 禁止重连避免无限递归 */);
+            if (!probe_ret) {
+                Log.warn("ADB reconnect probe failed, device is still unavailable");
+                continue;
+            }
+
             auto recall_ret = call_command(cmd, timeout, false /* 禁止重连避免无限递归 */, recv_by_socket);
             if (recall_ret) {
                 // 重连并成功执行了
@@ -141,6 +158,12 @@ std::optional<std::string> asst::AdbController::call_command(
 
     if (!exit_res) {
         Log.warn("Call `", cmd, "` failed");
+        callcmd_lock.unlock();
+        if (controller_recovery::should_reconnect_after_command(exit_res, inited(), allow_reconnect, need_exit())) {
+            // A timeout has no exit code, but is just as strong a signal of a
+            // broken adb transport as a non-zero exit status.
+            return reconnect(cmd, timeout, recv_by_socket);
+        }
         return std::nullopt;
     }
     const int exit_ret = exit_res.value();
@@ -175,7 +198,7 @@ std::optional<std::string> asst::AdbController::call_command(
     if (!exit_ret) {
         return recv_by_socket ? sock_data : pipe_data;
     }
-    else if (inited() && allow_reconnect) {
+    else if (controller_recovery::should_reconnect_after_command(exit_res, inited(), allow_reconnect, need_exit())) {
         // 之前可以运行，突然运行不了了，这种情况多半是 adb 炸了。所以重新连接一下
         return reconnect(cmd, timeout, recv_by_socket);
     }

@@ -862,7 +862,7 @@ PageContentEffect classify_page_content_effect(std::string_view source, std::str
         return {};
     }
 
-    static constexpr std::array<std::string_view, 28> IncidentEvents = {
+    static constexpr std::array<std::string_view, 29> IncidentEvents = {
         "桑尼的邀请",
         "色味不同源",
         "货从口出",
@@ -891,6 +891,7 @@ PageContentEffect classify_page_content_effect(std::string_view source, std::str
         "好奇心之死",
         "窥视箱中",
         "调谐仪式",
+        "行动奖励",
     };
     if (std::ranges::find(IncidentEvents, content) != IncidentEvents.end()) {
         return { NodeType::Incident, false, true };

@@ -266,37 +266,63 @@ void BlackFlowAutomationStoreTaskPlugin::queue_eerie_store_snapshot(std::string 
 
 void BlackFlowAutomationStoreTaskPlugin::capture_pending_eerie_store_snapshot(
     const cv::Mat& top_image,
-    const cv::Mat& bottom_image)
+    const cv::Mat& bottom_image,
+    const std::vector<TextRect>& top_goods,
+    const std::vector<TextRect>& bottom_goods)
 {
     if (!m_pending_eerie_store_snapshot.has_value() || m_port == nullptr) {
         return;
     }
-    const auto top_task = Task.get<OcrTaskInfo>(ShopGoodsTask);
     const auto bottom_task = Task.get<OcrTaskInfo>(ShopGoodsBottomTask);
-    if (top_task == nullptr || bottom_task == nullptr || top_task->roi.width != bottom_task->roi.width) {
-        Log.warn("BlackFlow eerie merchant stitched capture has incompatible shelf ROIs");
-        return;
-    }
-    const auto crop = [](const cv::Mat& image, const Rect& roi) -> cv::Mat {
-        const cv::Rect requested(roi.x, roi.y, roi.width, roi.height);
-        const cv::Rect bounds(0, 0, image.cols, image.rows);
-        return (requested & bounds) == requested ? image(requested) : cv::Mat {};
-    };
-    const cv::Mat top_shelf = crop(top_image, top_task->roi);
-    const cv::Mat bottom_shelves = crop(bottom_image, bottom_task->roi);
-    if (top_shelf.empty() || bottom_shelves.empty()) {
-        Log.warn("BlackFlow eerie merchant stitched capture shelf ROI is outside the screenshot");
+    if (bottom_task == nullptr || top_image.empty() || bottom_image.empty() ||
+        top_image.size() != bottom_image.size() || top_image.type() != bottom_image.type()) {
+        Log.warn("BlackFlow eerie merchant stitched capture has incompatible screenshots");
         return;
     }
 
-    cv::Mat stitched;
-    cv::vconcat(top_shelf, bottom_shelves, stitched);
+    const auto anchors = [](const std::vector<TextRect>& goods) {
+        std::vector<EerieStoreStitchAnchor> result;
+        result.reserve(goods.size());
+        for (const TextRect& good : goods) {
+            result.emplace_back(EerieStoreStitchAnchor { good.text, good.rect.x, good.rect.y });
+        }
+        return result;
+    };
+    const std::optional<int> scroll_offset = eerie_store_scroll_offset(anchors(top_goods), anchors(bottom_goods));
+    if (!scroll_offset.has_value()) {
+        Log.warn("BlackFlow eerie merchant stitched capture cannot locate the overlapping second row");
+        return;
+    }
+    const auto layout = eerie_store_stitch_layout(
+        top_image.cols,
+        top_image.rows,
+        bottom_task->roi,
+        *scroll_offset);
+    if (!layout.has_value()) {
+        Log.warn("BlackFlow eerie merchant stitched capture calculated an invalid layout", *scroll_offset);
+        return;
+    }
+
+    const auto cv_rect = [](const Rect& rect) { return cv::Rect { rect.x, rect.y, rect.width, rect.height }; };
+    cv::Mat stitched(layout->output_height, layout->output_width, top_image.type(), cv::Scalar(0));
+    top_image(cv_rect(layout->base_source)).copyTo(stitched(cv_rect(layout->base_destination)));
+    bottom_image(cv_rect(layout->continuation_source))
+        .copyTo(stitched(cv_rect(layout->continuation_destination)));
+
     const auto& [phase, refresh_index] = *m_pending_eerie_store_snapshot;
     std::string error;
     if (!m_port->capture_store_page("eerie_merchant", phase, refresh_index, &stitched, &error)) {
         Log.warn("BlackFlow eerie merchant stitched page capture failed", phase, error);
         return;
     }
+    Log.info(
+        "BlackFlow eerie merchant page stitched",
+        "scroll offset",
+        *scroll_offset,
+        "size",
+        stitched.cols,
+        "x",
+        stitched.rows);
     m_pending_eerie_store_snapshot.reset();
 }
 
@@ -994,6 +1020,9 @@ bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
 
     const cv::Mat top_image = ctrler()->get_image();
     const auto top_goods = recognize(top_image, std::string(ShopGoodsTask));
+    const auto top_capture_goods = m_pending_eerie_store_snapshot.has_value()
+                                       ? recognize(top_image, std::string(ShopGoodsBottomTask))
+                                       : std::vector<TextRect> {};
 
     if (!run_goods_swipe(ShopGoodsSwipeToBottomTask)) {
         return false;
@@ -1001,7 +1030,7 @@ bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
     m_shop_shelf_page = ShelfPage::Bottom;
     const cv::Mat bottom_image = ctrler()->get_image();
     const auto bottom_goods = recognize(bottom_image, std::string(ShopGoodsBottomTask));
-    capture_pending_eerie_store_snapshot(top_image, bottom_image);
+    capture_pending_eerie_store_snapshot(top_image, bottom_image, top_capture_goods, bottom_goods);
 
     m_shop_goods.clear();
     m_shop_goods.reserve(top_goods.size() + bottom_goods.size());

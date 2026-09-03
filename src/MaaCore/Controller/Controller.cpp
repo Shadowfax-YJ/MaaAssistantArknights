@@ -21,6 +21,7 @@
 
 #include "AdbController.h"
 #include "ControllerAPI.h"
+#include "ControllerRecoveryPolicy.h"
 #include "MaaFwAdbController.h"
 #include "MaatouchController.h"
 #include "MinitouchController.h"
@@ -476,22 +477,18 @@ cv::Mat asst::Controller::get_image(bool raw)
         return {};
     }
 
-    // 有些模拟器adb偶尔会莫名其妙截图失败，多试几次
-    static constexpr int MaxTryCount = 20;
     bool success = false;
-    for (int i = 0; i < MaxTryCount && inited(); ++i) {
+    for (size_t attempt = 0; attempt < controller_recovery::MaxScreencapAttempts && inited(); ++attempt) {
         if (need_exit()) {
             break;
         }
-        if (screencap()) {
+        if (screencap(controller_recovery::allow_reconnect_for_screencap_attempt(attempt))) {
             success = true;
             break;
         }
     }
-    while (!success && !need_exit()) {
-        if (screencap(true)) {
-            break;
-        }
+
+    if (!success && !need_exit()) {
         Log.error(__FUNCTION__, "screencap failed!");
         json::value info = json::object {
             { "uuid", m_uuid },
@@ -503,8 +500,6 @@ cv::Mat asst::Controller::get_image(bool raw)
 
         const cv::Size d_size(m_scale_size.first, m_scale_size.second);
         m_cache_image = cv::Mat(d_size, CV_8UC3);
-
-        break;
     }
 
     if (raw) {

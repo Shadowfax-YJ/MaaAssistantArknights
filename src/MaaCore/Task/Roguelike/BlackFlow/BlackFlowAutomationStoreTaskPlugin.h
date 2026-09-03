@@ -99,7 +99,11 @@ private:
     void finalize_pending_purchase(AutomationStoreKind kind);
     void capture_store_snapshot(AutomationStoreKind kind, std::string_view phase, int refresh_index) const;
     void queue_eerie_store_snapshot(std::string phase, int refresh_index);
-    void capture_pending_eerie_store_snapshot(const cv::Mat& top_image, const cv::Mat& bottom_image);
+    void capture_pending_eerie_store_snapshot(
+        const cv::Mat& top_image,
+        const cv::Mat& bottom_image,
+        const std::vector<TextRect>& top_goods,
+        const std::vector<TextRect>& bottom_goods);
 
     mutable PendingWork m_pending = PendingWork::None;
 

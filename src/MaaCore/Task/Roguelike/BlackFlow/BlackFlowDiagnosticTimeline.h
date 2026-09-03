@@ -38,6 +38,16 @@ namespace asst::blackflow
            evidence_sequence <= decision_sequence;
 }
 
+[[nodiscard]] constexpr bool diagnostic_node_identity_checkpoint_required(
+    bool exploration_notebook_identity_updated,
+    bool page_content_resolved_identity) noexcept
+{
+    // Unknown hidden nodes can have their event title seeded while entering the page. The
+    // later RoguelikeEvent callback is then not the first observed content, but it is still
+    // the point where the old-floor exploration notebook changes and must be persisted.
+    return exploration_notebook_identity_updated && page_content_resolved_identity;
+}
+
 struct DiagnosticEvidenceStamp
 {
     int floor = 0;

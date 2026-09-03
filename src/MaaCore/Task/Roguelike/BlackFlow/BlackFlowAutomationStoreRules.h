@@ -4,6 +4,7 @@
 #include <array>
 #include <charconv>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -20,6 +21,134 @@ enum class AutomationStoreKind : std::uint8_t
     Eerie,
     Secret,
 };
+
+struct EerieStoreStitchAnchor
+{
+    std::string_view name;
+    int x = 0;
+    int y = 0;
+};
+
+struct EerieStoreStitchLayout
+{
+    int output_width = 0;
+    int output_height = 0;
+    Rect base_source;
+    Rect base_destination;
+    Rect continuation_source;
+    Rect continuation_destination;
+};
+
+// 商店的第二排会同时出现在回顶截图和滑到底截图中。用同名、同列商品的
+// 纵坐标差标定实际滚动距离，避免把分辨率、模拟器手势误差写成固定像素。
+[[nodiscard]] inline std::optional<int> eerie_store_scroll_offset(
+    const std::vector<EerieStoreStitchAnchor>& top_goods,
+    const std::vector<EerieStoreStitchAnchor>& bottom_goods)
+{
+    constexpr int SameColumnTolerance = 80;
+    constexpr int MinimumScrollOffset = 80;
+    constexpr int MaximumScrollOffset = 480;
+    constexpr int OffsetClusterTolerance = 8;
+
+    std::vector<int> candidates;
+    for (const EerieStoreStitchAnchor& top : top_goods) {
+        if (top.name.empty()) {
+            continue;
+        }
+        for (const EerieStoreStitchAnchor& bottom : bottom_goods) {
+            const int column_delta = top.x >= bottom.x ? top.x - bottom.x : bottom.x - top.x;
+            const int offset = top.y - bottom.y;
+            if (top.name == bottom.name && column_delta <= SameColumnTolerance &&
+                offset >= MinimumScrollOffset && offset <= MaximumScrollOffset) {
+                candidates.emplace_back(offset);
+            }
+        }
+    }
+    // OCR 偶尔会漏掉恰好重叠的同一件商品；两张图各自可见的相邻两排
+    // 间距仍等于这次滚动距离，可作为不依赖商品名的次级证据。
+    const auto append_visible_row_pitch = [&candidates](const std::vector<EerieStoreStitchAnchor>& goods) {
+        constexpr int SameRowTolerance = 30;
+        std::vector<int> ys;
+        ys.reserve(goods.size());
+        for (const EerieStoreStitchAnchor& good : goods) {
+            ys.emplace_back(good.y);
+        }
+        std::ranges::sort(ys);
+
+        std::vector<std::vector<int>> rows;
+        for (const int y : ys) {
+            if (rows.empty() || y - rows.back().back() > SameRowTolerance) {
+                rows.emplace_back();
+            }
+            rows.back().emplace_back(y);
+        }
+        std::vector<int> centers;
+        centers.reserve(rows.size());
+        for (const auto& row : rows) {
+            centers.emplace_back(row[(row.size() - 1) / 2]);
+        }
+        for (std::size_t index = 1; index < centers.size(); ++index) {
+            const int pitch = centers[index] - centers[index - 1];
+            if (pitch >= MinimumScrollOffset && pitch <= MaximumScrollOffset) {
+                candidates.emplace_back(pitch);
+            }
+        }
+    };
+    if (candidates.empty()) {
+        append_visible_row_pitch(top_goods);
+        append_visible_row_pitch(bottom_goods);
+        if (candidates.empty()) {
+            return std::nullopt;
+        }
+    }
+
+    std::ranges::sort(candidates);
+    int best_center = candidates.front();
+    std::size_t best_size = 0;
+    for (const int center : candidates) {
+        const auto first = std::ranges::lower_bound(candidates, center - OffsetClusterTolerance);
+        const auto last = std::ranges::upper_bound(candidates, center + OffsetClusterTolerance);
+        const std::size_t size = static_cast<std::size_t>(last - first);
+        if (size > best_size) {
+            best_size = size;
+            best_center = center;
+        }
+    }
+
+    std::vector<int> cluster;
+    std::ranges::copy_if(candidates, std::back_inserter(cluster), [best_center](int offset) {
+        const int delta = offset >= best_center ? offset - best_center : best_center - offset;
+        return delta <= OffsetClusterTolerance;
+    });
+    return cluster[(cluster.size() - 1) / 2];
+}
+
+// 与事件长截图相同：完整保留首屏，只把末屏从可滚动区域的顶部覆盖到
+// 对应纵坐标并向下扩展。这样页头、最后一排商品和页脚都不会被裁掉。
+[[nodiscard]] inline std::optional<EerieStoreStitchLayout> eerie_store_stitch_layout(
+    int image_width,
+    int image_height,
+    const Rect& scroll_roi,
+    int scroll_offset) noexcept
+{
+    if (image_width <= 0 || image_height <= 0 || scroll_roi.x < 0 || scroll_roi.y < 0 ||
+        scroll_roi.x >= image_width || scroll_roi.y >= image_height || scroll_offset <= 0 ||
+        scroll_offset >= image_height) {
+        return std::nullopt;
+    }
+
+    const int continuation_width = image_width - scroll_roi.x;
+    const int continuation_height = image_height - scroll_roi.y;
+    return EerieStoreStitchLayout {
+        .output_width = image_width,
+        .output_height = image_height + scroll_offset,
+        .base_source = Rect { 0, 0, image_width, image_height },
+        .base_destination = Rect { 0, 0, image_width, image_height },
+        .continuation_source = Rect { scroll_roi.x, scroll_roi.y, continuation_width, continuation_height },
+        .continuation_destination =
+            Rect { scroll_roi.x, scroll_roi.y + scroll_offset, continuation_width, continuation_height },
+    };
+}
 
 [[nodiscard]] inline constexpr bool
     automation_store_should_capture_cultivation_result(std::string_view task) noexcept

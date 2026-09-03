@@ -148,8 +148,8 @@ struct BlackFlowObservationRequest
     int difficulty = 0;
     std::uint64_t map_generation = 0;
     bool inspect_utopia = false;
-    // 五层打开再关闭零件箱不会改变地图横向视口；紧随其后的地图重建可复用
-    // 已完成的左滑定位。若本次检查实托邦时回到主菜单刷新了地图，则仍须重新定位。
+    // 五层打开再关闭零件箱或实托邦标题弹层不会改变地图横向视口；紧随其后的
+    // 地图重建可复用已完成的左滑定位。
     bool viewport_already_normalized = false;
     std::string utopia_ideology;
     std::string utopia_policy;
@@ -169,10 +169,9 @@ struct BlackFlowObservationRequest
 
 [[nodiscard]] constexpr bool should_normalize_map_viewport(
     bool before_every_capture,
-    bool viewport_already_normalized,
-    bool map_refreshed) noexcept
+    bool viewport_already_normalized) noexcept
 {
-    return before_every_capture && (!viewport_already_normalized || map_refreshed);
+    return before_every_capture && !viewport_already_normalized;
 }
 
 [[nodiscard]] inline bool move_confirmation_left_preview(std::string_view last_task) noexcept
@@ -514,7 +513,6 @@ private:
         std::uint64_t map_generation,
         UtopiaPanelObservation& observation,
         cv::Mat& stable_map_image,
-        bool& map_refreshed,
         std::string* error);
     bool cleanup_overloaded_inventory(bool inventory_already_open, std::string* error);
     bool classify_entered_page(const cv::Mat& image, EnteredPageObservation& observation, std::string* error) const;
