@@ -1,6 +1,7 @@
 #include "BlackFlowMapObservationSource.h"
 
 #include "BlackFlowDiagnosticTimeline.h"
+#include "BlackFlowRunArchive.h"
 
 #include <algorithm>
 #include <cctype>
@@ -675,6 +676,39 @@ void BlackFlowMapObservationSource::reset_run()
     m_processing_item_history.clear();
     m_routing_history_artifacts_initialized = false;
     m_run_log.reset();
+}
+
+bool BlackFlowMapObservationSource::queue_current_run_archive(std::string* error)
+{
+    const std::filesystem::path run_directory = m_run_log.close_current_run();
+    if (run_directory.empty()) {
+        return true;
+    }
+    return enqueue_completed_run_archive(
+        run_directory,
+        [](const std::filesystem::path& source, const RunArchiveResult& result, const std::string& archive_error) {
+            if (archive_error.empty() && !result.archive_path.empty()) {
+                Log.info(
+                    "BlackFlow completed run archived",
+                    "source",
+                    source,
+                    "archive",
+                    result.archive_path,
+                    "entries",
+                    result.entry_count,
+                    "uncompressed_bytes",
+                    result.uncompressed_bytes);
+            }
+            else {
+                Log.error(
+                    "BlackFlow completed run archive failed; source directory was preserved",
+                    "source",
+                    source,
+                    "error",
+                    archive_error);
+            }
+        },
+        error);
 }
 
 void BlackFlowMapObservationSource::configure_diagnostics(const DiagnosticSettings& settings)

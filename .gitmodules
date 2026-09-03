@@ -3,7 +3,7 @@
 	url = https://github.com/MaaAssistantArknights/MaaTestSet.git
 [submodule "src/MaaMacGui"]
 	path = src/MaaMacGui
-	url = https://github.com/MaaAssistantArknights/MaaMacGui.git
+	url = https://github.com/Shadowfax-YJ/MaaMacGui.git
 [submodule "src/maa-cli"]
 	path = src/maa-cli
 	url = https://github.com/MaaAssistantArknights/maa-cli.git

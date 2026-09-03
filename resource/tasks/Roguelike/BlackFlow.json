@@ -385,6 +385,11 @@
         "Doc": "滑到货架底部后同时识别第二、三排，两排都使用下半段坐标购买。",
         "roi": [395, 159, 857, 401]
     },
+    "BlackFlow@Roguelike@AutomationShopCaptureAnchors": {
+        "algorithm": "OcrDetect",
+        "Doc": "仅用于商店长截图对齐；识别商品区全部文字，不继承购买白名单。",
+        "roi": [395, 159, 857, 401]
+    },
     "BlackFlow@Roguelike@AutomationShopGoodsSwipeToTop": {
         "Doc": "参考事件列表的短促滑动，从货架底部直接回到顶部；顶/底视图之间无需保留中间商品重叠。",
         "algorithm": "JustReturn",

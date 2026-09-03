@@ -28,6 +28,15 @@ on:
       - "tools/maadeps-download.py"
       - "!**/*.md"
   workflow_dispatch:
+    inputs:
+      build_scope:
+        description: "Build scope"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - "all"
+          - "blackflow-macos-package"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}${{ github.ref == 'refs/heads/dev-v2' && format('-{0}', github.sha) || '' }}
@@ -101,6 +110,7 @@ jobs:
 
   windows:
     name: Build for Windows
+    if: inputs.build_scope != 'blackflow-macos-package'
     needs: meta
     strategy:
       matrix:
@@ -263,6 +273,7 @@ jobs:
 
   ubuntu:
     name: Build for Ubuntu
+    if: inputs.build_scope != 'blackflow-macos-package'
     needs: meta
     runs-on: ubuntu-latest
     strategy:
@@ -388,6 +399,7 @@ jobs:
 
   android:
     name: Build for Android
+    if: inputs.build_scope != 'blackflow-macos-package'
     needs: meta
     runs-on: macos-26
     strategy:
@@ -626,6 +638,10 @@ jobs:
         run: |
           if ${{ startsWith(github.ref, 'refs/tags/v') }}; then
             xcodebuild -scheme MAA archive -archivePath MAA.xcarchive
+          elif [[ '${{ inputs.build_scope }}' == 'blackflow-macos-package' ]]; then
+            xcodebuild CODE_SIGNING_ALLOWED=NO \
+              'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) BLACKFLOW_DATA_COLLECTION' \
+              -scheme MAA archive -archivePath MAA.xcarchive
           else
             xcodebuild CODE_SIGNING_ALLOWED=NO -scheme MAA archive -archivePath MAA.xcarchive
           fi
@@ -643,6 +659,40 @@ jobs:
           create-dmg Export/MAA.app
           mv MAA*.dmg MAA.dmg
         working-directory: src/MaaMacGui
+
+      - name: Create BlackFlow data collection disk image
+        if: inputs.build_scope == 'blackflow-macos-package'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='src/MaaMacGui/MAA.xcarchive/Products/Applications/MAA.app'
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          staging='build/blackflow-macos-dmg'
+          mkdir -p "$staging" release
+          cp -R "$app" "$staging/MAA.app"
+          ln -s /Applications "$staging/Applications"
+          cat > "$staging/NOTICE.txt" <<'NOTICE'
+          黑流树海数据收集专用 MAA v1
+
+          注意事项：
+          1、请下载后先打开 DMG，并将 MAA.app 拖入 Applications 后运行。请预留磁盘空间，一个完整的对局数据约为 200-300MB（压缩前）；对局结束后会自动压缩，压缩后约为 70-80MB。
+          2、数据位于日志目录的 debug/BlackFlow 文件夹下，可通过菜单“文件 → 打开日志文件夹”定位。
+          3、请上传完整的对局，不要从中途让 MAA 接手，可能出现异常。
+          4、优先使用 PlayCover 或可通过 ADB 连接的模拟器环境。
+          5、一个完整的对局耗时约 40-50 分钟，请合理规划时间。
+          6、请先完成群里发过的问卷。
+          7、数据暂定以局为单位，将程序自动生成的对局 ZIP 上传到 QQ 群文件；请使用与问卷相同的 QQ 账号。
+          8、不会存钱（），但是能点亮一些图鉴（？
+
+          本专用版本已关闭自动更新。由于使用 ad-hoc 签名且未经过 Apple 公证，首次启动若被 macOS 拦截，请在 Finder 中右键 MAA.app 并选择“打开”。
+          NOTICE
+          hdiutil create \
+            -volname 'MAA BlackFlow Data Collection v1' \
+            -srcfolder "$staging" \
+            -ov -format UDZO \
+            'release/MAA-BlackFlow-Data-Collection-v1-macos-universal.dmg'
 
       - name: Archive debug symbols
         if: startsWith(github.ref, 'refs/tags/v')
@@ -687,10 +737,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: MAA-macos-universal
-          path: ${{ startsWith(github.ref, 'refs/tags/v') && 'release/MAA*' || 'src/MaaMacGui/MAA.xcarchive/**' }}
+          path: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.build_scope == 'blackflow-macos-package') && 'release/MAA*' || 'src/MaaMacGui/MAA.xcarchive/**' }}
 
   avalonia:
     name: Build MAAUnified (Avalonia) ${{ matrix.name }}
+    if: inputs.build_scope != 'blackflow-macos-package'
     needs: [meta, windows, ubuntu, macOS-Core]
     runs-on: ${{ matrix.os }}
     strategy:

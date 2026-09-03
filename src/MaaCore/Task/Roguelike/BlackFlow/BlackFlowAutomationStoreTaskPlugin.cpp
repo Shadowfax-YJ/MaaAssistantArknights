@@ -31,6 +31,7 @@ constexpr std::string_view ShopDecisionEntry = "BlackFlow@Roguelike@AutomationSh
 constexpr std::string_view ShopAction = "BlackFlow@Roguelike@AutomationShopAction";
 constexpr std::string_view ShopGoodsTask = "BlackFlow@Roguelike@AutomationShopGoods";
 constexpr std::string_view ShopGoodsBottomTask = "BlackFlow@Roguelike@AutomationShopGoodsBottom";
+constexpr std::string_view ShopCaptureAnchorsTask = "BlackFlow@Roguelike@AutomationShopCaptureAnchors";
 constexpr std::string_view ShopGoodsSwipeToTopTask = "BlackFlow@Roguelike@AutomationShopGoodsSwipeToTop";
 constexpr std::string_view ShopGoodsSwipeToBottomTask = "BlackFlow@Roguelike@AutomationShopGoodsSwipeToBottom";
 constexpr std::string_view ShopBuyConfirmTask = "BlackFlow@Roguelike@AutomationShopBuyConfirm";
@@ -1020,9 +1021,12 @@ bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
 
     const cv::Mat top_image = ctrler()->get_image();
     const auto top_goods = recognize(top_image, std::string(ShopGoodsTask));
-    const auto top_capture_goods = m_pending_eerie_store_snapshot.has_value()
-                                       ? recognize(top_image, std::string(ShopGoodsBottomTask))
-                                       : std::vector<TextRect> {};
+    // Screenshot stitching must not depend on the purchase whitelist. The
+    // overlapping row can consist entirely of goods we intentionally never
+    // buy, while generic labels such as "价格" still provide stable anchors.
+    const auto top_capture_anchors = m_pending_eerie_store_snapshot.has_value()
+                                         ? recognize(top_image, std::string(ShopCaptureAnchorsTask))
+                                         : std::vector<TextRect> {};
 
     if (!run_goods_swipe(ShopGoodsSwipeToBottomTask)) {
         return false;
@@ -1030,7 +1034,10 @@ bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
     m_shop_shelf_page = ShelfPage::Bottom;
     const cv::Mat bottom_image = ctrler()->get_image();
     const auto bottom_goods = recognize(bottom_image, std::string(ShopGoodsBottomTask));
-    capture_pending_eerie_store_snapshot(top_image, bottom_image, top_capture_goods, bottom_goods);
+    const auto bottom_capture_anchors = m_pending_eerie_store_snapshot.has_value()
+                                            ? recognize(bottom_image, std::string(ShopCaptureAnchorsTask))
+                                            : std::vector<TextRect> {};
+    capture_pending_eerie_store_snapshot(top_image, bottom_image, top_capture_anchors, bottom_capture_anchors);
 
     m_shop_goods.clear();
     m_shop_goods.reserve(top_goods.size() + bottom_goods.size());

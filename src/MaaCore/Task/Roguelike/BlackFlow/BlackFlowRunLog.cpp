@@ -563,9 +563,10 @@ bool BlackFlowRunLog::record(
     }
 }
 
-void BlackFlowRunLog::reset() noexcept
+std::filesystem::path BlackFlowRunLog::close_current_run() noexcept
 {
     std::scoped_lock lock(m_mutex);
+    std::filesystem::path completed_run = std::move(m_run_directory);
     if (m_jsonl.is_open()) {
         m_jsonl.flush();
         m_jsonl.close();
@@ -586,5 +587,11 @@ void BlackFlowRunLog::reset() noexcept
     m_last_image_sequence = 0;
     m_run_revision = 0;
     m_sequence = 0;
+    return completed_run;
+}
+
+void BlackFlowRunLog::reset() noexcept
+{
+    (void)close_current_run();
 }
 } // namespace asst::blackflow

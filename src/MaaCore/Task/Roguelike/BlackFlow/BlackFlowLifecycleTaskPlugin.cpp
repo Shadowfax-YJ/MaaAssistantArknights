@@ -67,6 +67,7 @@ bool BlackFlowLifecycleTaskPlugin::load_params(const json::value& params)
     if (!BlackFlowTaskPluginBase::load_params(params)) {
         return false;
     }
+    m_start_explore_seen = false;
 
     std::string profile = params.get("blackflow_strategy", std::string {});
     if (profile.empty()) {
@@ -206,6 +207,15 @@ bool BlackFlowLifecycleTaskPlugin::verify(AsstMsg msg, const json::value& detail
 
 void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
 {
+    const bool run_has_progress = m_session != nullptr &&
+        (m_session->current_floor().has_value() || m_session->run().floor > 0 || m_session->result().has_value());
+    const StartExploreRunDisposition disposition =
+        start_explore_run_disposition(m_start_explore_seen, run_has_progress);
+    m_start_explore_seen = true;
+    if (disposition == StartExploreRunDisposition::KeepInitialRun) {
+        Log.info("BlackFlow initial StartExplore keeps the initialized run log");
+        return;
+    }
     finish_current_run(true);
 }
 
@@ -242,6 +252,12 @@ void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
             "BlackFlowLifecycle",
             nullptr,
             true);
+    }
+    if (m_port != nullptr) {
+        std::string archive_error;
+        if (!m_port->queue_current_run_archive(&archive_error)) {
+            Log.error("BlackFlow failed to queue completed run archive", archive_error);
+        }
     }
     if (m_port != nullptr) {
         m_port->reset_run();

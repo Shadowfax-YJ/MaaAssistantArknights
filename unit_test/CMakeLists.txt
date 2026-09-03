@@ -4,6 +4,10 @@ project(MAAUnitTests LANGUAGES CXX)
 
 include(CTest)
 include(FetchContent)
+if(NOT TARGET ZLIB::ZLIB)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/MaaDeps/maadeps.cmake)
+    find_package(ZLIB REQUIRED)
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -55,13 +59,14 @@ add_executable(maa-black-flow-routing-test
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPageIdentity.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPlanner.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPolicy.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowRunArchive.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyGoal.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyValue.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowStateSpace.cpp
 )
 
 target_compile_features(maa-black-flow-routing-test PRIVATE cxx_std_20)
-target_link_libraries(maa-black-flow-routing-test PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(maa-black-flow-routing-test PRIVATE Catch2::Catch2WithMain ZLIB::ZLIB)
 target_include_directories(maa-black-flow-routing-test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include

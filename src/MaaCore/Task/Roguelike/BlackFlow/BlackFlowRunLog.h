@@ -247,6 +247,7 @@ public:
         const std::filesystem::path& relative_directory,
         std::string_view attribution,
         std::string* error = nullptr);
+    [[nodiscard]] std::filesystem::path close_current_run() noexcept;
     void reset() noexcept;
 
     [[nodiscard]] const std::filesystem::path& run_directory() const noexcept { return m_run_directory; }

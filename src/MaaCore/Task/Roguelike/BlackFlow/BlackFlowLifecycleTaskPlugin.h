@@ -36,5 +36,6 @@ private:
     mutable std::string m_terminal_trigger;
     mutable std::string m_terminal_pre_task;
     bool m_stop_after_abandon = false;
+    bool m_start_explore_seen = false;
 };
 } // namespace asst::blackflow

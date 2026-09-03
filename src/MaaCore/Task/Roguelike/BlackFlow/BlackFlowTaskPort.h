@@ -332,6 +332,7 @@ public:
         std::string* error) = 0;
 
     virtual void reset_run() {}
+    virtual bool queue_current_run_archive(std::string* = nullptr) { return true; }
 
     virtual void configure_diagnostics(const DiagnosticSettings&) {}
 
@@ -380,6 +381,7 @@ public:
     virtual bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) = 0;
 
     virtual void reset_run() {}
+    virtual bool queue_current_run_archive(std::string* = nullptr) { return true; }
 
     virtual void configure_diagnostics(const DiagnosticSettings&) {}
 
@@ -462,6 +464,7 @@ public:
     bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) override;
 
     void reset_run() override;
+    bool queue_current_run_archive(std::string* error = nullptr) override;
     void configure_diagnostics(const DiagnosticSettings& settings) override;
     void set_collection_popup_session(std::weak_ptr<BlackFlowSession> session) override;
     bool capture_collection_popup(std::string_view task, std::string* error = nullptr) override;

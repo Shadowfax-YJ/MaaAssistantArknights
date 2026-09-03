@@ -25,6 +25,7 @@ public:
         std::string* error) override;
 
     void reset_run() override;
+    bool queue_current_run_archive(std::string* error = nullptr) override;
     void configure_diagnostics(const DiagnosticSettings& settings) override;
     bool persist_diagnostics(const DiagnosticArtifactRequest& request, std::string* error) override;
     bool record_run_event(

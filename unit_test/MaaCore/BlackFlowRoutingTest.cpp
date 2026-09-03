@@ -1,11 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <set>
 
 #include <meojson/json.hpp>
@@ -32,6 +36,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowPolicy.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRevealSemantics.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRunArchive.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPort.h"
 #include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
@@ -46,6 +51,20 @@ using namespace asst::blackflow::perception;
 
 namespace
 {
+class ScopedDirectoryCleanup
+{
+public:
+    explicit ScopedDirectoryCleanup(std::filesystem::path path) : m_path(std::move(path)) {}
+    ~ScopedDirectoryCleanup()
+    {
+        std::error_code ignored;
+        std::filesystem::remove_all(m_path, ignored);
+    }
+
+private:
+    std::filesystem::path m_path;
+};
+
 RunResources resources_authorizing(MovementKind movement)
 {
     RunResources resources;
@@ -215,6 +234,24 @@ TEST_CASE("BlackFlow eerie merchant capture keeps the full page while extending 
             std::vector<EerieStoreStitchAnchor> { { "第一排甲", 612, 181 } },
             std::vector<EerieStoreStitchAnchor> { { "医者-地缘策略", 1036, 390 } })
             .has_value());
+
+    // The overlapping row can contain no purchasable goods at all. Capture
+    // alignment must still be able to use unfiltered UI text such as the
+    // repeated price labels instead of depending on the purchase whitelist.
+    REQUIRE(
+        eerie_store_scroll_offset(
+            std::vector<EerieStoreStitchAnchor> {
+                { "价格", 560, 310 },
+                { "价格", 765, 310 },
+                { "价格", 560, 522 },
+                { "价格", 765, 522 },
+            },
+            std::vector<EerieStoreStitchAnchor> {
+                { "价格", 560, 310 },
+                { "价格", 765, 310 },
+                { "价格", 560, 522 },
+                { "价格", 765, 522 },
+            }) == 212);
 }
 
 TEST_CASE("BlackFlow move preview recognition waits for a stable displayed state")
@@ -604,6 +641,9 @@ TEST_CASE("BlackFlow eerie merchant settles refreshes and relocates a cached goo
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
     REQUIRE(tasks->at("BlackFlow@Roguelike@AutomationShopRefreshConfirm").get("postDelay", 0) >= 1200);
+    const auto& capture_anchors = tasks->at("BlackFlow@Roguelike@AutomationShopCaptureAnchors");
+    REQUIRE(capture_anchors.at("algorithm") == "OcrDetect");
+    REQUIRE_FALSE(capture_anchors.contains("text"));
 
     std::ifstream source_file(
         repository_root /
@@ -618,7 +658,8 @@ TEST_CASE("BlackFlow eerie merchant settles refreshes and relocates a cached goo
     REQUIRE(source.find("queue_eerie_store_snapshot(\"initial\"") != std::string::npos);
     REQUIRE(source.find("queue_eerie_store_snapshot(\"after_refresh\"") != std::string::npos);
     REQUIRE(source.find("capture_pending_eerie_store_snapshot(") != std::string::npos);
-    REQUIRE(source.find("top_capture_goods, bottom_goods") != std::string::npos);
+    REQUIRE(source.find("ShopCaptureAnchorsTask") != std::string::npos);
+    REQUIRE(source.find("top_capture_anchors, bottom_capture_anchors") != std::string::npos);
 }
 
 TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
@@ -2607,6 +2648,132 @@ TEST_CASE("BlackFlow abandonment reset waits until the settlement page reaches S
     REQUIRE(settlement != successors.end());
     REQUIRE(restart != successors.end());
     REQUIRE(settlement < restart);
+}
+
+TEST_CASE("BlackFlow initial StartExplore keeps the initialized run log")
+{
+    REQUIRE(
+        start_explore_run_disposition(false, false) == StartExploreRunDisposition::KeepInitialRun);
+    REQUIRE(
+        start_explore_run_disposition(false, true) == StartExploreRunDisposition::FinishAndStartNext);
+    REQUIRE(
+        start_explore_run_disposition(true, false) == StartExploreRunDisposition::FinishAndStartNext);
+}
+
+TEST_CASE("BlackFlow completed run is verified before its directory is removed")
+{
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("maa-blackflow-run-archive-test-" + std::to_string(nonce));
+    ScopedDirectoryCleanup cleanup(root);
+    const std::filesystem::path run = root / "run-20260904-010203-123456";
+    const std::filesystem::path nested = run / "collection-popups" / "floor-1" / "node-1";
+    REQUIRE(std::filesystem::create_directories(nested));
+    {
+        std::ofstream output(run / "run.log", std::ios::binary);
+        output << "run.started\nrun.ended\n";
+    }
+    {
+        std::ofstream output(nested / std::filesystem::path(u8"归因.json"), std::ios::binary);
+        output << R"({"source":"丰饶树冢"})";
+    }
+
+    RunArchiveResult result;
+    std::string error;
+    REQUIRE(archive_completed_run_directory(run, result, &error));
+    INFO(error);
+    REQUIRE_FALSE(std::filesystem::exists(run));
+    REQUIRE(std::filesystem::is_regular_file(result.archive_path));
+    REQUIRE(result.entry_count == 2);
+    REQUIRE(result.uncompressed_bytes > 0);
+}
+
+TEST_CASE("BlackFlow run archive failure preserves the source directory")
+{
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("maa-blackflow-run-archive-collision-test-" + std::to_string(nonce));
+    ScopedDirectoryCleanup cleanup(root);
+    const std::filesystem::path run = root / "run-20260904-010203-654321";
+    REQUIRE(std::filesystem::create_directories(run));
+    {
+        std::ofstream output(run / "run.log", std::ios::binary);
+        output << "must survive";
+    }
+    {
+        std::ofstream output(root / "run-20260904-010203-654321.zip", std::ios::binary);
+        output << "existing archive";
+    }
+
+    RunArchiveResult result;
+    std::string error;
+    REQUIRE_FALSE(archive_completed_run_directory(run, result, &error));
+    REQUIRE(std::filesystem::is_directory(run));
+    REQUIRE(std::filesystem::is_regular_file(run / "run.log"));
+    REQUIRE(error.find("already exists") != std::string::npos);
+}
+
+TEST_CASE("BlackFlow completed run archive queue never waits for compression")
+{
+    struct AsyncState
+    {
+        std::mutex mutex;
+        std::condition_variable ready;
+        bool callback_started = false;
+        bool release_callback = false;
+        bool callback_completed = false;
+        RunArchiveResult result;
+        std::string error;
+    };
+
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root = std::filesystem::temp_directory_path() /
+        ("maa-blackflow-run-archive-queue-test-" + std::to_string(nonce));
+    ScopedDirectoryCleanup cleanup(root);
+    const std::filesystem::path run = root / "run-20260904-010203-777777";
+    REQUIRE(std::filesystem::create_directories(run));
+    {
+        std::ofstream output(run / "run.log", std::ios::binary);
+        output << "asynchronous archive";
+    }
+
+    const auto state = std::make_shared<AsyncState>();
+    std::string enqueue_error;
+    const auto before = std::chrono::steady_clock::now();
+    REQUIRE(enqueue_completed_run_archive(
+        run,
+        [state](const std::filesystem::path&, const RunArchiveResult& result, const std::string& error) {
+            std::unique_lock lock(state->mutex);
+            state->callback_started = true;
+            state->result = result;
+            state->error = error;
+            state->ready.notify_all();
+            state->ready.wait_for(
+                lock,
+                std::chrono::seconds(2),
+                [state]() { return state->release_callback; });
+            state->callback_completed = true;
+            state->ready.notify_all();
+        },
+        &enqueue_error));
+    const auto enqueue_duration = std::chrono::steady_clock::now() - before;
+    INFO(enqueue_error);
+    REQUIRE(enqueue_duration < std::chrono::milliseconds(500));
+
+    std::unique_lock lock(state->mutex);
+    REQUIRE(state->ready.wait_for(
+        lock,
+        std::chrono::seconds(5),
+        [state]() { return state->callback_started; }));
+    state->release_callback = true;
+    state->ready.notify_all();
+    REQUIRE(state->ready.wait_for(
+        lock,
+        std::chrono::seconds(5),
+        [state]() { return state->callback_completed; }));
+    REQUIRE(state->error.empty());
+    REQUIRE(std::filesystem::is_regular_file(state->result.archive_path));
+    REQUIRE_FALSE(std::filesystem::exists(run));
 }
 
 TEST_CASE("BlackFlow merchant sale recognition never includes processing products")

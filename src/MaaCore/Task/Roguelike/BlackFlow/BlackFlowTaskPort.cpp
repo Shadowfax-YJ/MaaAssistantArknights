@@ -1679,6 +1679,11 @@ void BlackFlowTaskPort::reset_run()
     }
 }
 
+bool BlackFlowTaskPort::queue_current_run_archive(std::string* error)
+{
+    return m_map_source == nullptr || m_map_source->queue_current_run_archive(error);
+}
+
 void BlackFlowTaskPort::configure_diagnostics(const DiagnosticSettings& settings)
 {
     if (m_map_source != nullptr) {
