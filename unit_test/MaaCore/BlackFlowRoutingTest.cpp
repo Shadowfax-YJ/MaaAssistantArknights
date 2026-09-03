@@ -254,15 +254,16 @@ TEST_CASE("BlackFlow eerie merchant capture keeps the full page while extending 
             }) == 212);
 }
 
-TEST_CASE("BlackFlow move preview recognition waits for a stable displayed state")
+TEST_CASE("BlackFlow move preview recognition accepts stable semantics while pixels animate")
 {
     using enum MovePreviewFrameState;
 
-    REQUIRE_FALSE(move_preview_frame_is_stable(Missing, Missing, 0.0));
-    REQUIRE_FALSE(move_preview_frame_is_stable(Missing, Reachable, 0.0));
-    REQUIRE_FALSE(move_preview_frame_is_stable(Reachable, Blocked, 0.0));
-    REQUIRE_FALSE(move_preview_frame_is_stable(Reachable, Reachable, MovePreviewMaximumMeanDifference + 0.01));
-    REQUIRE(move_preview_frame_is_stable(Reachable, Reachable, MovePreviewMaximumMeanDifference));
+    REQUIRE_FALSE(move_preview_observation_is_stable(Missing, Missing, true));
+    REQUIRE_FALSE(move_preview_observation_is_stable(Missing, Reachable, true));
+    REQUIRE_FALSE(move_preview_observation_is_stable(Reachable, Blocked, true));
+    REQUIRE_FALSE(move_preview_observation_is_stable(Reachable, Reachable, false));
+    REQUIRE(move_preview_observation_is_stable(Reachable, Reachable, true));
+    REQUIRE(move_preview_observation_is_stable(Blocked, Blocked, true));
     REQUIRE(MovePreviewStabilityInterval <= 200);
     REQUIRE(MovePreviewStabilityAttempts * MovePreviewStabilityInterval >= 3000);
 }
@@ -3089,6 +3090,7 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
     REQUIRE(depart.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
                 "#self",
+                "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
                 "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted",
             });
 
@@ -3113,7 +3115,11 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
     REQUIRE(reenter.get("action", std::string {}) == "ClickSelf");
     REQUIRE(reenter.get("maxTimes", 0) == 3);
     REQUIRE(reenter.get("next", std::vector<std::string> {}) ==
-            std::vector<std::string> { "#self", "BlackFlow@Roguelike@StageEnterBattleAgainCompleted" });
+            std::vector<std::string> {
+                "#self",
+                "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+                "BlackFlow@Roguelike@StageEnterBattleAgainCompleted",
+            });
     REQUIRE(reenter.get("exceededNext", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@RecoverMap-Enter" });
 
@@ -3514,13 +3520,61 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
     REQUIRE(departure.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
     REQUIRE(departure.get("action", std::string {}) == "ClickSelf");
     const auto departure_successors = departure.get("next", std::vector<std::string> {});
-    REQUIRE(std::ranges::find(departure_successors, "BlackFlow@Roguelike@QuickFormation") !=
-            departure_successors.end());
+    const auto overload =
+        std::ranges::find(departure_successors, "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt");
+    const auto quick_formation =
+        std::ranges::find(departure_successors, "BlackFlow@Roguelike@QuickFormation");
+    REQUIRE(overload != departure_successors.end());
+    REQUIRE(quick_formation != departure_successors.end());
+    REQUIRE(overload < quick_formation);
 
     const auto confirmation_resets = tasks->at("BlackFlow@Roguelike@HuntedConfirmCompleted")
                                          .get("reduceOtherTimes", std::vector<std::string> {});
     REQUIRE(std::ranges::find(confirmation_resets, "BlackFlow@Roguelike@HuntedDepart*3") !=
             confirmation_resets.end());
+}
+
+TEST_CASE("BlackFlow direct battle departures route inventory overload through cleanup")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    constexpr std::string_view Prompt = "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt";
+    constexpr std::string_view Action = "BlackFlow@Roguelike@DirectDepartInventoryOverloadAction";
+    for (const std::string_view departure : {
+             "BlackFlow@Roguelike@HuntedDepart",
+             "BlackFlow@Roguelike@StageEncounterBattleDepart",
+             "BlackFlow@Roguelike@StageEnterBattleAgain",
+         }) {
+        const auto successors = tasks->at(std::string(departure)).get("next", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(successors, Prompt) != successors.end());
+    }
+
+    const auto& prompt = tasks->at(std::string(Prompt));
+    REQUIRE(prompt.get("baseTask", std::string {}) == "BlackFlow@Roguelike@MovementInventoryOverloadPrompt");
+    REQUIRE(prompt.get("next", std::vector<std::string> {}) == std::vector<std::string> { std::string(Action) });
+    REQUIRE(tasks->at(std::string(Action)).get("baseTask", std::string {}) == "BlackFlow@Roguelike@RecoveryFailed");
+
+    REQUIRE(tasks->at("BlackFlow@Roguelike@DirectDepartHuntedResume")
+                .get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> {
+                "BlackFlow@Roguelike@HuntedDepart",
+                "BlackFlow@Roguelike@HuntedConfirm",
+            });
+    REQUIRE(tasks->at("BlackFlow@Roguelike@DirectDepartEncounterResume")
+                .get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> {
+                "BlackFlow@Roguelike@StageEncounterBattleDepart",
+                "BlackFlow@Roguelike@RecoverMap-Enter",
+            });
+    REQUIRE(tasks->at("BlackFlow@Roguelike@DirectDepartBattleReenterResume")
+                .get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> {
+                "BlackFlow@Roguelike@StageEnterBattleAgain",
+                "BlackFlow@Roguelike@RecoverMap-Enter",
+            });
 }
 
 TEST_CASE("BlackFlow encounter rewards can transition directly into pursuit")

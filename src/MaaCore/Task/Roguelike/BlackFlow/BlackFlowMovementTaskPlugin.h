@@ -31,6 +31,7 @@ private:
         None,
         SelectMovement,
         ObserveInventory,
+        CleanupDirectDepartOverload,
     };
 
     enum class SelectionOutcome
@@ -106,6 +107,7 @@ private:
     };
 
     bool observe_inventory();
+    bool cleanup_direct_depart_overload(std::string_view source_task);
     bool scan_inventory_frame(InventoryFrame& frame, std::string* error);
     InventoryAnalysisOutcome
         analyze_inventory_frame(const cv::Mat& image, InventoryFrame& frame, int minimum_name_x, std::string* error) const;
@@ -139,5 +141,6 @@ private:
     static std::vector<std::string> inventory_ocr_candidates();
 
     mutable PendingWork m_pending = PendingWork::None;
+    mutable std::string m_direct_depart_source;
 };
 } // namespace asst::blackflow

@@ -752,6 +752,11 @@ public:
                 continue;
             }
 
+            // 标题、节点类型和行动力消耗连续一致，才是这里真正需要的稳定性。
+            // 右侧预览面板包含常驻粒子、烟雾和缩略图加载动画，尤其在 macOS 的 4K
+            // Encode 截图上，相邻两帧的像素均值会一直超过旧阈值。像素差仍作为诊断信息
+            // 记录，但不能再阻止已经稳定的语义进入确认流程。
+            const bool semantic_stable = semantics_are_stable(current, current_state);
             const cv::Mat previous_region =
                 previous.has_value() ? move_preview_stability_region(*previous) : cv::Mat {};
             const cv::Mat current_region = move_preview_stability_region(current);
@@ -760,25 +765,21 @@ public:
                 const double denominator =
                     static_cast<double>(current_region.total()) * static_cast<double>(current_region.channels());
                 mean_difference = cv::norm(previous_region, current_region, cv::NORM_L1) / denominator;
-                if (move_preview_frame_is_stable(previous_state, current_state, mean_difference)) {
-                    if (semantics_are_stable(current, current_state)) {
-                        image = std::move(current);
-                        state = current_state;
-                        return true;
-                    }
-                    last_rejection = "preview pixels are stable but semantic content is not yet stable";
-                }
-                else {
-                    last_rejection =
-                        previous_state != current_state
-                            ? "preview state changed between consecutive frames"
-                            : "preview is still animating (mean frame difference " + std::to_string(mean_difference) +
-                                  ")";
-                }
             }
             else {
                 mean_difference = -1.0;
-                last_rejection = "waiting for a second comparable preview frame";
+            }
+
+            if (move_preview_observation_is_stable(previous_state, current_state, semantic_stable)) {
+                image = std::move(current);
+                state = current_state;
+                return true;
+            }
+            if (previous_state != current_state) {
+                last_rejection = "preview state changed between consecutive frames";
+            }
+            else if (!semantic_stable) {
+                last_rejection = "preview semantic content is not yet stable";
             }
 
             previous = std::move(current);
@@ -1077,6 +1078,7 @@ bool BlackFlowTaskPort::preview(
     MovePreviewSemanticStability semantic_stability;
     const auto semantics_are_stable = [&](const cv::Mat& current, MovePreviewFrameState current_state) {
         if (current_state == MovePreviewFrameState::Blocked) {
+            semantic_stability.reset();
             return true;
         }
         const auto current_cost = recognize_move_preview_action_point_cost(current);
@@ -1614,6 +1616,11 @@ bool BlackFlowTaskPort::cleanup_open_inventory_if_overloaded(bool& cleanup_perfo
     }
     cleanup_performed = true;
     return true;
+}
+
+bool BlackFlowTaskPort::cleanup_depart_inventory_overload(std::string* error)
+{
+    return cleanup_overloaded_inventory(false, error);
 }
 
 bool BlackFlowTaskPort::confirm(

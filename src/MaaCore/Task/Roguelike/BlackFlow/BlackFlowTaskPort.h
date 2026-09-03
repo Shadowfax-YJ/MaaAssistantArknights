@@ -265,7 +265,6 @@ enum class MovePreviewFrameState
 
 inline constexpr int MovePreviewStabilityAttempts = 24;
 inline constexpr int MovePreviewStabilityInterval = 150;
-inline constexpr double MovePreviewMaximumMeanDifference = 3.0;
 // 用 2026-09-02 两次完整 run 中 44 组战斗预览前后截图标定：地图区域同视口最大 3.192，
 // 发生纵向平移最小 6.904。取两者间的 4.0，保留足够分类余量。
 inline constexpr double BattlePreviewMapMaximumMeanDifference = 4.0;
@@ -275,13 +274,12 @@ inline constexpr double BattlePreviewMapMaximumMeanDifference = 4.0;
     return mean_difference >= 0.0 && mean_difference <= BattlePreviewMapMaximumMeanDifference;
 }
 
-[[nodiscard]] constexpr bool move_preview_frame_is_stable(
+[[nodiscard]] constexpr bool move_preview_observation_is_stable(
     MovePreviewFrameState previous,
     MovePreviewFrameState current,
-    double mean_difference) noexcept
+    bool semantics_stable) noexcept
 {
-    return current != MovePreviewFrameState::Missing && current == previous && mean_difference >= 0.0 &&
-           mean_difference <= MovePreviewMaximumMeanDifference;
+    return current != MovePreviewFrameState::Missing && current == previous && semantics_stable;
 }
 
 class MovePreviewSemanticStability
@@ -379,6 +377,7 @@ public:
     virtual bool
         confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) = 0;
     virtual bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) = 0;
+    virtual bool cleanup_depart_inventory_overload(std::string* error) = 0;
 
     virtual void reset_run() {}
     virtual bool queue_current_run_archive(std::string* = nullptr) { return true; }
@@ -462,6 +461,7 @@ public:
     bool check_battle_preview_map(BattlePreviewMapCheck& check, std::string* error) override;
     bool confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) override;
     bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) override;
+    bool cleanup_depart_inventory_overload(std::string* error) override;
 
     void reset_run() override;
     bool queue_current_run_archive(std::string* error = nullptr) override;

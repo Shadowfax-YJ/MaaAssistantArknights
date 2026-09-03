@@ -26,6 +26,17 @@ constexpr std::string_view SelectMovementTrigger = "BlackFlow@Roguelike@SelectMo
 constexpr std::string_view SelectionAction = "BlackFlow@Roguelike@SelectMovementAction";
 constexpr std::string_view InventoryObservationTrigger = "BlackFlow@Roguelike@MovementInventoryObserve";
 constexpr std::string_view InventoryObservationAction = "BlackFlow@Roguelike@MovementInventoryObservationAction";
+constexpr std::string_view DirectDepartOverloadTrigger =
+    "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt";
+constexpr std::string_view DirectDepartOverloadAction =
+    "BlackFlow@Roguelike@DirectDepartInventoryOverloadAction";
+constexpr std::string_view HuntedDepartTask = "BlackFlow@Roguelike@HuntedDepart";
+constexpr std::string_view StageEncounterBattleDepartTask = "BlackFlow@Roguelike@StageEncounterBattleDepart";
+constexpr std::string_view StageEnterBattleAgainTask = "BlackFlow@Roguelike@StageEnterBattleAgain";
+constexpr std::string_view HuntedResumeTask = "BlackFlow@Roguelike@DirectDepartHuntedResume";
+constexpr std::string_view EncounterBattleResumeTask = "BlackFlow@Roguelike@DirectDepartEncounterResume";
+constexpr std::string_view BattleReenterResumeTask = "BlackFlow@Roguelike@DirectDepartBattleReenterResume";
+constexpr std::string_view RecoveryFailedTask = "BlackFlow@Roguelike@RecoveryFailed";
 constexpr std::string_view InventoryCheckTask = "BlackFlow@Roguelike@MovementInventoryCheck";
 constexpr std::string_view InventoryItemsTask = "BlackFlow@Roguelike@MovementInventoryItems";
 constexpr std::string_view InventoryNaturalPriorityTask = "BlackFlow@Roguelike@InventoryNaturalPriority";
@@ -117,12 +128,18 @@ bool BlackFlowMovementTaskPlugin::verify(AsstMsg msg, const json::value& details
         m_pending = PendingWork::ObserveInventory;
         return true;
     }
+    if (task == DirectDepartOverloadTrigger) {
+        m_pending = PendingWork::CleanupDirectDepartOverload;
+        m_direct_depart_source = details.get("pre_task", std::string {});
+        return true;
+    }
     return false;
 }
 
 void BlackFlowMovementTaskPlugin::reset_in_run_variables()
 {
     m_pending = PendingWork::None;
+    m_direct_depart_source.clear();
 }
 
 bool BlackFlowMovementTaskPlugin::_run()
@@ -132,6 +149,11 @@ bool BlackFlowMovementTaskPlugin::_run()
     m_pending = PendingWork::None;
     if (work == PendingWork::None) {
         return true;
+    }
+    if (work == PendingWork::CleanupDirectDepartOverload) {
+        const std::string source = std::move(m_direct_depart_source);
+        m_direct_depart_source.clear();
+        return cleanup_direct_depart_overload(source);
     }
     if (work == PendingWork::ObserveInventory) {
         return observe_inventory();
@@ -166,6 +188,79 @@ bool BlackFlowMovementTaskPlugin::_run()
             FailureDisposition::RestartRun);
         Log.error("BlackFlow movement selection failed", error);
     }
+    report_outputs();
+    return true;
+}
+
+bool BlackFlowMovementTaskPlugin::cleanup_direct_depart_overload(std::string_view source_task)
+{
+    Task.set_task_base(std::string(DirectDepartOverloadAction), std::string(RecoveryFailedTask));
+    if (m_session == nullptr || m_port == nullptr) {
+        Log.error("BlackFlow direct-depart inventory cleanup has no active session or task port");
+        return true;
+    }
+
+    const bool hunted = source_task == HuntedDepartTask;
+    const bool encounter_battle = source_task == StageEncounterBattleDepartTask;
+    const bool battle_reenter = source_task == StageEnterBattleAgainTask;
+    if (!hunted && !encounter_battle && !battle_reenter) {
+        m_session->fail(
+            "direct_depart_inventory_cleanup_failed",
+            "inventory overload was reached from an unknown direct-depart task: " + std::string(source_task),
+            FailureDisposition::StopTask);
+        Log.error("BlackFlow direct-depart inventory overload has unknown source", source_task);
+        report_outputs();
+        return true;
+    }
+
+    record_run_event(
+        RunLogLevel::Info,
+        "inventory.depart-overload",
+        "started",
+        "pending",
+        json::object { { "source_task", std::string(source_task) } },
+        "BlackFlowDirectDepartInventory");
+    std::string error;
+    if (!m_port->cleanup_depart_inventory_overload(&error)) {
+        record_run_event(
+            RunLogLevel::Error,
+            "inventory.depart-overload",
+            "failed",
+            "error",
+            json::object { { "source_task", std::string(source_task) }, { "error", error } },
+            "BlackFlowDirectDepartInventory",
+            nullptr,
+            true);
+        m_session->fail(
+            "direct_depart_inventory_cleanup_failed",
+            error.empty() ? "direct-depart inventory overload cleanup failed" : error,
+            FailureDisposition::StopTask);
+        Log.error("BlackFlow direct-depart inventory overload cleanup failed", source_task, error);
+        report_outputs();
+        return true;
+    }
+
+    // 过载拦截发生在实际进入节点之前，且整理可能丢掉加工品；废弃旧背包快照。
+    // 关闭零件箱后可能回到原预览，也可能回到地图，因此先走来源专用的现场路由，
+    // 不能直接把追猎送进 Stages，否则地图先于追猎确认出现时会误走 NextLevel。
+    m_session->invalidate_movement_inventory();
+    const std::string_view resume_task = hunted          ? HuntedResumeTask
+                                         : encounter_battle ? EncounterBattleResumeTask
+                                                            : BattleReenterResumeTask;
+    Task.set_task_base(std::string(DirectDepartOverloadAction), std::string(resume_task));
+    record_run_event(
+        RunLogLevel::Info,
+        "inventory.depart-overload",
+        "completed",
+        "success",
+        json::object {
+            { "source_task", std::string(source_task) },
+            { "resume_task", std::string(resume_task) },
+        },
+        "BlackFlowDirectDepartInventory",
+        nullptr,
+        true);
+    Log.info("BlackFlow direct-depart inventory overload cleaned", source_task, "resume", resume_task);
     report_outputs();
     return true;
 }

@@ -1777,7 +1777,11 @@
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@QuickFormation"],
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@QuickFormation"
+        ],
         "maxTimes": 3,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
@@ -2088,6 +2092,37 @@
         "text": ["零件箱已满"],
         "fullMatch": false,
         "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt": {
+        "Doc": "追猎、事件转战斗等旁路直接点击出发后也可能触发零件箱已满；交给移动插件清理并按来源恢复。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryOverloadPrompt",
+        "next": ["BlackFlow@Roguelike@DirectDepartInventoryOverloadAction"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@HuntedDepart*3",
+            "BlackFlow@Roguelike@StageEncounterBattleDepart*3",
+            "BlackFlow@Roguelike@StageEnterBattleAgain*3"
+        ]
+    },
+    "BlackFlow@Roguelike@DirectDepartInventoryOverloadAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@DirectDepartHuntedResume": {
+        "Doc": "追猎出发被零件箱满拦截后，关闭零件箱可能回到战斗预览，也可能重新出现追猎确认；只接受这两种现场。",
+        "algorithm": "JustReturn",
+        "postDelay": 500,
+        "next": ["BlackFlow@Roguelike@HuntedDepart", "BlackFlow@Roguelike@HuntedConfirm"]
+    },
+    "BlackFlow@Roguelike@DirectDepartEncounterResume": {
+        "Doc": "事件首次转战斗被零件箱满拦截后，优先复用仍打开的预览，否则进入既有地图恢复链。",
+        "algorithm": "JustReturn",
+        "postDelay": 500,
+        "next": ["BlackFlow@Roguelike@StageEncounterBattleDepart", "BlackFlow@Roguelike@RecoverMap-Enter"]
+    },
+    "BlackFlow@Roguelike@DirectDepartBattleReenterResume": {
+        "Doc": "快捷编队返回后的出发被零件箱满拦截时，优先复用仍打开的预览，否则进入既有地图恢复链。",
+        "algorithm": "JustReturn",
+        "postDelay": 500,
+        "next": ["BlackFlow@Roguelike@StageEnterBattleAgain", "BlackFlow@Roguelike@RecoverMap-Enter"]
     },
     "BlackFlow@Roguelike@MovementInventoryOverloadOpen": {
         "algorithm": "OcrDetect",
@@ -2892,7 +2927,11 @@
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted"],
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted"
+        ],
         "maxTimes": 3,
         "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
     },
@@ -3052,7 +3091,11 @@
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@StageEnterBattleAgainCompleted"],
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@StageEnterBattleAgainCompleted"
+        ],
         "maxTimes": 3,
         "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
     },
