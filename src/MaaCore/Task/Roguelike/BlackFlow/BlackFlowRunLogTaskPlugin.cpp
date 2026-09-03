@@ -8,6 +8,7 @@ bool BlackFlowRunLogTaskPlugin::load_params(const json::value& params)
         return false;
     }
     set_block(false);
+    set_may_change_ui(false);
     return m_session != nullptr && m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection;
 }
 

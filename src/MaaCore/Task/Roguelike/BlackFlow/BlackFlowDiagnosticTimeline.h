@@ -10,6 +10,13 @@
 
 namespace asst::blackflow
 {
+[[nodiscard]] constexpr int diagnostic_processing_item_floor(int run_floor) noexcept
+{
+    // Normal routing now rebuilds the map before scanning the parts box. Keep a
+    // defensive fallback so an interrupted/resumed observation never creates floor-0.
+    return std::max(1, run_floor);
+}
+
 [[nodiscard]] constexpr bool diagnostic_evidence_is_visible_at_step(
     int evidence_floor,
     std::uint64_t evidence_sequence,

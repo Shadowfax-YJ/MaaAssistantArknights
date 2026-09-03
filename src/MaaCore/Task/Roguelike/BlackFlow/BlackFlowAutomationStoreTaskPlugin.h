@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "BlackFlowAutomationStoreRules.h"
@@ -97,6 +98,8 @@ private:
     void clear_pending_purchase() noexcept;
     void finalize_pending_purchase(AutomationStoreKind kind);
     void capture_store_snapshot(AutomationStoreKind kind, std::string_view phase, int refresh_index) const;
+    void queue_eerie_store_snapshot(std::string phase, int refresh_index);
+    void capture_pending_eerie_store_snapshot(const cv::Mat& top_image, const cv::Mat& bottom_image);
 
     mutable PendingWork m_pending = PendingWork::None;
 
@@ -119,6 +122,7 @@ private:
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     bool m_shop_sold_in_cycle = false;
     ShelfPage m_shop_shelf_page = ShelfPage::Top;
+    std::optional<std::pair<std::string, int>> m_pending_eerie_store_snapshot;
 
     std::vector<ShelfSlot> m_scrap_shop_purchased;
     std::vector<std::string> m_scrap_shop_purchased_names;

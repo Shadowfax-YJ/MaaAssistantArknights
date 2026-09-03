@@ -9,6 +9,7 @@ asst::ScreenshotTaskPlugin::ScreenshotTaskPlugin(
     std::string_view task_chain) :
     AbstractTaskPlugin(callback, inst, task_chain)
 {
+    set_may_change_ui(false);
     m_screenshot_tasks.clear();
     if (auto ptr = Task.get(config_name)) {
         std::ranges::copy(ptr->next, std::back_inserter(m_screenshot_tasks));

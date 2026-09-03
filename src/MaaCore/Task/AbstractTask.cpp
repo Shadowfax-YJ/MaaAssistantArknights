@@ -122,6 +122,12 @@ json::value asst::AbstractTask::basic_info_with_what(std::string what) const
 
 void asst::AbstractTask::callback(AsstMsg msg, const json::value& detail)
 {
+    callback_with_plugin_effect(msg, detail);
+}
+
+bool asst::AbstractTask::callback_with_plugin_effect(AsstMsg msg, const json::value& detail)
+{
+    bool plugin_may_change_ui = false;
     for (const TaskPluginPtr& plugin : m_plugins) {
         plugin->set_task_id(m_task_id);
         plugin->set_task_ptr(this);
@@ -130,6 +136,7 @@ void asst::AbstractTask::callback(AsstMsg msg, const json::value& detail)
             continue;
         }
 
+        plugin_may_change_ui |= plugin->may_change_ui();
         plugin->run();
 
         if (plugin->block()) {
@@ -143,11 +150,12 @@ void asst::AbstractTask::callback(AsstMsg msg, const json::value& detail)
                 json::value proceed_detail = detail;
                 proceed_detail["details"]["task"] = task.substr(pos + 1);
                 m_callback(msg, proceed_detail, m_inst);
-                return;
+                return plugin_may_change_ui;
             }
         }
         m_callback(msg, detail, m_inst);
     }
+    return plugin_may_change_ui;
 }
 
 void asst::AbstractTask::click_return_button()

@@ -38,6 +38,20 @@ inline constexpr std::string_view NodeStorePurchaseRunLogAction = "node.store.pu
            task.ends_with("@Roguelike@ChooseOper");
 }
 
+[[nodiscard]] inline constexpr bool
+    pursuit_first_loot_click_task(std::string_view task, int execution_count) noexcept
+{
+    return execution_count == 1 &&
+           (task == "ClickToDrops" || task == "BlackFlow@Roguelike@ClickToDrops" ||
+            task.ends_with("@Roguelike@ClickToDrops"));
+}
+
+[[nodiscard]] inline constexpr bool pursuit_loot_click_task(std::string_view task) noexcept
+{
+    return task == "ClickToDrops" || task == "BlackFlow@Roguelike@ClickToDrops" ||
+           task.ends_with("@Roguelike@ClickToDrops");
+}
+
 [[nodiscard]] inline constexpr std::string_view recruitment_page_flag_task(std::string_view task) noexcept
 {
     return task.find("StartExplore@Roguelike@ChooseOper") != std::string_view::npos
@@ -67,12 +81,16 @@ enum class NodeGetDropScreen
 
 [[nodiscard]] inline std::optional<NodeGetDropScreen> node_get_drop_screen(std::string_view task) noexcept
 {
-    if (task == "BlackFlow@Roguelike@GetDrop") {
+    if (task == "BlackFlow@Roguelike@GetDrop" ||
+        task == "BlackFlow@Roguelike@GetDropConfirmed") {
         return NodeGetDropScreen::Drop;
     }
     if (task == "BlackFlow@Roguelike@GetDropSelect" ||
         task == "BlackFlow@Roguelike@GetDropSelectReward" ||
-        task == "BlackFlow@Roguelike@GetDropTrophyReward") {
+        task == "BlackFlow@Roguelike@GetDropTrophyReward" ||
+        task == "BlackFlow@Roguelike@GetDropSelectConfirmed" ||
+        task == "BlackFlow@Roguelike@GetDropSelectRewardConfirmed" ||
+        task == "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed") {
         return NodeGetDropScreen::Select;
     }
     return std::nullopt;
@@ -82,7 +100,17 @@ enum class NodeGetDropScreen
 // 因此必须等专用插件拿到实际点击框后再采集，不能由通用 ProcessTask 插件提前保存。
 [[nodiscard]] inline constexpr bool node_get_drop_uses_custom_selector(std::string_view task) noexcept
 {
-    return task == "BlackFlow@Roguelike@GetDropTrophyReward";
+    return task == "BlackFlow@Roguelike@GetDropTrophyReward" ||
+           task == "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed";
+}
+
+// 候选任务只负责第一次识别；实际点击必须由 Confirmed 任务在等待卡片重排后重新识别，
+// 再由插件基于稳定帧上的最新坐标执行。ProcessTask 自身始终保持 DoNothing。
+[[nodiscard]] inline constexpr bool node_get_drop_requires_stable_click(std::string_view task) noexcept
+{
+    return task == "BlackFlow@Roguelike@GetDropConfirmed" ||
+           task == "BlackFlow@Roguelike@GetDropSelectConfirmed" ||
+           task == "BlackFlow@Roguelike@GetDropSelectRewardConfirmed";
 }
 
 [[nodiscard]] inline constexpr std::string_view to_string(NodeGetDropScreen screen) noexcept
@@ -105,6 +133,15 @@ struct DropOptionSelection
     int option_count = 0;
     int selected_index_from_left = 0;
 };
+
+[[nodiscard]] inline constexpr bool trophy_reward_click_is_safe(
+    size_t detection_count,
+    bool option_selection_resolved,
+    bool selected_semantically_identified) noexcept
+{
+    return (detection_count == 2 || detection_count == 3) && option_selection_resolved &&
+           selected_semantically_identified;
+}
 
 // 点击前用 MultiMatcher 找出同一排的全部按钮，再把 ProcessTask 实际命中的按钮
 // 映射到按横坐标排序后的序号。当前界面只接受二选一或三选一。
@@ -168,6 +205,36 @@ struct DropOptionSelection
         return CollectionPopupSource::FloorEntry;
     }
     return CollectionPopupSource::None;
+}
+
+[[nodiscard]] inline bool collection_popup_stages_task(std::string_view task) noexcept
+{
+    // The callback may contain the resource key either as the outer task name or
+    // as part of a fully expanded compound task.
+    return task == "Stages" || task.starts_with("Stages@") ||
+           task.find("@Roguelike@Stages@") != std::string_view::npos;
+}
+
+[[nodiscard]] inline std::optional<int> collection_popup_pending_floor_entry(
+    std::string_view task,
+    int page_floor,
+    NodeType page_node_type,
+    std::string_view page_intent,
+    bool page_changes_floor) noexcept
+{
+    if (page_floor <= 0 || !collection_popup_stages_task(task)) {
+        return std::nullopt;
+    }
+    // final.pass is a same-floor pass-through even though its icon is Final.
+    if (page_node_type == NodeType::Final && page_intent == "final.pass") {
+        return std::nullopt;
+    }
+    if (!page_changes_floor && !is_exit_node_type(page_node_type)) {
+        return std::nullopt;
+    }
+    // Floor-entry popups can be shown after the game has rendered the new map but
+    // before NextLevel commits the recognized floor to the session.
+    return page_floor + 1;
 }
 
 [[nodiscard]] inline bool collection_popup_needs_landing_resolution(std::string_view task) noexcept

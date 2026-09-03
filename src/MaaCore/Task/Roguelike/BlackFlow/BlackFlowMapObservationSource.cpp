@@ -817,7 +817,8 @@ bool BlackFlowMapObservationSource::persist_diagnostics(const DiagnosticArtifact
         }
         const bool routing_history_event =
             request.trigger == DiagnosticTrigger::RoutingDecision ||
-            request.trigger == DiagnosticTrigger::BattleStageObservation;
+            request.trigger == DiagnosticTrigger::BattleStageObservation ||
+            request.trigger == DiagnosticTrigger::NodeIdentityResolved;
         const bool processing_history_event =
             request.trigger == DiagnosticTrigger::ProcessingItemObservation;
         if (routing_history_event || processing_history_event) {
@@ -880,6 +881,7 @@ bool BlackFlowMapObservationSource::persist_diagnostics(const DiagnosticArtifact
         case DiagnosticTrigger::RoutineObservation:
         case DiagnosticTrigger::RoutingDecision:
         case DiagnosticTrigger::BattleStageObservation:
+        case DiagnosticTrigger::NodeIdentityResolved:
         case DiagnosticTrigger::ProcessingItemObservation:
             break;
         default:

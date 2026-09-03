@@ -31,6 +31,7 @@ enum class DiagnosticTrigger
     RoutineObservation,
     RoutingDecision,
     BattleStageObservation,
+    NodeIdentityResolved,
     ProcessingItemObservation,
     RebuildConflict,
     InferredEdgeSelected,

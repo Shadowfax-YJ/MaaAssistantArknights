@@ -1,9 +1,15 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <compare>
+#include <cstddef>
 #include <limits>
+#include <numeric>
+#include <optional>
+#include <span>
 #include <tuple>
+#include <vector>
 
 #include "BlackFlowModel.h"
 
@@ -17,15 +23,42 @@ enum class InventoryPartCategory
     Unknown,
 };
 
+enum class InventoryDiscardBand
+{
+    BeforeQuotaExcess,
+    QuotaExcess,
+    Normal,
+};
+
 struct InventoryDiscardRank
 {
+    InventoryDiscardBand band = InventoryDiscardBand::Normal;
     int priority = std::numeric_limits<int>::max();
-    // 只在 priority 相同（即同类加工品实例）时参与比较；其他零件的原有跨类别
-    // 丢弃顺序完全不变。未识别次数和非加工品排在可靠次数之后。
+    // 只在 band 和 priority 相同（即同类加工品实例）时参与比较。
+    // 未识别次数和非加工品排在可靠次数之后。
     int remaining_charges = std::numeric_limits<int>::max();
 
     auto operator<=>(const InventoryDiscardRank&) const = default;
 };
+
+// 同名加工品超出商店购买配额时，只把多出来的实例提前。
+// “剩余次数少的先丢”同时决定哪些实例算作超额；未识别的次数由调用方传入
+// numeric_limits<int>::max()，不会抢在可靠的低次数实例前面。
+[[nodiscard]] inline std::vector<std::size_t>
+    inventory_quota_excess_indices(std::span<const int> remaining_charges, std::size_t quota)
+{
+    if (remaining_charges.size() <= quota) {
+        return {};
+    }
+
+    std::vector<std::size_t> indices(remaining_charges.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::stable_sort(indices.begin(), indices.end(), [&](std::size_t lhs, std::size_t rhs) {
+        return remaining_charges[lhs] < remaining_charges[rhs];
+    });
+    indices.resize(remaining_charges.size() - quota);
+    return indices;
+}
 
 enum class InventoryScanAction
 {
@@ -35,6 +68,17 @@ enum class InventoryScanAction
 };
 
 inline constexpr int InventoryMaximumSwipes = 4;
+inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
+
+// 到达最右端后游戏列表会回弹，最右名称的中心会明显向左退。
+// 这一帧仍与上一帧有较大像素差，不能只靠“画面未变”判定结束。
+[[nodiscard]] constexpr bool inventory_scan_rebounded(
+    std::optional<int> previous_rightmost_center,
+    std::optional<int> current_rightmost_center) noexcept
+{
+    return previous_rightmost_center.has_value() && current_rightmost_center.has_value() &&
+           *current_rightmost_center + InventoryRightEdgeReboundMinimumPixels < *previous_rightmost_center;
+}
 
 // 节点页面打开时，移动事务尚未回图应用；零件箱快照仍是移动前的状态。
 // 事件路线评估和节点内商店都必须在副本上先投影本次入场所消耗的加工品，

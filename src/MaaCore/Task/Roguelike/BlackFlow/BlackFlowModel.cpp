@@ -1391,7 +1391,8 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         // 小八界优先随机到仍显示为“未知的诡秘”的非作战节点；只有不存在这种候选时，
         // 才退化为全部合法非作战节点。明确带流窜居民标记的节点在建立这两个候选池前
         // 已经排除，可能重叠但未确认的标记仍须保留。
-        if (movement.random_target && !hidden_noncombat_targets.empty()) {
+        const bool random_uses_hidden_pool = movement.random_target && !hidden_noncombat_targets.empty();
+        if (random_uses_hidden_pool) {
             targets = std::move(hidden_noncombat_targets);
         }
         std::ranges::sort(targets);
@@ -1422,6 +1423,25 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
                     action.candidate.landing_action_point_gains.insert_or_assign(
                         landing,
                         movement.effect.action_point_gain + predicted_node_gain(*target_node, state));
+                }
+            }
+            // “可点击以打开预览”和“可被随机传送选中”不是同一概念。当前格完成后会在
+            // 规划状态中变成 Removed，不能再作为预览激活目标，但当场上没有可用的
+            // “未知的诡秘”时，它仍是小八界的合法非作战随机落点。
+            if (!random_uses_hidden_pool) {
+                const Node* source_node = map.find_node(state.current_node);
+                if (source_node != nullptr) {
+                    const NodeType source_type = effective_node_type(*source_node, state);
+                    const NodeType visible_source_type =
+                        movement_visible_node_type(source_type, source_node->visually_hidden);
+                    if (node_type_allowed(movement, visible_source_type) &&
+                        !node_has_explicit_roaming_resident_marker(*source_node)) {
+                        action.possible_landings.emplace_back(state.current_node);
+                        action.candidate.landing_node_types.insert_or_assign(state.current_node, source_type);
+                        action.candidate.landing_action_point_gains.insert_or_assign(
+                            state.current_node,
+                            movement.effect.action_point_gain + predicted_node_gain(*source_node, state));
+                    }
                 }
             }
             std::ranges::sort(action.possible_landings);
@@ -1619,6 +1639,7 @@ bool MoveTransaction::record_preview(MovePreview preview, std::string* error)
 bool MoveTransaction::commit(
     std::uint64_t current_map_revision,
     std::uint64_t current_viewport_revision,
+    const RunResources& current_resources,
     std::string* error)
 {
     if (m_stage != MoveTransactionStage::Previewed || !m_preview.has_value() ||
@@ -1634,6 +1655,16 @@ bool MoveTransaction::commit(
             *error = "map or viewport revision changed before commit";
         }
         return false;
+    }
+    if (m_proposal.movement != MovementKind::Walk) {
+        const auto charge = current_resources.movement_charges.find(m_proposal.movement);
+        if (charge == current_resources.movement_charges.end() || charge->second <= 0) {
+            m_stage = MoveTransactionStage::Invalidated;
+            if (error != nullptr) {
+                *error = "movement charge was exhausted before transaction commit";
+            }
+            return false;
+        }
     }
     m_stage = MoveTransactionStage::Committed;
     return true;
@@ -1767,17 +1798,9 @@ bool MoveTransaction::apply(RunState& state, std::string* error)
         return false;
     }
 
-    if (m_proposal.movement != MovementKind::Walk) {
-        auto charge = state.resources.movement_charges.find(m_proposal.movement);
-        if (charge == state.resources.movement_charges.end() || charge->second <= 0) {
-            if (error != nullptr) {
-                *error = "movement charge was exhausted before transaction application";
-            }
-            return false;
-        }
-        // 剩余次数由下一次零件箱星星观测重建。这里不猜测具体消耗了哪一件同类实例，
-        // 也不再用事务结算修改库存事实；规划器自己的搜索状态仍会逐步扣除聚合次数。
-    }
+    // 加工品余量在 commit（实际点击移动按钮之前）校验。回图后的权威零件箱扫描可能已经
+    // 移除刚好耗尽的最后一件，apply 不能把这项“已消耗”事实误判为移动前就没有余量。
+    // 剩余次数只由零件箱星星观测重建；事务结算不猜测具体消耗了哪一个同类实例。
     state.resources.action_points = m_observation->action_points;
     state.resources.hope += movement->effect.hope_gain;
     state.resources.ingots += movement->effect.ingot_gain;

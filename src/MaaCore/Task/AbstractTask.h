@@ -89,6 +89,10 @@ protected:
     virtual bool on_run_fails() { return true; }
 
     virtual void callback(AsstMsg msg, const json::value& detail);
+    // Dispatches the callback and reports whether any triggered plugin may have
+    // changed the UI. Plugins are conservative by default and must explicitly
+    // opt out when they are observation-only.
+    bool callback_with_plugin_effect(AsstMsg msg, const json::value& detail);
     virtual void click_return_button();
     bool save_img(
         const std::filesystem::path& relative_dir = utils::path("debug"),

@@ -19,6 +19,8 @@ inline constexpr std::string_view AutomationCollectionSquad = "堡垒战术分�
 inline constexpr std::string_view AutomationCollectionRoles = "坚不可摧";
 inline constexpr int AutomationCollectionRecruitHardSwipeLimit = 99;
 inline constexpr int AutomationCollectionRecruitEmptyPageRetryLimit = 2;
+inline constexpr int AutomationCollectionRecruitRoleProbeSwipeLimit = 5;
+inline constexpr int AutomationCollectionPassiveTaskDelay = 150;
 
 // 通用招募页的 5 次上限不足以覆盖某些职业券的完整名单。固定队模式以
 // “完成一次有效滑动后页面不变”为正常终止条件，这里的 99 只是识别/动画异常时的硬保险。
@@ -59,6 +61,36 @@ struct AutomationCollectionTeamProgress
     bool defender_operator_recruited = false;
     bool specialist_operator_recruited = false;
 };
+
+[[nodiscard]] inline std::vector<std::string_view>
+    automation_collection_pending_milestone_operators(const AutomationCollectionTeamProgress& progress)
+{
+    std::vector<std::string_view> pending;
+    if (!progress.first_operator_elite_two) {
+        pending.emplace_back(AutomationCollectionFirstOperator);
+    }
+    if (!progress.caster_operator_recruited) {
+        pending.emplace_back(AutomationCollectionCasterOperator);
+    }
+    if (!progress.core_operator_elite_two) {
+        pending.emplace_back(AutomationCollectionCoreOperator);
+    }
+    if (!progress.defender_operator_recruited) {
+        pending.emplace_back(AutomationCollectionDefenderOperator);
+    }
+    if (!progress.specialist_operator_recruited) {
+        pending.emplace_back(AutomationCollectionSpecialistOperator);
+    }
+    return pending;
+}
+
+[[nodiscard]] inline constexpr bool automation_collection_should_abandon_after_role_probe(
+    int completed_swipes,
+    bool pending_milestone_role_seen) noexcept
+{
+    return completed_swipes >= AutomationCollectionRecruitRoleProbeSwipeLimit &&
+           !pending_milestone_role_seen;
+}
 
 [[nodiscard]] inline constexpr bool
     automation_collection_team_complete(const AutomationCollectionTeamProgress& progress) noexcept

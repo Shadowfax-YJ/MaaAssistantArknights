@@ -54,6 +54,8 @@ std::string_view to_string(DiagnosticTrigger trigger) noexcept
         return "routing_decision";
     case DiagnosticTrigger::BattleStageObservation:
         return "battle_stage_observation";
+    case DiagnosticTrigger::NodeIdentityResolved:
+        return "node_identity_resolved";
     case DiagnosticTrigger::ProcessingItemObservation:
         return "processing_item_observation";
     case DiagnosticTrigger::RebuildConflict:

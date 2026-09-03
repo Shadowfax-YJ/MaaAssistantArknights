@@ -19,9 +19,11 @@ public:
 
     int priority() const;
     bool block() const;
+    bool may_change_ui() const;
 
     void set_priority(int priority);
     void set_block(bool block);
+    void set_may_change_ui(bool may_change_ui);
 
     virtual void set_task_ptr(AbstractTask* ptr);
 
@@ -53,5 +55,8 @@ protected:
     AbstractTask* m_task_ptr = nullptr;
     int m_priority = 0;
     bool m_block = false;
+    // A newly added plugin is treated as behavioral until it explicitly proves
+    // that it only observes or persists data.
+    bool m_may_change_ui = true;
 };
 }

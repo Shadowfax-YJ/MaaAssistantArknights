@@ -174,16 +174,26 @@ public:
     // 过载整理会改变加工品集合，而被拦截的那次移动并未发生。下一轮规划前必须重新读零件箱。
     void invalidate_movement_inventory() noexcept { m_movement_inventory_refresh_required = true; }
 
-    // 零件箱从地图上打开并关闭后，地图横向视口保持不变。这个一次性标记只供
-    // 紧随其后的地图重建消费，避免五层重复执行左滑定位。
-    void mark_viewport_preserved_after_inventory() noexcept
+    // 零件箱从已经重建完成的地图上打开并关闭后，地图及横向视口都不变。记录当时的
+    // 地图代次和 revision；紧随其后的规划轮次只有在两者仍一致时才可跳过重复建图。
+    void mark_map_preserved_after_inventory() noexcept
     {
-        m_viewport_preserved_after_inventory = true;
+        const MapSnapshot& map = m_map.snapshot();
+        if (m_run.floor > 0 && m_map.floor() == m_run.floor && map.revision > 0) {
+            m_map_preserved_after_inventory = PreservedMapStamp { m_map_generation, map.revision };
+        }
+        else {
+            m_map_preserved_after_inventory.reset();
+        }
     }
-    [[nodiscard]] bool consume_viewport_preserved_after_inventory() noexcept
+    [[nodiscard]] bool consume_map_preserved_after_inventory() noexcept
     {
-        const bool preserved = m_viewport_preserved_after_inventory;
-        m_viewport_preserved_after_inventory = false;
+        const MapSnapshot& map = m_map.snapshot();
+        const bool preserved = m_map_preserved_after_inventory.has_value() &&
+                               m_map_preserved_after_inventory->map_generation == m_map_generation &&
+                               m_map_preserved_after_inventory->map_revision == map.revision &&
+                               m_run.floor > 0 && m_map.floor() == m_run.floor;
+        m_map_preserved_after_inventory.reset();
         return preserved;
     }
 
@@ -388,7 +398,12 @@ private:
     std::optional<BlackFlowStrategyResult> m_result;
     bool m_result_reported = false;
     bool m_movement_inventory_refresh_required = true;
-    bool m_viewport_preserved_after_inventory = false;
+    struct PreservedMapStamp
+    {
+        std::uint64_t map_generation = 0;
+        std::uint64_t map_revision = 0;
+    };
+    std::optional<PreservedMapStamp> m_map_preserved_after_inventory;
     DiagnosticSettings m_diagnostics;
     std::size_t m_persisted_image_packages = 0;
     std::uint64_t m_run_revision = 0;

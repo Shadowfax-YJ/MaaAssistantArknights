@@ -177,6 +177,7 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
         }
     }
 
+    blackflow::AutomationCollectionTeamProgress automation_collection_progress;
     if (automation_collection) {
         const auto& recruited_operators = m_config->status().opers;
         const auto operator_recruited = [&](std::string_view name) {
@@ -186,14 +187,14 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
             const auto iter = recruited_operators.find(std::string(name));
             return iter != recruited_operators.end() && iter->second.elite >= 2;
         };
-        const blackflow::AutomationCollectionTeamProgress team_progress {
+        automation_collection_progress = {
             .first_operator_elite_two = operator_elite_two(blackflow::AutomationCollectionFirstOperator),
             .caster_operator_recruited = operator_recruited(blackflow::AutomationCollectionCasterOperator),
             .core_operator_elite_two = operator_elite_two(blackflow::AutomationCollectionCoreOperator),
             .defender_operator_recruited = operator_recruited(blackflow::AutomationCollectionDefenderOperator),
             .specialist_operator_recruited = operator_recruited(blackflow::AutomationCollectionSpecialistOperator),
         };
-        if (blackflow::automation_collection_team_complete(team_progress)) {
+        if (blackflow::automation_collection_team_complete(automation_collection_progress)) {
             Log.info(__FUNCTION__, "| Fixed five-person team is complete; give up voucher without scanning operators");
             return ProcessTask(*this, { "BlackFlow@RoguelikeRecruit-GiveUp" }).run();
         }
@@ -202,7 +203,7 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
     // 自动化收集不需要比较无关候选的优先级：招募券页面已经限定了可选范围，当前页出现
     // 尚未入队的五人队目标或可晋升目标时立即选择；只有没看到目标时才继续翻页。
     if (automation_collection) {
-        return recruit_automation_collection_char();
+        return recruit_automation_collection_char(automation_collection_progress);
     }
 
     bool team_full_without_rookie = m_config->status().team_full_without_rookie;
@@ -697,11 +698,37 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_appointed_char(const std::string&
     return false;
 }
 
-bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char()
+bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char(
+    const blackflow::AutomationCollectionTeamProgress& progress)
 {
     LogTraceFunction;
 
     const auto& chars_map = m_config->status().opers;
+    const std::vector<std::string_view> pending_milestone_operators =
+        blackflow::automation_collection_pending_milestone_operators(progress);
+    std::unordered_set<battle::Role> pending_milestone_roles;
+    bool role_probe_reliable = true;
+    for (const std::string_view oper : pending_milestone_operators) {
+        const battle::Role role = get_oper_role(std::string(oper));
+        if (role == battle::Role::Unknown) {
+            role_probe_reliable = false;
+            continue;
+        }
+        pending_milestone_roles.emplace(role);
+    }
+    // 固定目标的职业数据若不完整，宁可保留原来的完整扫描，也不能据此提前放弃。
+    bool pending_milestone_role_seen = !role_probe_reliable || pending_milestone_roles.empty();
+    if (!role_probe_reliable) {
+        Log.warn(__FUNCTION__, "| Pending milestone operator has unknown profession; disable five-swipe early give-up");
+    }
+    const auto observe_pending_milestone_role = [&](const auto& detected_names) {
+        if (pending_milestone_role_seen) {
+            return;
+        }
+        pending_milestone_role_seen = std::ranges::any_of(detected_names, [&](const std::string& name) {
+            return pending_milestone_roles.contains(get_oper_role(name));
+        });
+    };
     auto select_visible_target = [&](const std::vector<battle::roguelike::Recruitment>& opers) -> bool {
         for (const auto& oper : opers) {
             const auto owned_it = chars_map.find(oper.name);
@@ -732,7 +759,9 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char()
     // 先看进入招募页时已经显示的内容。命中目标时不复位、不继续扫描。
     {
         RoguelikeRecruitImageAnalyzer analyzer(ctrler()->get_image());
-        if (analyzer.analyze() && select_visible_target(analyzer.get_result())) {
+        const bool analysis_succeeded = analyzer.analyze();
+        observe_pending_milestone_role(analyzer.get_detected_names());
+        if (analysis_succeeded && select_visible_target(analyzer.get_result())) {
             return true;
         }
     }
@@ -752,6 +781,7 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char()
         RoguelikeRecruitImageAnalyzer analyzer(ctrler()->get_image());
         const bool analysis_succeeded = analyzer.analyze();
         const auto& opers = analyzer.get_result();
+        observe_pending_milestone_role(analyzer.get_detected_names());
         if (analysis_succeeded && select_visible_target(opers)) {
             return true;
         }
@@ -786,6 +816,16 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_automation_collection_char()
         }
         if (action == blackflow::AutomationCollectionRecruitPageAction::StopAtSeenPage) {
             Log.trace(__FUNCTION__, "| Seen recruit page remained stable after a swipe; stop searching");
+            break;
+        }
+        if (blackflow::automation_collection_should_abandon_after_role_probe(
+                completed_swipes,
+                pending_milestone_role_seen)) {
+            Log.info(
+                __FUNCTION__,
+                "| No operator matching a pending milestone profession appeared after",
+                completed_swipes,
+                "swipes; give up voucher early");
             break;
         }
         if (completed_swipes >= swipe_times) {

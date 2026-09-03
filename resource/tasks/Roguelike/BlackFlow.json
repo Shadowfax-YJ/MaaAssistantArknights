@@ -218,11 +218,35 @@
             "BlackFlow@Roguelike@ClickToDrops*20"
         ]
     },
+    "BlackFlow@Roguelike@MissionCompletedFlag": {
+        "Doc": "战斗结算进入战利品流程前，先检查并采集可能已经出现的收藏品弹窗；确认没有弹窗后才允许首次执行 ClickToDrops。",
+        "baseTask": "Roguelike@MissionCompletedFlag",
+        "template": "Roguelike@ExitThenAbandon.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@MissionCompletedFlag@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MissionCompletedFlag@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
     "BlackFlow@Roguelike@ClickToDrops": {
-        "Doc": "结算页兜底空点；连续二十次仍未识别到掉落、招募或地图页面时进入公共等待，并在一分钟后重试本动作。",
+        "Doc": "结算页兜底空点；每次空点后先捕捉可能随战利品页出现的收藏品弹窗，再识别掉落、招募或地图页面。连续二十次仍未识别时进入公共等待，并在一分钟后重试本动作。",
         "specificRect": [600, 600, 25, 25],
         "maxTimes": 20,
-        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "next": [
+            "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageEncounterSpecialClose",
+            "BlackFlow@Roguelike@TraderRandomShopping",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@Stages#next",
+            "BlackFlow@Roguelike@StartUpThemes#next",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
     },
     "BlackFlow@Roguelike@CloseCollection": {
         "Doc": "关掉藏品、资源等获得类弹窗，只在 某任务@(本任务) 的形式下使用。",
@@ -406,6 +430,7 @@
             "Roguelike@StageTraderRefreshConfirmNew.png",
             "Roguelike@StageTraderRefreshConfirm.png"
         ],
+        "postDelay": 1200,
         "next": [
             "#self",
             "BlackFlow@Roguelike@AutomationShopRefreshCompleted"
@@ -1193,8 +1218,8 @@
         "next": [
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@GetDrops#next",
-            "BlackFlow@Roguelike@GetDropCompleted",
             "BlackFlow@Roguelike@GetDropLeave",
+            "BlackFlow@Roguelike@GetDropCompleted",
             "BlackFlow@Roguelike@Stages#next",
             "BlackFlow@Roguelike@StageEncounterSpecialClose",
             "BlackFlow@Roguelike@StageTraderLeave",
@@ -1404,9 +1429,27 @@
         "template": "BlackFlow@Roguelike@GamePassTheEndConfirm.png"
     },
     "BlackFlow@Roguelike@GetDrop": {
+        "Doc": "首次命中奖励按钮只进入稳定等待；不保存可能在卡片重排中失效的坐标。",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropWait"]
+    },
+    "BlackFlow@Roguelike@GetDropWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
         "next": [
-            "BlackFlow@Roguelike@GetDrop@(BlackFlow@Roguelike@CloseCollectionContinue)",
-            "BlackFlow@Roguelike@GetDrop@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@GetDropConfirmed",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
+    "BlackFlow@Roguelike@GetDropConfirmed": {
+        "Doc": "等待卡片重排后重新识别奖励按钮；ProcessTask 不点击，由节点证据插件在稳定帧上再次定位后点击。",
+        "baseTask": "BlackFlow@Roguelike@GetDrop",
+        "template": "BlackFlow@Roguelike@GetDrop.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@GetDropConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@GetDropConfirmed@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@GetDropCompleted",
@@ -1414,8 +1457,37 @@
         ]
     },
     "BlackFlow@Roguelike@GetDropCompleted": {
-        "template": "BlackFlow@Roguelike@GetDropCompleted.png",
-        "specificRect": [600, 600, 25, 25],
+        "Doc": "领取完最后一项奖励后会自动出现‘已领取所有奖励’弹窗；不能使用与‘直接离开’相同的奔跑图标判定。",
+        "algorithm": "OcrDetect",
+        "text": ["已领取所有奖励"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "roi": [430, 350, 420, 140],
+        "action": "DoNothing",
+        "postDelay": 0,
+        "next": ["BlackFlow@Roguelike@GetDropCompletedWait"]
+    },
+    "BlackFlow@Roguelike@GetDropCompletedWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 250,
+        "next": [
+            "BlackFlow@Roguelike@GetDrops#next",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@GetDropLeave",
+            "BlackFlow@Roguelike@GetDropCompletedConfirmed",
+            "BlackFlow@Roguelike@DropsFlag"
+        ]
+    },
+    "BlackFlow@Roguelike@GetDropCompletedConfirmed": {
+        "baseTask": "BlackFlow@Roguelike@GetDropCompleted",
+        "algorithm": "OcrDetect",
+        "text": ["已领取所有奖励"],
+        "fullMatch": true,
+        "fuzzyMatch": true,
+        "roi": [430, 350, 420, 140],
+        "action": "ClickRect",
+        "specificRect": [600, 480, 80, 100],
+        "postDelay": 100,
         "next": [
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@ChooseOperFlag",
@@ -1423,16 +1495,47 @@
         ]
     },
     "BlackFlow@Roguelike@GetDropLeave": {
-        "template": "BlackFlow@Roguelike@GetDropLeave.png"
+        "Doc": "明确识别到仍有奖励时的‘直接离开’文字，只等待并重新扫描奖励，绝不点击。",
+        "template": "BlackFlow@Roguelike@GetDropLeave.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropLeaveWait"]
+    },
+    "BlackFlow@Roguelike@GetDropLeaveWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 700,
+        "next": [
+            "BlackFlow@Roguelike@GetDrops#next",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@GetDropLeave"
+        ]
     },
     "BlackFlow@Roguelike@GetDropRecruit": {
-        "template": "BlackFlow@Roguelike@GetDrop.png"
+        "template": "BlackFlow@Roguelike@GetDrop.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropWait"]
     },
     "BlackFlow@Roguelike@GetDropSelect": {
         "template": "BlackFlow@Roguelike@GetDropSelect.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropSelectWait"]
+    },
+    "BlackFlow@Roguelike@GetDropSelectWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
         "next": [
-            "BlackFlow@Roguelike@GetDropSelect@(BlackFlow@Roguelike@CloseCollectionContinue)",
-            "BlackFlow@Roguelike@GetDropSelect@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@GetDropSelectConfirmed",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
+    "BlackFlow@Roguelike@GetDropSelectConfirmed": {
+        "baseTask": "BlackFlow@Roguelike@GetDropSelect",
+        "template": "BlackFlow@Roguelike@GetDropSelect.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@GetDropSelectConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@GetDropSelectConfirmed@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@CloseEvent",
             "BlackFlow@Roguelike@GetDropSelectRecruit",
             "BlackFlow@Roguelike@GetDropTrophyReward",
@@ -1447,10 +1550,26 @@
         "template": "BlackFlow@Roguelike@GetDropSelectRecruit.png"
     },
     "BlackFlow@Roguelike@GetDropTrophyReward": {
-        "Doc": "战斗后战利品零件二选一；插件会 OCR 两侧名称和类别，并按配置优先级点击“收下”。",
+        "Doc": "战斗后战利品零件二/三选一的首次候选识别；等待卡片重排后再交给插件选择。",
         "baseTask": "Roguelike@GetDropSelectReward",
         "template": "BlackFlow@Roguelike@GetDropTrophyReward.png",
         "roi": [350, 460, 570, 100],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropTrophyRewardWait"]
+    },
+    "BlackFlow@Roguelike@GetDropTrophyRewardWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "next": [
+            "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
+    "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed": {
+        "Doc": "稳定后重新识别；只有识别出二/三项且所选项有名称或类别时，插件才按最新坐标点击。",
+        "baseTask": "BlackFlow@Roguelike@GetDropTrophyReward",
+        "template": "BlackFlow@Roguelike@GetDropTrophyReward.png",
         "action": "DoNothing",
         "postDelay": 1000,
         "templThreshold": 0.75,
@@ -1466,6 +1585,22 @@
     },
     "BlackFlow@Roguelike@GetDropSelectReward": {
         "template": "BlackFlow@Roguelike@GetDropSelectReward.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropSelectRewardWait"]
+    },
+    "BlackFlow@Roguelike@GetDropSelectRewardWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "next": [
+            "BlackFlow@Roguelike@GetDropSelectRewardConfirmed",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ClickToDrops"
+        ]
+    },
+    "BlackFlow@Roguelike@GetDropSelectRewardConfirmed": {
+        "baseTask": "BlackFlow@Roguelike@GetDropSelectReward",
+        "template": "BlackFlow@Roguelike@GetDropSelectReward.png",
+        "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@GetDropTrophyReward",
             "BlackFlow@Roguelike@GetDropSelectReward",
@@ -1939,23 +2074,23 @@
         "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@MovementInventoryDiscardPriority": {
-        "Doc": "零件箱过载时的跨类别丢弃顺序；由战利品二选一的 30 零件保留优先级整体倒序，并将笼控器调整到老妈妈的融雪与恋家果之间。数组从先丢到后丢。",
+        "Doc": "零件箱过载时的跨类别丢弃顺序，数组从先丢到后丢。超出商店购买配额的加工品实例会动态插在 MovementInventoryDiscardBeforeQuotaExcess 之后，其他零件保持本数组的相对顺序。",
         "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
         "text": [
             "白模鸟",
             "涂装黎博利",
+            "枯苔藓球",
+            "报废假肢",
+            "报废轮子",
             "涂装阿戈尔",
             "涂装佩洛",
             "白模狗",
-            "枯苔藓球",
             "血蕈",
             "白模鱼",
             "雾滚草",
             "浪花",
             "霜晶树",
             "回声玉米",
-            "报废假肢",
-            "报废轮子",
             "种子",
             "小八界",
             "标准引擎",
@@ -1974,6 +2109,11 @@
             "结构性原理"
         ]
     },
+    "BlackFlow@Roguelike@MovementInventoryDiscardBeforeQuotaExcess": {
+        "Doc": "零件箱过载时固定早于‘超出商店购买配额的加工品’丢弃的前置组，顺序与 MovementInventoryDiscardPriority 的同名项一致。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
+        "text": ["白模鸟", "涂装黎博利", "枯苔藓球", "报废假肢", "报废轮子"]
+    },
     "BlackFlow@Roguelike@MovementInventoryDiscardButton": {
         "algorithm": "OcrDetect",
         "roi": [350, 450, 400, 120],
@@ -1983,6 +2123,10 @@
         "preDelay": 400,
         "action": "ClickSelf",
         "postDelay": 800
+    },
+    "BlackFlow@Roguelike@MovementInventoryEquippedDiscardConfirm": {
+        "Doc": "丢弃正在装载的加工品时出现的二次确认；按钮位置与零件箱过载提示的右侧确认按钮一致。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryOverloadOpen"
     },
     "BlackFlow@Roguelike@MovementInventoryDiscardDetailWait": {
         "Doc": "点击零件卡片后等待详情弹层展开；必须发生在丢弃按钮 OCR 之前。",

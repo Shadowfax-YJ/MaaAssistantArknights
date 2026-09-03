@@ -12,6 +12,11 @@ bool asst::AbstractTaskPlugin::block() const
     return m_block;
 }
 
+bool asst::AbstractTaskPlugin::may_change_ui() const
+{
+    return m_may_change_ui;
+}
+
 void asst::AbstractTaskPlugin::set_priority(int priority)
 {
     m_priority = priority;
@@ -20,6 +25,11 @@ void asst::AbstractTaskPlugin::set_priority(int priority)
 void asst::AbstractTaskPlugin::set_block(bool block)
 {
     m_block = block;
+}
+
+void asst::AbstractTaskPlugin::set_may_change_ui(bool may_change_ui)
+{
+    m_may_change_ui = may_change_ui;
 }
 
 void asst::AbstractTaskPlugin::set_task_ptr(asst::AbstractTask* ptr)

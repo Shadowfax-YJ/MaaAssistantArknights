@@ -78,10 +78,6 @@ bool refresh_with_retries(Session& session, IBlackFlowTaskPort& port, std::strin
     }
 
     bool viewport_already_normalized = false;
-    if constexpr (requires { session.consume_viewport_preserved_after_inventory(); }) {
-        viewport_already_normalized = session.consume_viewport_preserved_after_inventory();
-    }
-
     std::string latest_error;
     for (int attempt = 0; attempt < TransientRevealObservationMaximumAttempts; ++attempt) {
         BlackFlowObservationRequest request;
@@ -201,6 +197,17 @@ bool session_requires_movement_inventory_observation(const Session& session)
 {
     if constexpr (requires { session.movement_inventory_refresh_required(); }) {
         return session.movement_inventory_refresh_required();
+    }
+    else {
+        return false;
+    }
+}
+
+template <typename Session>
+bool session_can_reuse_map_after_inventory(Session& session)
+{
+    if constexpr (requires { session.consume_map_preserved_after_inventory(); }) {
+        return session.consume_map_preserved_after_inventory();
     }
     else {
         return false;
@@ -395,12 +402,9 @@ RoutingCycleOutcome execute_routing_cycle(Session& session, IBlackFlowTaskPort& 
     if (session.terminated()) {
         return { RoutingCycleStatus::SessionTerminated, {}, {} };
     }
-    // 零件箱的库存是规划输入，且关箱不会移动地图；在已知需要扫描时先扫库存，避免
-    // 先为即将失效的旧库存重建一次地图。扫描后仍保留下方的复查，覆盖 refresh 新识别楼层的情况。
-    if (session_requires_movement_inventory_observation(session)) {
-        return { RoutingCycleStatus::MovementInventoryObservationRequired, {}, {} };
-    }
-
+    // 楼层和节点归属必须先由地图观测落实。随后先探查本层战斗预览，再扫描零件箱，最后
+    // 才进入规划和移动预览。关闭这些面板后若视口未变，下一轮复用地图，避免重复重建。
+    const bool reuse_inventory_map = session_can_reuse_map_after_inventory(session);
     bool reuse_battle_preview_map = false;
     BattlePreviewMapCheck preview_map_check;
     std::string preview_map_error;
@@ -421,7 +425,16 @@ RoutingCycleOutcome execute_routing_cycle(Session& session, IBlackFlowTaskPort& 
     else {
         Log.warn("BlackFlow battle preview map cache check failed; rebuilding map", preview_map_error);
     }
-    if (!reuse_battle_preview_map && !refresh_with_retries(session, port, &error)) {
+    if (reuse_inventory_map) {
+        record_routing_run_event(
+            session,
+            port,
+            RunLogLevel::Info,
+            "inventory.map-cache",
+            "checked",
+            "reused");
+    }
+    if (!reuse_inventory_map && !reuse_battle_preview_map && !refresh_with_retries(session, port, &error)) {
         return { RoutingCycleStatus::NeedsPageRecovery, "map_rebuild_failed", std::move(error) };
     }
     if (session_requires_map_settle(session)) {
@@ -489,7 +502,6 @@ RoutingCycleOutcome execute_routing_cycle(Session& session, IBlackFlowTaskPort& 
     if (session_requires_movement_inventory_observation(session)) {
         return { RoutingCycleStatus::MovementInventoryObservationRequired, {}, {} };
     }
-
     BlackFlowPlan plan = session.plan(&error);
     if (!plan) {
         if (session.terminated()) {

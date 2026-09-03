@@ -17,6 +17,7 @@ BlackFlowCollectionPopupTaskPlugin::BlackFlowCollectionPopupTaskPlugin(
     m_capture(std::move(capture))
 {
     set_block(true);
+    set_may_change_ui(false);
     set_retry_times(0);
 }
 

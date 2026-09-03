@@ -44,6 +44,18 @@
 using namespace asst::blackflow;
 using namespace asst::blackflow::perception;
 
+namespace
+{
+RunResources resources_authorizing(MovementKind movement)
+{
+    RunResources resources;
+    if (movement != MovementKind::Walk) {
+        resources.movement_charges.emplace(movement, 1);
+    }
+    return resources;
+}
+} // namespace
+
 TEST_CASE("BlackFlow ideal source remains fixed within one map generation")
 {
     SameMapIdealDomainState<GridPosition> state;
@@ -241,6 +253,47 @@ TEST_CASE("BlackFlow run log reuses only semantically redundant screenshots")
     REQUIRE_FALSE(should_reuse_run_log_image(1.0, true, true));
 }
 
+TEST_CASE("BlackFlow processing-item evidence never creates a synthetic floor zero")
+{
+    REQUIRE(diagnostic_processing_item_floor(0) == 1);
+    REQUIRE(diagnostic_processing_item_floor(1) == 1);
+    REQUIRE(diagnostic_processing_item_floor(4) == 4);
+}
+
+TEST_CASE("BlackFlow rebuilds a floor map before scanning its parts box and reuses that map afterward")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    std::ifstream input(
+        repository_root /
+        "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowRoutingLoop.h",
+        std::ios::binary);
+    REQUIRE(input.good());
+    const std::string source {
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>()
+    };
+
+    const std::size_t cycle = source.find("RoutingCycleOutcome execute_routing_cycle");
+    REQUIRE(cycle != std::string::npos);
+    const std::size_t refresh = source.find("refresh_with_retries(session, port", cycle);
+    const std::size_t inventory =
+        source.find("session_requires_movement_inventory_observation(session)", cycle);
+    const std::size_t battle_preview = source.find("session.next_battle_intel_probe();", cycle);
+    const std::size_t movement_preview = source.find("BlackFlowPlan plan = session.plan(&error);", cycle);
+    REQUIRE(refresh != std::string::npos);
+    REQUIRE(inventory != std::string::npos);
+    REQUIRE(battle_preview != std::string::npos);
+    REQUIRE(movement_preview != std::string::npos);
+    REQUIRE(refresh < inventory);
+    REQUIRE(battle_preview < inventory);
+    REQUIRE(inventory < movement_preview);
+    REQUIRE(source.find("session_can_reuse_map_after_inventory(session)", cycle) != std::string::npos);
+    REQUIRE(
+        source.find("!reuse_inventory_map && !reuse_battle_preview_map", cycle) !=
+        std::string::npos);
+}
+
 TEST_CASE("BlackFlow collection popups classify buttons and explicit sources")
 {
     const std::string next =
@@ -268,8 +321,268 @@ TEST_CASE("BlackFlow collection popups classify buttons and explicit sources")
         CollectionPopupSource::FloorEntry);
 }
 
+TEST_CASE("BlackFlow attributes Stages popups after an exit page to the entering floor")
+{
+    const std::string stages_continue =
+        "BlackFlow@Roguelike@Stages@BlackFlow@Roguelike@CloseCollectionContinue";
+    const std::string stages_close =
+        "BlackFlow@Roguelike@Stages@BlackFlow@Roguelike@CloseCollection";
+
+    REQUIRE(
+        collection_popup_pending_floor_entry(
+            stages_continue,
+            2,
+            NodeType::Final,
+            "default",
+            false) ==
+        3);
+    REQUIRE(
+        collection_popup_pending_floor_entry(stages_close, 2, NodeType::Final, "default", false) ==
+        3);
+
+    // The reward still owned by the exit node is closed under StageEncounterReward and must
+    // remain in that node's directory. Only the subsequent generic Stages chain is floor-entry.
+    REQUIRE_FALSE(
+        collection_popup_pending_floor_entry(
+            "BlackFlow@Roguelike@StageEncounterReward@BlackFlow@Roguelike@CloseCollection",
+            2,
+            NodeType::Final,
+            "default",
+            false)
+            .has_value());
+    REQUIRE_FALSE(
+        collection_popup_pending_floor_entry(
+            stages_continue,
+            2,
+            NodeType::Incident,
+            "default",
+            false)
+            .has_value());
+    REQUIRE_FALSE(
+        collection_popup_pending_floor_entry(
+            stages_continue,
+            2,
+            NodeType::Final,
+            "final.pass",
+            false)
+            .has_value());
+}
+
+TEST_CASE("BlackFlow loot-page entry captures immediate collection popups before blind clicking")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const auto successors = tasks->at("BlackFlow@Roguelike@ClickToDrops")
+                                .get("next", std::vector<std::string> {});
+    const auto continue_popup = std::ranges::find(
+        successors,
+        "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollectionContinue)");
+    const auto close_popup = std::ranges::find(
+        successors,
+        "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollection)");
+    const auto drops_flag =
+        std::ranges::find(successors, "BlackFlow@Roguelike@DropsFlag");
+
+    REQUIRE(continue_popup != successors.end());
+    REQUIRE(close_popup != successors.end());
+    REQUIRE(drops_flag != successors.end());
+    REQUIRE(continue_popup < drops_flag);
+    REQUIRE(close_popup < drops_flag);
+}
+
+TEST_CASE("BlackFlow checks pursuit collection popups before the first loot-page fallback click")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const auto successors = tasks->at("BlackFlow@Roguelike@MissionCompletedFlag")
+                                .get("next", std::vector<std::string> {});
+    const auto continue_popup = std::ranges::find(
+        successors,
+        "BlackFlow@Roguelike@MissionCompletedFlag@(BlackFlow@Roguelike@CloseCollectionContinue)");
+    const auto close_popup = std::ranges::find(
+        successors,
+        "BlackFlow@Roguelike@MissionCompletedFlag@(BlackFlow@Roguelike@CloseCollection)");
+    const auto blind_click =
+        std::ranges::find(successors, "BlackFlow@Roguelike@ClickToDrops");
+
+    REQUIRE(continue_popup != successors.end());
+    REQUIRE(close_popup != successors.end());
+    REQUIRE(blind_click != successors.end());
+    REQUIRE(continue_popup < blind_click);
+    REQUIRE(close_popup < blind_click);
+    REQUIRE(pursuit_first_loot_click_task("ClickToDrops", 1));
+    REQUIRE_FALSE(pursuit_first_loot_click_task("ClickToDrops", 2));
+}
+
+TEST_CASE("BlackFlow loot completion requires the all-rewards message and never the shared leave icon")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    for (const std::string_view entry : {
+             "BlackFlow@Roguelike@DropsFlag_default",
+             "BlackFlow@Roguelike@DropsFlag_mode1",
+         }) {
+        const auto successors = tasks->at(std::string(entry)).get("next", std::vector<std::string> {});
+        const auto direct_leave = std::ranges::find(successors, "BlackFlow@Roguelike@GetDropLeave");
+        const auto completed = std::ranges::find(successors, "BlackFlow@Roguelike@GetDropCompleted");
+        REQUIRE(direct_leave != successors.end());
+        REQUIRE(completed != successors.end());
+        REQUIRE(direct_leave < completed);
+    }
+
+    const auto& direct_leave = tasks->at("BlackFlow@Roguelike@GetDropLeave");
+    REQUIRE(direct_leave.get("action", std::string {}) == "DoNothing");
+    REQUIRE(
+        direct_leave.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@GetDropLeaveWait" });
+    REQUIRE(tasks->at("BlackFlow@Roguelike@GetDropLeaveWait").get("postDelay", 0) >= 600);
+
+    const auto& first_detection = tasks->at("BlackFlow@Roguelike@GetDropCompleted");
+    REQUIRE(first_detection.get("algorithm", std::string {}) == "OcrDetect");
+    REQUIRE(
+        first_detection.get("text", std::vector<std::string> {}) ==
+        std::vector<std::string> { "已领取所有奖励" });
+    REQUIRE_FALSE(first_detection.contains("template"));
+    REQUIRE(first_detection.get("action", std::string {}) == "DoNothing");
+    REQUIRE(first_detection.get("postDelay", -1) == 0);
+    REQUIRE(
+        first_detection.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@GetDropCompletedWait" });
+
+    const auto& wait = tasks->at("BlackFlow@Roguelike@GetDropCompletedWait");
+    REQUIRE(wait.get("postDelay", 0) >= 200);
+    REQUIRE(wait.get("postDelay", 0) <= 300);
+    const auto wait_successors = wait.get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(wait_successors, "BlackFlow@Roguelike@GetDrops#next") != wait_successors.end());
+    const auto direct_leave_recheck =
+        std::ranges::find(wait_successors, "BlackFlow@Roguelike@GetDropLeave");
+    const auto completed_recheck =
+        std::ranges::find(wait_successors, "BlackFlow@Roguelike@GetDropCompletedConfirmed");
+    REQUIRE(direct_leave_recheck != wait_successors.end());
+    REQUIRE(completed_recheck != wait_successors.end());
+    REQUIRE(direct_leave_recheck < completed_recheck);
+
+    const auto& confirmed = tasks->at("BlackFlow@Roguelike@GetDropCompletedConfirmed");
+    REQUIRE(confirmed.get("algorithm", std::string {}) == "OcrDetect");
+    REQUIRE(
+        confirmed.get("text", std::vector<std::string> {}) ==
+        std::vector<std::string> { "已领取所有奖励" });
+    REQUIRE_FALSE(confirmed.contains("template"));
+    REQUIRE(confirmed.get("action", std::string {}) == "ClickRect");
+    REQUIRE(confirmed.get("postDelay", -1) >= 0);
+    REQUIRE(confirmed.get("postDelay", -1) <= 200);
+    REQUIRE(
+        confirmed.get("specificRect", std::vector<int> {}) ==
+        std::vector<int> { 600, 480, 80, 100 });
+    const auto confirmed_successors = confirmed.get("next", std::vector<std::string> {});
+    REQUIRE(
+        std::ranges::find(
+            confirmed_successors,
+            "BlackFlow@Roguelike@NodeCompletionAction") !=
+        confirmed_successors.end());
+}
+
+TEST_CASE("BlackFlow reward clicks are revalidated after reward-card layout changes")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    constexpr std::array guarded_clicks {
+        std::array<std::string_view, 4> {
+            "BlackFlow@Roguelike@GetDrop",
+            "BlackFlow@Roguelike@GetDropWait",
+            "BlackFlow@Roguelike@GetDropConfirmed",
+            "BlackFlow@Roguelike@GetDrop.png",
+        },
+        std::array<std::string_view, 4> {
+            "BlackFlow@Roguelike@GetDropSelect",
+            "BlackFlow@Roguelike@GetDropSelectWait",
+            "BlackFlow@Roguelike@GetDropSelectConfirmed",
+            "BlackFlow@Roguelike@GetDropSelect.png",
+        },
+        std::array<std::string_view, 4> {
+            "BlackFlow@Roguelike@GetDropSelectReward",
+            "BlackFlow@Roguelike@GetDropSelectRewardWait",
+            "BlackFlow@Roguelike@GetDropSelectRewardConfirmed",
+            "BlackFlow@Roguelike@GetDropSelectReward.png",
+        },
+        std::array<std::string_view, 4> {
+            "BlackFlow@Roguelike@GetDropTrophyReward",
+            "BlackFlow@Roguelike@GetDropTrophyRewardWait",
+            "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed",
+            "BlackFlow@Roguelike@GetDropTrophyReward.png",
+        },
+    };
+    for (const auto& [candidate_name, wait_name, confirmed_name, expected_template] : guarded_clicks) {
+        CAPTURE(candidate_name, wait_name, confirmed_name, expected_template);
+        const auto& candidate = tasks->at(std::string(candidate_name));
+        REQUIRE(candidate.get("action", std::string {}) == "DoNothing");
+        REQUIRE(
+            candidate.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { std::string(wait_name) });
+
+        const auto& wait = tasks->at(std::string(wait_name));
+        REQUIRE(wait.get("algorithm", std::string {}) == "JustReturn");
+        REQUIRE(wait.get("postDelay", 0) >= 300);
+        const auto wait_successors = wait.get("next", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(wait_successors, confirmed_name) != wait_successors.end());
+
+        const auto& confirmed = tasks->at(std::string(confirmed_name));
+        REQUIRE(confirmed.get("action", std::string {}) == "DoNothing");
+        REQUIRE(confirmed.get("template", std::string {}) == expected_template);
+    }
+}
+
+TEST_CASE("BlackFlow trophy reward selector rejects the captured one-button unidentified transition frame")
+{
+    REQUIRE_FALSE(trophy_reward_click_is_safe(1, false, false));
+    REQUIRE_FALSE(trophy_reward_click_is_safe(2, false, true));
+    REQUIRE_FALSE(trophy_reward_click_is_safe(2, true, false));
+    REQUIRE(trophy_reward_click_is_safe(2, true, true));
+    REQUIRE(trophy_reward_click_is_safe(3, true, true));
+}
+
+TEST_CASE("BlackFlow eerie merchant settles refreshes and relocates a cached good before clicking")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    REQUIRE(tasks->at("BlackFlow@Roguelike@AutomationShopRefreshConfirm").get("postDelay", 0) >= 1200);
+
+    std::ifstream source_file(
+        repository_root /
+            "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowAutomationStoreTaskPlugin.cpp",
+        std::ios::binary);
+    REQUIRE(source_file);
+    const std::string source {
+        std::istreambuf_iterator<char>(source_file),
+        std::istreambuf_iterator<char>() };
+    REQUIRE(source.find("if (!relocate_selection(*selection, recognition_task))") != std::string::npos);
+    REQUIRE(source.find("ShopDecisionEntry") != std::string::npos);
+    REQUIRE(source.find("queue_eerie_store_snapshot(\"initial\"") != std::string::npos);
+    REQUIRE(source.find("queue_eerie_store_snapshot(\"after_refresh\"") != std::string::npos);
+    REQUIRE(source.find("capture_pending_eerie_store_snapshot(top_image, bottom_image)") != std::string::npos);
+}
+
 TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
 {
+    REQUIRE(pursuit_first_loot_click_task("ClickToDrops", 1));
+    REQUIRE(pursuit_first_loot_click_task("BlackFlow@Roguelike@ClickToDrops", 1));
+    REQUIRE_FALSE(pursuit_first_loot_click_task("ClickToDrops", 2));
+    REQUIRE_FALSE(pursuit_first_loot_click_task("ClickToDrops", 3));
+    REQUIRE_FALSE(pursuit_first_loot_click_task("DropsFlag", 1));
     REQUIRE(
         node_get_drop_screen("BlackFlow@Roguelike@GetDrop") ==
         NodeGetDropScreen::Drop);
@@ -341,6 +654,28 @@ TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
             asst::Rect { 530, 500, 180, 60 })
             .has_value());
     REQUIRE_FALSE(is_node_evidence_run_log_action("map.observed"));
+}
+
+TEST_CASE("BlackFlow persists resolved hidden-node identity as a routing-history checkpoint")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    std::ifstream telemetry_file(
+        repository_root / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowTelemetry.cpp",
+        std::ios::binary);
+    std::ifstream history_file(
+        repository_root / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowMapObservationSource.cpp",
+        std::ios::binary);
+    REQUIRE(telemetry_file);
+    REQUIRE(history_file);
+    const std::string telemetry {
+        std::istreambuf_iterator<char>(telemetry_file),
+        std::istreambuf_iterator<char>() };
+    const std::string history {
+        std::istreambuf_iterator<char>(history_file),
+        std::istreambuf_iterator<char>() };
+    REQUIRE(telemetry.find("node_identity_resolved") != std::string::npos);
+    REQUIRE(history.find("DiagnosticTrigger::NodeIdentityResolved") != std::string::npos);
 }
 
 TEST_CASE("BlackFlow battle total kills uses the mode and latest observation as tie breaker")
@@ -474,6 +809,7 @@ TEST_CASE("BlackFlow automation collection recruits the fixed five-person team")
     REQUIRE(AutomationCollectionSpecialistOperator == "伊桑");
     REQUIRE(AutomationCollectionSquad == "堡垒战术分队");
     REQUIRE(AutomationCollectionRoles == "坚不可摧");
+    REQUIRE(AutomationCollectionPassiveTaskDelay == 150);
     REQUIRE(AutomationCollectionOperators.size() == 5);
     REQUIRE(is_automation_collection_operator("机械师"));
     REQUIRE(is_automation_collection_operator("卡达"));
@@ -732,6 +1068,27 @@ TEST_CASE("BlackFlow fixed-team recruitment scans past incomplete OCR pages")
     const std::unordered_set<std::string> rightmost_page { "安赛尔", "伊桑" };
     REQUIRE(automation_collection_recruit_page_is_unchanged_endpoint(rightmost_page, rightmost_page, 1));
     REQUIRE_FALSE(automation_collection_recruit_page_is_unchanged_endpoint({}, rightmost_page, 1));
+}
+
+TEST_CASE("BlackFlow fixed-team recruitment abandons unrelated professions after five swipes")
+{
+    REQUIRE(AutomationCollectionRecruitRoleProbeSwipeLimit == 5);
+
+    const AutomationCollectionTeamProgress only_specialist_pending {
+        .first_operator_elite_two = true,
+        .caster_operator_recruited = true,
+        .core_operator_elite_two = true,
+        .defender_operator_recruited = true,
+        .specialist_operator_recruited = false,
+    };
+    REQUIRE(
+        automation_collection_pending_milestone_operators(only_specialist_pending) ==
+        std::vector<std::string_view> { AutomationCollectionSpecialistOperator });
+
+    REQUIRE_FALSE(automation_collection_should_abandon_after_role_probe(4, false));
+    REQUIRE(automation_collection_should_abandon_after_role_probe(5, false));
+    REQUIRE(automation_collection_should_abandon_after_role_probe(6, false));
+    REQUIRE_FALSE(automation_collection_should_abandon_after_role_probe(5, true));
 }
 
 TEST_CASE("BlackFlow fixed-team recruitment waits out rebound frames and stops page cycles")
@@ -1567,14 +1924,21 @@ TEST_CASE("BlackFlow overload cleanup keeps the configured cross-category discar
         tasks->at("BlackFlow@Roguelike@MovementInventoryDiscardPriority")
             .get("text", std::vector<std::string> {});
     const std::vector<std::string> expected {
-        "白模鸟",         "涂装黎博利",   "涂装阿戈尔", "涂装佩洛",       "白模狗",
-        "枯苔藓球",       "血蕈",         "白模鱼",     "雾滚草",         "浪花",
-        "霜晶树",         "回声玉米",     "报废假肢",   "报废轮子",       "种子",
+        "白模鸟",         "涂装黎博利",   "枯苔藓球",   "报废假肢",       "报废轮子",
+        "涂装阿戈尔",     "涂装佩洛",     "白模狗",     "血蕈",           "白模鱼",
+        "雾滚草",         "浪花",         "霜晶树",     "回声玉米",       "种子",
         "小八界",         "标准引擎",     "试作外骨骼", "气垫底座",       "多生苔藓",
         "坎诺特的触须",   "重弹簧",       "老妈妈的融雪", "笼控器",       "恋家果",
         "板藤",           "光彩松露",     "一次性喷气背包", "“简易遥控器”", "结构性原理",
     };
     REQUIRE(discard_priority == expected);
+
+    const auto before_quota_excess =
+        tasks->at("BlackFlow@Roguelike@MovementInventoryDiscardBeforeQuotaExcess")
+            .get("text", std::vector<std::string> {});
+    REQUIRE(
+        before_quota_excess ==
+        std::vector<std::string> { "白模鸟", "涂装黎博利", "枯苔藓球", "报废假肢", "报废轮子" });
 }
 
 TEST_CASE("BlackFlow overload cleanup can scan and discard beyond the first inventory columns")
@@ -1613,6 +1977,42 @@ TEST_CASE("BlackFlow overload cleanup can scan and discard beyond the first inve
     REQUIRE(inventory_part_detail_click_rect({ 395, 260, 67, 19 }) == asst::Rect { 416, 191, 24, 24 });
 }
 
+TEST_CASE("BlackFlow inventory scan rejects a right-edge rebound frame")
+{
+    // 2026-09-01 实际滑动：正常页最右名称中心依次向右推进，到底回弹后从 934 退到 859。
+    REQUIRE_FALSE(inventory_scan_rebounded(824, 836));
+    REQUIRE_FALSE(inventory_scan_rebounded(836, 891));
+    REQUIRE_FALSE(inventory_scan_rebounded(900, 870));
+    REQUIRE(inventory_scan_rebounded(934, 859));
+    REQUIRE_FALSE(inventory_scan_rebounded(std::nullopt, 859));
+}
+
+TEST_CASE("BlackFlow overload cleanup confirms discarding the equipped processing item")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const std::string task_name = "BlackFlow@Roguelike@MovementInventoryEquippedDiscardConfirm";
+    REQUIRE(tasks->contains(task_name));
+    const auto& confirm = tasks->at(task_name);
+    REQUIRE(confirm.get("baseTask", std::string {}) ==
+            "BlackFlow@Roguelike@MovementInventoryOverloadOpen");
+
+    std::ifstream input(repository_root /
+                        "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowTaskPort.cpp");
+    REQUIRE(input.good());
+    const std::string source {
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>()
+    };
+    const std::size_t discard = source.find("run_task(InventoryDiscardButtonTask");
+    REQUIRE(discard != std::string::npos);
+    const std::size_t confirm_discard = source.find("InventoryEquippedDiscardConfirmTask", discard);
+    REQUIRE(confirm_discard != std::string::npos);
+}
+
 TEST_CASE("BlackFlow overload cleanup revalidates the banner after a full scan before discarding")
 {
     const std::filesystem::path repository_root =
@@ -1639,15 +2039,40 @@ TEST_CASE("BlackFlow overload cleanup revalidates the banner after a full scan b
 
 TEST_CASE("BlackFlow overload cleanup uses remaining charges only within the same processing-item kind")
 {
-    const InventoryDiscardRank earlier_kind_with_more_uses { 4, 3 };
-    const InventoryDiscardRank later_kind_with_fewer_uses { 5, 1 };
-    const InventoryDiscardRank same_kind_with_more_uses { 5, 3 };
-    const InventoryDiscardRank same_kind_with_fewer_uses { 5, 1 };
+    const InventoryDiscardRank fixed_last { InventoryDiscardBand::BeforeQuotaExcess, 4, 3 };
+    const InventoryDiscardRank excess_earlier_kind { InventoryDiscardBand::QuotaExcess, 16, 3 };
+    const InventoryDiscardRank excess_later_kind { InventoryDiscardBand::QuotaExcess, 20, 1 };
+    const InventoryDiscardRank ordinary_earlier_kind { InventoryDiscardBand::Normal, 5, 1 };
+    const InventoryDiscardRank ordinary_later_kind_with_more_uses { InventoryDiscardBand::Normal, 6, 3 };
+    const InventoryDiscardRank ordinary_later_kind_with_fewer_uses { InventoryDiscardBand::Normal, 6, 1 };
 
-    // 不同类加工品仍严格服从既有丢弃优先级。
-    REQUIRE(earlier_kind_with_more_uses < later_kind_with_fewer_uses);
+    REQUIRE(fixed_last < excess_later_kind);
+    REQUIRE(excess_later_kind < ordinary_earlier_kind);
+    // 多种加工品同时超额时，仍先按原丢弃表中的类型顺序；
+    // 不会因为后一种的剩余次数更少就跨类型提前。
+    REQUIRE(excess_earlier_kind < excess_later_kind);
+    // 非超额的不同类加工品仍严格服从既有丢弃优先级。
+    REQUIRE(ordinary_earlier_kind < ordinary_later_kind_with_fewer_uses);
     // 只有同类实例才由剩余次数打破平局。
-    REQUIRE(same_kind_with_fewer_uses < same_kind_with_more_uses);
+    REQUIRE(ordinary_later_kind_with_fewer_uses < ordinary_later_kind_with_more_uses);
+}
+
+TEST_CASE("BlackFlow overload cleanup promotes only processing-item instances beyond the store quota")
+{
+    REQUIRE(automation_store_purchase_quota("标准引擎") == 2);
+    REQUIRE(automation_store_purchase_quota("坎诺特的触须") == 1);
+    REQUIRE_FALSE(automation_store_purchase_quota("一次性喷气背包").has_value());
+
+    const std::array engine_charges { 3, 1, 2 };
+    // 三个标准引擎只有一个超出配额，应选剩余 1 次的第二个实例。
+    REQUIRE(inventory_quota_excess_indices(engine_charges, 2) == std::vector<std::size_t> { 1 });
+
+    const std::array tentacle_charges { 3, 1, 2 };
+    // 触须配额为 1，超出的两个实例按剩余次数从少到多提前。
+    REQUIRE(inventory_quota_excess_indices(tentacle_charges, 1) == std::vector<std::size_t> { 1, 2 });
+
+    const std::array within_quota { 1, 3 };
+    REQUIRE(inventory_quota_excess_indices(within_quota, 2).empty());
 }
 
 TEST_CASE("BlackFlow processing inventory OCR recognizes every ordered type boundary")
@@ -2325,7 +2750,7 @@ TEST_CASE("BlackFlow combat rewards finish the node transaction before returning
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
 
-    const std::vector<std::string> successors = tasks->at("BlackFlow@Roguelike@GetDropCompleted")
+    const std::vector<std::string> successors = tasks->at("BlackFlow@Roguelike@GetDropCompletedConfirmed")
                                                     .get("next", std::vector<std::string> {});
 
     REQUIRE(std::ranges::find(successors, "BlackFlow@Roguelike@NodeCompletionAction") != successors.end());
@@ -2340,7 +2765,7 @@ TEST_CASE("BlackFlow trophy reward selection precedes the generic drop click")
     REQUIRE(tasks.has_value());
 
     constexpr std::array entry_tasks {
-        "BlackFlow@Roguelike@GetDropSelect",
+        "BlackFlow@Roguelike@GetDropSelectConfirmed",
         "BlackFlow@Roguelike@GetDrops",
     };
     for (const std::string_view entry_task : entry_tasks) {
@@ -3593,6 +4018,8 @@ TEST_CASE("BlackFlow random movement keeps a clickable activation target")
             random_move->possible_landings.end());
     REQUIRE(std::ranges::find(random_move->possible_landings, other_hidden_invisible.id) !=
             random_move->possible_landings.end());
+    REQUIRE(std::ranges::find(random_move->possible_landings, source.id) ==
+            random_move->possible_landings.end());
 
     ViewportObservation viewport;
     viewport.replace(
@@ -3610,7 +4037,7 @@ TEST_CASE("BlackFlow random movement keeps a clickable activation target")
     REQUIRE(transaction->record_preview(
         MovePreview { PreviewReachability::Reachable, 0, NodeType::HideInvisible, "未知的诡秘", false },
         &error));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision(), &error));
+    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision(), run.resources, &error));
 
     MoveObservation observation;
     observation.current_node = other_hidden_invisible.id;
@@ -3635,7 +4062,7 @@ TEST_CASE("BlackFlow random movement keeps a clickable activation target")
     REQUIRE(linked_transaction->record_preview(
         MovePreview { PreviewReachability::Reachable, 0, NodeType::HideInvisible, "未知的诡秘", false },
         &error));
-    REQUIRE(linked_transaction->commit(map.revision, viewport.viewport_revision(), &error));
+    REQUIRE(linked_transaction->commit(map.revision, viewport.viewport_revision(), linked_run.resources, &error));
     REQUIRE(linked_transaction->mark_page_resolved(&error));
 
     MoveObservation linked_observation;
@@ -3649,6 +4076,43 @@ TEST_CASE("BlackFlow random movement keeps a clickable activation target")
     REQUIRE(linked_transaction->observe(linked_observation, &error));
     REQUIRE(linked_transaction->apply(linked_run, &error));
     REQUIRE(linked_run.current_node == linked_observation.current_node);
+}
+
+TEST_CASE("BlackFlow random movement includes its completed noncombat source in the fallback landing pool")
+{
+    MapSnapshot map;
+
+    Node source;
+    source.floor = 5;
+    source.position = { 3, 4 };
+    source.id = *make_stable_node_id(source.floor, source.position);
+    source.type = NodeType::Empty;
+    source.progress = NodeProgress::Completed;
+    REQUIRE(map.upsert_node(source));
+
+    Node activation;
+    activation.floor = 5;
+    activation.position = { 0, 2 };
+    activation.id = *make_stable_node_id(activation.floor, activation.position);
+    activation.type = NodeType::Empty;
+    activation.progress = NodeProgress::Active;
+    REQUIRE(map.upsert_node(activation));
+
+    RunState run;
+    run.floor = 5;
+    run.current_node = source.id;
+    run.resources.action_points = 7;
+    run.resources.movement_charges.emplace(MovementKind::M07, 1);
+    run.active_movement = MovementKind::M07;
+
+    const auto actions = enumerate_move_actions(map, run);
+    const auto random_move = std::ranges::find_if(actions, [](const MoveAction& action) {
+        return action.candidate.movement == MovementKind::M07;
+    });
+    REQUIRE(random_move != actions.end());
+    REQUIRE(random_move->candidate.target == activation.id);
+    REQUIRE(std::ranges::find(random_move->possible_landings, source.id) !=
+            random_move->possible_landings.end());
 }
 
 TEST_CASE("BlackFlow random movement prioritizes hidden noncombat and excludes only explicit resident markers")
@@ -3732,6 +4196,76 @@ TEST_CASE("BlackFlow random movement prioritizes hidden noncombat and excludes o
         REQUIRE(std::ranges::find(compact_random->candidate.possible_landings, combat) ==
                 compact_random->candidate.possible_landings.end());
     }
+}
+
+TEST_CASE("BlackFlow applies a committed move after the final processing-item charge disappears from inventory")
+{
+    MapSnapshot map;
+
+    Node source;
+    source.floor = 1;
+    source.position = { 0, 0 };
+    source.id = *make_stable_node_id(source.floor, source.position);
+    source.type = NodeType::Empty;
+    REQUIRE(map.upsert_node(source));
+
+    Node target;
+    target.floor = 1;
+    target.position = { 0, 1 };
+    target.id = *make_stable_node_id(target.floor, target.position);
+    target.type = NodeType::Incident;
+    REQUIRE(map.upsert_node(target));
+
+    ViewportObservation viewport;
+    viewport.replace(
+        { NodeObservation { target.id, asst::Rect { 500, 200, 60, 60 }, std::nullopt, 1.0, 0.0 } },
+        map.revision,
+        7);
+
+    MoveCandidate move;
+    move.action_id = "consume-final-processing-item-charge";
+    move.source = source.id;
+    move.target = target.id;
+    move.landing = target.id;
+    move.path = { target.id };
+    move.movement = MovementKind::M02;
+    move.predicted_action_point_cost = 1;
+    move.possible_landings = { target.id };
+    move.landing_action_point_gains.emplace(target.id, 0);
+    move.controllable = true;
+
+    auto unavailable = MoveTransaction::propose(move, map, viewport);
+    REQUIRE(unavailable.has_value());
+    REQUIRE(unavailable->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
+    std::string error;
+    REQUIRE_FALSE(unavailable->commit(map.revision, viewport.viewport_revision(), RunResources {}, &error));
+    REQUIRE(error == "movement charge was exhausted before transaction commit");
+
+    auto transaction = MoveTransaction::propose(move, map, viewport);
+    REQUIRE(transaction.has_value());
+    REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
+    const RunResources before_move_resources = resources_authorizing(move.movement);
+    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision(), before_move_resources));
+
+    MoveObservation observation;
+    observation.current_node = target.id;
+    observation.floor = 1;
+    observation.action_points = 1;
+    observation.landed_type = target.type;
+    observation.viewport_revision = viewport.viewport_revision() + 1;
+    REQUIRE(transaction->observe(observation));
+
+    RunState after_move_inventory;
+    after_move_inventory.floor = 1;
+    after_move_inventory.current_node = source.id;
+    after_move_inventory.resources.action_points = 2;
+    // The fresh post-move parts-box scan is authoritative: this committed move
+    // consumed the one-charge item, so it is correctly absent here.
+    REQUIRE(after_move_inventory.resources.movement_charges.empty());
+
+    REQUIRE(transaction->apply(after_move_inventory, &error));
+    REQUIRE(after_move_inventory.current_node == target.id);
+    REQUIRE(after_move_inventory.resources.action_points == 1);
 }
 
 TEST_CASE("BlackFlow random movement falls back after every hidden noncombat candidate is explicitly resident-marked")
@@ -4707,7 +5241,10 @@ TEST_CASE("BlackFlow reconciles the last floor three move after adapted pursuit 
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->mark_page_resolved());
 
     MoveObservation floor_four;
@@ -4763,7 +5300,10 @@ TEST_CASE("BlackFlow reconciles a floor three move preempted by adapted pursuit 
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->stage() == MoveTransactionStage::Committed);
 
     MoveObservation floor_four;
@@ -4816,7 +5356,10 @@ TEST_CASE("BlackFlow reconciles a resolved hidden page that advances to the next
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->mark_page_resolved());
 
     MoveObservation floor_two;
@@ -4870,7 +5413,10 @@ TEST_CASE("BlackFlow applies an uncontrollable move whose hidden landing advance
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 0 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->mark_page_resolved());
 
     MoveObservation floor_two;
@@ -4934,7 +5480,10 @@ TEST_CASE("BlackFlow accepts an uncontrollable final landing through its observe
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 0 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->mark_page_resolved());
 
     MoveObservation floor_two;
@@ -4987,7 +5536,10 @@ TEST_CASE("BlackFlow reconciles a floor four terminal that opens a recollection 
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
-    REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+    REQUIRE(transaction->commit(
+        map.revision,
+        viewport.viewport_revision(),
+        resources_authorizing(move.movement)));
     REQUIRE(transaction->mark_page_resolved());
 
     MoveObservation recollection;
@@ -6197,7 +6749,10 @@ TEST_CASE("BlackFlow move transaction accepts only an attributed linked encounte
         auto transaction = MoveTransaction::propose(move, map, viewport);
         REQUIRE(transaction.has_value());
         REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
-        REQUIRE(transaction->commit(map.revision, viewport.viewport_revision()));
+        REQUIRE(transaction->commit(
+            map.revision,
+            viewport.viewport_revision(),
+            resources_authorizing(move.movement)));
         REQUIRE(transaction->mark_page_resolved());
         return transaction;
     };
@@ -7478,7 +8033,7 @@ TEST_CASE("BlackFlow drop page classification recovers from a transient recruitm
     const std::string safe_failure = "BlackFlow@Roguelike@RecoveryFailed";
 
     const auto get_drop_successors =
-        tasks->at("BlackFlow@Roguelike@GetDrop").get("next", std::vector<std::string> {});
+        tasks->at("BlackFlow@Roguelike@GetDropConfirmed").get("next", std::vector<std::string> {});
     const auto choose_from_drop = std::ranges::find(get_drop_successors, choose_oper);
     const auto drop_flag =
         std::ranges::find(get_drop_successors, "BlackFlow@Roguelike@DropsFlag");

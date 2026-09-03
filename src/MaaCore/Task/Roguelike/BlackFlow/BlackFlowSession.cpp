@@ -442,7 +442,7 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
     m_movement_inventory_refresh_required = next_movement_inventory_refresh_state(
         m_movement_inventory_refresh_required,
         MovementInventoryRefreshEvent::RunStarted);
-    m_viewport_preserved_after_inventory = false;
+    m_map_preserved_after_inventory.reset();
     m_persisted_image_packages = 0;
     ++m_run_revision;
     m_page_revision = 0;
@@ -1620,7 +1620,8 @@ void BlackFlowSession::request_diagnostics(
     const bool routine = trigger == DiagnosticTrigger::RoutineObservation;
     const bool processing_item_observation = trigger == DiagnosticTrigger::ProcessingItemObservation;
     const bool routing_history_item =
-        trigger == DiagnosticTrigger::RoutingDecision || trigger == DiagnosticTrigger::BattleStageObservation;
+        trigger == DiagnosticTrigger::RoutingDecision || trigger == DiagnosticTrigger::BattleStageObservation ||
+        trigger == DiagnosticTrigger::NodeIdentityResolved;
     if (routine && m_diagnostics.level == DiagnosticLevel::Normal) {
         return;
     }
@@ -1643,12 +1644,13 @@ void BlackFlowSession::request_diagnostics(
     snapshot["map_revision"] = m_map.snapshot().revision;
     snapshot["map_generation"] = m_map_generation;
     snapshot["floor_four_remembrance"] = m_current_map_is_floor_four_remembrance;
+    const int artifact_floor = snapshot.get("floor", m_run.floor);
     snapshot["map_section_key"] = diagnostic_map_section_key(
-        m_run.floor,
+        artifact_floor,
         m_map_generation,
         m_current_map_is_floor_four_remembrance);
     snapshot["map_section_label"] =
-        diagnostic_map_section_label(m_run.floor, m_current_map_is_floor_four_remembrance);
+        diagnostic_map_section_label(artifact_floor, m_current_map_is_floor_four_remembrance);
     m_diagnostic_requests.emplace_back(
         DiagnosticArtifactRequest {
             trigger,
@@ -1670,7 +1672,7 @@ void BlackFlowSession::record_processing_item_evidence(
     json::object evidence,
     std::vector<DiagnosticArtifactRequest::EvidenceImage> evidence_images)
 {
-    evidence["floor"] = m_run.floor;
+    evidence["floor"] = diagnostic_processing_item_floor(m_run.floor);
     if (const MovementSpec* active = m_run.active_movement.has_value()
                                          ? find_movement_spec(*m_run.active_movement)
                                          : nullptr;
@@ -4046,7 +4048,11 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
         }
     }
 
-    const bool committed = m_transaction->commit(m_map.snapshot().revision, m_viewport.viewport_revision(), error);
+    const bool committed = m_transaction->commit(
+        m_map.snapshot().revision,
+        m_viewport.viewport_revision(),
+        m_run.resources,
+        error);
     if (!committed) {
         return false;
     }
@@ -4242,7 +4248,7 @@ bool BlackFlowSession::set_current_floor(int floor, std::string* error)
     m_floor_recognition_pending = false;
     if (new_map_generation) {
         ++m_map_generation;
-        m_viewport_preserved_after_inventory = false;
+        m_map_preserved_after_inventory.reset();
         m_utopia_effect_expired = false;
         m_utopia_status.clear();
         m_utopia_reason.clear();
@@ -4470,6 +4476,7 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
         context.node_name = content;
     }
 
+    bool notebook_identity_updated = false;
     if (context.has_landing && context.node != InvalidNodeId &&
         context.floor == m_exploration_notebook.floor()) {
         Node noted;
@@ -4498,7 +4505,7 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
             noted.identity_source = source;
         }
         noted.fate_event = noted.fate_event || page_is_fate_event;
-        m_exploration_notebook.snapshot().upsert_node(std::move(noted));
+        notebook_identity_updated = m_exploration_notebook.snapshot().upsert_node(std::move(noted));
     }
 
     json::object details {
@@ -4513,7 +4520,15 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
         { "content", content },
         { "source", source },
     };
-    m_telemetry_events.emplace_back(BlackFlowTelemetryEvent { "BlackFlowNodeContentObserved", std::move(details) });
+    m_telemetry_events.emplace_back(BlackFlowTelemetryEvent { "BlackFlowNodeContentObserved", details });
+    // 未知诡秘可能在页面结算后直接跨层。身份虽然已经写入当前层探索笔记，但如果
+    // 不在切换笔记前持久化一次，最终 routing-history 仍只会留下进入前的未知节点。
+    if (notebook_identity_updated && first_content && effect.resolved_type.has_value()) {
+        details["reason_category"] = "node_identity_resolved";
+        details["reason_detail"] = "事件标题已回写节点具体类型与名称";
+        append_map_visualization(details);
+        request_diagnostics(DiagnosticTrigger::NodeIdentityResolved, std::move(details));
+    }
     return true;
 }
 

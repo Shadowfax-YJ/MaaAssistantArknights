@@ -1,5 +1,6 @@
 #include "ProcessTask.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <random>
@@ -51,6 +52,23 @@ const std::unordered_set<std::string>& get_main_screen_entry_tasks()
     return get_main_screen_entry_tasks_impl();
 }
 
+constexpr int success_transition_delay(
+    int task_delay,
+    std::optional<int> passive_task_delay,
+    ProcessTaskAction action,
+    bool has_ui_effect) noexcept
+{
+    return action == ProcessTaskAction::DoNothing && !has_ui_effect && passive_task_delay.has_value()
+               ? std::min(task_delay, *passive_task_delay)
+               : task_delay;
+}
+
+static_assert(success_transition_delay(500, 150, ProcessTaskAction::DoNothing, false) == 150);
+static_assert(success_transition_delay(500, 150, ProcessTaskAction::DoNothing, true) == 500);
+static_assert(success_transition_delay(500, 150, ProcessTaskAction::ClickSelf, false) == 500);
+static_assert(success_transition_delay(500, std::nullopt, ProcessTaskAction::DoNothing, false) == 500);
+static_assert(success_transition_delay(100, 150, ProcessTaskAction::DoNothing, false) == 100);
+
 bool is_main_screen_recognition(const std::string& name)
 {
     // 任务链中位于主界面的入口
@@ -89,6 +107,12 @@ ProcessTask::ProcessTask(AbstractTask&& abs, std::vector<std::string> tasks_name
 ProcessTask& ProcessTask::set_task_delay(int delay) noexcept
 {
     m_task_delay = delay;
+    return *this;
+}
+
+ProcessTask& ProcessTask::set_passive_task_delay(std::optional<int> delay) noexcept
+{
+    m_passive_task_delay = delay;
     return *this;
 }
 
@@ -139,6 +163,7 @@ bool ProcessTask::run()
     TaskConstPtr cur_task_ptr = nullptr;           // 当前任务，仅用于计算 on_error_next
     TaskList to_be_recognized = m_begin_task_list; // 待匹配任务列表
     while (true) {
+        int transition_delay = m_task_delay;
         auto [status /*识别成功与否*/, next_task_ptr /*匹配到的任务*/] = find_and_run_task(to_be_recognized);
         switch (status) {
         case NodeStatus::RetryFailed:
@@ -156,6 +181,11 @@ bool ProcessTask::run()
         case NodeStatus::Success:
             // 成功匹配且执行成功，下一个匹配列表是 next
             to_be_recognized = next_task_ptr->next;
+            transition_delay = success_transition_delay(
+                m_task_delay,
+                m_passive_task_delay,
+                next_task_ptr->action,
+                m_last_task_has_ui_effect);
             break;
         case NodeStatus::Interrupted:
             // need_exit() or Stop action
@@ -172,7 +202,7 @@ bool ProcessTask::run()
             return true;
         }
 
-        if (!sleep(m_task_delay)) { // Interrupted
+        if (!sleep(transition_delay)) { // Interrupted
             return true;
         }
 
@@ -304,6 +334,7 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
 {
     const auto& task = hits.task_ptr;
     const auto& task_name = task->name;
+    m_last_task_has_ui_effect = !task->sub.empty();
     int& exec_times = m_exec_times[task_name];
     auto [max_times, limit_type] = calc_time_limit(task);
     json::value info = basic_info();
@@ -331,7 +362,7 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
         { "result", hits.reco_detail != nullptr ? *hits.reco_detail : json::object {} },
     };
 
-    callback(AsstMsg::SubTaskStart, info);
+    m_last_task_has_ui_effect |= callback_with_plugin_effect(AsstMsg::SubTaskStart, info);
     // 允许插件停用ProcessTask
     if (!m_enable) {
         Log.info("task disabled after SubTaskStart callback, pass", basic_info().to_string());
@@ -378,7 +409,7 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
         }
     }
 
-    callback(AsstMsg::SubTaskCompleted, info);
+    m_last_task_has_ui_effect |= callback_with_plugin_effect(AsstMsg::SubTaskCompleted, info);
     // 允许插件停用ProcessTask
     if (!m_enable) {
         Log.info("task disabled after SubTaskCompleted callback, pass", basic_info().to_string());

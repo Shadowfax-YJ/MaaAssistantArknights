@@ -391,7 +391,15 @@ public:
     {
         return true;
     }
-    virtual bool capture_store_page(std::string_view, std::string_view, int, std::string* = nullptr) { return true; }
+    virtual bool capture_store_page(
+        std::string_view,
+        std::string_view,
+        int,
+        const cv::Mat* = nullptr,
+        std::string* = nullptr)
+    {
+        return true;
+    }
     virtual bool record_store_purchase(
         std::string_view,
         std::string_view,
@@ -470,6 +478,7 @@ public:
         std::string_view store_kind,
         std::string_view capture_phase,
         int refresh_index,
+        const cv::Mat* captured_image = nullptr,
         std::string* error = nullptr) override;
     bool record_store_purchase(
         std::string_view store_kind,

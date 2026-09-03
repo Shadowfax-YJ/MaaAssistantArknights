@@ -27,6 +27,7 @@ namespace
 {
 constexpr std::string_view ShopEnterTask = "BlackFlow@Roguelike@AutomationShopEnter";
 constexpr std::string_view ShopDecisionTask = "BlackFlow@Roguelike@AutomationShopDecision";
+constexpr std::string_view ShopDecisionEntry = "BlackFlow@Roguelike@AutomationShopDecision-Enter";
 constexpr std::string_view ShopAction = "BlackFlow@Roguelike@AutomationShopAction";
 constexpr std::string_view ShopGoodsTask = "BlackFlow@Roguelike@AutomationShopGoods";
 constexpr std::string_view ShopGoodsBottomTask = "BlackFlow@Roguelike@AutomationShopGoodsBottom";
@@ -190,6 +191,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_active_shop_identity.reset();
     m_shop_sold_in_cycle = false;
     m_shop_shelf_page = ShelfPage::Top;
+    m_pending_eerie_store_snapshot.reset();
     m_scrap_shop_purchased.clear();
     m_scrap_shop_purchased_names.clear();
     m_scrap_shop_buy_attempted.clear();
@@ -252,9 +254,50 @@ void BlackFlowAutomationStoreTaskPlugin::capture_store_snapshot(
     }
     const std::string_view store_kind = kind == AutomationStoreKind::Eerie ? "eerie_merchant" : "secret_merchant";
     std::string error;
-    if (!m_port->capture_store_page(store_kind, phase, refresh_index, &error)) {
+    if (!m_port->capture_store_page(store_kind, phase, refresh_index, nullptr, &error)) {
         Log.warn("BlackFlow store page capture failed", store_kind, phase, error);
     }
+}
+
+void BlackFlowAutomationStoreTaskPlugin::queue_eerie_store_snapshot(std::string phase, int refresh_index)
+{
+    m_pending_eerie_store_snapshot.emplace(std::move(phase), refresh_index);
+}
+
+void BlackFlowAutomationStoreTaskPlugin::capture_pending_eerie_store_snapshot(
+    const cv::Mat& top_image,
+    const cv::Mat& bottom_image)
+{
+    if (!m_pending_eerie_store_snapshot.has_value() || m_port == nullptr) {
+        return;
+    }
+    const auto top_task = Task.get<OcrTaskInfo>(ShopGoodsTask);
+    const auto bottom_task = Task.get<OcrTaskInfo>(ShopGoodsBottomTask);
+    if (top_task == nullptr || bottom_task == nullptr || top_task->roi.width != bottom_task->roi.width) {
+        Log.warn("BlackFlow eerie merchant stitched capture has incompatible shelf ROIs");
+        return;
+    }
+    const auto crop = [](const cv::Mat& image, const Rect& roi) -> cv::Mat {
+        const cv::Rect requested(roi.x, roi.y, roi.width, roi.height);
+        const cv::Rect bounds(0, 0, image.cols, image.rows);
+        return (requested & bounds) == requested ? image(requested) : cv::Mat {};
+    };
+    const cv::Mat top_shelf = crop(top_image, top_task->roi);
+    const cv::Mat bottom_shelves = crop(bottom_image, bottom_task->roi);
+    if (top_shelf.empty() || bottom_shelves.empty()) {
+        Log.warn("BlackFlow eerie merchant stitched capture shelf ROI is outside the screenshot");
+        return;
+    }
+
+    cv::Mat stitched;
+    cv::vconcat(top_shelf, bottom_shelves, stitched);
+    const auto& [phase, refresh_index] = *m_pending_eerie_store_snapshot;
+    std::string error;
+    if (!m_port->capture_store_page("eerie_merchant", phase, refresh_index, &stitched, &error)) {
+        Log.warn("BlackFlow eerie merchant stitched page capture failed", phase, error);
+        return;
+    }
+    m_pending_eerie_store_snapshot.reset();
 }
 
 void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase(AutomationStoreKind kind)
@@ -353,7 +396,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_shop_sold_in_cycle = false;
         m_shop_shelf_page = ShelfPage::Top;
         Task.set_task_base(std::string(ShopResumeAction), std::string(automation_shop_resume_base_task()));
-        capture_store_snapshot(AutomationStoreKind::Eerie, "initial", m_shop_refresh_count);
+        queue_eerie_store_snapshot("initial", m_shop_refresh_count);
         return true;
     }
     if (work == PendingWork::ShopDecision) {
@@ -363,6 +406,19 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             return false;
         }
         if (selection.has_value()) {
+            const std::string_view recognition_task = selection->page == ShelfPage::Top
+                                                          ? ShopGoodsTask
+                                                          : ShopGoodsBottomTask;
+            if (!relocate_selection(*selection, recognition_task)) {
+                // 刷新转场可能先露出旧的下半货架，随后才回到顶部。缓存名称仍然有效，
+                // 但旧坐标可能已经落在投资入口上；找不到当前同名商品时只重扫，绝不盲点。
+                Log.warn(
+                    "BlackFlow automation 诡意行商商品当前坐标校验失败，重新扫描货架",
+                    normalized_good_name(selection->good.text));
+                m_shop_goods.clear();
+                Task.set_task_base(std::string(ShopAction), std::string(ShopDecisionEntry));
+                return true;
+            }
             record_run_event(
                 RunLogLevel::Info,
                 "store.eerie.purchase.select",
@@ -508,7 +564,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_shop_goods.clear();
         m_shop_sold_in_cycle = false;
         m_shop_shelf_page = ShelfPage::Top;
-        capture_store_snapshot(AutomationStoreKind::Eerie, "after_refresh", m_shop_refresh_count);
+        queue_eerie_store_snapshot("after_refresh", m_shop_refresh_count);
         return true;
     }
     if (work == PendingWork::ShopLeave) {
@@ -929,12 +985,12 @@ std::optional<int>
 
 bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
 {
-    if (m_shop_shelf_page == ShelfPage::Bottom) {
-        if (!run_goods_swipe(ShopGoodsSwipeToTopTask)) {
-            return false;
-        }
-        m_shop_shelf_page = ShelfPage::Top;
+    // 不能只相信内存里的 ShelfPage：商店刷新会异步把实际货架复位到顶部，
+    // 现场曾因此把下半货架的商品坐标缓存成顶部坐标。每次全量扫描先物理回顶。
+    if (!run_goods_swipe(ShopGoodsSwipeToTopTask)) {
+        return false;
     }
+    m_shop_shelf_page = ShelfPage::Top;
 
     const cv::Mat top_image = ctrler()->get_image();
     const auto top_goods = recognize(top_image, std::string(ShopGoodsTask));
@@ -945,6 +1001,7 @@ bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
     m_shop_shelf_page = ShelfPage::Bottom;
     const cv::Mat bottom_image = ctrler()->get_image();
     const auto bottom_goods = recognize(bottom_image, std::string(ShopGoodsBottomTask));
+    capture_pending_eerie_store_snapshot(top_image, bottom_image);
 
     m_shop_goods.clear();
     m_shop_goods.reserve(top_goods.size() + bottom_goods.size());

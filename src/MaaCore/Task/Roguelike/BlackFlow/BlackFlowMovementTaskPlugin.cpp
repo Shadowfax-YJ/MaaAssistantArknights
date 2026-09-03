@@ -238,7 +238,7 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
         return true;
     }
     record_inventory_evidence(frame, "识别完成", {});
-    m_session->mark_viewport_preserved_after_inventory();
+    m_session->mark_map_preserved_after_inventory();
 
     const MovementSpec* loaded =
         frame.loaded_movement.has_value() ? find_movement_spec(*frame.loaded_movement) : nullptr;

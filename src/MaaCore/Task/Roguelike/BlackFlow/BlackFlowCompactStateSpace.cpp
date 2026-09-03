@@ -662,7 +662,8 @@ std::optional<std::vector<CompactMoveAction>>
         }
         // 与 enumerate_move_actions 保持一致：小八界先使用“未知的诡秘”候选池；只有
         // 该池为空时才使用全部合法非作战节点。明确流窜居民在入池前排除，疑似重叠保留。
-        if (movement.random_target && !hidden_noncombat_targets.empty()) {
+        const bool random_uses_hidden_pool = movement.random_target && !hidden_noncombat_targets.empty();
+        if (random_uses_hidden_pool) {
             targets = std::move(hidden_noncombat_targets);
         }
         if (targets.empty()) {
@@ -690,6 +691,21 @@ std::optional<std::vector<CompactMoveAction>>
                 action.candidate.landing_action_point_gains.insert_or_assign(
                     landing,
                     movement.effect.action_point_gain + node_action_point_gain(source, target));
+            }
+            // 完成后的当前格不能再作为预览点击目标，但在小八界退化为全部合法非作战
+            // 节点时仍是随机落点。压缩状态空间必须与根动作枚举保持完全一致。
+            if (!random_uses_hidden_pool) {
+                const NodeType source_type = effective_type(source, source_index);
+                const NodeType visible_source_type =
+                    movement_visible_node_type(source_type, m_nodes[source_index].visually_hidden);
+                if (node_type_allowed(movement, visible_source_type) &&
+                    !m_nodes[source_index].explicit_roaming_resident_marker) {
+                    action.possible_landings.emplace_back(source.node);
+                    action.candidate.landing_node_types.insert_or_assign(source.node, source_type);
+                    action.candidate.landing_action_point_gains.insert_or_assign(
+                        source.node,
+                        movement.effect.action_point_gain + node_action_point_gain(source, source_index));
+                }
             }
             std::ranges::sort(action.possible_landings);
             action.possible_landings.erase(

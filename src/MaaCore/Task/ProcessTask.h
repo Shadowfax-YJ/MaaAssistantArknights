@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "AbstractTask.h"
 #include "Common/AsstTypes.h"
 #include "MaaUtils/NoWarningCVMat.hpp"
@@ -32,6 +34,7 @@ public:
     virtual bool run() override;
 
     ProcessTask& set_task_delay(int delay) noexcept;
+    ProcessTask& set_passive_task_delay(std::optional<int> delay) noexcept;
     ProcessTask& set_tasks(std::vector<std::string> tasks_name) noexcept;
     ProcessTask& set_times_limit(std::string name, int limit, TimesLimitType type = TimesLimitType::Pre);
     ProcessTask& set_post_delay(std::string name, int delay);
@@ -90,6 +93,8 @@ protected:
     std::unordered_map<std::string, int> m_exec_times;
     static constexpr int TaskDelayUnsetted = -1;
     int m_task_delay = TaskDelayUnsetted;
+    std::optional<int> m_passive_task_delay;
+    bool m_last_task_has_ui_effect = true;
     cv::Mat m_reusable;
     std::shared_ptr<HitDetail> m_last_hit_detail = nullptr;
 };

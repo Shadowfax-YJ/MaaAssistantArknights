@@ -672,6 +672,7 @@ public:
     [[nodiscard]] bool commit(
         std::uint64_t current_map_revision,
         std::uint64_t current_viewport_revision,
+        const RunResources& current_resources,
         std::string* error = nullptr);
     [[nodiscard]] bool mark_page_resolved(std::string* error = nullptr);
     [[nodiscard]] bool observe(MoveObservation observation, std::string* error = nullptr);

@@ -1,5 +1,6 @@
 #include "RoguelikeTask.h"
 
+#include <optional>
 #include <utility>
 
 #include "Common/AsstBattleDef.h"
@@ -445,6 +446,10 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     // 只由用户主动停止或真正的任务错误结束，不受普通“探索次数”上限影响。
     const bool automation_collection =
         theme == RoguelikeTheme::BlackFlow && mode == RoguelikeMode::BlackFlowAutomationCollection;
+    m_roguelike_task_ptr->set_passive_task_delay(
+        automation_collection
+            ? std::optional<int> { blackflow::AutomationCollectionPassiveTaskDelay }
+            : std::nullopt);
     m_roguelike_task_ptr->set_times_limit(
         theme + "@Roguelike@StartExplore",
         automation_collection ? INT_MAX : params.get("starts_count", INT_MAX));
