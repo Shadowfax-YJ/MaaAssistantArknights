@@ -1776,7 +1776,8 @@
     "BlackFlow@Roguelike@HuntedDepart": {
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
-        "action": "ClickSelf",
+        "action": "ClickRect",
+        "specificRect": [1135, 525, 70, 70],
         "next": [
             "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
@@ -2922,11 +2923,12 @@
         ]
     },
     "BlackFlow@Roguelike@StageEncounterBattleDepart": {
-        "Doc": "事件选项转入战斗预览后，点击右下角“出发前往”，再交给现有快捷编队与作战链。使用独立次数状态，避免与追猎入口互相影响。",
+        "Doc": "事件选项转入战斗预览后，先用模板确认右下角“出发前往”存在，再点击按钮内部固定安全区，避免 ClickSelf 随机落到文字右缘而无法出发；随后交给现有快捷编队与作战链。使用独立次数状态，避免与追猎入口互相影响。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
-        "action": "ClickSelf",
+        "action": "ClickRect",
+        "specificRect": [1135, 525, 70, 70],
         "next": [
             "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
@@ -3086,11 +3088,12 @@
         ]
     },
     "BlackFlow@Roguelike@StageEnterBattleAgain": {
-        "Doc": "快捷编队确认并返回节点预览后，按模板点击实际的‘出发前往’按钮；概念体激活面板会改变按钮纵向位置，禁止继承通用主题的固定点击坐标。",
+        "Doc": "快捷编队确认并返回节点预览后，用模板确认实际的‘出发前往’按钮存在，再点击按钮内部固定安全区；概念体激活面板会改变通用主题按钮位置，因此使用黑流预览页自己的安全区。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
-        "action": "ClickSelf",
+        "action": "ClickRect",
+        "specificRect": [1135, 525, 70, 70],
         "next": [
             "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",

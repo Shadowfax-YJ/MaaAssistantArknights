@@ -3085,7 +3085,8 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
     const auto& depart = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepart");
     REQUIRE(depart.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
     REQUIRE(depart.get("roi", std::vector<int> {}) == std::vector<int> { 1122, 520, 153, 65 });
-    REQUIRE(depart.get("action", std::string {}) == "ClickSelf");
+    REQUIRE(depart.get("action", std::string {}) == "ClickRect");
+    REQUIRE(depart.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
     REQUIRE(depart.get("maxTimes", 0) == 3);
     REQUIRE(depart.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
@@ -3112,7 +3113,8 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
     const auto& reenter = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgain");
     REQUIRE(reenter.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
     REQUIRE(reenter.get("roi", std::vector<int> {}) == std::vector<int> { 1122, 520, 153, 65 });
-    REQUIRE(reenter.get("action", std::string {}) == "ClickSelf");
+    REQUIRE(reenter.get("action", std::string {}) == "ClickRect");
+    REQUIRE(reenter.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
     REQUIRE(reenter.get("maxTimes", 0) == 3);
     REQUIRE(reenter.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
@@ -3518,7 +3520,8 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
 
     const auto departure = tasks->at("BlackFlow@Roguelike@HuntedDepart");
     REQUIRE(departure.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
-    REQUIRE(departure.get("action", std::string {}) == "ClickSelf");
+    REQUIRE(departure.get("action", std::string {}) == "ClickRect");
+    REQUIRE(departure.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
     const auto departure_successors = departure.get("next", std::vector<std::string> {});
     const auto overload =
         std::ranges::find(departure_successors, "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt");
