@@ -674,7 +674,7 @@ jobs:
           cp -R "$app" "$staging/MAA.app"
           ln -s /Applications "$staging/Applications"
           cat > "$staging/NOTICE.txt" <<'NOTICE'
-          黑流树海数据收集专用 MAA v1.1
+          黑流树海数据收集专用 MAA v1.0.1
 
           注意事项：
           1、请下载后先打开 DMG，并将 MAA.app 拖入 Applications 后运行。请预留磁盘空间，一个完整的对局数据约为 200-300MB（压缩前）；对局结束后会自动压缩，压缩后约为 70-80MB。
@@ -689,10 +689,10 @@ jobs:
           本专用版本已关闭自动更新。由于使用 ad-hoc 签名且未经过 Apple 公证，首次启动若被 macOS 拦截，请在 Finder 中右键 MAA.app 并选择“打开”。
           NOTICE
           hdiutil create \
-            -volname 'MAA BlackFlow Data Collection v1.1' \
+            -volname 'MAA BlackFlow Data Collection v1.0.1' \
             -srcfolder "$staging" \
             -ov -format UDZO \
-            'release/MAA-BlackFlow-Data-Collection-v1.1-macos-universal.dmg'
+            'release/MAA-BlackFlow-Data-Collection-v1.0.1-macos-universal.dmg'
 
       - name: Archive debug symbols
         if: startsWith(github.ref, 'refs/tags/v')
