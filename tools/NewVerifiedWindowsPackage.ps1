@@ -81,8 +81,14 @@ if (-not (Test-Path -LiteralPath $archiveParent -PathType Container)) {
 
 $sourceResult = Assert-PackageTree $installRoot $ExpectedVersion
 
-$temporaryArchive = Join-Path $archiveParent ('.' + [IO.Path]::GetFileName($archiveFullPath) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
-$verificationRoot = Join-Path $archiveParent ('verify-' + [guid]::NewGuid().ToString('N'))
+$installPrefix = $installRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+$scratchParent = if ($archiveFullPath.StartsWith($installPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    Split-Path -Parent $installRoot
+} else {
+    $archiveParent
+}
+$temporaryArchive = Join-Path $scratchParent ('.' + [IO.Path]::GetFileName($archiveFullPath) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
+$verificationRoot = Join-Path $scratchParent ('verify-' + [guid]::NewGuid().ToString('N'))
 
 try {
     Add-Type -AssemblyName System.IO.Compression
