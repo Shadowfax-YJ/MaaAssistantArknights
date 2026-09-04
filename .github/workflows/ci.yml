@@ -224,7 +224,6 @@ jobs:
           $csproj.Save($csprojPath)
 
       - name: Publish WPF GUI
-        continue-on-error: true
         run: |
           dotnet publish src/MaaWpfGui/MaaWpfGui.csproj -c Release -p:Platform=${{ matrix.arch == 'arm64' && 'ARM64' || 'x64' }} -o install
 
@@ -265,10 +264,8 @@ jobs:
       - name: Generate file list
         run: pwsh tools/GenerateFileList.ps1 -InstallDir install
 
-      - name: Zip files
-        run: |
-          cd install
-          Compress-Archive -Destination MAA-${{ needs.meta.outputs.tag }}-win-${{ matrix.arch }}.zip -Path ./*
+      - name: Zip and verify files
+        run: pwsh tools/NewVerifiedWindowsPackage.ps1 -InstallDir install -ArchivePath install/MAA-${{ needs.meta.outputs.tag }}-win-${{ matrix.arch }}.zip -ExpectedVersion '${{ needs.meta.outputs.tag }}'
 
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
@@ -652,6 +649,33 @@ jobs:
             xcodebuild CODE_SIGNING_ALLOWED=NO -scheme MAA archive -archivePath MAA.xcarchive
           fi
         working-directory: src/MaaMacGui
+
+      - name: Verify GUI and Core versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          app='src/MaaMacGui/MAA.xcarchive/Products/Applications/MAA.app'
+          expected='${{ needs.meta.outputs.tag }}'
+          ui_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          core_library=$(find "$app" -type f -name 'libMaaCore*.dylib' -print -quit)
+          if [[ -z "$core_library" ]]; then
+            echo '::error::MaaCore dylib is missing from the app bundle'
+            exit 1
+          fi
+          core_version=$(python3 - "$core_library" <<'PY'
+          import ctypes
+          import sys
+
+          library = ctypes.CDLL(sys.argv[1])
+          library.AsstGetVersion.restype = ctypes.c_char_p
+          print(library.AsstGetVersion().decode())
+          PY
+          )
+          echo "UI=$ui_version Core=$core_version Expected=$expected"
+          if [[ "$ui_version" != "$expected" || "$core_version" != "$expected" ]]; then
+            echo "::error::UI/Core version mismatch: UI=$ui_version Core=$core_version Expected=$expected"
+            exit 1
+          fi
 
       - name: Export MAA
         if: startsWith(github.ref, 'refs/tags/v')

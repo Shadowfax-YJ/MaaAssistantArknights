@@ -1,0 +1,40 @@
+{
+  "Configurations": {
+    "Default": {
+      "TaskQueue": [
+        {
+          "$type": "RoguelikeTask",
+          "Theme": "BlackFlow",
+          "Difficulty": 6,
+          "Mode": "BlackFlowAutomationCollection",
+          "Squad": "堡垒战术分队",
+          "Roles": "坚不可摧",
+          "StartCount": 99999,
+          "CoreChar": "凯尔希·思衡托",
+          "Investment": false,
+          "StartWithSeed": false,
+          "Seed": "",
+          "UseSupport": true,
+          "Name": "",
+          "IsEnable": true,
+          "TaskType": "Roguelike"
+        }
+      ],
+      "TaskSelectedIndex": 0
+    }
+  },
+  "ConfigVersion": 1,
+  "Current": "Default",
+  "Update": {
+    "DoNotShowUpdate": true,
+    "CheckOnStartup": false,
+    "CheckOnSchedule": false,
+    "AutoDownloadUpdatePackage": false,
+    "AutoInstallUpdatePackage": false
+  },
+  "Gui": {
+    "Localization": "zh-cn",
+    "LoadWindowPlacement": false,
+    "SaveWindowPlacement": true
+  }
+}
