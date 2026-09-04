@@ -3241,8 +3241,16 @@ TEST_CASE("BlackFlow event title classification backfills hidden page identity")
     REQUIRE(unknown.classified_type == NodeType::Incident);
 }
 
-TEST_CASE("BlackFlow entered-page event OCR retains the ordinary-event fast path")
+TEST_CASE("BlackFlow entered-page classifier retains the local ordinary-event fast path in the narrow ROI")
 {
+    const EnteredPageObservation typed_event = classify_entered_page_texts({ "掠夺成性" });
+    REQUIRE(typed_event.event_name == "掠夺成性");
+    REQUIRE(typed_event.classified_type == NodeType::Duel);
+
+    const EnteredPageObservation ordinary_event = classify_entered_page_texts({ "行动奖励" });
+    REQUIRE(ordinary_event.event_name == "行动奖励");
+    REQUIRE(ordinary_event.classified_type == NodeType::Incident);
+
     const std::filesystem::path repository_root =
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
@@ -3250,8 +3258,12 @@ TEST_CASE("BlackFlow entered-page event OCR retains the ordinary-event fast path
 
     const auto event_whitelist = tasks->at("BlackFlow@Roguelike@StageEncounterOcr")
                                      .get("text", std::vector<std::string> {});
-    REQUIRE(std::ranges::find(event_whitelist, "掠夺成性") != event_whitelist.end());
-    REQUIRE(std::ranges::find(event_whitelist, "行动奖励") != event_whitelist.end());
+    const auto entered_page_whitelist = tasks->at("BlackFlow@Roguelike@EnteredPageClassification")
+                                            .get("text", std::vector<std::string> {});
+    for (const std::string& event_name : event_whitelist) {
+        INFO(event_name);
+        REQUIRE(std::ranges::find(entered_page_whitelist, event_name) != entered_page_whitelist.end());
+    }
 }
 
 TEST_CASE("BlackFlow entered-page fixed identities use the upstream speaker-name ROI")
@@ -3271,8 +3283,11 @@ TEST_CASE("BlackFlow entered-page fixed identities use the upstream speaker-name
     REQUIRE(tasks.has_value());
     const auto& classify = tasks->at("BlackFlow@Roguelike@EnteredPageClassification");
     REQUIRE(classify.get("roi", std::vector<int> {}) == std::vector<int> { 0, 420, 500, 115 });
-    REQUIRE(classify.get("text", std::vector<std::string> {}) ==
-            std::vector<std::string> { "险路尽头", "坎诺特", "机械师", "佩德洛" });
+    const auto classify_text = classify.get("text", std::vector<std::string> {});
+    for (const std::string_view fixed_identity : { "险路尽头", "坎诺特", "机械师", "佩德洛" }) {
+        CAPTURE(fixed_identity);
+        REQUIRE(std::ranges::find(classify_text, fixed_identity) != classify_text.end());
+    }
     REQUIRE(classify.get("ocrReplace", std::vector<std::vector<std::string>> {}) ==
             std::vector<std::vector<std::string>> { { "^古怪商人\\s*坎诺特$", "坎诺特" } });
 }
