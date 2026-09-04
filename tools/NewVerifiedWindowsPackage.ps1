@@ -30,6 +30,44 @@ function Get-CoreVersion([string]$CorePath) {
     return $match.Groups['version'].Value
 }
 
+function Get-PeMachine([string]$BinaryPath) {
+    $bytes = [IO.File]::ReadAllBytes($BinaryPath)
+    if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+        throw "Not a valid PE binary: $BinaryPath"
+    }
+
+    $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+    if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length -or
+        $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45) {
+        throw "PE header is invalid: $BinaryPath"
+    }
+
+    return [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+}
+
+function Assert-ResourcesLoad([string]$Root) {
+    $coreDll = Join-Path $Root 'MaaCore.dll'
+    $coreMachine = Get-PeMachine $coreDll
+    $hostMachine = switch ([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture) {
+        'X64' { 0x8664 }
+        'Arm64' { 0xaa64 }
+        default { 0 }
+    }
+
+    if ($coreMachine -ne $hostMachine) {
+        Write-Host ("Skipping runtime resource smoke test for cross-architecture package: " +
+            "core=0x{0:X4}, host=0x{1:X4}" -f $coreMachine, $hostMachine)
+        return
+    }
+
+    & python (Join-Path $PSScriptRoot 'VerifyMaaResourceLoad.py') `
+        --root $Root `
+        --library $coreDll
+    if ($LASTEXITCODE -ne 0) {
+        throw "MaaCore rejected the packaged resources"
+    }
+}
+
 function Assert-PackageTree([string]$Root, [string]$Version) {
     $maaDll = Join-Path $Root 'MAA.dll'
     $coreDll = Join-Path $Root 'MaaCore.dll'
@@ -80,6 +118,7 @@ if (-not (Test-Path -LiteralPath $archiveParent -PathType Container)) {
 }
 
 $sourceResult = Assert-PackageTree $installRoot $ExpectedVersion
+Assert-ResourcesLoad $installRoot
 
 $installPrefix = $installRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 $scratchParent = if ($archiveFullPath.StartsWith($installPrefix, [StringComparison]::OrdinalIgnoreCase)) {
@@ -108,6 +147,7 @@ try {
         $false)
 
     $extractedResult = Assert-PackageTree $verificationRoot $ExpectedVersion
+    Assert-ResourcesLoad $verificationRoot
     if ($sourceResult.ActualFiles -ne $extractedResult.ActualFiles) {
         throw "Extracted file count differs: source=$($sourceResult.ActualFiles), extracted=$($extractedResult.ActualFiles)"
     }

@@ -3602,6 +3602,10 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
                 "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait",
             });
 
+    const auto& observer = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartObserve");
+    REQUIRE(observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(observer.get("action", std::string {}) == "DoNothing");
+
     const auto& destination = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartDestination");
     REQUIRE(destination.get("template", std::string {}) == "BattleQuickFormation.png");
     REQUIRE(destination.get("action", std::string {}) == "DoNothing");
@@ -3639,6 +3643,17 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
             });
     REQUIRE(reenter.get("exceededNext", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@RecoverMap-Enter" });
+
+    const auto& observer = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainObserve");
+    REQUIRE(observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(observer.get("action", std::string {}) == "DoNothing");
+
+    const auto& destination = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainDestination");
+    REQUIRE(destination.get("template", std::string {}) == "Roguelike@StartAction.png");
+    REQUIRE(destination.get("action", std::string {}) == "DoNothing");
+    REQUIRE(destination.get("sub", std::vector<std::string> {}) == std::vector<std::string> {});
+    REQUIRE(destination.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@StageEnterBattleAgainCompleted" });
 
     const auto& completed = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainCompleted");
     REQUIRE(completed.get("next", std::vector<std::string> {}) ==
@@ -4060,6 +4075,10 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
     REQUIRE(overload != departure_successors.end());
     REQUIRE(observer != departure_successors.end());
     REQUIRE(overload < observer);
+
+    const auto& departure_observer = tasks->at("BlackFlow@Roguelike@HuntedDepartObserve");
+    REQUIRE(departure_observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(departure_observer.get("action", std::string {}) == "DoNothing");
 
     const auto& destination = tasks->at("BlackFlow@Roguelike@HuntedDepartDestination");
     REQUIRE(destination.get("template", std::string {}) == "BattleQuickFormation.png");

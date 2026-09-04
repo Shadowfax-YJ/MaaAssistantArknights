@@ -676,6 +676,9 @@ jobs:
             echo "::error::UI/Core version mismatch: UI=$ui_version Core=$core_version Expected=$expected"
             exit 1
           fi
+          python3 tools/VerifyMaaResourceLoad.py \
+            --root "$app/Contents/Resources" \
+            --library "$core_library"
 
       - name: Export MAA
         if: startsWith(github.ref, 'refs/tags/v')
