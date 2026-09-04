@@ -371,13 +371,14 @@ CollectionPopupDestination virtual_collection_popup_destination(
 CollectionPopupDestination pursuit_collection_popup_destination(
     int floor,
     std::string stage_name,
-    std::optional<int> total_kills)
+    std::optional<int> total_kills,
+    std::string_view evidence = "pursuit_lifecycle")
 {
     CollectionPopupDestination result {
         collection_popup_virtual_node_directory(floor, "追猎", 0),
         json::object {
             { "kind", "abstract_node" },
-            { "evidence", "pursuit_lifecycle" },
+            { "evidence", std::string(evidence) },
             { "entry_kind", "pursuit" },
             { "floor", floor },
             { "node_name", std::move(stage_name) },
@@ -424,6 +425,14 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
                 { "floor", floor },
             },
         };
+    }
+
+    if (collection_popup_pursuit_transition_task(task)) {
+        return pursuit_collection_popup_destination(
+            floor,
+            {},
+            std::nullopt,
+            "pursuit_confirmation_transition");
     }
 
     if (const auto& page = session.page_context(); page.has_value()) {
@@ -1692,8 +1701,12 @@ MoveConfirmationStatus BlackFlowTaskPort::confirm(
     if (waits_for_door_animation) {
         confirmed_image = m_task_context->capture();
     }
-    // 按钮消失只说明预览页暂时没被识别，不能证明移动已经提交。无论定向还是随机移动，
-    // 都要求实际节点页或地图 HUD 的阳性证据，避免转场遮罩/弹窗造成单帧漏识别后虚假提交。
+    if (!move_confirmation_requires_entered_page_classification(
+            transaction.proposal(),
+            *transaction.preview())) {
+        return MoveConfirmationStatus::Succeeded;
+    }
+    // 随机移动或预览仍隐藏身份时，才从实际进入的页面回写落点身份。
     if (!classify_entered_page(confirmed_image, entered_page, error)) {
         return MoveConfirmationStatus::Failed;
     }
@@ -1703,11 +1716,6 @@ MoveConfirmationStatus BlackFlowTaskPort::confirm(
         }
         entered_page.inventory_cleanup_performed = true;
         return MoveConfirmationStatus::Succeeded;
-    }
-    if (transaction.proposal().controllable && transaction.preview()->identity_revealed) {
-        // 阳性分类这里只负责证明已经离开预览。已探明定向落点仍以地图/预览为身份权威：
-        // 快捷编队模板只能说明“进入战斗”，不能把紧急作战、居民据点等细分类型降成普通作战。
-        retain_entered_page_transition_evidence_only(entered_page);
     }
     return MoveConfirmationStatus::Succeeded;
 }

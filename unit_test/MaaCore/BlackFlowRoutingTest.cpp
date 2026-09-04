@@ -1976,22 +1976,26 @@ TEST_CASE("BlackFlow move confirmation handles the leave-region confirmation dia
     REQUIRE(MoveConfirmationStatus::NeedsDismiss != MoveConfirmationStatus::Failed);
 }
 
-TEST_CASE("BlackFlow revealed controllable moves keep their preview identity after positive page detection")
+TEST_CASE("BlackFlow revealed controllable moves do not require entered-page identity classification")
 {
-    EnteredPageObservation observation;
-    observation.matched_texts = { "快捷编队主界面" };
-    observation.classified_type = NodeType::BattleNormal;
-    observation.event_name = "误识别事件";
-    observation.classification_conflict = true;
-    observation.map_visible = true;
+    MoveCandidate known_target;
+    known_target.controllable = true;
+    const MovePreview revealed_preview {
+        PreviewReachability::Reachable,
+        1,
+        NodeType::Empty,
+        "林间空地",
+        true,
+    };
+    REQUIRE_FALSE(move_confirmation_requires_entered_page_classification(known_target, revealed_preview));
 
-    retain_entered_page_transition_evidence_only(observation);
+    MovePreview hidden_preview = revealed_preview;
+    hidden_preview.identity_revealed = false;
+    REQUIRE(move_confirmation_requires_entered_page_classification(known_target, hidden_preview));
 
-    REQUIRE_FALSE(observation.classified_type.has_value());
-    REQUIRE_FALSE(observation.event_name.has_value());
-    REQUIRE_FALSE(observation.classification_conflict);
-    REQUIRE(observation.matched_texts == std::vector<std::string> { "快捷编队主界面" });
-    REQUIRE(observation.map_visible);
+    MoveCandidate random_landing = known_target;
+    random_landing.controllable = false;
+    REQUIRE(move_confirmation_requires_entered_page_classification(random_landing, revealed_preview));
 }
 
 TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
@@ -4139,6 +4143,36 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
                                          .get("reduceOtherTimes", std::vector<std::string> {});
     REQUIRE(std::ranges::find(confirmation_resets, "BlackFlow@Roguelike@HuntedDepart*3") !=
             confirmation_resets.end());
+}
+
+TEST_CASE("BlackFlow pursuit confirmation drains and captures reward popups before battle preview")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    for (const std::string state : {
+             "BlackFlow@Roguelike@HuntedConfirm",
+             "BlackFlow@Roguelike@HuntedConfirmObserve",
+             "BlackFlow@Roguelike@HuntedConfirmAbsentOnce",
+             "BlackFlow@Roguelike@HuntedConfirmTransitionWait",
+         }) {
+        CAPTURE(state);
+        const auto successors = tasks->at(state).get("next", std::vector<std::string> {});
+        const std::string continue_popup =
+            state + "@(BlackFlow@Roguelike@CloseCollectionContinue)";
+        const std::string close_popup = state + "@(BlackFlow@Roguelike@CloseCollection)";
+        REQUIRE(std::ranges::find(successors, continue_popup) != successors.end());
+        REQUIRE(std::ranges::find(successors, close_popup) != successors.end());
+    }
+
+    REQUIRE(collection_popup_pursuit_transition_task(
+        "BlackFlow@Roguelike@HuntedConfirmTransitionWait@"
+        "(BlackFlow@Roguelike@CloseCollectionContinue)"));
+    REQUIRE_FALSE(collection_popup_pursuit_transition_task(
+        "BlackFlow@Roguelike@MovePreviewConfirmCompleted@"
+        "(BlackFlow@Roguelike@CloseCollectionContinue)"));
 }
 
 TEST_CASE("BlackFlow direct battle departures route inventory overload through cleanup")

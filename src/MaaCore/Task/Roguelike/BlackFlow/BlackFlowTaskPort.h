@@ -209,11 +209,15 @@ struct EnteredPageObservation
     bool map_visible = false;
 };
 
-inline void retain_entered_page_transition_evidence_only(EnteredPageObservation& observation) noexcept
+// A controllable move whose preview already revealed the destination keeps that
+// preview as the identity authority.  The confirmation state machine has already
+// verified that the depart button disappeared; only random or still-hidden
+// landings need post-entry page classification.
+[[nodiscard]] inline bool move_confirmation_requires_entered_page_classification(
+    const MoveCandidate& proposal,
+    const MovePreview& preview) noexcept
 {
-    observation.classified_type.reset();
-    observation.event_name.reset();
-    observation.classification_conflict = false;
+    return !proposal.controllable || !preview.identity_revealed;
 }
 
 enum class MoveConfirmationStatus

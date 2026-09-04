@@ -1925,6 +1925,8 @@
         "action": "ClickSelf",
         "next": [
             "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@HuntedConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"
         ],
         "maxTimes": 3,
@@ -1938,7 +1940,12 @@
         "template": "BlackFlow@Roguelike@HuntedConfirm.png",
         "roi": [496, 595, 297, 98],
         "action": "DoNothing",
-        "next": ["#self", "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"],
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@HuntedConfirmObserve@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@HuntedConfirmObserve@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"
+        ],
         "maxTimes": 2,
         "exceededNext": [
             "BlackFlow@Roguelike@HuntedConfirm",
@@ -1952,6 +1959,8 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirmAbsentOnce@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@HuntedConfirmAbsentOnce@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@HuntedConfirmDestination",
             "BlackFlow@Roguelike@HuntedConfirmTransitionWait"
         ]
@@ -1963,6 +1972,8 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirmTransitionWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@HuntedConfirmTransitionWait@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@HuntedConfirmDestination",
             "#self"
         ],

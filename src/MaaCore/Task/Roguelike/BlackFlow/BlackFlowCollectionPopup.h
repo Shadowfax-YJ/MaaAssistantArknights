@@ -246,6 +246,11 @@ struct DropOptionSelection
     return task.find("EnteredPageClassificationRewardPrepare") != std::string_view::npos;
 }
 
+[[nodiscard]] inline bool collection_popup_pursuit_transition_task(std::string_view task) noexcept
+{
+    return task.find("HuntedConfirm") != std::string_view::npos;
+}
+
 [[nodiscard]] inline std::filesystem::path collection_popup_regular_node_directory(int floor, NodeId node)
 {
     return std::filesystem::path(CollectionPopupRootDirectory) / ("floor-" + std::to_string(floor)) /
