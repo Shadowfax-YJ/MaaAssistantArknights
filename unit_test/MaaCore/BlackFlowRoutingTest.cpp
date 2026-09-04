@@ -2009,6 +2009,48 @@ TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
         require_passive_observer(name);
     }
 
+    for (const auto& [destination, completed] : std::array {
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted",
+             },
+         }) {
+        CAPTURE(destination, completed);
+        const auto& task = tasks->at(destination);
+        REQUIRE(task.get("template", std::string {}) == "BlackFlow@Roguelike@HuntedConfirm.png");
+        REQUIRE(task.get("action", std::string {}) == "DoNothing");
+        REQUIRE(task.get("next", std::vector<std::string> {}) == std::vector<std::string> { completed });
+    }
+
+    for (const auto& [completed, normal_destination] : std::array {
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveConfirmCompleted",
+                 "BlackFlow@Roguelike@NodeCompletionAction",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted",
+                 "BlackFlow@Roguelike@Stages",
+             },
+         }) {
+        CAPTURE(completed, normal_destination);
+        REQUIRE(tasks->at(completed).get("next", std::vector<std::string> {}) ==
+                std::vector<std::string> { "BlackFlow@Roguelike@HuntedConfirm", normal_destination });
+    }
+
+    const auto& inventory_hunted = tasks->at("BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted");
+    REQUIRE(inventory_hunted.get("template", std::string {}) == "BlackFlow@Roguelike@HuntedConfirm.png");
+    REQUIRE(inventory_hunted.get("action", std::string {}) == "DoNothing");
+    REQUIRE(inventory_hunted.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@HuntedConfirm" });
+    const auto inventory_hunted_resets =
+        inventory_hunted.get("reduceOtherTimes", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(inventory_hunted_resets, "BlackFlow@Roguelike@MovementInventoryClose*3") !=
+            inventory_hunted_resets.end());
+
     for (const auto& [resetter, observer] : std::array {
              std::pair {
                  "BlackFlow@Roguelike@EmployLeaveTransitionWait",
@@ -3497,7 +3539,10 @@ TEST_CASE("BlackFlow emergency aid dispatches through a JustReturn adapter to th
     const auto& employ_completed = tasks->at("BlackFlow@Roguelike@EmployLeaveConfirmCompleted");
     REQUIRE(
         employ_completed.get("next", std::vector<std::string> {}) ==
-        std::vector<std::string> { "BlackFlow@Roguelike@NodeCompletionAction" });
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@NodeCompletionAction",
+        });
 }
 
 TEST_CASE("BlackFlow Lone Survivor follow-up retains the Emergency Aid transfer semantics")

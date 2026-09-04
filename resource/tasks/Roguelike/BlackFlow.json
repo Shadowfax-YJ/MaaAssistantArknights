@@ -1306,6 +1306,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@EmployLeaveTransitionWait"
@@ -1324,6 +1325,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "#self",
+            "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@EmployLeaveTransitionWait"
@@ -1342,6 +1344,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
             "#self"
@@ -1384,6 +1387,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait"
@@ -1396,6 +1400,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
             "#self"
@@ -1417,6 +1422,12 @@
         "action": "DoNothing",
         "next": ["BlackFlow@Roguelike@EmployLeaveConfirmCompleted"]
     },
+    "BlackFlow@Roguelike@EmployLeaveDestinationHunted": {
+        "baseTask": "BlackFlow@Roguelike@HuntedConfirm",
+        "template": "BlackFlow@Roguelike@HuntedConfirm.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@EmployLeaveConfirmCompleted"]
+    },
     "BlackFlow@Roguelike@EmployLeaveConfirmCompleted": {
         "algorithm": "JustReturn",
         "reduceOtherTimes": [
@@ -1427,7 +1438,7 @@
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
             "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait*20"
         ],
-        "next": ["BlackFlow@Roguelike@NodeCompletionAction"]
+        "next": ["BlackFlow@Roguelike@HuntedConfirm", "BlackFlow@Roguelike@NodeCompletionAction"]
     },
     "BlackFlow@Roguelike@EnterAfterRecruit": {
         "template": "BlackFlow@Roguelike@EnterAfterRecruit.png",
@@ -2325,6 +2336,7 @@
         "postDelay": 500,
         "next": [
             "BlackFlow@Roguelike@MovementInventoryCloseObserve",
+            "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
@@ -2342,6 +2354,7 @@
         "action": "DoNothing",
         "next": [
             "#self",
+            "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
@@ -2359,12 +2372,25 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovementInventoryCloseObserve*2"],
         "next": [
             "BlackFlow@Roguelike@MovementInventoryCloseObserve",
+            "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
             "#self"
         ],
         "maxTimes": 20,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted": {
+        "Doc": "零件箱收起后若行动力耗尽直接弹出追猎，先复位收起流程计数，再交给追猎处理器。",
+        "baseTask": "BlackFlow@Roguelike@HuntedConfirm",
+        "template": "BlackFlow@Roguelike@HuntedConfirm.png",
+        "action": "DoNothing",
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@MovementInventoryClose*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseObserve*2",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait*20"
+        ],
+        "next": ["BlackFlow@Roguelike@HuntedConfirm"]
     },
     "BlackFlow@Roguelike@MovementInventoryClose-Enter": {
         "algorithm": "JustReturn",
@@ -3498,6 +3524,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@StageTraderLeaveTransitionWait"
@@ -3518,6 +3545,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "#self",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@StageTraderLeaveTransitionWait"
@@ -3536,6 +3564,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
             "#self"
@@ -3578,6 +3607,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
             "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait"
@@ -3590,6 +3620,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
             "#self"
@@ -3611,6 +3642,12 @@
         "action": "DoNothing",
         "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"]
     },
+    "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted": {
+        "baseTask": "BlackFlow@Roguelike@HuntedConfirm",
+        "template": "BlackFlow@Roguelike@HuntedConfirm.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"]
+    },
     "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted": {
         "algorithm": "JustReturn",
         "reduceOtherTimes": [
@@ -3621,7 +3658,7 @@
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
             "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait*20"
         ],
-        "next": ["BlackFlow@Roguelike@Stages"]
+        "next": ["BlackFlow@Roguelike@HuntedConfirm", "BlackFlow@Roguelike@Stages"]
     },
     "BlackFlow@Roguelike@Stages": {
         "baseTask": "BlackFlow@Roguelike@Stages_default",
