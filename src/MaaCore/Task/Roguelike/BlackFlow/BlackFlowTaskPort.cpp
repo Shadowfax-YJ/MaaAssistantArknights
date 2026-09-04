@@ -82,6 +82,8 @@ constexpr std::string_view InventoryOverloadCloseTask = "BlackFlow@Roguelike@Mov
 constexpr std::string_view InventoryNaturalPriorityTask = "BlackFlow@Roguelike@InventoryNaturalPriority";
 constexpr std::string_view InventoryConceptPriorityTask = "BlackFlow@Roguelike@InventoryConceptPriority";
 constexpr std::string_view EnteredPageClassificationTask = "BlackFlow@Roguelike@EnteredPageClassification";
+constexpr std::string_view EnteredPageClassificationInterruptionTask =
+    "BlackFlow@Roguelike@EnteredPageClassificationInterruption";
 constexpr std::string_view EnteredPageClassificationCombatTask =
     "BlackFlow@Roguelike@EnteredPageClassificationCombat";
 constexpr std::string_view EnteredPageClassificationCombatOperatorConfirmTask =
@@ -2566,8 +2568,9 @@ bool BlackFlowTaskPort::classify_entered_page(
     std::string* error) const
 {
     const auto task = Task.get<OcrTaskInfo>(EnteredPageClassificationTask);
-    if (task == nullptr) {
-        set_error(error, "entered-page OCR task is missing");
+    const auto interruption_task = Task.get<OcrTaskInfo>(EnteredPageClassificationInterruptionTask);
+    if (task == nullptr || interruption_task == nullptr) {
+        set_error(error, "entered-page OCR task or interruption task is missing");
         return false;
     }
 
@@ -2588,16 +2591,20 @@ bool BlackFlowTaskPort::classify_entered_page(
         }
         const bool operator_confirm_visible =
             matches_template(candidate, EnteredPageClassificationCombatOperatorConfirmTask);
-        OCRer analyzer(candidate);
-        analyzer.set_task_info(task);
-        const auto results = analyzer.analyze();
         std::vector<std::string> matched_texts;
-        if (results.has_value()) {
-            matched_texts.reserve(results->size());
-            for (const auto& result : *results) {
-                matched_texts.emplace_back(result.text);
+        const auto append_matches = [&](const std::shared_ptr<OcrTaskInfo>& task_info) {
+            OCRer analyzer(candidate);
+            analyzer.set_task_info(task_info);
+            const auto results = analyzer.analyze();
+            if (results.has_value()) {
+                matched_texts.reserve(matched_texts.size() + results->size());
+                for (const auto& result : *results) {
+                    matched_texts.emplace_back(result.text);
+                }
             }
-        }
+        };
+        append_matches(task);
+        append_matches(interruption_task);
         observation = classify_entered_page_texts(std::move(matched_texts));
         if (operator_confirm_visible) {
             observation.combat_operator_selection_open = true;
@@ -2610,6 +2617,13 @@ bool BlackFlowTaskPort::classify_entered_page(
             return EnteredPageProbe::CombatOperatorSelection;
         }
         if (observation.classified_type.has_value()) {
+            return EnteredPageProbe::Classified;
+        }
+        // 固定页面按上游的左下角人物名窄 ROI 分类；普通事件仍复用自己的标题 ROI，
+        // 保留稳定首帧的快速派发，但不再让宽域干员姓名参与事件模糊匹配。
+        const auto encounter_title = recognize_text(candidate, StageEncounterOcrTask);
+        if (encounter_title.has_value()) {
+            observation = classify_entered_event_name(*encounter_title);
             return EnteredPageProbe::Classified;
         }
         return EnteredPageProbe::Unknown;

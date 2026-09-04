@@ -3241,40 +3241,40 @@ TEST_CASE("BlackFlow event title classification backfills hidden page identity")
     REQUIRE(unknown.classified_type == NodeType::Incident);
 }
 
-TEST_CASE("BlackFlow entered-page classifier fast-paths ordinary event titles")
+TEST_CASE("BlackFlow entered-page event OCR retains the ordinary-event fast path")
 {
-    const EnteredPageObservation typed_event = classify_entered_page_texts({ "掠夺成性" });
-    REQUIRE(typed_event.event_name == "掠夺成性");
-    REQUIRE(typed_event.classified_type == NodeType::Duel);
-
-    const EnteredPageObservation ordinary_event = classify_entered_page_texts({ "行动奖励" });
-    REQUIRE(ordinary_event.event_name == "行动奖励");
-    REQUIRE(ordinary_event.classified_type == NodeType::Incident);
-
-    const EnteredPageObservation operator_picker =
-        classify_entered_page_texts({ "助战招募", "掠夺成性" });
-    REQUIRE(operator_picker.combat_operator_selection_open);
-    REQUIRE_FALSE(operator_picker.event_name.has_value());
-    REQUIRE_FALSE(operator_picker.classified_type.has_value());
-
-    const EnteredPageObservation transitioning_frame =
-        classify_entered_page_texts({ "险路尽头", "原始娱乐" });
-    REQUIRE_FALSE(transitioning_frame.classification_conflict);
-    REQUIRE_FALSE(transitioning_frame.classified_type.has_value());
-
     const std::filesystem::path repository_root =
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
 
-    const auto broad_whitelist = tasks->at("BlackFlow@Roguelike@EnteredPageClassification")
-                                     .get("text", std::vector<std::string> {});
     const auto event_whitelist = tasks->at("BlackFlow@Roguelike@StageEncounterOcr")
                                      .get("text", std::vector<std::string> {});
-    for (const std::string& event_name : event_whitelist) {
-        INFO(event_name);
-        REQUIRE(std::ranges::find(broad_whitelist, event_name) != broad_whitelist.end());
-    }
+    REQUIRE(std::ranges::find(event_whitelist, "掠夺成性") != event_whitelist.end());
+    REQUIRE(std::ranges::find(event_whitelist, "行动奖励") != event_whitelist.end());
+}
+
+TEST_CASE("BlackFlow entered-page fixed identities use the upstream speaker-name ROI")
+{
+    REQUIRE(classify_entered_page_texts({ "坎诺特" }).classified_type == NodeType::Shop);
+    REQUIRE(classify_entered_page_texts({ "机械师" }).classified_type == NodeType::ScrapShop);
+
+    // The real failure frame also contained operator 黑键, previously fuzzily normalized to 黑诞.
+    // The upstream narrow ROI sees 佩德洛 instead, and that fixed identity must win.
+    const EnteredPageObservation employ = classify_entered_page_texts({ "佩德洛", "黑诞" });
+    REQUIRE(employ.classified_type == NodeType::Employ);
+    REQUIRE_FALSE(employ.event_name.has_value());
+
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const auto& classify = tasks->at("BlackFlow@Roguelike@EnteredPageClassification");
+    REQUIRE(classify.get("roi", std::vector<int> {}) == std::vector<int> { 0, 420, 500, 115 });
+    REQUIRE(classify.get("text", std::vector<std::string> {}) ==
+            std::vector<std::string> { "险路尽头", "坎诺特", "机械师", "佩德洛" });
+    REQUIRE(classify.get("ocrReplace", std::vector<std::vector<std::string>> {}) ==
+            std::vector<std::vector<std::string>> { { "^古怪商人\\s*坎诺特$", "坎诺特" } });
 }
 
 TEST_CASE("BlackFlow event and shop OCR use guarded fuzzy matching")
