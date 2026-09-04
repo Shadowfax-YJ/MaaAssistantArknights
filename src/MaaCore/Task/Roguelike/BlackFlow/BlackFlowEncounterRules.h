@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -27,12 +28,59 @@ inline constexpr const char* HealingHeartProcessingItemChoice = "让这里有一
 inline constexpr const char* HealingHeartSafetyFallbackChoice = "检测此地有无危险";
 inline constexpr const char* HealingHeartRestFallbackChoice = "闭上眼感受宁静";
 inline constexpr int HealingHeartActionPointCost = 3;
+inline constexpr int EncounterOptionNavigationAttemptLimit = 12;
+
+[[nodiscard]] inline constexpr bool encounter_option_navigation_should_continue(int completed_attempts) noexcept
+{
+    return completed_attempts >= 0 && completed_attempts < EncounterOptionNavigationAttemptLimit;
+}
 
 enum class ChainedEncounterPageState
 {
     Waiting,
     EventReady,
     MapReturned,
+};
+
+// 事件选项滚动具有惯性；Swipe 任务返回并不代表卡片已经停止移动。
+// 只有同一选项连续两帧的位置足够接近时，缓存坐标才允许用于点击。
+class EncounterOptionPositionStability
+{
+public:
+    void reset() noexcept
+    {
+        m_previous_y.reset();
+        m_stable_observations = 0;
+    }
+
+    [[nodiscard]] bool observe(std::optional<int> y) noexcept
+    {
+        if (!y.has_value()) {
+            reset();
+            return false;
+        }
+
+        if (m_previous_y.has_value() && absolute_difference(*m_previous_y, *y) <= PositionTolerance) {
+            ++m_stable_observations;
+        }
+        else {
+            m_stable_observations = 1;
+        }
+        m_previous_y = *y;
+        return m_stable_observations >= RequiredStableObservations;
+    }
+
+private:
+    [[nodiscard]] static constexpr int absolute_difference(int lhs, int rhs) noexcept
+    {
+        return lhs >= rhs ? lhs - rhs : rhs - lhs;
+    }
+
+    static constexpr int PositionTolerance = 3;
+    static constexpr int RequiredStableObservations = 2;
+
+    std::optional<int> m_previous_y;
+    int m_stable_observations = 0;
 };
 
 // 黑流树海的地图与事件页都会显示生命值。地图识别必须拥有最高优先级，

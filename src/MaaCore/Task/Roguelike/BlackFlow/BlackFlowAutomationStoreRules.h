@@ -302,6 +302,11 @@ inline constexpr std::size_t EerieStoreCollectibleRunPurchaseLimit = 2;
     return !is_eerie_store_collectible(name) || purchased_in_run < EerieStoreCollectibleRunPurchaseLimit;
 }
 
+[[nodiscard]] inline constexpr bool eerie_store_purchase_opens_recruitment(std::string_view name) noexcept
+{
+    return name.ends_with("招募券");
+}
+
 inline constexpr std::array<std::string_view, 29> ShopBuyPriority {
     "沙盘β",
     "医者-新典训",

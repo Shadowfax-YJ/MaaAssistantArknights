@@ -222,7 +222,11 @@ struct DropOptionSelection
     std::string_view page_intent,
     bool page_changes_floor) noexcept
 {
-    if (page_floor <= 0 || !collection_popup_stages_task(task)) {
+    const bool observes_floor_transition =
+        collection_popup_stages_task(task) ||
+        task.find("MapPrepare-FloorEnterZoom") != std::string_view::npos ||
+        task.find("MapCapturePopupDrain") != std::string_view::npos;
+    if (page_floor <= 0 || !observes_floor_transition) {
         return std::nullopt;
     }
     // final.pass is a same-floor pass-through even though its icon is Final.

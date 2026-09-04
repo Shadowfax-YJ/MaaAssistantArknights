@@ -19,6 +19,7 @@ enum class RoutingCycleStatus
     DirectExhaustionRequired,
     ReplanRequired,
     PreviewNeedsDismiss,
+    ConfirmationNeedsDismiss,
     SessionTerminated,
     NeedsPageRecovery,
     Failed,
@@ -336,19 +337,22 @@ RoutingCycleOutcome execute_preview_cycle(Session& session, IBlackFlowTaskPort& 
         "move.confirm",
         "started",
         "pending");
-    if (!port.confirm(*session.transaction(), entered_page, &error)) {
+    const MoveConfirmationStatus confirmation = port.confirm(*session.transaction(), entered_page, &error);
+    if (confirmation != MoveConfirmationStatus::Succeeded) {
         record_routing_run_event(
             session,
             port,
-            RunLogLevel::Error,
+            confirmation == MoveConfirmationStatus::NeedsDismiss ? RunLogLevel::Warning : RunLogLevel::Error,
             "move.confirm",
             "failed",
             "error",
             json::object { { "error", error } },
             true);
-        if (move_confirmation_failure_is_recoverable(error)) {
+        if (confirmation == MoveConfirmationStatus::NeedsDismiss) {
             session.cancel_transaction();
-            return { RoutingCycleStatus::PreviewNeedsDismiss, "move_confirmation_retry_exhausted", std::move(error) };
+            return { RoutingCycleStatus::ConfirmationNeedsDismiss,
+                     "move_confirmation_retry_exhausted",
+                     std::move(error) };
         }
         return { RoutingCycleStatus::Failed, "move_confirmation_failed", std::move(error) };
     }

@@ -97,7 +97,7 @@
         "template": "BlackFlow@Roguelike@AbandonConfirm.png",
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@MapPrepare-ZoomOut*3",
-            "BlackFlow@Roguelike@MovePreviewConfirm*3",
+            "BlackFlow@Roguelike@MovePreviewConfirm*4",
             "BlackFlow@Roguelike@MovePreviewWait*3",
             "BlackFlow@Roguelike@MovementInventoryClose*3",
             "BlackFlow@Roguelike@Page-Door-Wait*50",
@@ -215,7 +215,9 @@
         "roi": [900, 0, 380, 720],
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@RecruitWithoutButton*10",
-            "BlackFlow@Roguelike@ClickToDrops*20"
+            "BlackFlow@Roguelike@ClickToDrops*20",
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait*20",
+            "BlackFlow@Roguelike@AutomationShopPurchaseTransition*50"
         ]
     },
     "BlackFlow@Roguelike@MissionCompletedFlag": {
@@ -289,10 +291,8 @@
     "BlackFlow@Roguelike@AutomationShopBuyConfirm": {
         "baseTask": "BlackFlow@Roguelike@TraderRandomShoppingConfirm",
         "template": "Roguelike@TraderRandomShoppingConfirm.png",
-        "next": [
-            "BlackFlow@Roguelike@ChooseOperFlag",
-            "BlackFlow@Roguelike@AutomationShopPurchaseSettle"
-        ]
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopPurchaseTransition*50"],
+        "next": ["BlackFlow@Roguelike@AutomationShopPurchaseTransition"]
     },
     "BlackFlow@Roguelike@AutomationShopBuyConfirm-Enter": {
         "algorithm": "JustReturn",
@@ -315,10 +315,58 @@
         "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
     },
     "BlackFlow@Roguelike@AutomationShopPurchaseSettle": {
-        "Doc": "购买后商品卡片保持原位并置灰；确认任务已等待一秒，这里只留少量缓冲后复用缓存坐标。",
-        "algorithm": "JustReturn",
-        "postDelay": 200,
+        "Doc": "第一次看到诡意行商离开按钮只作为候选；再等待一帧并复核，避免招募页转场期间仍残留商店背景时过早恢复购物。",
+        "algorithm": "MatchTemplate",
+        "template": "Roguelike@StageTraderLeave.png",
+        "templThreshold": 0.75,
+        "roi": [985, 443, 295, 204],
+        "action": "DoNothing",
+        "postDelay": 600,
+        "next": [
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed",
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed": {
+        "Doc": "连续两次确认诡意行商页面仍可见后，才把普通商品购买交回商店决策插件。",
+        "algorithm": "MatchTemplate",
+        "template": "Roguelike@StageTraderLeave.png",
+        "templThreshold": 0.75,
+        "roi": [985, 443, 295, 204],
+        "action": "DoNothing",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopPurchaseWait*20"],
         "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+    },
+    "BlackFlow@Roguelike@AutomationShopPurchaseTransition": {
+        "Doc": "由商店插件按已确认购买的商品名动态分流；招募券只能等待实际招募按钮，其他商品才允许用稳定商店页面结算。",
+        "baseTask": "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition"
+    },
+    "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettle",
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopRecruitPurchaseWait": {
+        "Doc": "招募券购买后的专用动态基类：商店背景即使持续残留也不能恢复购物，只接受实际招募按钮。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "next": ["BlackFlow@Roguelike@ChooseOperFlag", "#self"],
+        "maxTimes": 50,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@AutomationShopPurchaseWait": {
+        "Doc": "购买确认后的纯等待门：只接受实际招募按钮或连续稳定的诡意行商页面，不在未知转场帧点击或调用商店插件。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "next": ["BlackFlow@Roguelike@ChooseOperFlag", "BlackFlow@Roguelike@AutomationShopPurchaseSettle", "#self"],
+        "maxTimes": 20,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@AutomationShopDecision": {
         "algorithm": "JustReturn",
@@ -1251,29 +1299,134 @@
         "next": ["BlackFlow@Roguelike@EmployLeave"]
     },
     "BlackFlow@Roguelike@EmployLeave": {
+        "Doc": "点击离开后先等待确认弹窗或地图阳性状态；旧按钮持续存在约两秒才允许再次点击。",
         "template": "BlackFlow@Roguelike@EmployLeave.png",
         "roi": [1099, 541, 179, 86],
         "action": "ClickSelf",
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
-            "BlackFlow@Roguelike@Stages-MapReady",
-            "#self"
+            "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+            "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@EmployLeaveTransitionWait"
         ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@EmployLeaveObserve*2",
+            "BlackFlow@Roguelike@EmployLeaveTransitionWait*20"
+        ]
+    },
+    "BlackFlow@Roguelike@EmployLeaveObserve": {
+        "template": "BlackFlow@Roguelike@EmployLeave.png",
+        "roi": [1099, 541, 179, 86],
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirm",
+            "#self",
+            "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+            "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@EmployLeaveTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@EmployLeave",
+            "BlackFlow@Roguelike@EmployLeaveTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@EmployLeaveTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirm",
+            "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+            "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+            "#self"
+        ],
+        "maxTimes": 20,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@EmployLeaveConfirm": {
+        "Doc": "确认点击后只观察，不把按钮单帧消失当成完成；弹窗持续存在约两秒才重击。",
         "template": "BlackFlow@Roguelike@EmployLeaveConfirm.png",
         "roi": [1099, 541, 179, 86],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@EmployLeaveConfirmCompleted"],
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveConfirmAbsentOnce"
+        ],
         "maxTimes": 3,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeave*3"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@EmployLeave*3",
+            "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
+            "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait*20"
+        ],
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@EmployLeaveConfirmObserve": {
+        "template": "BlackFlow@Roguelike@EmployLeaveConfirm.png",
+        "roi": [1099, 541, 179, 86],
+        "action": "DoNothing",
+        "next": ["#self", "BlackFlow@Roguelike@EmployLeaveConfirmAbsentOnce"],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@EmployLeaveConfirm",
+            "BlackFlow@Roguelike@EmployLeaveConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@EmployLeaveConfirmAbsentOnce": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+            "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+            "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+            "#self"
+        ],
+        "maxTimes": 20,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@EmployLeaveDestinationReady": {
+        "template": "BlackFlow@Roguelike@MapZoomIn.png",
+        "templThreshold": 0.9,
+        "roi": [24, 468, 62, 153],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@EmployLeaveConfirmCompleted"]
+    },
+    "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut": {
+        "template": "BlackFlow@Roguelike@MapZoomOut.png",
+        "templThreshold": 0.9,
+        "roi": [24, 468, 62, 153],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@EmployLeaveConfirmCompleted"]
     },
     "BlackFlow@Roguelike@EmployLeaveConfirmCompleted": {
         "algorithm": "JustReturn",
-        "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirm*3"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@EmployLeave*3",
+            "BlackFlow@Roguelike@EmployLeaveObserve*2",
+            "BlackFlow@Roguelike@EmployLeaveTransitionWait*20",
+            "BlackFlow@Roguelike@EmployLeaveConfirm*3",
+            "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
+            "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait*20"
+        ],
         "next": ["BlackFlow@Roguelike@NodeCompletionAction"]
     },
     "BlackFlow@Roguelike@EnterAfterRecruit": {
@@ -1755,17 +1908,68 @@
         "text": ["白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛", "白模鸟", "涂装黎博利"]
     },
     "BlackFlow@Roguelike@HuntedConfirm": {
+        "Doc": "点击追猎确认后等待弹窗稳定消失并识别实际战斗预览；确认按钮持续存在约两秒才允许重击。",
         "template": "BlackFlow@Roguelike@HuntedConfirm.png",
         "roi": [496, 595, 297, 98],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@HuntedConfirmCompleted"],
+        "next": [
+            "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"
+        ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@HuntedConfirmObserve*2",
+            "BlackFlow@Roguelike@HuntedConfirmTransitionWait*20"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedConfirmObserve": {
+        "template": "BlackFlow@Roguelike@HuntedConfirm.png",
+        "roi": [496, 595, 297, 98],
+        "action": "DoNothing",
+        "next": ["#self", "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@HuntedConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedConfirmAbsentOnce": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirmDestination",
+            "BlackFlow@Roguelike@HuntedConfirmTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedConfirmTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@HuntedConfirmObserve",
+            "BlackFlow@Roguelike@HuntedConfirmDestination",
+            "#self"
+        ],
+        "maxTimes": 20,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@HuntedConfirmDestination": {
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "roi": [1122, 520, 153, 65],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@HuntedConfirmCompleted"]
     },
     "BlackFlow@Roguelike@HuntedConfirmCompleted": {
         "algorithm": "JustReturn",
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@HuntedConfirm*3",
+            "BlackFlow@Roguelike@HuntedConfirmObserve*2",
+            "BlackFlow@Roguelike@HuntedConfirmTransitionWait*20",
             "BlackFlow@Roguelike@DirectExhaustConfirm*3",
             "BlackFlow@Roguelike@HuntedDepart*3"
         ],
@@ -1779,16 +1983,62 @@
         "next": ["BlackFlow@Roguelike@HuntedDepart"]
     },
     "BlackFlow@Roguelike@HuntedDepart": {
+        "Doc": "追猎战斗预览点击出发后先被动观察；按钮持续存在约两秒才允许再次点击，避免转场残影导致连点。",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
-            "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
-            "BlackFlow@Roguelike@QuickFormation"
+            "BlackFlow@Roguelike@HuntedDepartObserve",
+            "BlackFlow@Roguelike@HuntedDepartDestination",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait"
         ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@HuntedDepartObserve*2",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait*50"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedDepartObserve": {
+        "baseTask": "BlackFlow@Roguelike@HuntedDepart",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "#self",
+            "BlackFlow@Roguelike@HuntedDepartDestination",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@HuntedDepart",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedDepartDestination": {
+        "baseTask": "BattleQuickFormation",
+        "template": "BattleQuickFormation.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@QuickFormation"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@HuntedDepart*3",
+            "BlackFlow@Roguelike@HuntedDepartObserve*2",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait*50"
+        ]
+    },
+    "BlackFlow@Roguelike@HuntedDepartTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@HuntedDepartObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@HuntedDepartObserve",
+            "BlackFlow@Roguelike@HuntedDepartDestination",
+            "#self"
+        ],
+        "maxTimes": 50,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@InitialDrop": {
@@ -1904,11 +2154,19 @@
         "onErrorNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom": {
-        "Doc": "刚进入楼层时比例尺必定是大的，此刻两种放大镜状态分不清，所以不判状态直接切一次；比例尺缩小后节点不会压到顶部标题，楼层 OCR 才干净。",
+        "Doc": "楼层切换后先处理可能稍晚出现的 NEXT/X 奖励链，再执行缩放；避免识别地图后等待点击期间弹窗出现，被旧坐标点击直接跳过。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick"
+        ]
+    },
+    "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick": {
+        "Doc": "刚进入楼层时比例尺必定是大的；弹窗阳性已在前置守卫中优先处理，因此按当前帧立即切换比例尺，不保留会产生陈旧点击的 preDelay。",
         "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
         "template": ["BlackFlow@Roguelike@MapZoomIn.png", "BlackFlow@Roguelike@MapZoomOut.png"],
         "action": "ClickSelf",
-        "preDelay": 500,
         "postDelay": 1000,
         "next": ["BlackFlow@Roguelike@NextLevel"]
     },
@@ -1942,22 +2200,28 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewWait*3"]
     },
     "BlackFlow@Roguelike@MovePreviewConfirm": {
+        "Doc": [
+            "移植上游 0cd3d395e0 的确认观察状态机：点击后持续观察约两秒，按钮始终存在才允许再次点击。",
+            "保留本地固定安全点击区和跨区域二次确认弹窗处理；Confirm 的 maxTimes 只统计真实点击。"
+        ],
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
-            "BlackFlow@Roguelike@MovePreviewConfirm",
-            "BlackFlow@Roguelike@MovePreviewConfirmCompleted"
+            "BlackFlow@Roguelike@MovePreviewConfirmObserve",
+            "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
         ],
-        "maxTimes": 3
+        "maxTimes": 4,
+        "exceededNext": ["BlackFlow@Roguelike@MovePreviewConfirmExceeded"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewWait*3", "BlackFlow@Roguelike@MovePreviewConfirmObserve*2"]
     },
     "BlackFlow@Roguelike@MovePreviewConfirmCompleted": {
         "Doc": "移动确认后的统一收尾：等待落点转场，并在节点处理器接管前关闭加工品损毁、获得战利品等居中的 NEXT 详情弹窗以及右上角获得物弹窗。",
         "algorithm": "JustReturn",
         "postDelay": 600,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirm*3"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirm*4"],
         "next": [
             "BlackFlow@Roguelike@MovePreviewConfirmCompleted@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MovePreviewConfirmCompleted@(BlackFlow@Roguelike@CloseCollection)",
@@ -1965,6 +2229,40 @@
         ]
     },
     "BlackFlow@Roguelike@MovePreviewConfirmCompletedDone": {
+        "algorithm": "JustReturn"
+    },
+    "BlackFlow@Roguelike@MovePreviewConfirmExceeded": {
+        "algorithm": "JustReturn"
+    },
+    "BlackFlow@Roguelike@MovePreviewConfirmObserve": {
+        "Doc": "观察期间只识别、不点击；跨区域二次确认优先处理，按钮连续存在约两秒后才回到真实点击任务。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
+        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+            "#self",
+            "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@MovePreviewConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce": {
+        "Doc": "确认按钮首次消失后再等一帧；若按钮或跨区域确认重新出现则继续观察，连续缺失才进入页面阳性验证。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirmObserve",
+            "BlackFlow@Roguelike@MovePreviewConfirmSucceeded"
+        ]
+    },
+    "BlackFlow@Roguelike@MovePreviewConfirmSucceeded": {
         "algorithm": "JustReturn"
     },
     "BlackFlow@Roguelike@MovePreviewCost": {
@@ -2020,12 +2318,52 @@
         "next": ["BlackFlow@Roguelike@MovementInventoryOpen"]
     },
     "BlackFlow@Roguelike@MovementInventoryClose": {
+        "Doc": "点击收起后先被动观察展开标志；只有标志持续存在约两秒才重击，消失后继续等待地图阳性状态。",
         "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
         "roi": [589, 639, 101, 80],
         "action": "ClickSelf",
         "postDelay": 500,
-        "next": ["BlackFlow@Roguelike@MapPrepare-Ready", "BlackFlow@Roguelike@MapPrepare-ZoomOut", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryCloseObserve",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@MovementInventoryCloseObserve*2",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait*20"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseObserve": {
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+        "roi": [589, 639, 101, 80],
+        "action": "DoNothing",
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@MovementInventoryClose",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MovementInventoryCloseObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryCloseObserve",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "#self"
+        ],
+        "maxTimes": 20,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@MovementInventoryClose-Enter": {
@@ -2105,8 +2443,14 @@
         "next": ["BlackFlow@Roguelike@DirectDepartInventoryOverloadAction"],
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@HuntedDepart*3",
+            "BlackFlow@Roguelike@HuntedDepartObserve*2",
+            "BlackFlow@Roguelike@HuntedDepartTransitionWait*50",
             "BlackFlow@Roguelike@StageEncounterBattleDepart*3",
-            "BlackFlow@Roguelike@StageEnterBattleAgain*3"
+            "BlackFlow@Roguelike@StageEncounterBattleDepartObserve*2",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait*50",
+            "BlackFlow@Roguelike@StageEnterBattleAgain*3",
+            "BlackFlow@Roguelike@StageEnterBattleAgainObserve*2",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait*50"
         ]
     },
     "BlackFlow@Roguelike@DirectDepartInventoryOverloadAction": {
@@ -2237,18 +2581,37 @@
         "next": ["BlackFlow@Roguelike@MovementInventoryObservationAction"]
     },
     "BlackFlow@Roguelike@MovementInventoryOpen": {
+        "Doc": "打开零件箱后先观察展开标志；观察约两秒仍未展开才允许再次点击，maxTimes 只统计真实点击。",
         "algorithm": "JustReturn",
         "action": "ClickRect",
         "specificRect": [617, 653, 49, 57],
         "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryOpened",
+            "BlackFlow@Roguelike@MovementInventoryOpenObserve"
+        ],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MovementInventoryOpenObserve*2"]
+    },
+    "BlackFlow@Roguelike@MovementInventoryOpenObserve": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
         "next": ["BlackFlow@Roguelike@MovementInventoryOpened", "#self"],
-        "maxTimes": 3
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@MovementInventoryOpen",
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
     },
     "BlackFlow@Roguelike@MovementInventoryOpened": {
         "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
         "roi": [589, 639, 101, 80],
         "next": ["BlackFlow@Roguelike@MovementInventoryObserve"],
-        "reduceOtherTimes": ["BlackFlow@Roguelike@MovementInventoryOpen*3"]
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@MovementInventoryOpen*3",
+            "BlackFlow@Roguelike@MovementInventoryOpenObserve*2"
+        ]
     },
     "BlackFlow@Roguelike@MovementLoaded-M01": {
         "template": "BlackFlow@Roguelike@Movement-M01.png",
@@ -2353,6 +2716,18 @@
     "BlackFlow@Roguelike@MapCaptureStabilityWait": {
         "algorithm": "JustReturn",
         "postDelay": 300
+    },
+    "BlackFlow@Roguelike@MapCapturePopupDrain": {
+        "Doc": "稳定地图采样发现获得物弹窗时，先通过通用插件逐张截图并排空整条 NEXT/NEXT/X 奖励链，完成后再重新采样地图。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapCapturePopupDrainDone"
+        ]
+    },
+    "BlackFlow@Roguelike@MapCapturePopupDrainDone": {
+        "algorithm": "JustReturn"
     },
     "BlackFlow@Roguelike@UtopiaPanelToggle": {
         "Doc": "新地图楼层标题左侧固定的实托邦标记；打开标题弹层 OCR 后再次点击同一位置关闭。",
@@ -2468,6 +2843,7 @@
         "fuzzyMatch": true,
         "postDelay": 600,
         "next": [
+            "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
@@ -2634,7 +3010,10 @@
     },
     "BlackFlow@Roguelike@RecoverMap-Enter": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@RecoverMap"]
+        "next": [
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@RecoverMap"
+        ]
     },
     "BlackFlow@Roguelike@RecoverMap-Exit": {
         "baseTask": "BlackFlow@Roguelike@ExitThenAbandon",
@@ -2840,18 +3219,46 @@
         "next": ["BlackFlow@Roguelike@StageEncounterResult"]
     },
     "BlackFlow@Roguelike@StageEncounterLeaveConfirm": {
+        "Doc": "跨区域二次确认同时服务事件离开与移动出发，没有统一目标页；点击后只被动观察，并要求确认弹窗连续两帧消失才放行。",
         "baseTask": "Roguelike@StageEncounterLeaveConfirm",
         "template": "BlackFlow@Roguelike@StageEncounterLeaveConfirm.png",
+        "action": "ClickSelf",
         "next": [
-            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
-            "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted"
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce"
         ],
-        "maxTimes": 3
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve*2"]
+    },
+    "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve": {
+        "template": "BlackFlow@Roguelike@StageEncounterLeaveConfirm.png",
+        "roi": [1069, 0, 211, 700],
+        "action": "DoNothing",
+        "next": ["#self", "BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce"],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted"
+        ]
     },
     "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted": {
         "algorithm": "JustReturn",
         "postDelay": 600,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterLeaveConfirm*3"]
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm*3",
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve*2"
+        ]
     },
     "BlackFlow@Roguelike@StageEncounterOcr": {
         "baseTask": "Roguelike@StageEncounterOcr",
@@ -2899,8 +3306,8 @@
         "fuzzyMatch": true
     },
     "BlackFlow@Roguelike@StageEncounterResult": {
-        "Doc": "事件处理失败时先返回地图重新观测；恢复动作耗尽后等待一分钟，再原样重试失败的 RecoverMap 动作。",
-        "baseTask": "BlackFlow@Roguelike@RecoverMap-Enter"
+        "Doc": "事件点击失败或转场未完成时仍由事件结果分发器判断页面；若仍是原事件页则重新识别并续办，禁止错误打开退出探索确认。",
+        "baseTask": "BlackFlow@Roguelike@StageEncounterReward"
     },
     "BlackFlow@Roguelike@BattlePreparationStart": {
         "Doc": "狭路相逢准备阶段部署完成后，全屏识别并点击开始战斗；不依赖截图分辨率或固定像素坐标。",
@@ -2928,24 +3335,68 @@
         ]
     },
     "BlackFlow@Roguelike@StageEncounterBattleDepart": {
-        "Doc": "事件选项转入战斗预览后，先用模板确认右下角“出发前往”存在，再点击按钮内部固定安全区，避免 ClickSelf 随机落到文字右缘而无法出发；随后交给现有快捷编队与作战链。使用独立次数状态，避免与追猎入口互相影响。",
+        "Doc": "事件选项转入战斗预览后，点击固定安全区并被动观察；按钮持续存在约两秒才允许再次点击，快捷编队阳性后才交回作战链。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
-            "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
-            "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted"
+            "BlackFlow@Roguelike@StageEncounterBattleDepartObserve",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartDestination",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait"
         ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageEncounterBattleDepartObserve*2",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait*50"
+        ]
+    },
+    "BlackFlow@Roguelike@StageEncounterBattleDepartObserve": {
+        "baseTask": "BlackFlow@Roguelike@StageEncounterBattleDepart",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "#self",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartDestination",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@StageEncounterBattleDepart",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@StageEncounterBattleDepartDestination": {
+        "baseTask": "BattleQuickFormation",
+        "template": "BattleQuickFormation.png",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@StageEncounterBattleDepartCompleted"]
+    },
+    "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterBattleDepartObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartObserve",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartDestination",
+            "#self"
+        ],
+        "maxTimes": 50,
         "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
     },
     "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted": {
         "algorithm": "JustReturn",
         "postDelay": 600,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEncounterBattleDepart*3"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageEncounterBattleDepart*3",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartObserve*2",
+            "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait*50"
+        ],
         "next": ["BlackFlow@Roguelike@QuickFormation"]
     },
     "BlackFlow@Roguelike@StageEncounterSpecialClose": {
@@ -3039,26 +3490,137 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderInvestCancel*3"]
     },
     "BlackFlow@Roguelike@StageTraderLeave": {
+        "Doc": "点击离开商店后先等待确认弹窗或地图阳性状态；离开按钮持续存在约两秒才允许再次点击。",
         "baseTask": "Roguelike@StageTraderLeave",
         "template": "Roguelike@StageTraderLeave.png",
         "roi": [985, 443, 295, 204],
-        "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirm", "BlackFlow@Roguelike@StageTraderLeave"],
+        "action": "ClickSelf",
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+            "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@StageTraderLeaveTransitionWait"
+        ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@StageTraderInvestCancel*3",
-            "BlackFlow@Roguelike@StageTraderInvestSystemLeave*3"
+            "BlackFlow@Roguelike@StageTraderInvestSystemLeave*3",
+            "BlackFlow@Roguelike@StageTraderLeaveObserve*2",
+            "BlackFlow@Roguelike@StageTraderLeaveTransitionWait*20"
         ]
     },
+    "BlackFlow@Roguelike@StageTraderLeaveObserve": {
+        "template": "Roguelike@StageTraderLeave.png",
+        "roi": [985, 443, 295, 204],
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+            "#self",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@StageTraderLeaveTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@StageTraderLeaveTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+            "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+            "#self"
+        ],
+        "maxTimes": 20,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
     "BlackFlow@Roguelike@StageTraderLeaveConfirm": {
+        "Doc": "确认离开后只观察，不把按钮单帧消失当成完成；地图未稳定时继续纯等待。",
         "baseTask": "Roguelike@StageTraderLeaveConfirm",
         "template": "Roguelike@StageTraderLeaveConfirm.png",
-        "next": ["#self", "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"],
+        "action": "ClickSelf",
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmAbsentOnce"
+        ],
         "maxTimes": 3,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeave*3"]
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageTraderLeave*3",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait*20"
+        ]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve": {
+        "template": "Roguelike@StageTraderLeaveConfirm.png",
+        "roi": [985, 447, 295, 203],
+        "action": "DoNothing",
+        "next": ["#self", "BlackFlow@Roguelike@StageTraderLeaveConfirmAbsentOnce"],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveConfirmAbsentOnce": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+            "#self"
+        ],
+        "maxTimes": 20,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveDestinationReady": {
+        "template": "BlackFlow@Roguelike@MapZoomIn.png",
+        "templThreshold": 0.9,
+        "roi": [24, 468, 62, 153],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"]
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut": {
+        "template": "BlackFlow@Roguelike@MapZoomOut.png",
+        "templThreshold": 0.9,
+        "roi": [24, 468, 62, 153],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"]
     },
     "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted": {
         "algorithm": "JustReturn",
-        "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirm*3"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageTraderLeave*3",
+            "BlackFlow@Roguelike@StageTraderLeaveObserve*2",
+            "BlackFlow@Roguelike@StageTraderLeaveTransitionWait*20",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirm*3",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait*20"
+        ],
         "next": ["BlackFlow@Roguelike@Stages"]
     },
     "BlackFlow@Roguelike@Stages": {
@@ -3093,24 +3655,68 @@
         ]
     },
     "BlackFlow@Roguelike@StageEnterBattleAgain": {
-        "Doc": "快捷编队确认并返回节点预览后，用模板确认实际的‘出发前往’按钮存在，再点击按钮内部固定安全区；概念体激活面板会改变通用主题按钮位置，因此使用黑流预览页自己的安全区。",
+        "Doc": "快捷编队确认并返回节点预览后，点击固定安全区并被动观察；按钮持续存在约两秒才允许再次点击，战斗准备页阳性后才继续。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
-            "#self",
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
-            "BlackFlow@Roguelike@StageEnterBattleAgainCompleted"
+            "BlackFlow@Roguelike@StageEnterBattleAgainObserve",
+            "BlackFlow@Roguelike@StageEnterBattleAgainDestination",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait"
         ],
         "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageEnterBattleAgainObserve*2",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait*50"
+        ]
+    },
+    "BlackFlow@Roguelike@StageEnterBattleAgainObserve": {
+        "baseTask": "BlackFlow@Roguelike@StageEnterBattleAgain",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "#self",
+            "BlackFlow@Roguelike@StageEnterBattleAgainDestination",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@StageEnterBattleAgain",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@StageEnterBattleAgainDestination": {
+        "baseTask": "BlackFlow@Roguelike@StartAction",
+        "action": "DoNothing",
+        "sub": [],
+        "next": ["BlackFlow@Roguelike@StageEnterBattleAgainCompleted"]
+    },
+    "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEnterBattleAgainObserve*2"],
+        "next": [
+            "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
+            "BlackFlow@Roguelike@StageEnterBattleAgainObserve",
+            "BlackFlow@Roguelike@StageEnterBattleAgainDestination",
+            "#self"
+        ],
+        "maxTimes": 50,
         "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"]
     },
     "BlackFlow@Roguelike@StageEnterBattleAgainCompleted": {
         "algorithm": "JustReturn",
         "postDelay": 600,
-        "reduceOtherTimes": ["BlackFlow@Roguelike@StageEnterBattleAgain*3"],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@StageEnterBattleAgain*3",
+            "BlackFlow@Roguelike@StageEnterBattleAgainObserve*2",
+            "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait*50"
+        ],
         "next": ["BlackFlow@Roguelike@StartAction"]
     },
     "BlackFlow@Roguelike@StartAction": {

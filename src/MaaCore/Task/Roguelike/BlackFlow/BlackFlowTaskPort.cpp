@@ -46,7 +46,10 @@ constexpr std::string_view CurrentActionPointsTask = "BlackFlow@Roguelike@Curren
 constexpr std::string_view CurrentIngotsTask = "BlackFlow@Roguelike@CurrentIngots";
 constexpr std::string_view FloorFiveViewportSwipeLeftTask = "BlackFlow@Roguelike@MapViewportFloor5SwipeLeft";
 constexpr std::string_view MapCaptureStabilityWaitTask = "BlackFlow@Roguelike@MapCaptureStabilityWait";
+constexpr std::string_view MapCapturePopupDrainTask = "BlackFlow@Roguelike@MapCapturePopupDrain";
 constexpr std::string_view MapReadyTask = "BlackFlow@Roguelike@MapPrepare-Ready";
+constexpr std::string_view CloseCollectionTask = "BlackFlow@Roguelike@CloseCollection";
+constexpr std::string_view CloseCollectionContinueTask = "BlackFlow@Roguelike@CloseCollectionContinue";
 constexpr std::string_view UtopiaPanelToggleTask = "BlackFlow@Roguelike@UtopiaPanelToggle";
 constexpr std::string_view UtopiaPanelPolicyTask = "BlackFlow@Roguelike@UtopiaPanelPolicy";
 constexpr std::string_view UtopiaPanelIdeologyTask = "BlackFlow@Roguelike@UtopiaPanelIdeology";
@@ -59,6 +62,11 @@ constexpr std::string_view MovePreviewDisplayedCategoryTask =
     "BlackFlow@Roguelike@MovePreviewDisplayedCategory";
 constexpr std::string_view MovePreviewStageNameTask = "BlackFlow@Roguelike@MovePreviewStageName";
 constexpr std::string_view MovePreviewConfirmTask = "BlackFlow@Roguelike@MovePreviewConfirm";
+constexpr std::string_view MovePreviewConfirmSucceededTask = "BlackFlow@Roguelike@MovePreviewConfirmSucceeded";
+constexpr std::string_view MovePreviewConfirmExceededTask = "BlackFlow@Roguelike@MovePreviewConfirmExceeded";
+constexpr std::string_view MovePreviewConfirmCompletedTask = "BlackFlow@Roguelike@MovePreviewConfirmCompleted";
+constexpr std::string_view StageEncounterLeaveConfirmCompletedTask =
+    "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted";
 constexpr std::string_view MoveConfirmDoorAnimationWaitTask =
     "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait";
 constexpr std::string_view InventorySwipeTask = "BlackFlow@Roguelike@MovementInventorySwipe";
@@ -659,7 +667,6 @@ bool map_capture_candidate_is_unobstructed(const cv::Mat& image, std::string& re
         MovePreviewEnterTask,
         MovePreviewCannotEnterTask,
         std::string_view("BlackFlow@Roguelike@MovementInventoryClose"),
-        std::string_view("BlackFlow@Roguelike@CloseCollection"),
     };
     for (const std::string_view task : KnownOcclusionTasks) {
         if (matches_template(image, task)) {
@@ -848,6 +855,17 @@ public:
                 return false;
             }
             cv::Mat current = capture();
+            if (matches_template(current, CloseCollectionContinueTask) ||
+                matches_template(current, CloseCollectionTask)) {
+                std::string drain_error;
+                if (!execute({ std::string(MapCapturePopupDrainTask) }, &drain_error)) {
+                    set_error(error, "map capture could not drain a collection popup: " + drain_error);
+                    return false;
+                }
+                previous.reset();
+                last_rejection = "collection popup was drained before map capture";
+                continue;
+            }
             if (!map_capture_candidate_is_unobstructed(current, last_rejection)) {
                 previous.reset();
                 continue;
@@ -1625,7 +1643,7 @@ bool BlackFlowTaskPort::cleanup_depart_inventory_overload(std::string* error)
     return cleanup_overloaded_inventory(false, error);
 }
 
-bool BlackFlowTaskPort::confirm(
+MoveConfirmationStatus BlackFlowTaskPort::confirm(
     const MoveTransaction& transaction,
     EnteredPageObservation& entered_page,
     std::string* error)
@@ -1633,43 +1651,65 @@ bool BlackFlowTaskPort::confirm(
     if (m_task_context == nullptr || transaction.stage() != MoveTransactionStage::Previewed ||
         !transaction.preview().has_value() || transaction.preview()->reachability != PreviewReachability::Reachable) {
         set_error(error, "move confirmation requires a reachable previewed transaction");
-        return false;
+        return MoveConfirmationStatus::Failed;
     }
     if (!m_task_context->execute({ std::string(MovePreviewConfirmTask) }, error)) {
-        return false;
+        return MoveConfirmationStatus::Failed;
     }
-    if (!move_confirmation_left_preview(m_task_context->last_task())) {
-        set_error(
-            error,
-            "move confirmation did not leave the preview after its retry limit: " +
-                m_task_context->last_task());
-        return false;
+    const std::string& confirmation_task = m_task_context->last_task();
+    if (confirmation_task.ends_with(MovePreviewConfirmExceededTask)) {
+        set_error(error, "move preview confirmation remained visible after four attempts");
+        return MoveConfirmationStatus::NeedsDismiss;
+    }
+    if (!confirmation_task.ends_with(MovePreviewConfirmSucceededTask) &&
+        !confirmation_task.ends_with(StageEncounterLeaveConfirmCompletedTask)) {
+        set_error(error, "move preview confirmation ended at an unexpected task: " + confirmation_task);
+        return MoveConfirmationStatus::Failed;
+    }
+    if (!m_task_context->execute({ std::string(MovePreviewConfirmCompletedTask) }, error)) {
+        return MoveConfirmationStatus::Failed;
     }
     entered_page = {};
-    const cv::Mat confirmed_image = m_task_context->capture();
+    cv::Mat confirmed_image = m_task_context->capture();
     if (recognize_text(confirmed_image, InventoryOverloadPromptTask).has_value()) {
         entered_page.inventory_overloaded = true;
         if (!cleanup_overloaded_inventory(false, error)) {
-            return false;
+            return MoveConfirmationStatus::Failed;
         }
         entered_page.inventory_cleanup_performed = true;
-        return true;
+        return MoveConfirmationStatus::Succeeded;
     }
-    if (move_confirmation_requires_door_animation_wait(transaction) &&
+    const bool waits_for_door_animation = move_confirmation_requires_door_animation_wait(transaction);
+    if (waits_for_door_animation &&
         !m_task_context->execute({ std::string(MoveConfirmDoorAnimationWaitTask) }, error)) {
         const std::string detail = error == nullptr ? std::string {} : *error;
         set_error(
             error,
             detail.empty() ? "winding-passage animation did not return to the map"
                            : "winding-passage animation did not return to the map: " + detail);
-        return false;
+        return MoveConfirmationStatus::Failed;
     }
-    // 定向移动的预览标题就是实际落点；随机移动点击的节点只负责触发预览，实际落点可能
-    // 是另一种页面，因此无论标题是否已揭示都必须重新识别确认后的现场。
+    if (waits_for_door_animation) {
+        confirmed_image = m_task_context->capture();
+    }
+    // 按钮消失只说明预览页暂时没被识别，不能证明移动已经提交。无论定向还是随机移动，
+    // 都要求实际节点页或地图 HUD 的阳性证据，避免转场遮罩/弹窗造成单帧漏识别后虚假提交。
+    if (!classify_entered_page(confirmed_image, entered_page, error)) {
+        return MoveConfirmationStatus::Failed;
+    }
+    if (entered_page.inventory_overloaded) {
+        if (!cleanup_overloaded_inventory(false, error)) {
+            return MoveConfirmationStatus::Failed;
+        }
+        entered_page.inventory_cleanup_performed = true;
+        return MoveConfirmationStatus::Succeeded;
+    }
     if (transaction.proposal().controllable && transaction.preview()->identity_revealed) {
-        return true;
+        // 阳性分类这里只负责证明已经离开预览。已探明定向落点仍以地图/预览为身份权威：
+        // 快捷编队模板只能说明“进入战斗”，不能把紧急作战、居民据点等细分类型降成普通作战。
+        retain_entered_page_transition_evidence_only(entered_page);
     }
-    return classify_entered_page(confirmed_image, entered_page, error);
+    return MoveConfirmationStatus::Succeeded;
 }
 
 void BlackFlowTaskPort::reset_run()

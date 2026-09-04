@@ -174,16 +174,6 @@ struct BlackFlowObservationRequest
     return before_every_capture && !viewport_already_normalized;
 }
 
-[[nodiscard]] inline bool move_confirmation_left_preview(std::string_view last_task) noexcept
-{
-    return !last_task.empty() && !last_task.ends_with("@MovePreviewConfirm");
-}
-
-[[nodiscard]] inline bool move_confirmation_failure_is_recoverable(std::string_view error) noexcept
-{
-    return error.starts_with("move confirmation did not leave the preview after its retry limit:");
-}
-
 // 预览页行动力消耗只有 0..-9。小 ROI 的负号和数字 1 容易粘连成
 // 1-1、--1、I-1，甚至只剩一个 1；在这个封闭数值域内按末位数字恢复即可。
 [[nodiscard]] inline std::optional<int> parse_move_preview_action_point_cost(std::string_view text) noexcept
@@ -217,6 +207,20 @@ struct EnteredPageObservation
     bool combat_operator_selection_open = false;
     // 随机移动可能直接落到林间空地并回到地图；这与“节点页面 OCR 失败”必须区分。
     bool map_visible = false;
+};
+
+inline void retain_entered_page_transition_evidence_only(EnteredPageObservation& observation) noexcept
+{
+    observation.classified_type.reset();
+    observation.event_name.reset();
+    observation.classification_conflict = false;
+}
+
+enum class MoveConfirmationStatus
+{
+    Succeeded,
+    NeedsDismiss,
+    Failed,
 };
 
 [[nodiscard]] EnteredPageObservation classify_entered_event_name(std::string event_name);
@@ -374,7 +378,8 @@ public:
         check = {};
         return true;
     }
-    virtual bool
+
+    virtual MoveConfirmationStatus
         confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) = 0;
     virtual bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) = 0;
     virtual bool cleanup_depart_inventory_overload(std::string* error) = 0;
@@ -459,7 +464,8 @@ public:
         BattleIntelPreview& intel,
         std::string* error) override;
     bool check_battle_preview_map(BattlePreviewMapCheck& check, std::string* error) override;
-    bool confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) override;
+    MoveConfirmationStatus
+        confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) override;
     bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) override;
     bool cleanup_depart_inventory_overload(std::string* error) override;
 

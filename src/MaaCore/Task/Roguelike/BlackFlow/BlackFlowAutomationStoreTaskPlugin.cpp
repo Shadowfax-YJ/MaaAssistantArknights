@@ -36,6 +36,10 @@ constexpr std::string_view ShopGoodsSwipeToTopTask = "BlackFlow@Roguelike@Automa
 constexpr std::string_view ShopGoodsSwipeToBottomTask = "BlackFlow@Roguelike@AutomationShopGoodsSwipeToBottom";
 constexpr std::string_view ShopBuyConfirmTask = "BlackFlow@Roguelike@AutomationShopBuyConfirm";
 constexpr std::string_view ShopBuyConfirmEntry = "BlackFlow@Roguelike@AutomationShopBuyConfirm-Enter";
+constexpr std::string_view ShopPurchaseTransitionTask = "BlackFlow@Roguelike@AutomationShopPurchaseTransition";
+constexpr std::string_view ShopOrdinaryPurchaseTransitionTask =
+    "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition";
+constexpr std::string_view ShopRecruitPurchaseWaitTask = "BlackFlow@Roguelike@AutomationShopRecruitPurchaseWait";
 constexpr std::string_view ShopBuyMissedTask = "BlackFlow@Roguelike@AutomationShopBuyMissed";
 constexpr std::string_view ShopSellDecisionTask = "BlackFlow@Roguelike@AutomationShopSellDecision";
 constexpr std::string_view ShopSellAction = "BlackFlow@Roguelike@AutomationShopSellAction";
@@ -205,6 +209,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_scrap_shop_has_board_vine = false;
     m_scrap_shop_cultivation_requested = false;
     m_refresh_ledger.clear();
+    Task.set_task_base(std::string(ShopPurchaseTransitionTask), std::string(ShopOrdinaryPurchaseTransitionTask));
     reset_shop_resume_task();
 }
 
@@ -465,6 +470,11 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             m_pending_purchase_name = std::string(normalized_good_name(selection->good.text));
             m_pending_purchase_ingots_before = selection->ingots_before;
             m_pending_purchase_confirmed = false;
+            Task.set_task_base(
+                std::string(ShopPurchaseTransitionTask),
+                std::string(
+                    eerie_store_purchase_opens_recruitment(*m_pending_purchase_name) ? ShopRecruitPurchaseWaitTask
+                                                                                     : ShopOrdinaryPurchaseTransitionTask));
             Task.set_task_base(std::string(ShopAction), std::string(ShopBuyConfirmEntry));
             Log.info(
                 "BlackFlow automation 诡意行商 purchase selected",

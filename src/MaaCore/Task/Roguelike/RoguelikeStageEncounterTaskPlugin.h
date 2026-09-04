@@ -59,11 +59,12 @@ protected:
 private:
     bool update_option_list(std::string_view event_name);
     bool select_analyzed_option(size_t index);
+    std::optional<Rect> wait_for_analyzed_option_stable(size_t index);
     void reset_option_list_and_view_data();
     void report_analyzed_options();
     void update_view(const cv::Mat& image = cv::Mat());
     void reset_view();
-    void move_to_analyzed_option(size_t index);
+    bool move_to_analyzed_option(size_t index);
     void move_to_option_list_head();
     void move_forward();
     void move_backward();

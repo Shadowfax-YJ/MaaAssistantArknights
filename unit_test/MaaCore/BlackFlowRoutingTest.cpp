@@ -295,6 +295,28 @@ TEST_CASE("BlackFlow move preview keeps one panel open until its semantic conten
     REQUIRE(stability.observe("不期而遇|事件|-1"));
 }
 
+TEST_CASE("BlackFlow encounter option clicks wait until scroll inertia settles")
+{
+    EncounterOptionPositionStability stability;
+
+    // Captured from the failed 无人商店 run: the third option was first located at
+    // y=579, but kept moving to y=524 and finally y=444 after the swipe task returned.
+    REQUIRE_FALSE(stability.observe(579));
+    REQUIRE_FALSE(stability.observe(524));
+    REQUIRE_FALSE(stability.observe(444));
+    REQUIRE(stability.observe(443));
+
+    stability.reset();
+    REQUIRE_FALSE(stability.observe(443));
+    REQUIRE_FALSE(stability.observe(std::nullopt));
+    REQUIRE_FALSE(stability.observe(443));
+    REQUIRE(stability.observe(442));
+
+    REQUIRE(encounter_option_navigation_should_continue(0));
+    REQUIRE(encounter_option_navigation_should_continue(EncounterOptionNavigationAttemptLimit - 1));
+    REQUIRE_FALSE(encounter_option_navigation_should_continue(EncounterOptionNavigationAttemptLimit));
+}
+
 TEST_CASE("BlackFlow run log preserves floor-encoded 64-bit node ids")
 {
     constexpr std::uint64_t node = 281475043819522ULL;
@@ -448,6 +470,89 @@ TEST_CASE("BlackFlow attributes Stages popups after an exit page to the entering
             "final.pass",
             false)
             .has_value());
+}
+
+TEST_CASE("BlackFlow attributes late floor-transition popups to the entering floor")
+{
+    REQUIRE(
+        collection_popup_pending_floor_entry(
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            2,
+            NodeType::Final,
+            "default",
+            false) ==
+        3);
+    REQUIRE(
+        collection_popup_pending_floor_entry(
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollection)",
+            2,
+            NodeType::Final,
+            "default",
+            false) ==
+        3);
+}
+
+TEST_CASE("BlackFlow drains delayed floor-entry reward groups before map interaction")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const std::string continue_popup =
+        "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollectionContinue)";
+    const std::string close_popup =
+        "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)";
+    const std::string map_ready = "BlackFlow@Roguelike@MapPrepare-Ready";
+    const auto next_level = tasks->at("BlackFlow@Roguelike@NextLevel")
+                                .get("next", std::vector<std::string> {});
+    const auto continue_it = std::ranges::find(next_level, continue_popup);
+    const auto close_it = std::ranges::find(next_level, close_popup);
+    const auto ready_it = std::ranges::find(next_level, map_ready);
+    REQUIRE(continue_it != next_level.end());
+    REQUIRE(close_it != next_level.end());
+    REQUIRE(ready_it != next_level.end());
+    REQUIRE(continue_it < close_it);
+    REQUIRE(close_it < ready_it);
+
+    const auto& floor_zoom = tasks->at("BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+    REQUIRE(floor_zoom.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(
+        floor_zoom.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick",
+        });
+    const auto& floor_zoom_click = tasks->at("BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick");
+    REQUIRE(floor_zoom_click.get("action", std::string {}) == "ClickSelf");
+    REQUIRE(floor_zoom_click.get("preDelay", 0) == 0);
+
+    const auto drain_next = tasks->at("BlackFlow@Roguelike@MapCapturePopupDrain")
+                                .get("next", std::vector<std::string> {});
+    REQUIRE(
+        drain_next ==
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapCapturePopupDrainDone",
+        });
+
+    std::ifstream source_input(
+        repository_root / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowTaskPort.cpp",
+        std::ios::binary);
+    REQUIRE(source_input.good());
+    const std::string source {
+        std::istreambuf_iterator<char>(source_input),
+        std::istreambuf_iterator<char>()
+    };
+    const std::size_t capture = source.find("bool capture_stable_map");
+    const std::size_t drain = source.find("execute({ std::string(MapCapturePopupDrainTask) }", capture);
+    const std::size_t accept = source.find("map_capture_candidate_is_unobstructed", capture);
+    REQUIRE(capture != std::string::npos);
+    REQUIRE(drain != std::string::npos);
+    REQUIRE(accept != std::string::npos);
+    REQUIRE(drain < accept);
 }
 
 TEST_CASE("BlackFlow loot-page entry captures immediate collection popups before blind clicking")
@@ -1775,22 +1880,267 @@ TEST_CASE("BlackFlow move confirmation handles the leave-region confirmation dia
 
     const auto& confirm = tasks->at("BlackFlow@Roguelike@MovePreviewConfirm");
     const auto next = confirm.get("next", std::vector<std::string> {});
-    const auto leave_confirm =
-        std::ranges::find(next, "BlackFlow@Roguelike@StageEncounterLeaveConfirm");
-    const auto retry = std::ranges::find(next, "BlackFlow@Roguelike@MovePreviewConfirm");
+    const auto leave_confirm = std::ranges::find(next, "BlackFlow@Roguelike@StageEncounterLeaveConfirm");
+    const auto observe = std::ranges::find(next, "BlackFlow@Roguelike@MovePreviewConfirmObserve");
+    const auto absent_once = std::ranges::find(next, "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce");
     REQUIRE(leave_confirm != next.end());
-    REQUIRE(retry != next.end());
-    REQUIRE(leave_confirm < retry);
+    REQUIRE(observe != next.end());
+    REQUIRE(absent_once != next.end());
+    REQUIRE(leave_confirm < observe);
+    REQUIRE(observe < absent_once);
+    REQUIRE(std::ranges::find(next, "BlackFlow@Roguelike@MovePreviewConfirm") == next.end());
     REQUIRE(confirm.get("action", std::string {}) == "ClickRect");
     REQUIRE(confirm.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
+    REQUIRE(confirm.get("maxTimes", 0) == 4);
+    REQUIRE(
+        confirm.get("exceededNext", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@MovePreviewConfirmExceeded" });
 
-    REQUIRE_FALSE(move_confirmation_left_preview("BlackFlow@Roguelike@MovePreviewConfirm"));
-    REQUIRE(move_confirmation_left_preview("BlackFlow@Roguelike@MovePreviewConfirmCompletedDone"));
-    REQUIRE(move_confirmation_left_preview("BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted"));
-    REQUIRE(move_confirmation_failure_is_recoverable(
-        "move confirmation did not leave the preview after its retry limit: "
-        "BlackFlow@Roguelike@MovePreviewConfirm"));
-    REQUIRE_FALSE(move_confirmation_failure_is_recoverable("entered page classification failed"));
+    const auto& observation = tasks->at("BlackFlow@Roguelike@MovePreviewConfirmObserve");
+    REQUIRE(observation.get("action", std::string {}) == "DoNothing");
+    REQUIRE(observation.get("maxTimes", 0) == 2);
+    const auto observation_next = observation.get("next", std::vector<std::string> {});
+    REQUIRE(
+        std::ranges::find(observation_next, "BlackFlow@Roguelike@StageEncounterLeaveConfirm") !=
+        observation_next.end());
+    REQUIRE(std::ranges::find(observation_next, "#self") != observation_next.end());
+    REQUIRE(
+        observation.get("exceededNext", std::vector<std::string> {}) ==
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@MovePreviewConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce",
+        });
+
+    const auto& absent = tasks->at("BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce");
+    REQUIRE(absent.get("action", std::string {}) == "DoNothing");
+    REQUIRE(absent.get("postDelay", 0) >= 500);
+    REQUIRE(
+        absent.get("reduceOtherTimes", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@MovePreviewConfirmObserve*2" });
+    const auto absent_next = absent.get("next", std::vector<std::string> {});
+    REQUIRE(
+        std::ranges::find(absent_next, "BlackFlow@Roguelike@MovePreviewConfirmObserve") != absent_next.end());
+    REQUIRE(
+        std::ranges::find(absent_next, "BlackFlow@Roguelike@MovePreviewConfirmSucceeded") != absent_next.end());
+
+    REQUIRE(MoveConfirmationStatus::Succeeded != MoveConfirmationStatus::NeedsDismiss);
+    REQUIRE(MoveConfirmationStatus::NeedsDismiss != MoveConfirmationStatus::Failed);
+}
+
+TEST_CASE("BlackFlow revealed controllable moves keep their preview identity after positive page detection")
+{
+    EnteredPageObservation observation;
+    observation.matched_texts = { "快捷编队主界面" };
+    observation.classified_type = NodeType::BattleNormal;
+    observation.event_name = "误识别事件";
+    observation.classification_conflict = true;
+    observation.map_visible = true;
+
+    retain_entered_page_transition_evidence_only(observation);
+
+    REQUIRE_FALSE(observation.classified_type.has_value());
+    REQUIRE_FALSE(observation.event_name.has_value());
+    REQUIRE_FALSE(observation.classification_conflict);
+    REQUIRE(observation.matched_texts == std::vector<std::string> { "快捷编队主界面" });
+    REQUIRE(observation.map_visible);
+}
+
+TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const auto require_click_without_self_retry = [&](const std::string& name) {
+        CAPTURE(name);
+        const auto& task = tasks->at(name);
+        const auto next = task.get("next", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(next, "#self") == next.end());
+        REQUIRE(std::ranges::find(next, name) == next.end());
+        REQUIRE(task.get("maxTimes", 0) >= 3);
+        REQUIRE_FALSE(task.get("exceededNext", std::vector<std::string> {}).empty());
+    };
+    for (const std::string& name : {
+             "BlackFlow@Roguelike@MovementInventoryOpen",
+             "BlackFlow@Roguelike@MovementInventoryClose",
+             "BlackFlow@Roguelike@EmployLeave",
+             "BlackFlow@Roguelike@EmployLeaveConfirm",
+             "BlackFlow@Roguelike@HuntedConfirm",
+             "BlackFlow@Roguelike@HuntedDepart",
+             "BlackFlow@Roguelike@StageEncounterBattleDepart",
+             "BlackFlow@Roguelike@StageEnterBattleAgain",
+             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+             "BlackFlow@Roguelike@StageTraderLeave",
+             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+         }) {
+        require_click_without_self_retry(name);
+    }
+
+    const auto require_passive_observer = [&](const std::string& name) {
+        CAPTURE(name);
+        const auto& task = tasks->at(name);
+        const auto next = task.get("next", std::vector<std::string> {});
+        REQUIRE(task.get("action", std::string {}) == "DoNothing");
+        REQUIRE(std::ranges::find(next, "#self") != next.end());
+    };
+    for (const std::string& name : {
+             "BlackFlow@Roguelike@MovementInventoryOpenObserve",
+             "BlackFlow@Roguelike@MovementInventoryCloseObserve",
+             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait",
+             "BlackFlow@Roguelike@EmployLeaveObserve",
+             "BlackFlow@Roguelike@EmployLeaveTransitionWait",
+             "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+             "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait",
+             "BlackFlow@Roguelike@HuntedConfirmObserve",
+             "BlackFlow@Roguelike@HuntedConfirmTransitionWait",
+             "BlackFlow@Roguelike@HuntedDepartObserve",
+             "BlackFlow@Roguelike@HuntedDepartTransitionWait",
+             "BlackFlow@Roguelike@StageEncounterBattleDepartObserve",
+             "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait",
+             "BlackFlow@Roguelike@StageEnterBattleAgainObserve",
+             "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait",
+             "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve",
+             "BlackFlow@Roguelike@StageTraderLeaveObserve",
+             "BlackFlow@Roguelike@StageTraderLeaveTransitionWait",
+             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+             "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait",
+         }) {
+        require_passive_observer(name);
+    }
+
+    for (const auto& [resetter, observer] : std::array {
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveTransitionWait",
+                 "BlackFlow@Roguelike@EmployLeaveObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveConfirmAbsentOnce",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@HuntedConfirmAbsentOnce",
+                 "BlackFlow@Roguelike@HuntedConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@HuntedConfirmTransitionWait",
+                 "BlackFlow@Roguelike@HuntedConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@HuntedDepartTransitionWait",
+                 "BlackFlow@Roguelike@HuntedDepartObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait",
+                 "BlackFlow@Roguelike@StageEncounterBattleDepartObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait",
+                 "BlackFlow@Roguelike@StageEnterBattleAgainObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait",
+                 "BlackFlow@Roguelike@MovementInventoryCloseObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce",
+                 "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveTransitionWait",
+                 "BlackFlow@Roguelike@StageTraderLeaveObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmAbsentOnce",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
+             },
+         }) {
+        CAPTURE(resetter, observer);
+        const auto resets = tasks->at(resetter).get("reduceOtherTimes", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(resets, observer) != resets.end());
+    }
+
+    REQUIRE(
+        tasks->at("BlackFlow@Roguelike@MovementInventoryOpened").get("template", std::string {}) ==
+        "BlackFlow@Roguelike@MovementInventoryCollapse.png");
+    const auto inventory_close_next = tasks->at("BlackFlow@Roguelike@MovementInventoryClose")
+                                          .get("next", std::vector<std::string> {});
+    REQUIRE(inventory_close_next.front() == "BlackFlow@Roguelike@MovementInventoryCloseObserve");
+
+    for (const auto& [name, completed] : std::array {
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveDestinationReady",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted",
+             },
+         }) {
+        CAPTURE(name, completed);
+        const auto& destination = tasks->at(name);
+        REQUIRE(destination.get("action", std::string {}) == "DoNothing");
+        REQUIRE(destination.get("next", std::vector<std::string> {}) == std::vector<std::string> { completed });
+    }
+    const auto& hunted_destination = tasks->at("BlackFlow@Roguelike@HuntedConfirmDestination");
+    REQUIRE(hunted_destination.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(
+        hunted_destination.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@HuntedConfirmCompleted" });
+
+    for (const auto& [confirm, completed] : std::array {
+             std::pair {
+                 "BlackFlow@Roguelike@EmployLeaveConfirm",
+                 "BlackFlow@Roguelike@EmployLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@HuntedConfirm",
+                 "BlackFlow@Roguelike@HuntedConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+                 "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted",
+             },
+             std::pair {
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirm",
+                 "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted",
+             },
+         }) {
+        CAPTURE(confirm, completed);
+        const auto next = tasks->at(confirm).get("next", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(next, completed) == next.end());
+    }
+
+    const auto encounter_confirm_next = tasks->at("BlackFlow@Roguelike@StageEncounterLeaveConfirm")
+                                            .get("next", std::vector<std::string> {});
+    REQUIRE(
+        std::ranges::find(
+            encounter_confirm_next,
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted") == encounter_confirm_next.end());
+    const auto absent_once_next = tasks->at("BlackFlow@Roguelike@StageEncounterLeaveConfirmAbsentOnce")
+                                      .get("next", std::vector<std::string> {});
+    REQUIRE(
+        std::ranges::find(absent_once_next, "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve") !=
+        absent_once_next.end());
+    REQUIRE(
+        std::ranges::find(absent_once_next, "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted") !=
+        absent_once_next.end());
 }
 
 TEST_CASE("BlackFlow move preview cost tolerates the observed minus-sign OCR variants")
@@ -2839,26 +3189,90 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
 
-    for (const std::string_view prefix : { "AutomationShop", "AutomationCultivate" }) {
-        const std::string task_prefix = "BlackFlow@Roguelike@" + std::string(prefix);
-        const std::string settle_task_name = task_prefix + "PurchaseSettle";
-        const auto next = tasks->at(task_prefix + "BuyConfirm").get("next", std::vector<std::string> {});
-        REQUIRE(std::ranges::find(next, settle_task_name) != next.end());
+    const std::string shop_prefix = "BlackFlow@Roguelike@AutomationShop";
+    const std::string shop_settle_name = shop_prefix + "PurchaseSettle";
+    const auto& shop_confirm = tasks->at(shop_prefix + "BuyConfirm");
+    const auto shop_confirm_next = shop_confirm.get("next", std::vector<std::string> {});
+    REQUIRE(shop_confirm_next == std::vector<std::string> { shop_prefix + "PurchaseTransition" });
+    REQUIRE(
+        shop_confirm.get("reduceOtherTimes", std::vector<std::string> {}) ==
+        std::vector<std::string> { shop_prefix + "PurchaseTransition*50" });
 
-        const auto& settle = tasks->at(settle_task_name);
-        REQUIRE(settle.get("algorithm", std::string {}) == "JustReturn");
-        const int delay = settle.get("postDelay", 0);
-        if (prefix == "AutomationShop") {
-            // 诡意行商卡片不补位，确认按钮的基础任务已等待 1 秒。
-            REQUIRE(delay <= 300);
-        }
-        else {
-            REQUIRE(delay >= 1000);
-        }
-        REQUIRE(
-            settle.get("next", std::vector<std::string> {}) ==
-            std::vector<std::string> { task_prefix + "Decision" });
-    }
+    const auto& purchase_transition = tasks->at(shop_prefix + "PurchaseTransition");
+    REQUIRE(purchase_transition.get("baseTask", std::string {}) == shop_prefix + "OrdinaryPurchaseTransition");
+    REQUIRE(
+        tasks->at(shop_prefix + "OrdinaryPurchaseTransition").get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            shop_settle_name,
+            shop_prefix + "PurchaseWait",
+        });
+
+    const auto& shop_settle = tasks->at(shop_settle_name);
+    REQUIRE(shop_settle.get("algorithm", std::string {}) != "JustReturn");
+    REQUIRE(shop_settle.get("template", std::string {}) == "Roguelike@StageTraderLeave.png");
+    REQUIRE(shop_settle.get("action", std::string {}) == "DoNothing");
+    REQUIRE(shop_settle.get("postDelay", 0) >= 500);
+    REQUIRE(
+        shop_settle.get("next", std::vector<std::string> {}) == std::vector<std::string> {
+                                                                    "BlackFlow@Roguelike@ChooseOperFlag",
+                                                                    shop_prefix + "PurchaseSettleConfirmed",
+                                                                    shop_prefix + "PurchaseWait",
+                                                                });
+
+    const auto& shop_settle_confirmed = tasks->at(shop_prefix + "PurchaseSettleConfirmed");
+    REQUIRE(shop_settle_confirmed.get("template", std::string {}) == "Roguelike@StageTraderLeave.png");
+    REQUIRE(shop_settle_confirmed.get("action", std::string {}) == "DoNothing");
+    REQUIRE(
+        shop_settle_confirmed.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { shop_prefix + "Decision" });
+
+    const auto& shop_wait = tasks->at(shop_prefix + "PurchaseWait");
+    REQUIRE(shop_wait.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(shop_wait.get("action", std::string {}) == "DoNothing");
+    REQUIRE(shop_wait.get("postDelay", 0) >= 300);
+    const auto shop_wait_next = shop_wait.get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(shop_wait_next, "BlackFlow@Roguelike@ChooseOperFlag") != shop_wait_next.end());
+    REQUIRE(std::ranges::find(shop_wait_next, shop_settle_name) != shop_wait_next.end());
+    REQUIRE(std::ranges::find(shop_wait_next, "#self") != shop_wait_next.end());
+    REQUIRE(shop_wait.get("maxTimes", 0) >= 10);
+
+    const auto& recruit_wait = tasks->at(shop_prefix + "RecruitPurchaseWait");
+    REQUIRE(recruit_wait.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(recruit_wait.get("action", std::string {}) == "DoNothing");
+    const auto recruit_wait_next = recruit_wait.get("next", std::vector<std::string> {});
+    REQUIRE(
+        recruit_wait_next == std::vector<std::string> { "BlackFlow@Roguelike@ChooseOperFlag", "#self" });
+    REQUIRE(recruit_wait.get("maxTimes", 0) >= 50);
+    REQUIRE(std::ranges::find(recruit_wait_next, shop_settle_name) == recruit_wait_next.end());
+
+    const auto choose_oper_resets =
+        tasks->at("BlackFlow@Roguelike@ChooseOperFlag").get("reduceOtherTimes", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(choose_oper_resets, shop_prefix + "PurchaseWait*20") != choose_oper_resets.end());
+    REQUIRE(
+        std::ranges::find(choose_oper_resets, shop_prefix + "PurchaseTransition*50") !=
+        choose_oper_resets.end());
+
+    const std::string cultivate_prefix = "BlackFlow@Roguelike@AutomationCultivate";
+    const std::string cultivate_settle_name = cultivate_prefix + "PurchaseSettle";
+    const auto cultivate_confirm_next =
+        tasks->at(cultivate_prefix + "BuyConfirm").get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(cultivate_confirm_next, cultivate_settle_name) != cultivate_confirm_next.end());
+    const auto& cultivate_settle = tasks->at(cultivate_settle_name);
+    REQUIRE(cultivate_settle.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(cultivate_settle.get("postDelay", 0) >= 1000);
+    REQUIRE(
+        cultivate_settle.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { cultivate_prefix + "Decision" });
+}
+
+TEST_CASE("BlackFlow eerie merchant recruitment vouchers use the recruitment-only transition")
+{
+    REQUIRE(eerie_store_purchase_opens_recruitment("医疗招募券"));
+    REQUIRE(eerie_store_purchase_opens_recruitment("精锐重装招募券"));
+    REQUIRE(eerie_store_purchase_opens_recruitment("5星随机直升临时招募券"));
+    REQUIRE_FALSE(eerie_store_purchase_opens_recruitment("一次性喷气背包"));
+    REQUIRE_FALSE(eerie_store_purchase_opens_recruitment("医者-新典训"));
 }
 
 TEST_CASE("BlackFlow restart resumes an open encounter page before recognizing its floor label")
@@ -2887,6 +3301,24 @@ TEST_CASE("BlackFlow restart resumes an open encounter page before recognizing i
     const auto reward_next =
         tasks->at("BlackFlow@Roguelike@StageEncounterReward").get("next", std::vector<std::string> {});
     REQUIRE(std::ranges::find(reward_next, "BlackFlow@Roguelike@NextLevel") != reward_next.end());
+}
+
+TEST_CASE("BlackFlow failed encounter choices resume the event instead of opening map recovery")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    REQUIRE(
+        tasks->at("BlackFlow@Roguelike@StageEncounterResult").get("baseTask", std::string {}) ==
+        "BlackFlow@Roguelike@StageEncounterReward");
+
+    const auto recover_enter_next =
+        tasks->at("BlackFlow@Roguelike@RecoverMap-Enter").get("next", std::vector<std::string> {});
+    REQUIRE_FALSE(recover_enter_next.empty());
+    REQUIRE(recover_enter_next.front() == "BlackFlow@Roguelike@ResumeEncounterPage");
+    REQUIRE(std::ranges::find(recover_enter_next, "BlackFlow@Roguelike@RecoverMap") != recover_enter_next.end());
 }
 
 TEST_CASE("BlackFlow post-battle flow confirms the data synchronization prompt")
@@ -3061,6 +3493,35 @@ TEST_CASE("BlackFlow emergency aid dispatches through a JustReturn adapter to th
         [](const json::value& value) { return value.get("id", std::string {}) == "default_employ"; });
     REQUIRE(route != routes.end());
     REQUIRE(route->get("task", std::string {}) == "BlackFlow@Roguelike@EmployLeave-Enter");
+
+    const auto& employ_completed = tasks->at("BlackFlow@Roguelike@EmployLeaveConfirmCompleted");
+    REQUIRE(
+        employ_completed.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@NodeCompletionAction" });
+}
+
+TEST_CASE("BlackFlow Lone Survivor follow-up retains the Emergency Aid transfer semantics")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto encounter =
+        json::open(repository_root / "resource/roguelike/BlackFlow/encounter/default.json");
+    REQUIRE(encounter.has_value());
+
+    const auto stages = encounter->at("stage").as_array();
+    const auto lone_survivor = std::ranges::find_if(
+        stages,
+        [](const json::value& event) { return event.get("name", std::string {}) == LoneSurvivorEventName; });
+    const auto followup = std::ranges::find_if(
+        stages,
+        [](const json::value& event) { return event.get("name", std::string {}) == LoneSurvivorFollowupEventName; });
+
+    REQUIRE(lone_survivor != stages.end());
+    REQUIRE(followup != stages.end());
+    REQUIRE(lone_survivor->get("choose", 0) == 1);
+    REQUIRE(lone_survivor->get("next_event", std::string {}) == LoneSurvivorFollowupEventName);
+    REQUIRE(followup->get("choose", 0) == 2);
+    REQUIRE(event_reveal_node_type(LoneSurvivorFollowupEventName) == NodeType::Employ);
 }
 
 TEST_CASE("BlackFlow encounter options can transition through a battle preview")
@@ -3090,16 +3551,24 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
     REQUIRE(depart.get("maxTimes", 0) == 3);
     REQUIRE(depart.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
-                "#self",
                 "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
-                "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted",
+                "BlackFlow@Roguelike@StageEncounterBattleDepartObserve",
+                "BlackFlow@Roguelike@StageEncounterBattleDepartDestination",
+                "BlackFlow@Roguelike@StageEncounterBattleDepartTransitionWait",
             });
+
+    const auto& destination = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartDestination");
+    REQUIRE(destination.get("template", std::string {}) == "BattleQuickFormation.png");
+    REQUIRE(destination.get("action", std::string {}) == "DoNothing");
+    REQUIRE(destination.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@StageEncounterBattleDepartCompleted" });
 
     const auto& completed = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartCompleted");
     REQUIRE(completed.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@QuickFormation" });
-    REQUIRE(completed.get("reduceOtherTimes", std::vector<std::string> {}) ==
-            std::vector<std::string> { "BlackFlow@Roguelike@StageEncounterBattleDepart*3" });
+    const auto completed_resets = completed.get("reduceOtherTimes", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(completed_resets, "BlackFlow@Roguelike@StageEncounterBattleDepart*3") !=
+            completed_resets.end());
 }
 
 TEST_CASE("BlackFlow re-enters battle from the preview button instead of the concept-detail area")
@@ -3118,9 +3587,10 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
     REQUIRE(reenter.get("maxTimes", 0) == 3);
     REQUIRE(reenter.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
-                "#self",
                 "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
-                "BlackFlow@Roguelike@StageEnterBattleAgainCompleted",
+                "BlackFlow@Roguelike@StageEnterBattleAgainObserve",
+                "BlackFlow@Roguelike@StageEnterBattleAgainDestination",
+                "BlackFlow@Roguelike@StageEnterBattleAgainTransitionWait",
             });
     REQUIRE(reenter.get("exceededNext", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@RecoverMap-Enter" });
@@ -3128,8 +3598,9 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
     const auto& completed = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainCompleted");
     REQUIRE(completed.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@StartAction" });
-    REQUIRE(completed.get("reduceOtherTimes", std::vector<std::string> {}) ==
-            std::vector<std::string> { "BlackFlow@Roguelike@StageEnterBattleAgain*3" });
+    const auto completed_resets = completed.get("reduceOtherTimes", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(completed_resets, "BlackFlow@Roguelike@StageEnterBattleAgain*3") !=
+            completed_resets.end());
 }
 
 TEST_CASE("BlackFlow inventory knowledge expires on floor entry and node completion")
@@ -3540,11 +4011,16 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
     const auto departure_successors = departure.get("next", std::vector<std::string> {});
     const auto overload =
         std::ranges::find(departure_successors, "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt");
-    const auto quick_formation =
-        std::ranges::find(departure_successors, "BlackFlow@Roguelike@QuickFormation");
+    const auto observer = std::ranges::find(departure_successors, "BlackFlow@Roguelike@HuntedDepartObserve");
     REQUIRE(overload != departure_successors.end());
-    REQUIRE(quick_formation != departure_successors.end());
-    REQUIRE(overload < quick_formation);
+    REQUIRE(observer != departure_successors.end());
+    REQUIRE(overload < observer);
+
+    const auto& destination = tasks->at("BlackFlow@Roguelike@HuntedDepartDestination");
+    REQUIRE(destination.get("template", std::string {}) == "BattleQuickFormation.png");
+    REQUIRE(destination.get("action", std::string {}) == "DoNothing");
+    REQUIRE(destination.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@QuickFormation" });
 
     const auto confirmation_resets = tasks->at("BlackFlow@Roguelike@HuntedConfirmCompleted")
                                          .get("reduceOtherTimes", std::vector<std::string> {});
