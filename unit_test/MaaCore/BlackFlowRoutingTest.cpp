@@ -1729,6 +1729,42 @@ TEST_CASE("BlackFlow automation collection prioritizes swaddled-animal start rew
     REQUIRE(selected->preferred);
 }
 
+TEST_CASE("BlackFlow automation collection falls back when only resource rewards remain")
+{
+    const std::vector<std::string_view> ordinary_priority { "林间代步", "未编号物", "退行补偿", "巢寄生" };
+
+    SECTION("prefer the free ingot reward when both fallback rewards remain")
+    {
+        const auto selected = select_automation_collection_start_reward(
+            { "调查预付款", "空间租赁" },
+            ordinary_priority);
+        REQUIRE(selected.has_value());
+        REQUIRE(selected->detected_index == 0);
+        REQUIRE(selected->canonical == "调查预付款");
+        REQUIRE_FALSE(selected->preferred);
+    }
+
+    SECTION("select the capacity reward when it is the only remaining reward")
+    {
+        const auto selected = select_automation_collection_start_reward({ "空间租赁" }, ordinary_priority);
+        REQUIRE(selected.has_value());
+        REQUIRE(selected->detected_index == 0);
+        REQUIRE(selected->canonical == "空间租赁");
+        REQUIRE_FALSE(selected->preferred);
+    }
+
+    SECTION("keep an allowed ordinary reward ahead of fallback rewards")
+    {
+        const auto selected = select_automation_collection_start_reward(
+            { "调查预付款", "退行补偿", "空间租赁" },
+            ordinary_priority);
+        REQUIRE(selected.has_value());
+        REQUIRE(selected->detected_index == 1);
+        REQUIRE(selected->canonical == "退行补偿");
+        REQUIRE_FALSE(selected->preferred);
+    }
+}
+
 TEST_CASE("BlackFlow start reward selection is OCR-only and confirms the selected card")
 {
     const std::filesystem::path repository_root =

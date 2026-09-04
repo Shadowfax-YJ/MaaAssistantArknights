@@ -52,6 +52,13 @@ inline constexpr std::array<AutomationCollectionStartReward, 4> AutomationCollec
     AutomationCollectionStartReward { "巢寄生" },
 };
 
+// 前两级候选均未出现时不能停在奖励页无限重试。优先选择无条件获得源石锭的调查预付款；
+// 若它也不存在，空间租赁仍比无法开始本局更可取。
+inline constexpr std::array<std::string_view, 2> AutomationCollectionFallbackStartRewards = {
+    "调查预付款",
+    "空间租赁",
+};
+
 struct AutomationCollectionStartRewardSelection
 {
     std::size_t detected_index = 0;
@@ -114,6 +121,11 @@ select_automation_collection_start_reward(
     }
     for (const std::string_view ordinary : ordinary_priority) {
         if (auto result = select(ordinary, false); result.has_value()) {
+            return result;
+        }
+    }
+    for (const std::string_view fallback : AutomationCollectionFallbackStartRewards) {
+        if (auto result = select(fallback, false); result.has_value()) {
             return result;
         }
     }
