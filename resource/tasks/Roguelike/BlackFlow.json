@@ -2166,11 +2166,18 @@
         "onErrorNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom": {
-        "Doc": "楼层切换后先处理可能稍晚出现的 NEXT/X 奖励链，再执行缩放；避免识别地图后等待点击期间弹窗出现，被旧坐标点击直接跳过。",
+        "Doc": "只在楼层地图阳性时进入延迟奖励守卫；不能用无条件任务代替地图识别，否则招募或事件结算页会被误判为地图。",
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
+        "template": ["BlackFlow@Roguelike@MapZoomIn.png", "BlackFlow@Roguelike@MapZoomOut.png"],
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard"]
+    },
+    "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard": {
+        "Doc": "确认已在地图后，优先处理可能稍晚出现的 NEXT/X 奖励链；若没有弹窗，再由点击任务重新确认地图并缩放。",
         "algorithm": "JustReturn",
         "next": [
-            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollectionContinue)",
-            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick"
         ]
     },
@@ -3104,11 +3111,33 @@
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
+            "BlackFlow@Roguelike@CloseEventAfterEncounter",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
             "BlackFlow@Roguelike@NextLevel",
             "BlackFlow@Roguelike@NextLevel#next",
-            "BlackFlow@Roguelike@RecruitWithoutButton"
+            "BlackFlow@Roguelike@RecruitWithoutButtonTransitionWait"
         ]
+    },
+    "BlackFlow@Roguelike@RecruitWithoutButtonTransitionWait": {
+        "Doc": "关闭招募展示后只等待实际目标页阳性；事件招募会先回到带确认按钮的事件结算页，禁止用无条件楼层入口跳转抢跑。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@RecruitOther",
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
+            "BlackFlow@Roguelike@CloseEventAfterEncounter",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@NextLevel#next",
+            "BlackFlow@Roguelike@RecruitWithoutButtonTransitionWait"
+        ],
+        "maxTimes": 50,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@ResumeCombatQuickFormation": {
         "Doc": "任务若在快捷编队的干员选择页中断，先确认并返回编队页，再交给正常作战编队流程继续。必须排在 Begin 的通用返回按钮之前。",

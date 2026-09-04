@@ -227,8 +227,25 @@ observed_initial_floor_reveals(const MapSnapshot& map, NodeId entrance = Invalid
     bool endpoint_observation_available)
 {
     const NodeId returned_map_landing = transferred ? linked_node : event_node;
+
+    // The linked encounter is completed before the game returns to the map.  Natural
+    // vision is therefore evaluated against the post-settlement topology, where the
+    // entered event has already become an empty (transparent) node.  Keeping the
+    // pre-settlement Incident traversal here incorrectly blocks otherwise ordinary
+    // sight paths, including paths that pass through winding passages.
+    MapSnapshot visibility_map = map;
+    if (const Node* entered_event = map.find_node(event_node); entered_event != nullptr) {
+        Node completed_event = *entered_event;
+        completed_event.type = NodeType::Empty;
+        completed_event.name = "林间空地";
+        completed_event.identity_state = NodeIdentityState::Classified;
+        completed_event.identity_revealed = true;
+        completed_event.visually_hidden = false;
+        completed_event.traversal = default_traversal_for(NodeType::Empty);
+        (void)visibility_map.upsert_node(std::move(completed_event));
+    }
     auto result = expected_move_reveals(
-        map,
+        visibility_map,
         run,
         move,
         returned_map_landing,

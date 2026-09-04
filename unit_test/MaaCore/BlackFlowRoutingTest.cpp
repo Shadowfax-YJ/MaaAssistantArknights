@@ -516,12 +516,25 @@ TEST_CASE("BlackFlow drains delayed floor-entry reward groups before map interac
     REQUIRE(close_it < ready_it);
 
     const auto& floor_zoom = tasks->at("BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
-    REQUIRE(floor_zoom.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(floor_zoom.get("baseTask", std::string {}) == "BlackFlow@Roguelike@MapPrepare-Ready");
+    REQUIRE(
+        floor_zoom.get("template", std::vector<std::string> {}) ==
+        std::vector<std::string> {
+            "BlackFlow@Roguelike@MapZoomIn.png",
+            "BlackFlow@Roguelike@MapZoomOut.png",
+        });
+    REQUIRE(floor_zoom.get("action", std::string {}) == "DoNothing");
     REQUIRE(
         floor_zoom.get("next", std::vector<std::string> {}) ==
+        std::vector<std::string> { "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard" });
+
+    const auto& floor_zoom_guard = tasks->at("BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard");
+    REQUIRE(floor_zoom_guard.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(
+        floor_zoom_guard.get("next", std::vector<std::string> {}) ==
         std::vector<std::string> {
-            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollectionContinue)",
-            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick",
         });
     const auto& floor_zoom_click = tasks->at("BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick");
@@ -7310,6 +7323,64 @@ TEST_CASE("BlackFlow linked encounter transfer reveals from the returned-map lan
     REQUIRE_FALSE(transferred.contains(event_neighbor));
 }
 
+TEST_CASE("BlackFlow linked encounter reveal crosses a winding passage after the event becomes empty")
+{
+    MapSnapshot map;
+    RunState run;
+    run.floor = 3;
+    const auto add = [&](GridPosition position, NodeType type, bool revealed) {
+        Node node;
+        node.floor = run.floor;
+        node.position = position;
+        node.id = *make_stable_node_id(node.floor, node.position);
+        node.type = type;
+        node.identity_state = revealed ? NodeIdentityState::Classified : NodeIdentityState::Hidden;
+        node.identity_revealed = revealed;
+        node.traversal = default_traversal_for(type);
+        const NodeId id = node.id;
+        REQUIRE(map.upsert_node(std::move(node)));
+        return id;
+    };
+
+    const NodeId event_neighbor = add({ 2, 0 }, NodeType::HideBattle, false);
+    const NodeId event = add({ 1, 0 }, NodeType::Incident, true);
+    const NodeId source = add({ 1, 1 }, NodeType::Empty, true);
+    const NodeId first_door = add({ 1, 2 }, NodeType::Door, true);
+    const NodeId clearing_1 = add({ 2, 2 }, NodeType::Empty, true);
+    const NodeId clearing_2 = add({ 2, 3 }, NodeType::Empty, true);
+    const NodeId clearing_3 = add({ 3, 3 }, NodeType::Empty, true);
+    const NodeId clearing_4 = add({ 3, 4 }, NodeType::Empty, true);
+    const NodeId second_door = add({ 3, 5 }, NodeType::Door, true);
+    const NodeId landing = add({ 4, 5 }, NodeType::Employ, true);
+    const NodeId landing_neighbor = add({ 4, 4 }, NodeType::HideInvisible, false);
+
+    REQUIRE_FALSE(default_traversal_for(NodeType::Door).blocks_vision);
+    REQUIRE(default_traversal_for(NodeType::Incident).blocks_vision);
+    for (const auto [first, second] : {
+             std::pair { event_neighbor, event },
+             std::pair { event, source },
+             std::pair { source, first_door },
+             std::pair { first_door, clearing_1 },
+             std::pair { clearing_1, clearing_2 },
+             std::pair { clearing_2, clearing_3 },
+             std::pair { clearing_3, clearing_4 },
+             std::pair { clearing_4, second_door },
+             std::pair { second_door, landing },
+             std::pair { landing, landing_neighbor },
+         }) {
+        REQUIRE(map.upsert_edge({ first, second, EdgeKnowledge::Confirmed, {} }));
+    }
+
+    MoveCandidate move;
+    move.source = source;
+    move.target = event;
+    move.landing = event;
+    const auto expected =
+        expected_linked_encounter_return_reveals(map, run, move, event, landing, true, true);
+
+    REQUIRE(expected == std::unordered_set<NodeId> { event_neighbor, landing_neighbor });
+}
+
 TEST_CASE("BlackFlow reveal consistency attributes previously unknown event reveals after observation")
 {
     MapSnapshot before;
@@ -8849,6 +8920,36 @@ TEST_CASE("BlackFlow recruitment transitions continue the reveal screen without 
     const auto safe_rect = tasks->at(continuation).get("specificRect", std::vector<int> {});
     REQUIRE(safe_rect == std::vector<int> { 550, 300, 180, 120 });
     REQUIRE(safe_rect[0] + safe_rect[2] < 1100);
+
+    const std::string transition_wait = "BlackFlow@Roguelike@RecruitWithoutButtonTransitionWait";
+    const auto continuation_successors =
+        tasks->at(continuation).get("next", std::vector<std::string> {});
+    const auto encounter_result =
+        std::ranges::find(continuation_successors, "BlackFlow@Roguelike@CloseEventAfterEncounter");
+    const auto wait_entry = std::ranges::find(continuation_successors, transition_wait);
+    REQUIRE(encounter_result != continuation_successors.end());
+    REQUIRE(wait_entry != continuation_successors.end());
+    REQUIRE(encounter_result < wait_entry);
+    const auto map_entry =
+        std::ranges::find(continuation_successors, "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+    REQUIRE(map_entry != continuation_successors.end());
+    REQUIRE(map_entry < wait_entry);
+
+    const auto& passive_wait = tasks->at(transition_wait);
+    REQUIRE(passive_wait.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(passive_wait.get("action", std::string {}) == "DoNothing");
+    REQUIRE(passive_wait.get("postDelay", 0) >= 300);
+    const auto wait_successors = passive_wait.get("next", std::vector<std::string> {});
+    const auto wait_encounter_result =
+        std::ranges::find(wait_successors, "BlackFlow@Roguelike@CloseEventAfterEncounter");
+    const auto wait_self = std::ranges::find(wait_successors, transition_wait);
+    REQUIRE(wait_encounter_result != wait_successors.end());
+    REQUIRE(wait_self != wait_successors.end());
+    REQUIRE(wait_encounter_result < wait_self);
+    const auto wait_map_entry =
+        std::ranges::find(wait_successors, "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+    REQUIRE(wait_map_entry != wait_successors.end());
+    REQUIRE(wait_map_entry < wait_self);
 
     const auto& start_explore_continuation =
         tasks->at("BlackFlow@StartExplore@Roguelike@RecruitWithoutButton");
