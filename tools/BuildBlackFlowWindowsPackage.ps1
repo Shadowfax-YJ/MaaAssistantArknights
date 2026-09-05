@@ -118,9 +118,9 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BlackFlowDataCollection/gui.new
 $notice = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'BlackFlowDataCollection/NOTICE.txt')).Replace('{{VERSION}}', $Version)
 [IO.File]::WriteAllText((Join-Path $staging 'NOTICE.txt'), $notice, [Text.UTF8Encoding]::new($false))
 
-Get-ChildItem -LiteralPath $staging -Recurse -File | Where-Object { $_.Extension -in @('.pdb', '.bak', '.h', '.pyc') } | Remove-Item -Force
+Get-ChildItem -LiteralPath $staging -Recurse -File | Where-Object { $_.Extension -in @('.pdb', '.bak', '.h', '.pyc', '.log') } | Remove-Item -Force
 Get-ChildItem -LiteralPath $staging -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
-foreach ($directoryName in @('msvc-debug', 'cache', 'data', 'debug')) {
+foreach ($directoryName in @('msvc-debug', 'cache', 'data', 'debug', 'resource/debug')) {
     $directory = Join-Path $staging $directoryName
     if (Test-Path -LiteralPath $directory) {
         Remove-Item -LiteralPath $directory -Recurse -Force
