@@ -2807,7 +2807,7 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
     }
     if (!committed_move.controllable && m_page_context.has_value() &&
         m_page_context->identity_from_event_name && m_page_context->has_landing &&
-        observation.floor == run_before_move.floor) {
+        observation.floor == run_before_move.floor && !same_floor_recollection) {
         // 小八界点选的只是随机移动的激活位置。只有回图后的 current_node 才是真实落点，
         // 所以事件类型的落点校验必须延迟到这里。
         const NodeId event_landing = linked_return.has_value() ? linked_return->event_node : observation.current_node;
@@ -2891,7 +2891,7 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
     }
 
     if (m_page_context.has_value()) {
-        if (observation.floor == m_page_context->floor) {
+        if (observation.floor == m_page_context->floor && !same_floor_recollection) {
             if (linked_return.has_value()) {
                 // 加工品实际落到的是原不期而遇；随后事件效果才免费传送。不能把关联据点
                 // 的类型当成加工品落点，否则会错误消耗只针对作战落点的资源。
@@ -2904,6 +2904,8 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             }
         }
         else {
+            // 追忆虽仍是四层，current_node 已是新图入口。小八界没有预先确定的目标类型，
+            // 必须保留旧图已结算页面的出口身份，不能用新图入口类型核验这次移动。
             observation.landed_type = m_page_context->node_type;
             observation.target_progress =
                 m_page_context->result.has_value() && m_page_context->result->progress.has_value()
@@ -3014,7 +3016,8 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
     // 随机移动在打开预览时还不知道实际落点。回到地图后用当前标记把页面上下文绑定到
     // 真实节点，再写探索笔记、完成状态和节点内容，避免把 InvalidNodeId 记进地图。
     if (m_page_context.has_value() && !committed_move.controllable &&
-        m_page_context->node == InvalidNodeId && observation.floor == m_page_context->floor) {
+        m_page_context->node == InvalidNodeId && observation.floor == m_page_context->floor &&
+        !same_floor_recollection) {
         m_page_context->node = observation.current_node;
     }
 

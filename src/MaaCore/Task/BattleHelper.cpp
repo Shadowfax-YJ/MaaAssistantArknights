@@ -12,7 +12,6 @@
 #include "MaaUtils/NoWarningCV.hpp"
 #include "MaaUtils/Time.hpp"
 #include "Task/ProcessTask.h"
-#include "Task/BattleAutoSkillRules.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Battle/BattlefieldClassifier.h"
 #include "Vision/Battle/BattlefieldMatcher.h"
@@ -638,6 +637,19 @@ bool asst::BattleHelper::use_skill(const Point& loc, int timeout_ms)
     return click_oper_on_battlefield(loc) && click_skill(timeout_ms) && m_inst_helper.sleep(200);
 }
 
+asst::BattleSkillClickResult asst::BattleHelper::use_ready_skill(const Point& loc)
+{
+    if (!click_oper_on_battlefield(loc)) {
+        return BattleSkillClickResult::Failed;
+    }
+
+    const auto result = try_click_skill(0, BattleSkillClickMode::Automatic);
+    if (result == BattleSkillClickResult::Clicked && !m_inst_helper.sleep(200)) {
+        return BattleSkillClickResult::Failed;
+    }
+    return result;
+}
+
 bool asst::BattleHelper::check_pause_button(const cv::Mat& reusable)
 {
     cv::Mat image = reusable.empty() ? m_inst_helper.ctrler()->get_image() : reusable;
@@ -805,8 +817,14 @@ bool asst::BattleHelper::use_all_ready_skill(const cv::Mat& reusable)
 
         LogInfo << "Skill" << oper_tag.name << "is ready";
 
+        const auto result = use_ready_skill(loc);
+        if (result == BattleSkillClickResult::AlreadyActive) {
+            // 正在施放不是识别失败，也不能消耗技能次数或触发成功回调。
+            retry = 0;
+            return;
+        }
         // 识别到了，但点进去发现没有。一般来说是识别错了
-        if (!use_skill(loc, false)) {
+        if (result == BattleSkillClickResult::Failed) {
             LogWarn << "Skill" << oper_tag.name << "is not ready";
             static const bool save_infinitely = std::filesystem::exists("DEBUG_skill_ready.txt");
             if (!save_infinitely) {
@@ -870,8 +888,9 @@ bool asst::BattleHelper::check_and_use_skill(const Point& loc, bool& has_error, 
     if (!is_skill_ready(loc, image)) {
         return false;
     }
-    has_error = !use_skill(loc, false);
-    return true;
+    const auto result = use_ready_skill(loc);
+    has_error = result == BattleSkillClickResult::Failed;
+    return result != BattleSkillClickResult::AlreadyActive;
 }
 
 void asst::BattleHelper::save_map(const cv::Mat& image)
@@ -1004,6 +1023,11 @@ bool asst::BattleHelper::click_retreat()
 
 bool asst::BattleHelper::click_skill(int timeout_ms)
 {
+    return try_click_skill(timeout_ms, BattleSkillClickMode::Explicit) == BattleSkillClickResult::Clicked;
+}
+
+asst::BattleSkillClickResult asst::BattleHelper::try_click_skill(int timeout_ms, BattleSkillClickMode mode)
+{
     LogTraceFunction;
     const auto start_time = std::chrono::steady_clock::now();
     bool deploy_with_pause =
@@ -1020,7 +1044,7 @@ bool asst::BattleHelper::click_skill(int timeout_ms)
         if (pausing) {
             ProcessTask(this_task(), { "BattlePauseCancel" }).run();
         }
-        return clicked;
+        return clicked ? BattleSkillClickResult::Clicked : BattleSkillClickResult::Failed;
     }
 
     cv::Mat top_view;
@@ -1029,18 +1053,24 @@ bool asst::BattleHelper::click_skill(int timeout_ms)
     while (!m_inst_helper.need_exit()) {
         image = m_inst_helper.ctrler()->get_image();
         if (retry > 0 && (retry % 10 == 0) && !check_in_battle(image)) {
-            return false;
+            return BattleSkillClickResult::Failed;
         }
         top_view = get_top_view(image, true, m_has_multi_stages);
         Matcher skill_analyzer { top_view };
         skill_analyzer.set_task_info("BattleSkillReadyOnClick-TopView");
         skill_analyzer.set_roi({ 250, 250, 250, 250 });
-        if (skill_analyzer.analyze()) {
-            const bool clicked = m_inst_helper.ctrler()->click(m_skill_button_pos);
+        if (const auto match = skill_analyzer.analyze()) {
+            const auto result = click_matched_skill(match->templ_name, mode, [&] {
+                return m_inst_helper.ctrler()->click(m_skill_button_pos);
+            });
+            if (result == BattleSkillClickResult::AlreadyActive) {
+                Log.info("Skip auto skill: the skill is already active", match->templ_name);
+                cancel_oper_selection();
+            }
             if (pausing) {
                 ProcessTask(this_task(), { "BattlePauseCancel" }).run();
             }
-            return clicked;
+            return result;
         }
         if (timeout_ms > -1) {
             const auto elapsed_ms =
@@ -1068,7 +1098,7 @@ bool asst::BattleHelper::click_skill(int timeout_ms)
     if (pausing) {
         ProcessTask(this_task(), { "BattlePauseCancel" }).run();
     }
-    return false;
+    return BattleSkillClickResult::Failed;
 }
 
 bool asst::BattleHelper::cancel_oper_selection()

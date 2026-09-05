@@ -21,7 +21,12 @@
       "buildTarget": "maa-black-flow-routing-test",
       "ctestRegex": "^blackflow-routing::",
       "paths": [
+        "src/MaaCore/Task/BattleAutoSkillRules.h",
+        "src/MaaCore/Task/BattleHelper.cpp",
+        "src/MaaCore/Task/BattleHelper.h",
+        "resource/tasks/Roguelike/base.json",
         "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.h",
+        "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSession.cpp",
         "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPlanner.cpp",
         "src/MaaCore/Vision/Roguelike/BlackFlow/BlackFlowMapAnalyzer.cpp",
         "src/MaaCore/Vision/Roguelike/BlackFlow/BlackFlowTopologyMatcher.h",

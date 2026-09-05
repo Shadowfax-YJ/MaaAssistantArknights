@@ -1030,6 +1030,32 @@ TEST_CASE("BlackFlow weak normal battle OCR does not override the ideal-source e
     REQUIRE_FALSE(weak_normal_battle_ocr_defers_to_ideal_source_prediction("battle_elite", "ocr", false));
 }
 
+TEST_CASE("Roguelike first recruitment rechecks the page after the custom voucher plugin")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/base.json");
+    REQUIRE(tasks.has_value());
+
+    // 03:33:22 的现场：插件已经确认进入干员列表，父任务仍补点旧券坐标 (418, 512)，
+    // 选中了第四张卡。入口只能通知插件，随后重新识别列表或仍待使用的招募券。
+    const auto& entry = tasks->at("Roguelike@RecruitMain");
+    REQUIRE(entry.get("action", std::string {}) == "DoNothing");
+    const std::vector<std::string> expected_next {
+        "StartExplore@Roguelike@ChooseOperFlag",
+        "StartExplore@Roguelike@RecruitCloseGuide",
+        "StartExplore@Roguelike@RecruitOther",
+    };
+    REQUIRE(entry.get("next", std::vector<std::string> {}) == expected_next);
+
+    // 未配置自选干员或插件没有打开券时，仍须重新匹配并点击招募按钮。
+    // RecruitOther 继承入口资源，必须显式保留点击动作。
+    const auto& voucher = tasks->at("Roguelike@RecruitOther");
+    REQUIRE(voucher.get("action", std::string {}) == "ClickSelf");
+    REQUIRE(voucher.get("algorithm", std::string("MatchTemplate")) == "MatchTemplate");
+    REQUIRE(voucher.get("roi", std::vector<int> {}) == std::vector<int> { 80, 470, 1120, 154 });
+}
+
 TEST_CASE("BlackFlow automation collection recruits the fixed five-person team")
 {
     REQUIRE(AutomationCollectionFirstOperator == "机械师");
@@ -1362,6 +1388,46 @@ TEST_CASE("Battle auto skill activates a shared operator and device tile only on
     guard.record_success(shared_tile);
     REQUIRE_FALSE(guard.should_attempt(shared_tile));
     REQUIRE(guard.should_attempt(other_tile));
+}
+
+TEST_CASE("Battle auto skill skips active skills and can activate them again after cooldown")
+{
+    using asst::BattleSkillClickMode;
+    using asst::BattleSkillClickResult;
+
+    int clicks = 0;
+    const auto click = [&] {
+        ++clicks;
+        return true;
+    };
+    const auto attempt = [&](std::string_view matched_template) {
+        return asst::click_matched_skill(matched_template, BattleSkillClickMode::Automatic, click);
+    };
+
+    REQUIRE(attempt("BattleSkillReadyOnClick-TopView.png") == BattleSkillClickResult::Clicked);
+    REQUIRE(clicks == 1);
+
+    // Replay repeated false-positive ready classifications while the panel shows Stop.
+    for (int scan = 0; scan < 4; ++scan) {
+        REQUIRE(attempt("BattleSkillStopOnClick-TopView.png") == BattleSkillClickResult::AlreadyActive);
+        REQUIRE(clicks == 1);
+    }
+
+    REQUIRE(attempt("BattleSkillReadyOnClick-TopView2.png") == BattleSkillClickResult::Clicked);
+    REQUIRE(clicks == 2);
+    REQUIRE(asst::click_matched_skill("BattleSkillReadyOnClick-TopView.png", BattleSkillClickMode::Automatic, [] {
+                return false;
+            }) == BattleSkillClickResult::Failed);
+}
+
+TEST_CASE("Battle explicit skill actions can still stop active skills")
+{
+    int clicks = 0;
+    REQUIRE(asst::click_matched_skill("BattleSkillStopOnClick-TopView.png", asst::BattleSkillClickMode::Explicit, [&] {
+                ++clicks;
+                return true;
+            }) == asst::BattleSkillClickResult::Clicked);
+    REQUIRE(clicks == 1);
 }
 
 TEST_CASE("BlackFlow Gold Stasis defers drone and fountain choices only after Kal'tsit promotion")
@@ -6482,6 +6548,15 @@ TEST_CASE("BlackFlow reconciles a floor four terminal that opens a recollection 
     move.landing_action_point_gains.emplace(terminal.id, 0);
     move.controllable = true;
 
+    SECTION("a known terminal reached by walking") {}
+
+    SECTION("M07 learns the old terminal identity from its completed page")
+    {
+        move.movement = MovementKind::M07;
+        move.controllable = false;
+        move.landing = InvalidNodeId;
+    }
+
     auto transaction = MoveTransaction::propose(move, map, viewport);
     REQUIRE(transaction.has_value());
     REQUIRE(transaction->record_preview(MovePreview { PreviewReachability::Reachable, 1 }));
@@ -6502,7 +6577,24 @@ TEST_CASE("BlackFlow reconciles a floor four terminal that opens a recollection 
     REQUIRE(error == "next map observation does not match the committed move");
 
     recollection.renewed_same_floor_after_terminal = true;
+    if (!move.controllable) {
+        // The new map starts at a winding passage. It is not the M07 landing on the old map.
+        recollection.landed_type = NodeType::Door;
+        REQUIRE_FALSE(transaction->observe(recollection, &error));
+        recollection.landed_type = NodeType::Final;
+    }
     REQUIRE(transaction->observe(recollection, &error));
+
+    RunState run;
+    run.floor = 4;
+    run.current_node = source.id;
+    run.resources = resources_authorizing(move.movement);
+    run.resources.action_points = 1;
+    run.resources.white_model_birds = 1;
+    REQUIRE(transaction->apply(run, &error));
+    REQUIRE(run.current_node == recollection.current_node);
+    REQUIRE(run.resources.action_points == 8);
+    REQUIRE(run.resources.white_model_birds == 1);
 }
 
 TEST_CASE("BlackFlow completed one-time nodes become empty unless explicitly retained")

@@ -6,6 +6,7 @@
 #include "Config/Miscellaneous/TilePack.h"
 #include "InstHelper.h"
 #include "MaaUtils/NoWarningCVMat.hpp"
+#include "Task/BattleAutoSkillRules.h"
 #include "Utils/Platform.hpp"
 #include "Utils/WorkingDir.hpp"
 #include "Vision/BestMatcher.h"
@@ -99,7 +100,7 @@ protected:
     bool click_oper_on_battlefield(battle::Role role, const std::string& name);
     bool click_oper_on_battlefield(const Point& loc);
     bool click_retreat();                      // 这个是不带识别的，直接点
-    bool click_skill(int timeout_ms = 500000); // 这个是带识别的，转好了才点
+    bool click_skill(int timeout_ms = 500000); // 作业显式操作，允许开启或停止技能
     bool cancel_oper_selection();
     // 修正终点超出范围的滑动，纠正时是否需要顺时针旋转
     void fix_swipe_out_of_limit(
@@ -162,6 +163,9 @@ protected:
     std::map<Point, battle::OperNameTag> m_used_tiles; // 已占用的格子, <坐标> -> <实际单位>; 虚拟装置可与干员同格
 
 private:
+    BattleSkillClickResult use_ready_skill(const Point& loc);
+    BattleSkillClickResult try_click_skill(int timeout_ms, BattleSkillClickMode mode);
+
     InstHelper m_inst_helper;
 };
 } // namespace asst

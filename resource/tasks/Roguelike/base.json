@@ -166,8 +166,8 @@
         "text": [],
         "fullMatch": true,
         "roi": [13, 26, 120, 23],
-        "specificRect_Doc": "x拿来当文字灰度二值化下限用",
-        "specificRect": [170, 0, 0, 0]
+        "specificRect_Doc": "x拿来当文字灰度二值化下限用；选中卡片的蓝色高亮会压暗姓名，170会裁掉机械师的首字",
+        "specificRect": [140, 0, 0, 0]
     },
     "RoguelikeRecruitOcrFlag": {
         "roi": [525, 110, 640, 500],
@@ -1070,19 +1070,24 @@
         "next": ["Roguelike@ChooseOperFlag"]
     },
     "Roguelike@RecruitMain": {
-        "Doc": "肉鸽开始探索时, 招募第一个干员用, base_task",
+        "Doc": "开局首张招募券入口。自选职业插件可能已进入干员列表，禁止补点缓存的券坐标；下一步重新识别列表或招募券。",
         "template": "empty.png",
-        "action": "ClickSelf",
+        "action": "DoNothing",
         "roi": [80, 470, 540, 154],
-        "next": ["StartExplore@Roguelike@ChooseOperFlag", "StartExplore@Roguelike@RecruitCloseGuide", "#self"],
-        "postDelay": 1000
+        "next": [
+            "StartExplore@Roguelike@ChooseOperFlag",
+            "StartExplore@Roguelike@RecruitCloseGuide",
+            "StartExplore@Roguelike@RecruitOther"
+        ]
     },
     "Roguelike@RecruitOther": {
         "Doc": "base_task",
         "template": "empty.png",
         "baseTask": "Roguelike@RecruitMain",
+        "action": "ClickSelf",
         "roi": [80, 470, 1120, 154],
-        "next": ["Roguelike@ChooseOperFlag", "Roguelike@RecruitCloseGuide", "#self"]
+        "next": ["Roguelike@ChooseOperFlag", "Roguelike@RecruitCloseGuide", "#self"],
+        "postDelay": 1000
     },
     "Roguelike@RecruitSkip": {
         "template": "RecruitSkip.png",
