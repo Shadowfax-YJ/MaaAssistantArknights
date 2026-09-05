@@ -90,7 +90,7 @@ private:
     [[nodiscard]] bool is_endpoint(const PlannerState& state) const noexcept;
     [[nodiscard]] bool unavailable_target(const PlannerState& source, NodeId target) const noexcept;
     void precompute_adjacency(const MapSnapshot& map);
-    void precompute_endpoint_hidden_battle_reveals(const MapSnapshot& map);
+    void precompute_endpoint_reveals(const MapSnapshot& map);
     void precompute_geometry();
 
     const RunState* m_run = nullptr;
@@ -102,6 +102,7 @@ private:
     std::vector<std::vector<CompactNeighbor>> m_confirmed_adjacency;
     std::vector<std::vector<CompactNeighbor>> m_relaxed_adjacency;
     std::vector<PlannerNodeMask> m_endpoint_hidden_battle_reveals;
+    std::vector<PlannerNodeMask> m_endpoint_hidden_node_reveals;
     std::array<std::vector<std::vector<std::uint8_t>>, 13> m_geometric_targets;
     std::array<PlannerNodeMask, 21> m_type_nodes {};
     PlannerNodeMask m_blocking_nodes = 0;

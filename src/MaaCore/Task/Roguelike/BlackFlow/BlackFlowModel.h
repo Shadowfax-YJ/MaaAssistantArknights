@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -595,8 +596,13 @@ struct MoveAction
 };
 
 [[nodiscard]] NodeId resolve_landing(const MapSnapshot& map, NodeId target) noexcept;
+// 新增可见状态来自模拟落点，不能拿探索笔记中模板已知的身份替代。
 [[nodiscard]] std::vector<MoveAction>
-    enumerate_move_actions(const MapSnapshot& map, const RunState& state, GraphLayer layer = GraphLayer::Confirmed);
+    enumerate_move_actions(
+        const MapSnapshot& map,
+        const RunState& state,
+        GraphLayer layer = GraphLayer::Confirmed,
+        std::span<const NodeId> newly_revealed_nodes = {});
 
 enum class PreviewReachability
 {

@@ -31,8 +31,9 @@ struct PlannerState
     PlannerNodeMask completed_nodes = 0;
     PlannerNodeMask opened_blockers = 0;
     PlannerNodeMask consumed_lights = 0;
-    // 只跟踪会影响避战合法性的揭示状态；其他未知节点的揭示收益由 RouteLabel 记录。
+    // 凶戾揭示控制避战合法性；其他隐藏节点的揭示也会改变小八界和定向加工品的动作集。
     PlannerNodeMask revealed_hidden_battles = 0;
+    PlannerNodeMask newly_revealed_nodes = 0;
     SafetyGoalProgressId goal_progress_id = InvalidSafetyGoalProgressId;
     // 只有当前站在“选择路过”的险路尽头时为 true；离开后自动清除，之后仍可重新
     // 进入同一尽头并选择真正下层。它不能写进 completed_nodes。

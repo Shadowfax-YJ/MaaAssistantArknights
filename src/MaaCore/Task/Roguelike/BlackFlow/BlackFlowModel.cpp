@@ -1235,7 +1235,11 @@ NodeId resolve_landing(const MapSnapshot& map, NodeId target) noexcept
 // 否则按需图与紧凑空间对同一局面会给出不同的动作集，安全值与路线互相矛盾。
 // 已知差异：那边以 opened_blockers 判定 walk 穿行（这里用 visited_nodes）、在生成期过滤
 // forbidden 动作（这里由 OnDemandStateGraph 展开期过滤）。改动任一份时同步检查另一份。
-std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const RunState& state, GraphLayer layer)
+std::vector<MoveAction> enumerate_move_actions(
+    const MapSnapshot& map,
+    const RunState& state,
+    GraphLayer layer,
+    std::span<const NodeId> newly_revealed_nodes)
 {
     std::vector<MoveAction> result;
     if (state.resources.action_points < 1 || map.find_node(state.current_node) == nullptr) {
@@ -1374,18 +1378,20 @@ std::vector<MoveAction> enumerate_move_actions(const MapSnapshot& map, const Run
         std::vector<NodeId> hidden_noncombat_targets;
         for (const auto& [id, node] : map.nodes()) {
             const NodeType semantic_type = effective_node_type(node, state);
-            const NodeType visible_type = movement_visible_node_type(semantic_type, node.visually_hidden);
+            const bool newly_revealed = std::ranges::find(newly_revealed_nodes, id) != newly_revealed_nodes.end();
+            const bool visually_hidden = node.visually_hidden && !newly_revealed;
+            const NodeType visible_type = movement_visible_node_type(semantic_type, visually_hidden);
             const bool targetable = semantic_type == NodeType::Empty
                                         ? effective_progress(node, state) != NodeProgress::Removed
                                         : is_targetable(node, state);
             if (!targetable || !node_type_allowed(movement, visible_type) ||
-                !movement_target_is_currently_selectable(movement.kind, node.visually_hidden) ||
+                !movement_target_is_currently_selectable(movement.kind, visually_hidden) ||
                 (movement.random_target && node_has_explicit_roaming_resident_marker(node)) ||
                 !is_in_geometric_range(map, state.current_node, id, movement, GraphLayer::Confirmed)) {
                 continue;
             }
             targets.emplace_back(id);
-            if (movement.random_target && visible_type == NodeType::HideInvisible) {
+            if (movement.random_target && visible_type == NodeType::HideInvisible && !newly_revealed) {
                 hidden_noncombat_targets.emplace_back(id);
             }
         }

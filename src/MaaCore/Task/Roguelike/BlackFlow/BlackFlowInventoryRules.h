@@ -129,6 +129,48 @@ inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
     return { center_x - ClickSize / 2, center_y - ClickSize / 2, ClickSize, ClickSize };
 }
 
+// 详情交互的 I/O 由任务端口提供，便于回放滑动帧、丢失点击和延迟弹层。
+template <typename Locate, typename Click, typename Ready, typename Wait>
+[[nodiscard]] bool open_inventory_part_detail(Locate locate, Click click, Ready ready, Wait wait)
+{
+    constexpr int MaximumClicks = 3;
+    constexpr int StabilitySamples = 12;
+    constexpr int PopupSamples = 6;
+    for (int attempt = 0; attempt < MaximumClicks; ++attempt) {
+        std::optional<Rect> previous;
+        std::optional<Rect> stable;
+        for (int sample = 0; sample < StabilitySamples; ++sample) {
+            // 迟到的详情不能再被第二次点击关闭。
+            if (ready()) {
+                return true;
+            }
+            const auto current = locate();
+            if (current.has_value() && previous.has_value() && std::abs(current->x - previous->x) <= 3 &&
+                std::abs(current->y - previous->y) <= 3 && std::abs(current->width - previous->width) <= 3) {
+                stable = current;
+                break;
+            }
+            previous = current;
+            if (!wait()) {
+                return false;
+            }
+        }
+        if (!stable.has_value() || !click(inventory_part_detail_click_rect(*stable))) {
+            return false;
+        }
+        for (int sample = 0; sample < PopupSamples; ++sample) {
+            if (!wait()) {
+                return false;
+            }
+            if (ready()) {
+                return true;
+            }
+        }
+        // 弹层未出现时重新取稳定的卡片坐标，最多重试三次真实点击。
+    }
+    return false;
+}
+
 // 零件箱每次打开都默认位于最左端。先扫当前可见列，之后每次向右推进一列，
 // 只计新进入视野的最右列；不再先做多余的“回到最左端”手势。
 [[nodiscard]] constexpr std::array<InventoryScanAction, 9> inventory_full_scan_plan() noexcept

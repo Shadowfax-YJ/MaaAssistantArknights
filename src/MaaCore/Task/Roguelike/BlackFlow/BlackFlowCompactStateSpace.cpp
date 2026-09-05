@@ -60,6 +60,7 @@ bool planner_state_less(const PlannerState& lhs, const PlannerState& rhs) noexce
                lhs.opened_blockers,
                lhs.consumed_lights,
                lhs.revealed_hidden_battles,
+               lhs.newly_revealed_nodes,
                lhs.goal_progress_id,
                lhs.current_final_bypassed,
                lhs.terminal) <
@@ -70,6 +71,7 @@ bool planner_state_less(const PlannerState& lhs, const PlannerState& rhs) noexce
                rhs.opened_blockers,
                rhs.consumed_lights,
                rhs.revealed_hidden_battles,
+               rhs.newly_revealed_nodes,
                rhs.goal_progress_id,
                rhs.current_final_bypassed,
                rhs.terminal);
@@ -91,6 +93,7 @@ bool BlackFlowCompactStateSpace::initialize(
     m_confirmed_adjacency.clear();
     m_relaxed_adjacency.clear();
     m_endpoint_hidden_battle_reveals.clear();
+    m_endpoint_hidden_node_reveals.clear();
     for (auto& by_source : m_geometric_targets) {
         by_source.clear();
     }
@@ -175,7 +178,7 @@ bool BlackFlowCompactStateSpace::initialize(
     }
 
     precompute_adjacency(map);
-    precompute_endpoint_hidden_battle_reveals(map);
+    precompute_endpoint_reveals(map);
     precompute_geometry();
 
     m_initial_state.node = run.current_node;
@@ -266,9 +269,10 @@ void BlackFlowCompactStateSpace::precompute_adjacency(const MapSnapshot& map)
     sort_neighbors(m_relaxed_adjacency);
 }
 
-void BlackFlowCompactStateSpace::precompute_endpoint_hidden_battle_reveals(const MapSnapshot& map)
+void BlackFlowCompactStateSpace::precompute_endpoint_reveals(const MapSnapshot& map)
 {
     m_endpoint_hidden_battle_reveals.assign(m_nodes.size(), 0);
+    m_endpoint_hidden_node_reveals.assign(m_nodes.size(), 0);
     for (std::size_t origin = 0; origin < m_nodes.size(); ++origin) {
         auto revealed = map.reveal_through_transparent_nodes(m_nodes[origin].id);
         if (m_nodes[origin].type == NodeType::Light) {
@@ -279,6 +283,11 @@ void BlackFlowCompactStateSpace::precompute_endpoint_hidden_battle_reveals(const
         }
         for (const NodeId id : revealed) {
             const auto found = m_node_indices.find(id);
+            if (found != m_node_indices.end() &&
+                (m_nodes[found->second].visually_hidden || m_nodes[found->second].type == NodeType::HideInvisible ||
+                 m_nodes[found->second].type == NodeType::HideBattle)) {
+                m_endpoint_hidden_node_reveals[origin] |= PlannerNodeMask { 1 } << found->second;
+            }
             if (found != m_node_indices.end() && m_nodes[found->second].type == NodeType::HideBattle) {
                 m_endpoint_hidden_battle_reveals[origin] |= PlannerNodeMask { 1 } << found->second;
             }
@@ -461,6 +470,7 @@ PlannerState BlackFlowCompactStateSpace::transition(
         const auto landing_index = node_index(landing);
         if (landing_index.has_value() && *landing_index < m_endpoint_hidden_battle_reveals.size()) {
             successor.revealed_hidden_battles |= m_endpoint_hidden_battle_reveals[*landing_index];
+            successor.newly_revealed_nodes |= m_endpoint_hidden_node_reveals[*landing_index];
         }
     }
     successor.terminal = is_endpoint(successor);
@@ -646,17 +656,19 @@ std::optional<std::vector<CompactMoveAction>>
         std::vector<std::uint8_t> hidden_noncombat_targets;
         for (const std::uint8_t target : geometric_targets(movement.kind, source_index)) {
             const NodeType semantic_type = effective_type(source, target);
-            const NodeType visible_type = movement_visible_node_type(semantic_type, m_nodes[target].visually_hidden);
+            const bool newly_revealed = (source.newly_revealed_nodes & (PlannerNodeMask { 1 } << target)) != 0;
+            const bool visually_hidden = m_nodes[target].visually_hidden && !newly_revealed;
+            const NodeType visible_type = movement_visible_node_type(semantic_type, visually_hidden);
             const bool targetable = semantic_type == NodeType::Empty
                                         ? effective_progress(source, target) != NodeProgress::Removed
                                         : targetable_for_walk(source, target);
             if (!targetable || !node_type_allowed(movement, visible_type) ||
-                !movement_target_is_currently_selectable(movement.kind, m_nodes[target].visually_hidden) ||
+                !movement_target_is_currently_selectable(movement.kind, visually_hidden) ||
                 (movement.random_target && m_nodes[target].explicit_roaming_resident_marker)) {
                 continue;
             }
             targets.emplace_back(target);
-            if (movement.random_target && visible_type == NodeType::HideInvisible) {
+            if (movement.random_target && visible_type == NodeType::HideInvisible && !newly_revealed) {
                 hidden_noncombat_targets.emplace_back(target);
             }
         }

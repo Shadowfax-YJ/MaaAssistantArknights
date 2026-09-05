@@ -9215,3 +9215,134 @@ TEST_CASE("BlackFlow transient UI failures wait one minute before retrying the f
                 default_successors,
                 "BlackFlow@Roguelike@Begin") == default_successors.end());
 }
+
+TEST_CASE("BlackFlow future random pool changes after a landing reveals its only hidden target")
+{
+    MapSnapshot map;
+    const auto add = [&](GridPosition position, NodeType type, bool hidden = false) {
+        Node n;
+        n.floor = 1;
+        n.position = position;
+        n.id = *make_stable_node_id(1, position);
+        n.type = type;
+        n.traversal = default_traversal_for(type);
+        n.visually_hidden = hidden;
+        n.identity_revealed = !hidden;
+        REQUIRE(map.upsert_node(n));
+        return n.id;
+    };
+    const auto source = add({ 1, 2 }, NodeType::Empty);
+    const auto battle = add({ 2, 1 }, NodeType::BattleNormal);
+    const auto clearing = add({ 2, 2 }, NodeType::Empty);
+    const auto hidden = add({ 2, 3 }, NodeType::HideInvisible, true);
+    const auto shop = add({ 1, 3 }, NodeType::Shop);
+    const auto endpoint = add({ 1, 4 }, NodeType::Final);
+    REQUIRE(map.upsert_edge({ source, battle, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ battle, clearing, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ clearing, hidden, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ hidden, shop, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ shop, endpoint, EdgeKnowledge::Confirmed, {} }));
+    RunState run;
+    run.floor = 1;
+    run.current_node = source;
+    run.resources.action_points = 3;
+    run.resources.movement_charges = { { MovementKind::M03, 2 }, { MovementKind::M07, 1 } };
+    for (const bool compact : { false, true }) {
+        INFO(compact);
+        StateExpansionOptions options;
+        options.use_compact_actions = compact;
+        OnDemandStateGraph graph;
+        REQUIRE(graph.initialize(map, run, options));
+        const auto* actions = graph.actions(graph.initial_state());
+        REQUIRE(actions != nullptr);
+        const auto first = std::ranges::find_if(*actions, [&](const OnDemandSafetyAction& a) {
+            return a.candidate.movement == MovementKind::M03 && a.candidate.target == battle;
+        });
+        REQUIRE(first != actions->end());
+        const auto after = first->outcomes.front().successor;
+        const auto* next = graph.actions(after);
+        REQUIRE(next != nullptr);
+        const auto random = std::ranges::find_if(*next, [](const OnDemandSafetyAction& a) {
+            return a.candidate.movement == MovementKind::M07 && !a.candidate.bypass_final_on_completion;
+        });
+        REQUIRE(random != next->end());
+        // 落点经林间空地传递视野，唯一诡秘已点亮；小八界不能继续把它当作唯一落点。
+        REQUIRE(random->candidate.possible_landings.size() > 1);
+        REQUIRE(
+            std::ranges::find(random->candidate.possible_landings, shop) != random->candidate.possible_landings.end());
+    }
+}
+
+TEST_CASE("BlackFlow inventory detail opening waits for motion and confirms the popup")
+{
+    int tick = 0;
+    int clicks = 0;
+    int first_click_tick = -1;
+    int last_click_tick = -1;
+    int dropped_clicks = 0;
+    int popup_delay = 1;
+    SECTION("the card is still sliding after scroll reset")
+    {
+    }
+    SECTION("a stable click is lost and must be retried")
+    {
+        dropped_clicks = 1;
+    }
+    SECTION("a slow popup must not receive a second click")
+    {
+        popup_delay = 4;
+    }
+    const std::array<int, 5> positions { 524, 620, 780, 872, 872 };
+    const bool opened = open_inventory_part_detail(
+        [&]() -> std::optional<asst::Rect> { return asst::Rect { positions[std::min(tick, 4)], 258, 87, 22 }; },
+        [&](const asst::Rect&) {
+            ++clicks;
+            if (first_click_tick < 0) {
+                first_click_tick = tick;
+            }
+            if (tick >= 4 && clicks > dropped_clicks) {
+                last_click_tick = tick;
+            }
+            return true;
+        },
+        [&]() { return last_click_tick >= 0 && tick - last_click_tick >= popup_delay; },
+        [&]() {
+            ++tick;
+            return true;
+        });
+    REQUIRE(opened);
+    REQUIRE(first_click_tick >= 4);
+    REQUIRE(clicks == dropped_clicks + 1);
+}
+
+TEST_CASE("BlackFlow inventory detail opening stops on missing UI or interruption")
+{
+    int clicks = 0;
+    int waits = 0;
+    bool interrupted = false;
+    bool moving = false;
+    SECTION("the detail never appears")
+    {
+    }
+    SECTION("the list never stops moving")
+    {
+        moving = true;
+    }
+    SECTION("the task is interrupted")
+    {
+        interrupted = true;
+    }
+    REQUIRE_FALSE(open_inventory_part_detail(
+        [&]() -> std::optional<asst::Rect> { return asst::Rect { 524 + (moving ? waits * 10 : 0), 258, 87, 22 }; },
+        [&](const asst::Rect&) {
+            ++clicks;
+            return true;
+        },
+        []() { return false; },
+        [&]() {
+            ++waits;
+            return !interrupted;
+        }));
+    REQUIRE(clicks == (moving || interrupted ? 0 : 3));
+    REQUIRE(waits <= 24);
+}

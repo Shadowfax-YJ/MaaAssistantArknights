@@ -130,6 +130,11 @@ PlannerState transition_state(
         for (const NodeId id : revealed) {
             const Node* revealed_node = map.find_node(id);
             const auto revealed_bit = node_bit(node_indices, id);
+            if (revealed_node != nullptr && revealed_bit.has_value() &&
+                (revealed_node->visually_hidden || revealed_node->type == NodeType::HideInvisible ||
+                 revealed_node->type == NodeType::HideBattle)) {
+                successor.newly_revealed_nodes |= *revealed_bit;
+            }
             if (revealed_node != nullptr && revealed_node->type == NodeType::HideBattle && revealed_bit.has_value()) {
                 successor.revealed_hidden_battles |= *revealed_bit;
             }
@@ -317,6 +322,7 @@ std::size_t PlannerStateHash::operator()(const PlannerState& state) const noexce
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.opened_blockers));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.consumed_lights));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.revealed_hidden_battles));
+    seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.newly_revealed_nodes));
     seed = combine_hash(seed, std::hash<SafetyGoalProgressId> {}(state.goal_progress_id));
     seed = combine_hash(seed, std::hash<bool> {}(state.current_final_bypassed));
     return combine_hash(seed, std::hash<bool> {}(state.terminal));
@@ -606,7 +612,13 @@ const std::vector<OnDemandSafetyAction>* OnDemandStateGraph::actions(SafetyState
         }
         else {
             const RunState run = materialize(source);
-            const auto moves = enumerate_move_actions(*m_map, run, m_options.graph_layer);
+            std::vector<NodeId> newly_revealed;
+            for (std::size_t index = 0; index < m_indexed_nodes.size(); ++index) {
+                if ((source.newly_revealed_nodes & (PlannerNodeMask { 1 } << index)) != 0) {
+                    newly_revealed.emplace_back(m_indexed_nodes[index]);
+                }
+            }
+            const auto moves = enumerate_move_actions(*m_map, run, m_options.graph_layer, newly_revealed);
             for (const MoveAction& move : moves) {
                 if (m_options.forbidden_action_ids.contains(move.candidate.action_id)) {
                     continue;

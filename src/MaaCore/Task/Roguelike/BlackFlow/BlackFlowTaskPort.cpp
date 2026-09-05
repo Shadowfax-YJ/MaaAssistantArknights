@@ -1549,15 +1549,15 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
             }
         }
 
-        std::optional<Rect> current_rect;
-        for (int recognition_attempt = 0; recognition_attempt < 3 && !current_rect.has_value(); ++recognition_attempt) {
+        const auto locate_selected = [&]() -> std::optional<Rect> {
             const auto visible = analyze_parts(m_task_context->capture(), 0, selected_page);
             const auto found = std::ranges::min_element(visible, {}, [&](const ObservedPart& part) {
-                const int center_distance =
-                    std::abs((part.name_rect.x + part.name_rect.width / 2) -
-                             (selected_name_rect.x + selected_name_rect.width / 2)) +
-                    std::abs((part.name_rect.y + part.name_rect.height / 2) -
-                             (selected_name_rect.y + selected_name_rect.height / 2));
+                const int center_distance = std::abs(
+                                                (part.name_rect.x + part.name_rect.width / 2) -
+                                                (selected_name_rect.x + selected_name_rect.width / 2)) +
+                                            std::abs(
+                                                (part.name_rect.y + part.name_rect.height / 2) -
+                                                (selected_name_rect.y + selected_name_rect.height / 2));
                 return std::tuple {
                     part.name == selected_name ? 0 : 1,
                     part.remaining_charges == selected_remaining_charges ? 0 : 1,
@@ -1565,22 +1565,20 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                 };
             });
             if (found != visible.end() && found->name == selected_name) {
-                current_rect = found->name_rect;
-                break;
+                return found->name_rect;
             }
-            if (recognition_attempt + 1 < 3 &&
-                !run_task(EnteredPageClassificationRetryWaitTask, "parts-box item recognition retry wait failed")) {
-                return false;
-            }
-        }
-        if (!current_rect.has_value() || !m_task_context->click(inventory_part_detail_click_rect(*current_rect))) {
-            set_error(error, "selected discard part could not be found or clicked after restoring its scroll page");
-            return false;
-        }
-        // 点击卡片后详情弹层有展开动画。直接执行丢弃按钮 OCR 时，现场日志表明识别会在
-        // 约 0.1 秒内发生，此时画面仍是零件卡片正文，必然找不到“丢弃”。先显式等待弹层稳定，
-        // 再识别并点击按钮；任务上的 preDelay 只发生在按钮已经识别之后，不能代替这里。
-        if (!run_task(InventoryDiscardDetailWaitTask, "selected parts-box item detail did not become ready")) {
+            return std::nullopt;
+        };
+        if (!open_inventory_part_detail(
+                locate_selected,
+                [&](const Rect& rect) { return m_task_context->click(rect); },
+                [&]() {
+                    return recognizes_text_fragment(m_task_context->capture(), InventoryDiscardButtonTask, "丢弃");
+                },
+                [&]() {
+                    return run_task(InventoryDiscardDetailWaitTask, "parts-box detail observation wait failed");
+                })) {
+            set_error(error, "selected parts-box item detail did not become ready after stable selection and retries");
             return false;
         }
         Log.info(
