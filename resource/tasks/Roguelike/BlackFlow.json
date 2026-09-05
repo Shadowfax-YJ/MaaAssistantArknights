@@ -2775,10 +2775,10 @@
         "algorithm": "JustReturn"
     },
     "BlackFlow@Roguelike@UtopiaPanelToggle": {
-        "Doc": "新地图楼层标题左侧固定的实托邦标记；打开标题弹层 OCR 后再次点击同一位置关闭。",
+        "Doc": "点击楼层标题左侧实托邦图标的中央打开/关闭标题弹层；随机点击范围不得包含图标下方挂饰，否则可能未打开弹层却被缓存为本层无实托邦。",
         "algorithm": "JustReturn",
         "action": "ClickRect",
-        "specificRect": [535, 8, 55, 65],
+        "specificRect": [549, 28, 14, 14],
         "postDelay": 600
     },
     "BlackFlow@Roguelike@UtopiaPanelPolicy": {

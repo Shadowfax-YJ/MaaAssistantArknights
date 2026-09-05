@@ -144,10 +144,9 @@ std::optional<NormalizedPerceptionObservation>
         node.identity_source = source_node.identity_source;
         node.detected_by_vision = source_node.detected_by_vision;
         node.confirmed_by_topology = source_node.confirmed_by_topology;
-        // 初始流窜“居民”只会出现在林间空地。其他标记只有落在空地上时，才可能
-        // 实际遮住一个居民标记；战斗、事件、商店等节点上的标记不能参与该假设。
+        // 当前居民已经可能从初始空地移动到事件等节点，其他标记仍可能遮住它。
+        // “初始居民只在空地”的限制属于据点推断，不能用于当前移动的避让。
         const bool overlapped_resident_marker = infer_overlapped_resident_markers &&
-                                                *type == NodeType::Empty &&
                                                 !source_node.marker_type.empty() &&
                                                 source_node.marker_type != "savage";
         node.marker_type = source_node.marker_type;

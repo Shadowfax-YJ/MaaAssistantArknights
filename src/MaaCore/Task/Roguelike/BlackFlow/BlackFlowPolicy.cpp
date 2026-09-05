@@ -529,6 +529,9 @@ std::unordered_set<NodeType> automation_collection_forbidden_landing_types(int f
         result.insert(NodeType::BattleNormal);
         result.insert(NodeType::BattleElite);
     }
+    if (floor == 5) {
+        result.insert(NodeType::BattleBoss);
+    }
     return result;
 }
 

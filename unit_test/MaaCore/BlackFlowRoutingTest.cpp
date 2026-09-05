@@ -1935,8 +1935,15 @@ TEST_CASE("BlackFlow inspects the utopia title through the fixed map marker")
     REQUIRE(toggle.get("algorithm", std::string {}) == "JustReturn");
     REQUIRE(toggle.get("action", std::string {}) == "ClickRect");
     const auto click_rect = toggle.get("specificRect", std::vector<int> {});
-    const std::vector<int> expected_click_rect { 535, 8, 55, 65 };
-    REQUIRE(click_rect == expected_click_rect);
+    REQUIRE(click_rect.size() == 4);
+    // The recorded (568, 67) click hit the decoration below the marker and was
+    // cached as an absent utopia. Every randomized point must stay in its center.
+    REQUIRE(click_rect[0] >= 545);
+    REQUIRE(click_rect[1] >= 20);
+    REQUIRE(click_rect[2] > 0);
+    REQUIRE(click_rect[3] > 0);
+    REQUIRE(click_rect[0] + click_rect[2] <= 569);
+    REQUIRE(click_rect[1] + click_rect[3] <= 44);
 
     const auto& policy = tasks->at("BlackFlow@Roguelike@UtopiaPanelPolicy");
     REQUIRE(policy.get("algorithm", std::string {}) == "OcrDetect");
@@ -7185,6 +7192,12 @@ TEST_CASE("BlackFlow automation collection always allows resident settlements")
     REQUIRE_FALSE(later_floor.contains(NodeType::BattleSavage));
 }
 
+TEST_CASE("BlackFlow automation collection avoids the floor-five boss but permits the floor-three exit")
+{
+    REQUIRE(automation_collection_forbidden_landing_types(5).contains(NodeType::BattleBoss));
+    REQUIRE_FALSE(automation_collection_forbidden_landing_types(3).contains(NodeType::BattleBoss));
+}
+
 TEST_CASE("BlackFlow automation collection reserves full-map movement through the complete floor-four route")
 {
     REQUIRE(automation_collection_reserved_full_map_charges(1) == 3);
@@ -8331,13 +8344,13 @@ TEST_CASE("BlackFlow overlapping markers inherit roaming resident semantics when
     REQUIRE(normalized->map.nodes[2].marker_display_name == "藏果地");
     REQUIRE(normalized->map.nodes[2].marker_resident_overlap_possible == true);
     REQUIRE(normalized->map.nodes[3].marker_type.value_or("").empty());
-    REQUIRE(normalized->map.nodes[4].marker_resident_overlap_possible == false);
+    REQUIRE(normalized->map.nodes[4].marker_resident_overlap_possible == true);
     REQUIRE(normalized->map.nodes[4].name == "不期而遇");
     REQUIRE(normalized->map.nodes[4].marker_display_name == "线人与线索");
     REQUIRE(normalized->map.nodes[5].name == "命运所指");
     REQUIRE(normalized->map.nodes[5].fate_event == true);
     REQUIRE(normalized->map.nodes[5].marker_display_name == "谜题与谜底");
-    REQUIRE(normalized->map.nodes[5].marker_resident_overlap_possible == false);
+    REQUIRE(normalized->map.nodes[5].marker_resident_overlap_possible == true);
 
     observation.nodes[3].marker_type = "savage";
     observation.nodes[3].marker_display_name = "流窜居民";
@@ -8347,6 +8360,15 @@ TEST_CASE("BlackFlow overlapping markers inherit roaming resident semantics when
     REQUIRE(complete_resident_set->map.nodes[2].marker_type == "fruit_cache");
     REQUIRE(complete_resident_set->map.nodes[2].marker_display_name == "藏果地");
     REQUIRE(complete_resident_set->map.nodes[2].marker_resident_overlap_possible == false);
+    REQUIRE(complete_resident_set->map.nodes[4].marker_resident_overlap_possible == false);
+    REQUIRE(complete_resident_set->map.nodes[5].marker_resident_overlap_possible == false);
+
+    observation.nodes[0].marker_type.clear();
+    observation.nodes[1].marker_type.clear();
+    observation.nodes[3].marker_type.clear();
+    const auto no_residents = BlackFlowObservationAdapter {}.normalize(observation, &error);
+    REQUIRE(no_residents.has_value());
+    REQUIRE(no_residents->map.nodes[4].marker_resident_overlap_possible == false);
 }
 
 TEST_CASE("BlackFlow battle preview on a revealed non-battle node confirms a roaming resident overlay")
