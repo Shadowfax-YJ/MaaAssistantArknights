@@ -5844,7 +5844,50 @@ TEST_CASE("BlackFlow revealed move preview identity overrides the topology ident
     preview.displayed_name = "险路恶敌";
     preview.identity_revealed = true;
 
-    REQUIRE(should_apply_revealed_preview_identity(topology_identity, preview));
+    REQUIRE(should_apply_preview_identity(topology_identity, preview));
+}
+
+TEST_CASE("BlackFlow joined row titles are re-recognized in their original node columns")
+{
+    // The 01:55:30 frame returned one 170px box containing two complete titles.
+    REQUIRE(node_ocr_wide_fragment_columns(806, 170, 337.5, 100.75, 7) == std::vector<int> { 5, 6 });
+    // The preceding frame returned the two titles separately; no extra OCR is needed.
+    REQUIRE(node_ocr_wide_fragment_columns(805, 71, 337.5, 100.75, 7).empty());
+    REQUIRE(node_ocr_wide_fragment_columns(889, 86, 337.5, 100.75, 7).empty());
+    // A box reaching across three nodes requires all three crops, including edge columns.
+    REQUIRE(node_ocr_wide_fragment_columns(300, 280, 337.5, 100.75, 7) == std::vector<int> { 0, 1, 2 });
+}
+
+TEST_CASE("BlackFlow hidden move previews disprove an empty map identity")
+{
+    Node empty;
+    empty.type = NodeType::Empty;
+    empty.name = "林间空地";
+    empty.identity_revealed = true;
+    empty.identity_source = "empty_template";
+
+    MovePreview preview;
+    preview.displayed_type = NodeType::HideInvisible;
+    preview.displayed_name = "未知的诡秘";
+    preview.identity_revealed = false;
+    REQUIRE(should_apply_preview_identity(empty, preview));
+
+    preview.displayed_type = NodeType::HideBattle;
+    preview.displayed_name = "未知的凶戾";
+    REQUIRE(should_apply_preview_identity(empty, preview));
+
+    // An unrecognized title is not evidence of a hidden node.
+    preview.displayed_type = NodeType::Unknown;
+    preview.displayed_name.clear();
+    REQUIRE_FALSE(should_apply_preview_identity(empty, preview));
+
+    // A hidden preview must still preserve rule-inferred settlement/terminal identities.
+    preview.displayed_type = NodeType::HideBattle;
+    for (const NodeType known_type : { NodeType::BattleSavage, NodeType::BattleBoss, NodeType::Final }) {
+        Node known = empty;
+        known.type = known_type;
+        REQUIRE_FALSE(should_apply_preview_identity(known, preview));
+    }
 }
 
 TEST_CASE("BlackFlow resident settlement preview ignores quote typography differences")
@@ -5862,7 +5905,7 @@ TEST_CASE("BlackFlow resident settlement preview ignores quote typography differ
     preview.displayed_name = "\"居民\"据点";
     preview.identity_revealed = true;
 
-    REQUIRE_FALSE(should_apply_revealed_preview_identity(map_identity, preview));
+    REQUIRE_FALSE(should_apply_preview_identity(map_identity, preview));
 }
 
 TEST_CASE("BlackFlow empty preview display name does not invalidate normalized empty identity")
@@ -5888,7 +5931,47 @@ TEST_CASE("BlackFlow empty preview display name does not invalidate normalized e
     preview.displayed_name = "林间空地";
     preview.identity_revealed = true;
 
-    REQUIRE_FALSE(should_apply_revealed_preview_identity(*stored, preview));
+    REQUIRE_FALSE(should_apply_preview_identity(*stored, preview));
+}
+
+TEST_CASE("BlackFlow map refresh retains a hidden preview correction over weak empty recognition")
+{
+    for (const std::string source : { "empty_template", "map_topology_no_ocr_empty" }) {
+        INFO(source);
+        NormalizedMap map;
+        MapObservationBatch batch;
+        batch.floor = 3;
+        ObservedNode observed;
+        observed.position = { 2, 5 };
+        observed.type = NodeType::HideInvisible;
+        observed.name = "未知的诡秘";
+        observed.identity_revealed = false;
+        observed.identity_source = "move_preview_ocr";
+        batch.nodes = { observed };
+        REQUIRE(map.merge(batch));
+
+        batch.nodes.front().type = NodeType::Empty;
+        batch.nodes.front().name = "林间空地";
+        batch.nodes.front().identity_revealed = true;
+        batch.nodes.front().identity_source = source;
+        REQUIRE(map.merge(batch));
+        REQUIRE(map.snapshot().find_node(3, observed.position)->type == NodeType::HideInvisible);
+        REQUIRE_FALSE(map.snapshot().find_node(3, observed.position)->identity_revealed);
+
+        NormalizedMap completed_map = map;
+        MapObservationBatch completed = batch;
+        completed.nodes.front().progress = NodeProgress::Completed;
+        REQUIRE(completed_map.merge(completed));
+        REQUIRE(completed_map.snapshot().find_node(3, observed.position)->type == NodeType::Empty);
+
+        // A later explicit title is a new observation and must supersede the preview.
+        batch.nodes.front().type = NodeType::Employ;
+        batch.nodes.front().name = "应急助力";
+        batch.nodes.front().identity_source = "ocr";
+        REQUIRE(map.merge(batch));
+        REQUIRE(map.snapshot().find_node(3, observed.position)->type == NodeType::Employ);
+
+    }
 }
 
 TEST_CASE("BlackFlow topology rebuild preserves a move preview identity correction")

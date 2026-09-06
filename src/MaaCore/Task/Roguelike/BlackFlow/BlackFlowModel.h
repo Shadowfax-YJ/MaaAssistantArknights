@@ -623,8 +623,8 @@ struct MovePreview
 };
 
 // 移动预览展示的是当前节点的实际标题，可靠性高于模板附带的初始身份。
-// 只有预览已真正揭示身份时才允许覆盖，未知的诡秘/凶戾仍由原有隐藏身份规则处理。
-[[nodiscard]] bool should_apply_revealed_preview_identity(const Node& current, const MovePreview& preview) noexcept;
+// 已揭示标题可以纠正具体身份；未知的诡秘/凶戾也能否定空地，但不覆盖规则推导的非空身份。
+[[nodiscard]] bool should_apply_preview_identity(const Node& current, const MovePreview& preview) noexcept;
 
 // 已揭示的非作战节点若在移动预览中显示为普通作战，表示流窜“居民”当前占据了该节点；
 // 预览揭示的是临时战斗效果，不能覆盖节点本身的不期而遇、空地等身份。

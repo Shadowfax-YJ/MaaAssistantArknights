@@ -522,10 +522,16 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, MapMergePurpose purp
              *observed.identity_source == "initial_roaming_resident_prediction");
         // 移动预览 OCR 已经看到了节点的实际标题。关闭预览后的下一次地图重建仍会再次套用模板初始身份，
         // 这里必须保留预览纠正，直到地图 OCR 或节点结算给出更新的现场事实。
+        // 隐藏预览也能否定弱空地匹配，否则关闭预览后同一误匹配会使纠正/重规划无限重复。
+        const bool hidden_preview_empty_fallback =
+            current != nullptr && current->progress == NodeProgress::Active &&
+            (current->type == NodeType::HideInvisible || current->type == NodeType::HideBattle) &&
+            observed.type == NodeType::Empty && observed.progress.value_or(NodeProgress::Active) == NodeProgress::Active &&
+            (observed.identity_source == "empty_template" || topology_empty_fallback);
         const bool preserve_preview_identity =
             purpose == MapMergePurpose::CurrentObservation && current != nullptr &&
             current->identity_source == "move_preview_ocr" && observed.identity_source.has_value() &&
-            *observed.identity_source == "map_template_fixed_identity";
+            (*observed.identity_source == "map_template_fixed_identity" || hidden_preview_empty_fallback);
         const bool preserve_identity =
             preserve_door_identity || preserve_reliable_identity || current_has_active_observed_identity ||
             preserve_completed_empty || preserve_preview_identity || preserve_battle_stage_name;
@@ -830,9 +836,14 @@ bool completed_node_becomes_empty(bool repeatable, std::optional<bool> explicit_
     return explicit_becomes_empty.value_or(!repeatable);
 }
 
-bool should_apply_revealed_preview_identity(const Node& current, const MovePreview& preview) noexcept
+bool should_apply_preview_identity(const Node& current, const MovePreview& preview) noexcept
 {
-    return preview.identity_revealed && preview.displayed_type != NodeType::Unknown &&
+    // 未知类别尚未揭示具体身份，但已经足以否定空地模板的误匹配；规则推导的据点、
+    // 终点等具体身份仍不能仅凭隐藏预览降级。
+    const bool disproves_empty =
+        current.type == NodeType::Empty &&
+        (preview.displayed_type == NodeType::HideInvisible || preview.displayed_type == NodeType::HideBattle);
+    return (preview.identity_revealed || disproves_empty) && preview.displayed_type != NodeType::Unknown &&
            (!current.identity_revealed || current.type != preview.displayed_type ||
             !preview_identity_names_equal(current.name, preview.displayed_name));
 }

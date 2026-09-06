@@ -3759,9 +3759,9 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
     if (move_preview_updates_target_identity(proposal) && existing != nullptr &&
         preview.displayed_type != NodeType::Unknown) {
         const bool resident_overlay = preview_confirms_roaming_resident(*existing, preview);
+        const bool preview_correction = !resident_overlay && should_apply_preview_identity(*existing, preview);
         const bool identity_conflict =
-            !resident_overlay && existing->identity_revealed && preview.identity_revealed &&
-            existing->type != preview.displayed_type;
+            existing->identity_revealed && preview_correction && existing->type != preview.displayed_type;
         if (identity_conflict) {
             queue_warning(
                 "identity_conflict",
@@ -3781,8 +3781,6 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
         const bool identity_unresolved = existing->type == NodeType::Unknown ||
                                          existing->type == NodeType::HideInvisible ||
                                          existing->type == NodeType::HideBattle;
-        const bool revealed_preview_correction =
-            !resident_overlay && should_apply_revealed_preview_identity(*existing, preview);
         if (resident_overlay && existing->marker_type != "savage") {
             Node updated = *existing;
             updated.marker_type = "savage";
@@ -3800,7 +3798,8 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
                 m_viewport.replace(std::move(observations), m_map.snapshot().revision, m_viewport.viewport_revision());
             }
         }
-        else if ((identity_unresolved || revealed_preview_correction) &&
+        else if (
+            (identity_unresolved || preview_correction) &&
             (existing->type != preview.displayed_type || existing->name != preview.displayed_name ||
              existing->identity_revealed != preview.identity_revealed)) {
             Node updated = *existing;
@@ -3809,18 +3808,20 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
             updated.identity_revealed = preview.identity_revealed;
             updated.identity_state =
                 preview.identity_revealed ? NodeIdentityState::Classified : NodeIdentityState::Hidden;
-            if (preview.identity_revealed) {
-                updated.visually_hidden = false;
-                updated.identity_from_topology = false;
-                updated.identity_source = "move_preview_ocr";
-                updated.detected_by_vision = true;
-            }
-            if (!updated.traversal.repeatable && updated.progress == NodeProgress::Active) {
+            updated.visually_hidden = !preview.identity_revealed;
+            updated.identity_from_topology = false;
+            updated.identity_source = "move_preview_ocr";
+            updated.detected_by_vision = true;
+            if (updated.progress == NodeProgress::Active &&
+                (existing->type != updated.type || !updated.traversal.repeatable)) {
                 updated.traversal = default_traversal_for(updated.type);
             }
             const Node corrected = updated;
             changed = m_map.snapshot().upsert_node(std::move(updated));
             if (changed) {
+                if (identity_conflict && !preview.identity_revealed) {
+                    m_run.revealed_nodes.erase(corrected.id);
+                }
                 if (preview.identity_revealed && m_exploration_notebook.floor() == corrected.floor) {
                     Node noted = corrected;
                     if (const Node* existing_note = m_exploration_notebook.snapshot().find_node(corrected.id);
@@ -4067,17 +4068,6 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
     }
     NodeId page_node = proposal.controllable ? proposal.target : InvalidNodeId;
     const Node* target = page_node == InvalidNodeId ? nullptr : m_map.snapshot().find_node(page_node);
-    if (target != nullptr && (target->type == NodeType::Empty || is_transfer_node(target->type))) {
-        if (!m_transaction->mark_page_resolved(error)) {
-            return false;
-        }
-        m_page_context.reset();
-        if (m_pending_probe_target == proposal.target) {
-            m_pending_probe_target.reset();
-        }
-        queue_decision();
-        return true;
-    }
     if (!proposal.controllable && entered_page.map_visible) {
         // 小八界随机落到林间空地时确认后直接回到地图，没有节点页面需要派发；实际落点由
         // 下一次完整地图观测与 possible_landings 对账。
@@ -4165,6 +4155,19 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
             std::move(evidence));
     }
     PageIdentityResolution identity = resolve_page_identity(map_type, map_name, preview, entered_page);
+    // 地图可能把隐藏节点误判为空地。先使用进入后的页面分类，再判断本次是否没有
+    // 页面需要处理，避免丢弃已经识别出的雇佣、商店或事件页面。
+    if (proposal.controllable && (identity.type == NodeType::Empty || is_transfer_node(identity.type))) {
+        if (!m_transaction->mark_page_resolved(error)) {
+            return false;
+        }
+        m_page_context.reset();
+        if (m_pending_probe_target == proposal.target) {
+            m_pending_probe_target.reset();
+        }
+        queue_decision();
+        return true;
+    }
 
     // 隐藏节点要进来才认得出身份。地图阶段算出的意图是按 hide_invisible 定的，沿用它会把
     // 秘境行商这类节点分流到通用页面。这里按真实身份重新解析一次。

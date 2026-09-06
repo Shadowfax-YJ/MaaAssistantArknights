@@ -447,16 +447,26 @@ NodeDetectionResult NodeDetector::detect(
         // Voronoi 区间分配碎片，再只在同一列内拼框。整行直接拼接会把相邻节点的
         // 两个完整标题（间距常只有 12~16px）错误合成一个字符串，两个节点一起丢失。
         std::vector<std::vector<OcrHit>> column_fragments(static_cast<std::size_t>(columns));
+        std::vector<bool> retry_columns(static_cast<std::size_t>(columns), false);
         for (auto hit : m_bridge.recognize_row(image, row_roi)) {
             output.ocr_diagnostics.push_back(hit);
             if (hit.normalized_text.empty()) {
                 continue;
             }
-            const auto column = node_ocr_fragment_column(
-                hit.center().x,
+            const auto wide_columns = node_ocr_wide_fragment_columns(
+                hit.rect.x,
+                hit.rect.width,
                 output.grid.origin_x,
                 output.grid.spacing_x,
                 columns);
+            if (!wide_columns.empty()) {
+                for (const int column : wide_columns) {
+                    retry_columns[static_cast<std::size_t>(column)] = true;
+                }
+                continue;
+            }
+            const auto column =
+                node_ocr_fragment_column(hit.center().x, output.grid.origin_x, output.grid.spacing_x, columns);
             if (!column.has_value()) {
                 continue;
             }
@@ -465,6 +475,22 @@ NodeDetectionResult NodeDetector::detect(
 
         for (int column = 0; column < columns; ++column) {
             auto& fragments = column_fragments[static_cast<std::size_t>(column)];
+            if (retry_columns[static_cast<std::size_t>(column)]) {
+                // 相邻的“未知的诡秘”“未知的凶戾”等标题可能已被 OCR 检测器合成一个框。
+                // 保留整行的上下文高度，按相邻列中线裁剪后重识别，不能仅拆字符串猜坐标。
+                const double center_x = output.grid.origin_x + column * output.grid.spacing_x;
+                const int column_left = static_cast<int>(std::lround(center_x - 0.5 * output.grid.spacing_x));
+                const int column_right = static_cast<int>(std::lround(center_x + 0.5 * output.grid.spacing_x));
+                const cv::Rect column_roi =
+                    cv::Rect(column_left, row_roi.y, column_right - column_left, row_roi.height) & row_roi;
+                fragments.clear();
+                for (auto hit : m_bridge.recognize_row(image, column_roi)) {
+                    output.ocr_diagnostics.push_back(hit);
+                    if (!hit.normalized_text.empty()) {
+                        fragments.push_back(std::move(hit));
+                    }
+                }
+            }
             std::ranges::sort(fragments, [](const OcrHit& left_hit, const OcrHit& right_hit) {
                 if (left_hit.rect.x != right_hit.rect.x) {
                     return left_hit.rect.x < right_hit.rect.x;

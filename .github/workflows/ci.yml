@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.0.7
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.0.8
 
 on:
   push:
