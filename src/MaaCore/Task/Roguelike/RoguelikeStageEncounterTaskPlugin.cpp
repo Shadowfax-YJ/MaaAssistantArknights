@@ -18,6 +18,7 @@
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
+#include "Vision/Roguelike/BlackFlow/HudOcr.h"
 
 bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
@@ -47,10 +48,6 @@ bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::va
 bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 {
     LogTraceFunction;
-
-    m_lake_fairy_plan.reset();
-    m_lake_fairy_initial_choice_index = 0;
-    m_lake_fairy_unique_choice_selected = false;
 
     const std::string& theme = m_config->get_theme();
     std::vector<std::string> event_names = RoguelikeStageEncounter.get_event_names(theme);
@@ -103,6 +100,11 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 
     // 处理主事件及其链式 next_event
     while (!current_event_name.empty()) {
+        if (current_event_name != blackflow::LakeFairyEventName) {
+            m_lake_fairy_plan.reset();
+            m_lake_fairy_initial_choice_index = 0;
+            m_lake_fairy_unique_choice_selected = false;
+        }
         auto next = handle_single_event(current_event_name);
         if (!next) {
             break;
@@ -612,13 +614,25 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
 std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_blackflow_lake_fairy(
     const Config::RoguelikeEvent& event)
 {
+    // 新事件从开场重新建立计划；EncounterReward 对中途页面的续办保留已完成进度。
+    if (std::ranges::any_of(m_option_list, [](const auto& option) { return option.text == "上前看看"; })) {
+        m_lake_fairy_plan.reset();
+        m_lake_fairy_initial_choice_index = 0;
+        m_lake_fairy_unique_choice_selected = false;
+    }
     if (!m_lake_fairy_plan.has_value()) {
         const std::optional<blackflow::LakeFairyContext> context =
             m_blackflow_encounter_context_provider ? m_blackflow_encounter_context_provider() : std::nullopt;
         if (!context.has_value()) {
             Log.warn("Event: 湖中仙女 | encounter context unavailable; use the conservative branch");
         }
-        const blackflow::LakeFairyContext resolved_context = context.value_or(blackflow::LakeFairyContext {});
+        blackflow::LakeFairyContext resolved_context = context.value_or(blackflow::LakeFairyContext {});
+        const auto current_ingots = blackflow::perception::recognize_ingots(ctrler()->get_image());
+        // 事件内的付费决策必须读取当前 HUD，识别失败也不能沿用旧地图金额。
+        resolved_context.ingots = current_ingots.value_or(0);
+        if (!current_ingots.has_value()) {
+            Log.warn("Event: 湖中仙女 | current ingots unavailable; use the conservative branch");
+        }
         m_lake_fairy_plan = blackflow::make_lake_fairy_choice_plan(resolved_context);
         Log.info(
             "Event: 湖中仙女 | locked branch",
@@ -631,52 +645,27 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_black
             resolved_context.ingots);
     }
 
-    size_t choice = 0;
-    bool selecting_unique_choice = false;
-    if (m_lake_fairy_initial_choice_index < m_lake_fairy_plan->initial_choice_count) {
-        choice = m_lake_fairy_plan->initial_choices[m_lake_fairy_initial_choice_index];
+    std::vector<blackflow::LakeFairyOption> options;
+    for (const auto& option : m_option_list) {
+        options.push_back({ option.enabled, option.text });
     }
-    else {
-        if (m_lake_fairy_unique_choice_selected) {
-            Log.error("Event: 湖中仙女 | options remain after selecting the expected final unique option");
-            return std::nullopt;
-        }
-        const auto enabled_count = std::ranges::count_if(m_option_list, [](const auto& option) {
-            return option.enabled;
-        });
-        if (enabled_count != 1) {
-            Log.error(
-                "Event: 湖中仙女 | expected one enabled follow-up option, got",
-                enabled_count,
-                "from",
-                m_option_list.size(),
-                "recognized options");
-            return std::nullopt;
-        }
-        const auto unique = std::ranges::find_if(m_option_list, [](const auto& option) { return option.enabled; });
-        choice = static_cast<size_t>(std::distance(m_option_list.begin(), unique)) + 1;
-        selecting_unique_choice = true;
-    }
-
-    if (choice == 0 || choice > m_option_list.size() || !m_option_list[choice - 1].enabled) {
-        Log.error(
-            "Event: 湖中仙女 | planned option",
-            choice,
-            "is unavailable among",
-            m_option_list.size(),
-            "recognized options");
+    const auto choice = blackflow::resolve_lake_fairy_choice(
+        *m_lake_fairy_plan,
+        m_lake_fairy_initial_choice_index,
+        m_lake_fairy_unique_choice_selected,
+        options);
+    if (!choice.has_value()) {
+        Log.error("Event: 湖中仙女 | no applicable enabled option on the current page");
         return std::nullopt;
     }
-    if (!select_analyzed_option(choice - 1)) {
+    if (choice->fallback) {
+        Log.warn("Event: 湖中仙女 | planned option unavailable; fallback to", options[choice->index].text);
+    }
+    if (!select_analyzed_option(choice->index)) {
         return std::nullopt;
     }
-
-    if (selecting_unique_choice) {
-        m_lake_fairy_unique_choice_selected = true;
-    }
-    else {
-        ++m_lake_fairy_initial_choice_index;
-    }
+    m_lake_fairy_initial_choice_index = choice->next_initial_choice_index;
+    m_lake_fairy_unique_choice_selected = choice->unique;
     Task.set_task_base("BlackFlow@Roguelike@StageEncounterResult", "BlackFlow@Roguelike@StageEncounterReward");
     return next_event(event.next_event);
 }

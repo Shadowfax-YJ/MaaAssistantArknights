@@ -15,36 +15,37 @@
 #include <meojson/json.hpp>
 
 #include "Task/BattleAutoSkillRules.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowModel.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowObservation.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowOcrFragmentRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowBattleRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowEncounterRules.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowDiagnosticTimeline.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowDiagnosticTimeline.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEncounterRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowFailureRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowInventoryRefresh.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowLifecycleRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowModel.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowObservation.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowOcrFragmentRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowOcrMatcher.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowPlanner.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowPlannerRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowPolicy.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRevealSemantics.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunArchive.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPort.h"
 #include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
-#include "Vision/Roguelike/BlackFlow/IdealDomainStability.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowOptionHeaderRules.h"
-#include "Vision/Roguelike/BlackFlow/NodeOcrRules.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowTopologyMatcher.h"
+#include "Vision/Roguelike/BlackFlow/HudOcrRules.h"
+#include "Vision/Roguelike/BlackFlow/IdealDomainStability.h"
+#include "Vision/Roguelike/BlackFlow/NodeOcrRules.h"
 
 using namespace asst::blackflow;
 using namespace asst::blackflow::perception;
@@ -1157,6 +1158,74 @@ TEST_CASE("BlackFlow Lake Fairy locks the requested option sequence before choos
         REQUIRE(conservative.initial_choices[0] == 1);
         REQUIRE(conservative.initial_choices[1] == 2);
     }
+}
+
+TEST_CASE("BlackFlow Lake Fairy recovers disabled payment and resumed pages")
+{
+    const auto paid = make_lake_fairy_choice_plan({ true, 10 });
+    const auto free = make_lake_fairy_choice_plan({ true, 0 });
+    const std::array<LakeFairyOption, 3> payment { {
+        { false, "拿出诚意" },
+        { true, "休想骗我" },
+        { true, "离开" },
+    } };
+    for (const std::size_t progress : { 0, 1, 2, 3 }) {
+        const auto choice = resolve_lake_fairy_choice(paid, progress, false, payment);
+        REQUIRE(choice.has_value());
+        REQUIRE(choice->index == 1);
+        REQUIRE(choice->fallback);
+        REQUIRE(choice->next_initial_choice_index == paid.initial_choice_count);
+    }
+    const auto resumed = resolve_lake_fairy_choice(free, 0, false, payment);
+    REQUIRE(resumed.has_value());
+    REQUIRE(resumed->index == 1);
+    const std::array<LakeFairyOption, 1> final_page { { { true, "离开" } } };
+    for (const std::size_t progress : { 0, 2, 4 }) {
+        const auto final_choice = resolve_lake_fairy_choice(paid, progress, false, final_page);
+        REQUIRE(final_choice.has_value());
+        REQUIRE(final_choice->unique);
+        REQUIRE(final_choice->index == 0);
+    }
+    REQUIRE_FALSE(resolve_lake_fairy_choice(paid, 4, true, final_page).has_value());
+    const std::array<LakeFairyOption, 2> unknown { { { false, "?" }, { true, "未知选项" } } };
+    REQUIRE_FALSE(resolve_lake_fairy_choice(paid, 1, false, unknown).has_value());
+}
+
+TEST_CASE("BlackFlow Lake Fairy retains the paid sequence across reward interruptions")
+{
+    const auto plan = make_lake_fairy_choice_plan({ true, 3 });
+    const std::array<LakeFairyOption, 2> opening { { { true, "上前看看" }, { true, "不理会她" } } };
+    const auto start = resolve_lake_fairy_choice(plan, 0, false, opening);
+    REQUIRE(start.has_value());
+    REQUIRE(start->index == 0);
+    auto progress = start->next_initial_choice_index;
+    const std::array<LakeFairyOption, 3> payment { {
+        { true, "拿出诚意" },
+        { true, "休想骗我" },
+        { true, "离开" },
+    } };
+    while (progress < plan.initial_choice_count) {
+        const auto choice = resolve_lake_fairy_choice(plan, progress, false, payment);
+        REQUIRE(choice.has_value());
+        REQUIRE(choice->index == 0);
+        REQUIRE_FALSE(choice->fallback);
+        REQUIRE(choice->next_initial_choice_index == progress + 1);
+        progress = choice->next_initial_choice_index;
+    }
+}
+
+TEST_CASE("BlackFlow ingots reject the recorded low confidence extra digit")
+{
+    using asst::blackflow::perception::parse_ingots_ocr;
+    REQUIRE_FALSE(parse_ingots_ocr("10", 0.437960).has_value());
+    REQUIRE(parse_ingots_ocr("0", 0.99) == 0);
+    REQUIRE(parse_ingots_ocr("17", 0.95) == 17);
+    REQUIRE(parse_ingots_ocr("999", 0.9) == 999);
+    REQUIRE_FALSE(parse_ingots_ocr("1000", 0.99).has_value());
+    REQUIRE_FALSE(parse_ingots_ocr("1O", 0.99).has_value());
+    REQUIRE_FALSE(parse_ingots_ocr("-1", 0.99).has_value());
+    REQUIRE_FALSE(parse_ingots_ocr("", 0.99).has_value());
+    REQUIRE_FALSE(parse_ingots_ocr("10", std::numeric_limits<double>::quiet_NaN()).has_value());
 }
 
 TEST_CASE("BlackFlow Healing Heart compares safe tradeoffs by the planner's average lexicographic score")
@@ -9450,4 +9519,77 @@ TEST_CASE("BlackFlow inventory detail opening stops on missing UI or interruptio
         }));
     REQUIRE(clicks == (moving || interrupted ? 0 : 3));
     REQUIRE(waits <= 24);
+}
+
+TEST_CASE("BlackFlow inventory reset confirms the left edge after an incomplete four-swipe return")
+{
+    int swipes = 0;
+    int offset = 95 + 4 * 430;
+    int previous = offset;
+    REQUIRE(scroll_inventory_to_start(
+        [&] {
+            ++swipes;
+            offset = std::max(0, offset - 430);
+            return true;
+        },
+        [&] {
+            const bool unchanged = offset == previous;
+            previous = offset;
+            return unchanged;
+        }));
+    REQUIRE(offset == 0);
+    REQUIRE(swipes == 7);
+}
+
+TEST_CASE("BlackFlow inventory reset is bounded and requires consecutive stationary observations")
+{
+    int swipes = 0;
+    bool interrupted = false;
+    SECTION("moving frames never confirm the edge")
+    {
+    }
+    SECTION("interruption ends the reset")
+    {
+        interrupted = true;
+    }
+    REQUIRE_FALSE(scroll_inventory_to_start(
+        [&] {
+            ++swipes;
+            return !interrupted;
+        },
+        [&] { return swipes % 2 == 0; }));
+    REQUIRE(swipes == (interrupted ? 1 : 10));
+}
+
+TEST_CASE("BlackFlow inventory relocates a clipped target before clicking")
+{
+    bool target_visible = false;
+    bool popup_visible = false;
+    int clicks = 0;
+    int relocations = 0;
+    int waits = 0;
+    REQUIRE(open_inventory_part_detail(
+        [&]() -> std::optional<asst::Rect> {
+            return target_visible ? std::optional { asst::Rect { 393, 259, 70, 20 } } : std::nullopt;
+        },
+        [&](const asst::Rect& rect) {
+            REQUIRE(target_visible);
+            REQUIRE(rect.y < 259);
+            ++clicks;
+            popup_visible = true;
+            return true;
+        },
+        [&] { return popup_visible; },
+        [&] {
+            ++waits;
+            return true;
+        },
+        [&] {
+            ++relocations;
+            target_visible = true;
+            return true;
+        }));
+    REQUIRE(relocations == 1);
+    REQUIRE(clicks == 1);
+    REQUIRE(waits >= 12);
 }

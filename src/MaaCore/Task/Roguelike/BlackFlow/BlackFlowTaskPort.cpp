@@ -25,6 +25,7 @@
 #include "BlackFlowSession.h"
 
 #include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
+#include "Vision/Roguelike/BlackFlow/HudOcr.h"
 
 #include "Config/Roguelike/BlackFlow/BlackFlowNodeExecutionConfig.h"
 #include "Config/Roguelike/RoguelikeCopilotConfig.h"
@@ -43,7 +44,6 @@ namespace asst::blackflow
 namespace
 {
 constexpr std::string_view CurrentActionPointsTask = "BlackFlow@Roguelike@CurrentActionPoints";
-constexpr std::string_view CurrentIngotsTask = "BlackFlow@Roguelike@CurrentIngots";
 constexpr std::string_view FloorFiveViewportSwipeLeftTask = "BlackFlow@Roguelike@MapViewportFloor5SwipeLeft";
 constexpr std::string_view MapCaptureStabilityWaitTask = "BlackFlow@Roguelike@MapCaptureStabilityWait";
 constexpr std::string_view MapCapturePopupDrainTask = "BlackFlow@Roguelike@MapCapturePopupDrain";
@@ -1050,12 +1050,9 @@ bool BlackFlowTaskPort::refresh(
             return false;
         }
         const auto action_points = recognize_action_points(image);
-        const auto ingots = recognize_integer(image, CurrentIngotsTask);
+        const auto ingots = perception::recognize_ingots(image);
         const auto movement = recognize_loaded_movement(image);
-        next.run = make_map_hud_run_observation(
-            action_points,
-            ingots.has_value() && *ingots >= 0 && *ingots <= 999 ? ingots : std::nullopt,
-            movement);
+        next.run = make_map_hud_run_observation(action_points, ingots, movement);
         if (action_points.has_value()) {
             next.observation.hud_action_points = *action_points;
         }
@@ -1421,12 +1418,37 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
     };
 
     const auto reset_to_start = [&]() {
-        for (int swipe = 0; swipe < InventoryMaximumSwipes; ++swipe) {
-            if (!run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns")) {
-                return false;
-            }
+        cv::Mat previous = m_task_context->capture();
+        const bool reset = scroll_inventory_to_start(
+            [&] { return run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns"); },
+            [&] {
+                cv::Mat current = m_task_context->capture();
+                bool unchanged = false;
+                if (!previous.empty() && !current.empty() && previous.size() == current.size() &&
+                    previous.type() == current.type()) {
+                    const auto before = inventory_card_region(previous);
+                    const auto after = inventory_card_region(current);
+                    // 只比较名称行，避开图标光效。三行都不再移动才算手势到头。
+                    unchanged = !before.empty() && !after.empty();
+                    for (const int row : { 120, 282, 444 }) {
+                        if (before.rows < row + 35 || after.rows < row + 35) {
+                            unchanged = false;
+                            break;
+                        }
+                        const auto before_names = before.rowRange(row, row + 35);
+                        const auto after_names = after.rowRange(row, row + 35);
+                        const double denominator = static_cast<double>(after_names.total() * after_names.channels());
+                        unchanged = unchanged && cv::norm(before_names, after_names, cv::NORM_L1) / denominator <=
+                                                     InventoryUnchangedFrameMaximumDifference;
+                    }
+                }
+                previous = std::move(current);
+                return unchanged;
+            });
+        if (!reset) {
+            set_error(error, "parts-box could not confirm the left edge after scrolling");
         }
-        return true;
+        return reset;
     };
 
     bool first_scan_after_open = true;
@@ -1564,21 +1586,41 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                     center_distance,
                 };
             });
-            if (found != visible.end() && found->name == selected_name) {
+            if (found != visible.end() && found->name == selected_name &&
+                (!selected_remaining_charges.has_value() || found->remaining_charges == selected_remaining_charges)) {
                 return found->name_rect;
             }
             return std::nullopt;
         };
+        const auto relocate_selected = [&]() {
+            Log.warn(
+                "BlackFlow relocating missing inventory discard target",
+                selected_name,
+                "scan page",
+                selected_page);
+            if (!reset_to_start()) {
+                return false;
+            }
+            for (int page = 0; page <= InventoryMaximumSwipes; ++page) {
+                if (page > 0 && !run_task(InventorySwipeTask, "parts-box could not relocate the discard target")) {
+                    return false;
+                }
+                if (locate_selected().has_value()) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        Log.info("BlackFlow opening inventory discard target", selected_name, "scan page", selected_page);
         if (!open_inventory_part_detail(
                 locate_selected,
                 [&](const Rect& rect) { return m_task_context->click(rect); },
                 [&]() {
                     return recognizes_text_fragment(m_task_context->capture(), InventoryDiscardButtonTask, "丢弃");
                 },
-                [&]() {
-                    return run_task(InventoryDiscardDetailWaitTask, "parts-box detail observation wait failed");
-                })) {
-            set_error(error, "selected parts-box item detail did not become ready after stable selection and retries");
+                [&]() { return run_task(InventoryDiscardDetailWaitTask, "parts-box detail observation wait failed"); },
+                relocate_selected)) {
+            set_error(error, "could not locate a stable parts-box discard target or open its detail after retries");
             return false;
         }
         Log.info(

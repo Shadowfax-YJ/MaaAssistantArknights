@@ -70,6 +70,24 @@ enum class InventoryScanAction
 inline constexpr int InventoryMaximumSwipes = 4;
 inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
 
+// 固定次数的往返手势并不互相抵消。到达左端后，还需连续两次手势不再移动列表。
+template <typename Swipe, typename Unchanged>
+[[nodiscard]] bool scroll_inventory_to_start(Swipe swipe, Unchanged unchanged)
+{
+    constexpr int MaximumResetSwipes = InventoryMaximumSwipes * 2 + 2;
+    int stationary_swipes = 0;
+    for (int attempt = 0; attempt < MaximumResetSwipes; ++attempt) {
+        if (!swipe()) {
+            return false;
+        }
+        stationary_swipes = unchanged() ? stationary_swipes + 1 : 0;
+        if (attempt + 1 >= InventoryMaximumSwipes && stationary_swipes >= 2) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // 到达最右端后游戏列表会回弹，最右名称的中心会明显向左退。
 // 这一帧仍与上一帧有较大像素差，不能只靠“画面未变”判定结束。
 [[nodiscard]] constexpr bool inventory_scan_rebounded(
@@ -130,8 +148,8 @@ inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
 }
 
 // 详情交互的 I/O 由任务端口提供，便于回放滑动帧、丢失点击和延迟弹层。
-template <typename Locate, typename Click, typename Ready, typename Wait>
-[[nodiscard]] bool open_inventory_part_detail(Locate locate, Click click, Ready ready, Wait wait)
+template <typename Locate, typename Click, typename Ready, typename Wait, typename Relocate>
+[[nodiscard]] bool open_inventory_part_detail(Locate locate, Click click, Ready ready, Wait wait, Relocate relocate)
 {
     constexpr int MaximumClicks = 3;
     constexpr int StabilitySamples = 12;
@@ -155,7 +173,13 @@ template <typename Locate, typename Click, typename Ready, typename Wait>
                 return false;
             }
         }
-        if (!stable.has_value() || !click(inventory_part_detail_click_rect(*stable))) {
+        if (!stable.has_value()) {
+            if (attempt + 1 < MaximumClicks && relocate()) {
+                continue;
+            }
+            return false;
+        }
+        if (!click(inventory_part_detail_click_rect(*stable))) {
             return false;
         }
         for (int sample = 0; sample < PopupSamples; ++sample) {
@@ -169,6 +193,12 @@ template <typename Locate, typename Click, typename Ready, typename Wait>
         // 弹层未出现时重新取稳定的卡片坐标，最多重试三次真实点击。
     }
     return false;
+}
+
+template <typename Locate, typename Click, typename Ready, typename Wait>
+[[nodiscard]] bool open_inventory_part_detail(Locate locate, Click click, Ready ready, Wait wait)
+{
+    return open_inventory_part_detail(locate, click, ready, wait, [] { return false; });
 }
 
 // 零件箱每次打开都默认位于最左端。先扫当前可见列，之后每次向右推进一列，

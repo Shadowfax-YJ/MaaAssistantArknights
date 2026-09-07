@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -107,6 +108,73 @@ struct LakeFairyChoicePlan
     std::array<std::size_t, 4> initial_choices {};
     std::size_t initial_choice_count = 0;
 };
+
+struct LakeFairyOption
+{
+    bool enabled = false;
+    std::string_view text;
+};
+
+struct LakeFairyChoice
+{
+    std::size_t index = 0;
+    std::size_t next_initial_choice_index = 0;
+    bool unique = false;
+    bool fallback = false;
+};
+
+// 序列保留原有策略，但恢复到中途页面时必须以当前选项为准。
+// 返回的进度只能在点击成功后提交，避免失败重试跳过选项。
+[[nodiscard]] inline std::optional<LakeFairyChoice> resolve_lake_fairy_choice(
+    const LakeFairyChoicePlan& plan,
+    std::size_t initial_choice_index,
+    bool unique_choice_selected,
+    std::span<const LakeFairyOption> options)
+{
+    const auto find_option = [&](std::string_view text, bool require_enabled) -> std::optional<std::size_t> {
+        for (std::size_t index = 0; index < options.size(); ++index) {
+            if (options[index].text == text && (!require_enabled || options[index].enabled)) {
+                return index;
+            }
+        }
+        return std::nullopt;
+    };
+    if (const auto opening = find_option("上前看看", true)) {
+        return LakeFairyChoice { *opening, 1 };
+    }
+    if (unique_choice_selected) {
+        return std::nullopt;
+    }
+    // 奖励弹窗可能把最后一页交回新的插件调用。
+    if (options.size() == 1 && options.front().enabled) {
+        return LakeFairyChoice { 0, plan.initial_choice_count, true };
+    }
+    // EncounterReward 续办时插件可能从付款页重新启动，此时开场选项已经完成。
+    if (find_option("拿出诚意", false) || find_option("休想骗我", false)) {
+        initial_choice_index = std::max(initial_choice_index, std::size_t { 1 });
+    }
+    if (initial_choice_index < plan.initial_choice_count) {
+        const auto choice = plan.initial_choices[initial_choice_index];
+        if (choice > 0 && choice <= options.size() && options[choice - 1].enabled) {
+            return LakeFairyChoice { choice - 1, initial_choice_index + 1 };
+        }
+    }
+    else if (std::ranges::count_if(options, [](const auto& o) { return o.enabled; }) == 1) {
+        const auto unique = std::ranges::find_if(options, [](const auto& o) { return o.enabled; });
+        return LakeFairyChoice {
+            static_cast<std::size_t>(std::distance(options.begin(), unique)),
+            initial_choice_index,
+            true,
+        };
+    }
+    // 没有足够源石锭时回到原保守分支；只选择已确认的无代价选项。
+    for (const auto fallback : { "休想骗我", "离开", "不理会她" }) {
+        if (const auto choice = find_option(fallback, true)) {
+            return LakeFairyChoice { *choice, plan.initial_choice_count, false, true };
+        }
+    }
+    return std::nullopt;
+}
 
 struct LinkedEncounterRouteValue
 {
