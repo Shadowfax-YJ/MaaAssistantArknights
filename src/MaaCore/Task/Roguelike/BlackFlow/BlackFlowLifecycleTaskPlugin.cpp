@@ -36,7 +36,7 @@ bool configure_recovery_retry_action(const std::string& target)
             Log.error("BlackFlow recovery retry target does not exist", target);
             return false;
         }
-        successor = target;
+        successor = recovery_retry_task(target);
         if (task->max_times > 0 && task->max_times < std::numeric_limits<int>::max()) {
             reduce_other_times.emplace_back(target + "*" + std::to_string(task->max_times));
         }
@@ -308,15 +308,19 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             return true;
         }
         Log.warn(
-            "BlackFlow transient UI failure will retry the same action after one minute",
-            recovery_retry_target);
+            "BlackFlow transient UI failure will retry after one minute",
+            "failed task",
+            recovery_retry_target,
+            "resume task",
+            recovery_retry_task(recovery_retry_target));
         record_run_event(
             RunLogLevel::Info,
             "recovery.retry_scheduled",
             "waiting",
-            "retry_same_action",
+            recovery_retry_task(recovery_retry_target) == recovery_retry_target ? "retry_same_action" : "recheck_page",
             json::object {
                 { "task", recovery_retry_target },
+                { "resume_task", std::string(recovery_retry_task(recovery_retry_target)) },
                 { "delay_ms", 60'000 },
             },
             "BlackFlowLifecycle");

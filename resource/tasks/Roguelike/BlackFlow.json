@@ -2239,6 +2239,7 @@
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
+            "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmObserve",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
@@ -2264,18 +2265,32 @@
     "BlackFlow@Roguelike@MovePreviewConfirmExceeded": {
         "algorithm": "JustReturn"
     },
+    "BlackFlow@Roguelike@MovePreviewConfirm-Loading": {
+        "Doc": "服务器尚在提交移动时只等待；出发按钮仍可见不能算一次点击失败，网络恢复后继续本次移动确认。",
+        "baseTask": "LoadingText",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
+            "BlackFlow@Roguelike@MovePreviewConfirmObserve",
+            "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
+        ]
+    },
     "BlackFlow@Roguelike@MovePreviewConfirmObserve": {
         "Doc": "观察期间只识别、不点击；跨区域二次确认优先处理，按钮连续存在约两秒后才回到真实点击任务。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
         "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
         "action": "DoNothing",
         "next": [
+            "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "#self",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
         ],
         "maxTimes": 2,
         "exceededNext": [
+            "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
             "BlackFlow@Roguelike@MovePreviewConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
         ]
@@ -2287,6 +2302,7 @@
         "postDelay": 500,
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirmObserve*2"],
         "next": [
+            "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmObserve",
             "BlackFlow@Roguelike@MovePreviewConfirmSucceeded"
@@ -3039,7 +3055,13 @@
         "template": "BlackFlow@Roguelike@Continue.png",
         "maxTimes": 3,
         "postDelay": 500,
-        "next": ["#self", "BlackFlow@Roguelike@RecoverMap-Dismiss"],
+        "next": [
+            "BlackFlow@Roguelike@RecoverMap-Loading",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@RecoverMap-OnMap",
+            "#self",
+            "BlackFlow@Roguelike@RecoverMap-Dismiss"
+        ],
         "onErrorNext": ["BlackFlow@Roguelike@RecoverMapFailed"],
         "exceededNext": ["BlackFlow@Roguelike@RecoverMapFailed"],
         "reduceOtherTimes": ["BlackFlow@Roguelike@RecoverMap*3"]
@@ -3050,22 +3072,48 @@
         "specificRect": [1, 154, 45, 261],
         "maxTimes": 5,
         "postDelay": 500,
-        "next": ["BlackFlow@Roguelike@RecoverMap-OnMap", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@RecoverMap-Loading",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@RecoverMap-OnMap",
+            "#self"
+        ],
         "exceededNext": ["BlackFlow@Roguelike@RecoverMapFailed"]
     },
     "BlackFlow@Roguelike@RecoverMap-Enter": {
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@RecoverMap-Loading",
             "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@RecoverMap-OnMap",
+            "BlackFlow@Roguelike@RecoverMap-Continue",
             "BlackFlow@Roguelike@RecoverMap"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@RecoverMap*3",
+            "BlackFlow@Roguelike@RecoverMap-Exit*3",
+            "BlackFlow@Roguelike@RecoverMap-Continue*3",
+            "BlackFlow@Roguelike@RecoverMap-Dismiss*5"
         ]
+    },
+    "BlackFlow@Roguelike@RecoverMap-Loading": {
+        "baseTask": "LoadingText",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "next": ["#self", "BlackFlow@Roguelike@RecoverMap-Enter"]
     },
     "BlackFlow@Roguelike@RecoverMap-Exit": {
         "baseTask": "BlackFlow@Roguelike@ExitThenAbandon",
         "template": "Roguelike@ExitThenAbandon.png",
         "roi": [0, 0, 1280, 720],
         "maxTimes": 3,
-        "next": ["BlackFlow@Roguelike@RecoverMap-Continue", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@RecoverMap-Loading",
+            "BlackFlow@Roguelike@ResumeEncounterPage",
+            "BlackFlow@Roguelike@RecoverMap-Continue",
+            "BlackFlow@Roguelike@RecoverMap-OnMap",
+            "#self"
+        ],
         "onErrorNext": ["BlackFlow@Roguelike@RecoverMapFailed"],
         "exceededNext": ["BlackFlow@Roguelike@RecoverMapFailed"]
     },
@@ -3086,7 +3134,7 @@
         ]
     },
     "BlackFlow@Roguelike@RecoverMapFailed": {
-        "Doc": "地图返回链耗尽同样视为临时界面故障；等待一分钟后重试实际失败的 RecoverMap 动作，不结束当前探索。",
+        "Doc": "地图返回链耗尽同样视为临时界面故障；等待一分钟后回到 RecoverMap-Enter 识别实际页面，避免网络恢复后已经进入事件却仍重复点击空白。",
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@RecoveryRetryWait"]
     },
@@ -3096,13 +3144,13 @@
         "next": ["BlackFlow@Roguelike@RecoveryRetryWait"]
     },
     "BlackFlow@Roguelike@RecoveryRetryWait": {
-        "Doc": "等待一分钟，让临时 ADB 或模拟器输入异常自行恢复；之后不做全局页面识别，直接执行 RecoveryRetryAction。",
+        "Doc": "等待一分钟，让临时 ADB 或模拟器输入异常自行恢复；之后执行 RecoveryRetryAction。地图恢复重新识别当前页面，其他动作仍原位重试。",
         "algorithm": "JustReturn",
         "postDelay": 60000,
         "next": ["BlackFlow@Roguelike@RecoveryRetryAction"]
     },
     "BlackFlow@Roguelike@RecoveryRetryAction": {
-        "Doc": "生命周期插件在等待开始前把本任务的 next 动态改为一分钟前实际失败的动作，并同步重置该动作已耗尽的执行次数。",
+        "Doc": "生命周期插件在等待开始前动态设置重试入口，并重置失败动作的执行次数；地图恢复回到 RecoverMap-Enter 重新识别页面，其他动作仍重试原动作。",
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@StrategyTerminated"]
     },

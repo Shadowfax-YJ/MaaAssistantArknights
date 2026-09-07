@@ -2098,6 +2098,7 @@ TEST_CASE("BlackFlow move confirmation handles the leave-region confirmation dia
     REQUIRE(
         observation.get("exceededNext", std::vector<std::string> {}) ==
         std::vector<std::string> {
+            "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
             "BlackFlow@Roguelike@MovePreviewConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce",
         });
@@ -2592,6 +2593,68 @@ TEST_CASE("BlackFlow open encounter pages take precedence over the visible floor
             "BlackFlow@Roguelike@MovePreviewCannotEnter.png");
     REQUIRE(resume_blocked.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@CancelNodeSelection" });
+}
+
+TEST_CASE("BlackFlow map recovery resumes an encounter that opened after a network delay")
+{
+    REQUIRE(recovery_retry_task("BlackFlow@Roguelike@RecoverMap-Dismiss") == "BlackFlow@Roguelike@RecoverMap-Enter");
+    REQUIRE(recovery_retry_task("BlackFlow@Roguelike@RecoverMap-Exit") == "BlackFlow@Roguelike@RecoverMap-Enter");
+    REQUIRE(
+        recovery_retry_task("BlackFlow@Roguelike@StageEncounterJudgeClick") ==
+        "BlackFlow@Roguelike@StageEncounterJudgeClick");
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    // 2026-09-07 22:22:44 点击继续后进入事件；下一次恢复不得只点空白和检查地图。
+    for (const auto source : { "RecoverMap-Continue", "RecoverMap-Dismiss", "RecoverMap-Exit" }) {
+        const auto next =
+            tasks->at(std::string("BlackFlow@Roguelike@") + source).get("next", std::vector<std::string> {});
+        const auto resume = std::ranges::find(next, "BlackFlow@Roguelike@ResumeEncounterPage");
+        REQUIRE(resume != next.end());
+        REQUIRE(resume < std::ranges::find(next, "#self"));
+    }
+    const auto& loading = tasks->at("BlackFlow@Roguelike@RecoverMap-Loading");
+    REQUIRE(loading.get("action", std::string {}) == "DoNothing");
+    const auto dismiss = tasks->at("BlackFlow@Roguelike@RecoverMap-Dismiss").get("next", std::vector<std::string> {});
+    REQUIRE(dismiss.front() == "BlackFlow@Roguelike@RecoverMap-Loading");
+    for (const auto source : { "MovePreviewConfirm", "MovePreviewConfirmObserve", "MovePreviewConfirmAbsentOnce" }) {
+        const auto next =
+            tasks->at(std::string("BlackFlow@Roguelike@") + source).get("next", std::vector<std::string> {});
+        REQUIRE(next.front() == "BlackFlow@Roguelike@MovePreviewConfirm-Loading");
+    }
+    const auto& confirm_loading = tasks->at("BlackFlow@Roguelike@MovePreviewConfirm-Loading");
+    REQUIRE(confirm_loading.get("action", std::string {}) == "DoNothing");
+    REQUIRE(confirm_loading.get("next", std::vector<std::string> {}).front() == "#self");
+}
+
+TEST_CASE("BlackFlow inventory defers clipped names and does not count a partially shifted column twice")
+{
+    // 2026-09-07 23:47:32：试作外骨[1204,257,73,23]贴住右侧 OCR 边界，不能定位星级。
+    REQUIRE_FALSE(inventory_name_is_complete({ 1204, 257, 73, 23 }));
+    REQUIRE_FALSE(inventory_name_is_complete({ 348, 258, 97, 22 }));
+    REQUIRE(inventory_name_is_complete({ 807, 257, 90, 23 }));
+    REQUIRE_FALSE(inventory_name_is_complete({ 2408, 514, 146, 46 }, 2560, 1440));
+
+    const std::vector<InventoryColumnItem> before {
+        { MovementKind::M04, 1, { 832, 257, 55, 23 } }, { MovementKind::M08, 1, { 369, 259, 118, 19 } },
+        { MovementKind::M01, 1, { 392, 420, 71, 20 } }, { MovementKind::M03, 2, { 823, 419, 72, 23 } },
+        { MovementKind::M04, 1, { 400, 580, 55, 23 } }, { MovementKind::M10, 2, { 807, 582, 104, 19 } },
+    };
+    const std::vector<InventoryColumnItem> shifted {
+        { MovementKind::M04, 1, { 789, 259, 55, 20 } },
+        { MovementKind::M03, 2, { 781, 420, 71, 20 } },
+        { MovementKind::M10, 2, { 765, 582, 104, 19 } },
+    };
+    REQUIRE(inventory_column_only_shifted_partially(before, shifted));
+    const std::vector<InventoryColumnItem> next_column {
+        { MovementKind::M06, 2, { 780, 257, 90, 23 } },
+    };
+    REQUIRE_FALSE(inventory_column_only_shifted_partially(shifted, next_column));
+    // 完整推进一列后，同名同次数、相同位置的是新的独立实例，必须计入。
+    REQUIRE_FALSE(inventory_column_only_shifted_partially(shifted, shifted));
+    auto different = shifted;
+    different.front().remaining_uses = 0;
+    REQUIRE_FALSE(inventory_column_only_shifted_partially(before, different));
 }
 
 TEST_CASE("BlackFlow overload cleanup keeps the configured cross-category discard order")
@@ -3554,7 +3617,10 @@ TEST_CASE("BlackFlow failed encounter choices resume the event instead of openin
     const auto recover_enter_next =
         tasks->at("BlackFlow@Roguelike@RecoverMap-Enter").get("next", std::vector<std::string> {});
     REQUIRE_FALSE(recover_enter_next.empty());
-    REQUIRE(recover_enter_next.front() == "BlackFlow@Roguelike@ResumeEncounterPage");
+    REQUIRE(recover_enter_next.front() == "BlackFlow@Roguelike@RecoverMap-Loading");
+    REQUIRE(
+        std::ranges::find(recover_enter_next, "BlackFlow@Roguelike@ResumeEncounterPage") <
+        std::ranges::find(recover_enter_next, "BlackFlow@Roguelike@RecoverMap"));
     REQUIRE(std::ranges::find(recover_enter_next, "BlackFlow@Roguelike@RecoverMap") != recover_enter_next.end());
 }
 

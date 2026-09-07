@@ -105,6 +105,51 @@ struct MovementInventoryStarSlot
         const Rect& name_rect,
         int maximum_uses);
 
+// 名称贴着 OCR 区域边缘时可能只剩前/后几个字，即使模糊匹配成功也不能用来定位星星。
+[[nodiscard]] inline bool
+    inventory_name_is_complete(const Rect& name_rect, int image_width = 1280, int image_height = 720) noexcept
+{
+    const double scale_x = static_cast<double>(image_width) / 1280.0;
+    const double scale_y = static_cast<double>(image_height) / 720.0;
+    return name_rect.width > 0 && name_rect.height > 0 && name_rect.x > static_cast<int>(std::lround(350 * scale_x)) &&
+           name_rect.x + name_rect.width < static_cast<int>(std::lround(1276 * scale_x)) &&
+           name_rect.y > static_cast<int>(std::lround(134 * scale_y)) &&
+           name_rect.y + name_rect.height < static_cast<int>(std::lround(625 * scale_y));
+}
+
+struct InventoryColumnItem
+{
+    MovementKind movement;
+    int remaining_uses;
+    Rect name_rect;
+};
+
+// 手势只挪动几十像素时，最右侧完整列仍是上一屏的同一列。此时不能重复记账；
+// 下一屏同名同次数的独立实例通常回到相同列位置，不能仅凭名称去重。
+[[nodiscard]] inline bool inventory_column_only_shifted_partially(
+    std::span<const InventoryColumnItem> previous,
+    std::span<const InventoryColumnItem> current) noexcept
+{
+    if (current.empty()) {
+        return false;
+    }
+    std::optional<int> column_shift;
+    for (const auto& item : current) {
+        const auto match = std::ranges::find_if(previous, [&](const auto& before) {
+            const int shift =
+                before.name_rect.x + before.name_rect.width / 2 - item.name_rect.x - item.name_rect.width / 2;
+            return before.movement == item.movement && before.remaining_uses == item.remaining_uses &&
+                   std::abs(before.name_rect.y - item.name_rect.y) <= 6 && shift > 16 && shift < 216 &&
+                   (!column_shift.has_value() || std::abs(shift - *column_shift) <= 6);
+        });
+        if (match == previous.end()) {
+            return false;
+        }
+        column_shift = match->name_rect.x + match->name_rect.width / 2 - item.name_rect.x - item.name_rect.width / 2;
+    }
+    return true;
+}
+
 inline constexpr int MovementPanelMaximumSwipes = 8;
 
 // 规划目标来自进入节点时的零件箱扫描，是选择面板搜索的权威信源。面板连续几屏
