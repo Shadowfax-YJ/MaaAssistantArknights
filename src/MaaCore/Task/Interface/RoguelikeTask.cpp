@@ -135,9 +135,42 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         std::make_shared<blackflow::BlackFlowTaskPort>(callback, inst, TaskType, m_blackflow_map_source_ptr);
     m_blackflow_session_ptr = std::make_shared<blackflow::BlackFlowSession>();
     m_blackflow_port_ptr->set_collection_popup_session(m_blackflow_session_ptr);
+    encounter_plugin->set_blackflow_portal_handlers(
+        [weak = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
+            const std::vector<std::string>& prices) {
+            const auto session = weak.lock();
+            return session ? session->portal_choice(prices) : std::nullopt;
+        },
+        [weak = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string item) {
+            if (const auto session = weak.lock()) {
+                session->record_portal_choice(std::move(item));
+            }
+        });
+    encounter_plugin->set_blackflow_sacrifice_context_provider(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+             m_blackflow_session_ptr)]() -> std::optional<blackflow::SacrificeContext> {
+            const auto session = weak_session.lock();
+            if (session == nullptr || session->profile() != "automation_collection" ||
+                !session->page_context().has_value()) {
+                return std::nullopt;
+            }
+            return blackflow::SacrificeContext { session->run_revision(), session->page_context()->page_revision };
+        });
+    encounter_plugin->set_event_detail_observer(
+        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
+            std::string_view event,
+            std::string_view phase,
+            json::object details,
+            const cv::Mat& image) {
+            if (const auto port = weak_port.lock(); port != nullptr) {
+                std::string error;
+                if (!port->capture_event_detail(event, phase, std::move(details), image, &error)) {
+                    Log.warn("BlackFlow encounter detail capture failed", event, phase, error);
+                }
+            }
+        });
     m_custom_ptr->set_blackflow_start_reward_observer(
-        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
-            std::string_view reward) {
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view reward) {
             if (const auto session = weak_session.lock(); session != nullptr) {
                 session->set_start_reward(std::string(reward));
             }
@@ -164,6 +197,45 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             std::string_view event_name) -> std::optional<std::size_t> {
             const auto session = weak_session.lock();
             return session == nullptr ? std::nullopt : session->preferred_encounter_choice(event_name);
+        });
+    encounter_plugin->set_blackflow_expedition_context_provider(
+        [weak_config = std::weak_ptr<RoguelikeConfig>(m_config_ptr),
+         weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+             m_blackflow_session_ptr)]() -> std::optional<blackflow::ExpeditionContext> {
+            const auto config = weak_config.lock();
+            const auto session = weak_session.lock();
+            if (config == nullptr || session == nullptr || session->profile() != "automation_collection" ||
+                !session->page_context().has_value()) {
+                return std::nullopt;
+            }
+            blackflow::ExpeditionContext context {
+                .run_revision = session->run_revision(),
+                .page_revision = session->page_context()->page_revision,
+                .floor = session->run().floor,
+            };
+            if (context.floor != 2) {
+                return context;
+            }
+            const auto& operators = config->status().opers;
+            const auto core = operators.find(std::string(blackflow::AutomationCollectionCoreOperator));
+            const std::optional<int> core_elite =
+                core == operators.end() ? std::nullopt : std::optional<int>(core->second.elite);
+            const bool battle_free_exit = core_elite.has_value() && *core_elite < 2 &&
+                                          session->page_context()->node_type == blackflow::NodeType::Expedition &&
+                                          session->can_dispatch_expedition_core();
+            context.operators = blackflow::expedition_eligible_operators(
+                context.floor,
+                operators.contains(std::string(blackflow::AutomationCollectionDefenderOperator)),
+                operators.contains(std::string(blackflow::AutomationCollectionSpecialistOperator)),
+                core_elite,
+                battle_free_exit);
+            return context;
+        });
+    encounter_plugin->set_blackflow_expedition_dispatch_observer(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view name) {
+            if (const auto session = weak_session.lock(); session != nullptr) {
+                session->record_expedition_dispatch(name);
+            }
         });
     encounter_plugin->set_blackflow_encounter_choice_order_provider(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](

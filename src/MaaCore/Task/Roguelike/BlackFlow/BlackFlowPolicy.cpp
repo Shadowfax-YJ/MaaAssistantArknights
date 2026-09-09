@@ -961,12 +961,12 @@ PolicyDecision PolicyExecutor::choose(
         }
         if (maximize_effective_nodes) {
             add_score(
-                -candidate->effective_node_count,
+                -income_order_score(candidate->effective_node_count),
                 DecisionReasonCategory::Development,
                 "effective_node_count",
                 {},
-                -expected_sum(candidate->effective_node_count, [](const PolicyRouteOutcome& outcome) {
-                    return outcome.effective_node_count;
+                -expected_sum(income_order_score(candidate->effective_node_count), [](const PolicyRouteOutcome& outcome) {
+                    return income_order_score(outcome.effective_node_count);
                 }));
         }
         append_milestone_groups(MilestoneKind::Preferred, DecisionReasonCategory::PreferredGoal);
@@ -1118,6 +1118,15 @@ PolicyDecision PolicyExecutor::choose(
             }
             score_labels.emplace_back(to_string(origin.category));
         }
+        NodeIncome expected_income = entry.candidate->effective_node_income;
+        if (!entry.candidate->route_outcomes.empty()) {
+            expected_income = {};
+            for (const PolicyRouteOutcome& outcome : entry.candidate->route_outcomes) {
+                expected_income += outcome.effective_node_income;
+            }
+            expected_income.exploration /= static_cast<double>(entry.route_outcome_count);
+            expected_income.development /= static_cast<double>(entry.route_outcome_count);
+        }
         decision.candidate_summaries.emplace_back(
             PolicyCandidateSummary {
                 entry.candidate->move,
@@ -1135,6 +1144,8 @@ PolicyDecision PolicyExecutor::choose(
                 entry.candidate->revealed_nodes,
                 entry.expected_score_sum,
                 entry.route_outcome_count,
+                entry.candidate->effective_node_income,
+                expected_income,
             });
     }
     for (std::size_t index = 1; index < std::min<std::size_t>(ranked.size(), 3); ++index) {

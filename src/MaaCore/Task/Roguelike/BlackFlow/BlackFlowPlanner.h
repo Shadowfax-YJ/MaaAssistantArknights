@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -22,6 +23,17 @@ struct RouteSearchOptions
     bool safety_resource_dominance = true;
 };
 
+struct RouteContinuationValue
+{
+    bool safe = true;
+    int revealed_delta = 0;
+    double effective_delta = 0;
+    NodeIncome income_delta;
+};
+
+using RouteContinuationEvaluator =
+    std::function<RouteContinuationValue(const std::array<int, ProcessingMovementSlotCount>&)>;
+
 struct BlackFlowPlanRequest
 {
     const MapSnapshot* map = nullptr;
@@ -41,6 +53,8 @@ struct BlackFlowPlanRequest
     bool no_AP_is_terminal = false;
     const std::unordered_set<std::string>* forbidden_actions = nullptr;
     std::unordered_set<NodeType> forbidden_node_types;
+    // 只豁免当前帧已确认的居民落点；下一步居民可能移动，必须重新观测才可再次豁免。
+    bool allow_initial_roaming_residents = false;
     // 只约束当前实际要执行的第一步。用于会在地图上移动的节点标记：后续模拟时
     // 标记位置已经不可靠，不能像固定节点类型一样封死整条路线。
     std::unordered_set<std::string> root_forbidden_marker_types;
@@ -55,6 +69,10 @@ struct BlackFlowPlanRequest
     std::vector<std::string> route_hint_action_ids;
     std::size_t maximum_states = 2'000'000;
     RouteSearchOptions route_search;
+    // Score the saved outer map with the inventory left by this route; zero consumption is the baseline.
+    RouteContinuationEvaluator continuation;
+    // A shuffling map permits only one observed movement before its identities must be read again.
+    bool observe_after_one_move = false;
 };
 
 struct PreviewSafetyVerification

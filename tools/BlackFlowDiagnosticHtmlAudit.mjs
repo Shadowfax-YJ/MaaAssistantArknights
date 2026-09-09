@@ -14,7 +14,7 @@ const sessionSource = fs.readFileSync(
   "utf8",
 );
 if (!sessionSource.includes(
-  "node.battle.has_value() ? node.battle->stage_name : std::string(battle_stage_name(node))",
+  '{ "stage_name", std::string(battle_stage_name(node)) }',
 )) {
   throw new Error("BlackFlow diagnostic node payload has no explicit battle stage field");
 }

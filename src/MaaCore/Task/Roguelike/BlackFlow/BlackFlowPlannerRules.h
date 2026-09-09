@@ -64,11 +64,13 @@ inline void advance_route_hint_after_applied_move(
 [[nodiscard]] inline bool move_lands_on_forbidden_node_type(
     const MapSnapshot& map,
     const MoveCandidate& move,
-    const std::unordered_set<NodeType>& forbidden)
+    const std::unordered_set<NodeType>& forbidden,
+    bool allow_roaming_residents = false)
 {
     const auto landing_is_forbidden = [&](NodeId id) {
         const Node* node = map.find_node(id);
-        return node != nullptr && forbidden.contains(node->type);
+        return node != nullptr && forbidden.contains(node->type) &&
+               !(allow_roaming_residents && node_has_explicit_roaming_resident_marker(*node));
     };
 
     if (move.controllable || move.possible_landings.empty()) {

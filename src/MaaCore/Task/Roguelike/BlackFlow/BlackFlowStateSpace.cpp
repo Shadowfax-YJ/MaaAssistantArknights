@@ -641,6 +641,10 @@ const std::vector<OnDemandSafetyAction>* OnDemandStateGraph::actions(SafetyState
                     const auto node_mask = bit(id);
                     const bool revealed_before_landing =
                         node_mask.has_value() && (source.revealed_hidden_battles & *node_mask) != 0;
+                    if (node != nullptr && m_options.allow_initial_roaming_residents &&
+                        source == state(initial_state()) && node_has_explicit_roaming_resident_marker(*node)) {
+                        return false;
+                    }
                     return node != nullptr && route_landing_is_forbidden(
                                                   node->type,
                                                   revealed_before_landing,

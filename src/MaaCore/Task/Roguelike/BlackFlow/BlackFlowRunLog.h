@@ -26,7 +26,7 @@ inline constexpr int BlackFlowRunLogMaximumImageWidth = 1280;
 inline constexpr int BlackFlowRunLogMaximumImageHeight = 720;
 inline constexpr double BlackFlowRunLogStableFrameMaximumMeanDifference = 3.0;
 inline constexpr double BlackFlowRunLogNearDuplicateMaximumMeanDifference = 0.15;
-inline constexpr std::string_view BlackFlowNodeAttributionFileName = "attribution.txt";
+inline constexpr std::string_view BlackFlowNodeAttributionFileName = "attribution.json";
 
 // 地图节点 ID 把楼层编码在高 16 位，正常值远超 32 位 int。运行日志状态中的
 // visited_nodes 必须按完整的无符号 64 位读取，否则首个已访问节点出现后会阻断
@@ -268,7 +268,13 @@ private:
     bool ensure_node_attribution_file(
         const std::filesystem::path& relative_directory,
         std::string* error) const;
+    bool update_node_attribution_file(
+        const std::filesystem::path& relative_directory,
+        const json::object& attribution,
+        std::optional<std::string_view> annotation,
+        std::string* error) const;
     bool ensure_collection_node_directories(const json::object& state, std::string* error) const;
+    bool sync_collection_node_identities(const json::object& state, std::string* error) const;
 
     mutable std::mutex m_mutex;
     std::filesystem::path m_run_directory;

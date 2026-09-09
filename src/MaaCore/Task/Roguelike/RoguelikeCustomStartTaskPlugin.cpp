@@ -11,6 +11,7 @@
 #include "Utils/Logger.hpp"
 #include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/OCRer.h"
+#include "Vision/Roguelike/RoguelikeRecruitImageAnalyzer.h"
 
 #include "BlackFlow/BlackFlowStartRewardRules.h"
 #include "BlackFlow/BlackFlowAutomationCollectionRules.h"
@@ -51,10 +52,14 @@ bool asst::RoguelikeCustomStartTaskPlugin::verify(AsstMsg msg, const json::value
                                        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection;
     if (m_waiting_to_run == RoguelikeCustomType::None && automation_collection && msg == AsstMsg::SubTaskCompleted &&
         !m_automation_collection_core_char_voucher_selected &&
-        task_view.ends_with("StartExplore@Roguelike@CoreCharVoucherReady")) {
-        // 只有招募券页面模板重新出现后才切换核心干员所属职业。RecruitWithoutButton 只是
-        // 展示页的中央点击兜底；在它完成时触发会对仍在播放的招募动画反复做无效 OCR。
+        (task_view.ends_with("StartExplore@Roguelike@CoreCharVoucherReady") ||
+         (task_view.ends_with("StartExplore@Roguelike@ChooseOperFlag") &&
+          m_config->status().opers.contains(std::string(blackflow::AutomationCollectionFirstOperator)) &&
+          !m_config->status().opers.contains(m_config->get_core_char())))) {
+        // 在招募券页面模板重新出现后切换核心干员所属职业。RecruitWithoutButton 只是
+        // 展示页关闭兜底；在它完成时触发会对仍在播放的招募动画反复做无效 OCR。
         // 同时必须早于 RecruitOther：后者一旦命中，主流程会缓存并补点原职业券。
+        // 若过渡期间已经进入列表，也先核对职业，不能绕过选券校验直接招募。
         m_waiting_to_run = RoguelikeCustomType::CoreCharVoucher;
     }
 
@@ -153,6 +158,22 @@ bool asst::RoguelikeCustomStartTaskPlugin::_run()
     }
 
     return it->second();
+}
+
+bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()
+{
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection &&
+        (m_waiting_to_run == RoguelikeCustomType::CoreChar ||
+         m_waiting_to_run == RoguelikeCustomType::CoreCharVoucher)) {
+        // 回调插件的失败不会自动传给父任务；选券校验已用尽重试，不能继续招募错误职业。
+        Log.error("BlackFlow recruitment voucher validation failed; stopping before operator recruitment");
+        if (m_task_ptr != nullptr) {
+            m_task_ptr->set_enable(false);
+        }
+        return false;
+    }
+    return AbstractRoguelikeTaskPlugin::on_run_fails();
 }
 
 void asst::RoguelikeCustomStartTaskPlugin::reset_in_run_variables()
@@ -382,7 +403,90 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_recruit_role_for(const std::st
         Log.error("Unknown role", char_name, static_cast<int>(role));
         return false;
     }
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection) {
+        return hijack_blackflow_recruit_role(role, role_iter->second);
+    }
     return hijack_recruit_role(role_iter->second);
+}
+
+bool asst::RoguelikeCustomStartTaskPlugin::hijack_blackflow_recruit_role(
+    battle::Role expected_role,
+    const std::string& role_ocr_name)
+{
+    Log.info("BlackFlow selecting recruitment voucher", role_ocr_name);
+    constexpr int ObservationAttempts = 50;
+    constexpr int ObservationDelay = 300;
+    constexpr int MaximumVoucherClicks = 3;
+    constexpr int MaximumReturns = 2;
+    std::optional<Rect> previous_voucher;
+    std::optional<battle::Role> previous_wrong_role;
+    int voucher_clicks = 0;
+    int returns = 0;
+    for (int attempt = 0; attempt < ObservationAttempts && !need_exit(); ++attempt) {
+        const auto image = ctrler()->get_image();
+        PipelineAnalyzer page(image);
+        page.set_tasks({ "BlackFlow@Roguelike@RecruitCloseGuide", "BlackFlow@Roguelike@ChooseOperFlag" });
+        if (const auto result = page.analyze(); result.has_value()) {
+            previous_voucher.reset();
+            if (result->task_ptr->name.ends_with("RecruitCloseGuide")) {
+                ctrler()->click(result->rect);
+                sleep(ObservationDelay);
+                continue;
+            }
+            RoguelikeRecruitImageAnalyzer operators(image);
+            operators.analyze();
+            const auto actual_role = operators.get_detected_role();
+            if (actual_role == expected_role) {
+                Log.info("BlackFlow recruitment voucher role verified", role_ocr_name, operators.get_detected_names());
+                return true;
+            }
+            // 不把任意干员列表视为选券成功。错误职业连续两帧一致才返回，避免动画误判。
+            if (actual_role.has_value() && actual_role == previous_wrong_role) {
+                if (returns++ >= MaximumReturns) {
+                    break;
+                }
+                Log.warn(
+                    "BlackFlow recruitment voucher role mismatch; returning to vouchers",
+                    static_cast<int>(*actual_role),
+                    "expected",
+                    role_ocr_name);
+                if (!ProcessTask(*this, { "BlackFlow@StartExplore@Roguelike@ReturnToVouchers" }).run()) {
+                    return false;
+                }
+                previous_wrong_role.reset();
+                continue;
+            }
+            previous_wrong_role = actual_role;
+        }
+        else {
+            previous_wrong_role.reset();
+            OCRer voucher(image);
+            voucher.set_task_info("RoguelikeCustom-HijackCoChar");
+            voucher.set_required({ role_ocr_name });
+            if (voucher.analyze()) {
+                const auto rect = voucher.get_result().front().rect;
+                // 等待招募券位置稳定后只点一次；每次重试重新截图，禁止补点旧坐标。
+                if (previous_voucher.has_value() && std::abs(previous_voucher->x - rect.x) <= 5 &&
+                    std::abs(previous_voucher->y - rect.y) <= 5) {
+                    if (voucher_clicks++ >= MaximumVoucherClicks) {
+                        break;
+                    }
+                    ctrler()->click(rect);
+                    previous_voucher.reset();
+                    sleep(Task.get("RoguelikeCustom-HijackCoChar")->pre_delay);
+                    continue;
+                }
+                previous_voucher = rect;
+            }
+            else {
+                previous_voucher.reset();
+            }
+        }
+        sleep(ObservationDelay);
+    }
+    Log.error("BlackFlow recruitment voucher role could not be verified", role_ocr_name);
+    return false;
 }
 
 bool asst::RoguelikeCustomStartTaskPlugin::hijack_recruit_role(const std::string& role_ocr_name)

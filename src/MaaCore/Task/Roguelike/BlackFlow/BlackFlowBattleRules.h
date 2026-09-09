@@ -3,14 +3,36 @@
 #include <algorithm>
 #include <cstddef>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "Common/AsstTypes.h"
+#include "Utils/FuzzyTextMatcher.h"
 
 namespace asst::blackflow
 {
 inline constexpr std::size_t PreparationCombatSettleDelayMs = 1500;
+
+[[nodiscard]] inline std::optional<std::string> resolve_battle_intel_stage_name(
+    std::string_view captured, const std::vector<std::string>& configured_stage_names)
+{
+    const auto first = captured.find_first_not_of(" \t\r\n");
+    if (first == std::string_view::npos) {
+        return std::nullopt;
+    }
+    captured = captured.substr(first, captured.find_last_not_of(" \t\r\n") - first + 1);
+    if (captured == "作战" || captured == "紧急作战" || captured == "未知的凶戾" ||
+        captured == "未知的诡秘" || captured == "险路恶敌") {
+        return std::nullopt;
+    }
+    // 情报收集不要求已有自动作战脚本。脚本名称仅用于纠正可唯一匹配的 OCR 误差；
+    // 未配置的关卡仍保留预览原文，由调用方的连续两帧稳定性检查确认。
+    const auto match = utils::fuzzy_match_ocr_text(captured, configured_stage_names);
+    return match.accepted ? match.canonical : std::string(captured);
+}
 
 // N 在战斗循环内会被反复识别。用众数抵抗偶发 OCR 抖动；票数相同时采用
 // 最近一次结果，使后续稳定、纠正后的读数优先于开场读数。
@@ -76,6 +98,19 @@ private:
     bool card_available) noexcept
 {
     return selection_cleared && (!card_visible || card_cooling || !card_available);
+}
+
+// Observe returns no value when the current frame cannot establish the deployment result.
+// Wait bounds how long the caller can keep the attempted deployment pending.
+template <typename Observe, typename Wait>
+[[nodiscard]] std::optional<bool> wait_for_deployment_confirmation(Observe&& observe, Wait&& wait)
+{
+    do {
+        if (auto result = observe(); result.has_value()) {
+            return result;
+        }
+    } while (wait());
+    return std::nullopt;
 }
 
 // 等待中的虚拟装置刚刚开过技能时，技能可能改变部署费用。当前帧来自开技能前，

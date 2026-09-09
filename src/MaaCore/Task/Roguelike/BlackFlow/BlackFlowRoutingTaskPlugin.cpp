@@ -74,6 +74,13 @@ bool BlackFlowRoutingTaskPlugin::_run()
     const RoutingCycleOutcome cycle = work == PendingWork::ResumePendingMove
                                           ? execute_pending_routing_cycle(*m_session, *m_port)
                                           : execute_routing_cycle(*m_session, *m_port);
+    if (m_port->take_pending_pursuit()) {
+        m_page_recovery_attempted = false;
+        m_floor_recovery_attempted = false;
+        Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@HuntedWait");
+        report_outputs();
+        return true;
+    }
     if (cycle.status == RoutingCycleStatus::NeedsPageRecovery) {
         const bool completed_page = m_session->page_context().has_value() &&
                                     m_session->page_context()->stage == PageExecutionStage::Resolved &&
@@ -107,6 +114,9 @@ bool BlackFlowRoutingTaskPlugin::_run()
         return true;
     }
     if (cycle.status == RoutingCycleStatus::DirectExhaustionRequired) {
+        Task.set_task_base(
+            "BlackFlow@Roguelike@DirectExhaustDestination",
+            m_session->in_tree_hole() ? "BlackFlow@Roguelike@TreeHoleReturnEnter" : "BlackFlow@Roguelike@HuntedWait");
         Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@DirectExhaust-Enter");
         report_outputs();
         return true;

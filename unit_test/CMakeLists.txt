@@ -52,6 +52,7 @@ catch_discover_tests(maa-controller-recovery-test TEST_PREFIX "controller-recove
 
 add_executable(maa-black-flow-routing-test
     MaaCore/BlackFlowRoutingTest.cpp
+    MaaCore/BlackFlowTopologyTest.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowCompactStateSpace.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.cpp
@@ -72,7 +73,7 @@ target_include_directories(maa-black-flow-routing-test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include
 )
 if(MSVC)
-    target_compile_options(maa-black-flow-routing-test PRIVATE /utf-8)
+    target_compile_options(maa-black-flow-routing-test PRIVATE /utf-8 /bigobj)
 endif()
 
 catch_discover_tests(maa-black-flow-routing-test TEST_PREFIX "blackflow-routing::")

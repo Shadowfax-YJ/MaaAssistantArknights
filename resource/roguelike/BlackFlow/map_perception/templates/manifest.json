@@ -226,6 +226,36 @@
             "height": 25
         },
         {
+            "file": "BlackFlow@Roguelike@light_end.png",
+            "marker_type": "light_end",
+            "display_name": "光明之末",
+            "role": "node_marker",
+            "seed_anchor": false,
+            "threshold": 0.8,
+            "width": 25,
+            "height": 25
+        },
+        {
+            "file": "BlackFlow@Roguelike@god_sorrow.png",
+            "marker_type": "god_sorrow",
+            "display_name": "神明之殇",
+            "role": "node_marker",
+            "seed_anchor": false,
+            "threshold": 0.8,
+            "width": 25,
+            "height": 25
+        },
+        {
+            "file": "BlackFlow@Roguelike@civilization_ashes.png",
+            "marker_type": "civilization_ashes",
+            "display_name": "文明之烬",
+            "role": "node_marker",
+            "seed_anchor": false,
+            "threshold": 0.8,
+            "width": 25,
+            "height": 25
+        },
+        {
             "file": "BlackFlow@Roguelike@empty.png",
             "node_type": "empty",
             "display_name": "空节点",

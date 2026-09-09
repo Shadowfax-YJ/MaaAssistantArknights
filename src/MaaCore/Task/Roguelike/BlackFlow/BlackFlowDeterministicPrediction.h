@@ -52,14 +52,24 @@ struct ResidentSettlementPrediction
     });
 }
 
-[[nodiscard]] constexpr bool utopia_effect_expires_after_node_completion(
+[[nodiscard]] inline bool utopia_effect_expires_after_node_completion(
     bool page_completed,
     std::string_view utopia_ideology,
     const std::optional<GridPosition>& ideal_source,
-    GridPosition resolved_position) noexcept
+    int source_floor,
+    std::optional<std::uint64_t> source_generation,
+    NodeId completed_node,
+    std::uint64_t completed_generation) noexcept
 {
-    return page_completed && utopia_ideology != "hopeful-soil" && ideal_source.has_value() &&
-           resolved_position == *ideal_source;
+    if (!page_completed || utopia_ideology == "hopeful-soil" || !ideal_source.has_value() ||
+        !source_generation.has_value() || *source_generation != completed_generation ||
+        completed_node == InvalidNodeId) {
+        return false;
+    }
+    // 换层回图仍会结算旧页面。节点 ID 包含楼层，地图代次区分同层的新地图；
+    // 不使用旧节点在新图中查找失败时留下的默认坐标 (0, 0)。
+    const auto source_node = make_stable_node_id(source_floor, *ideal_source);
+    return source_node.has_value() && completed_node == *source_node;
 }
 
 // 移植自 lubiao-wiki：只在主地图 2/4/5 层使用初始流窜“居民”的空间证据。

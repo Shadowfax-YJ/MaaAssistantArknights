@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 
+#include "Common/AsstBattleDef.h"
 #include "AbstractRoguelikeTaskPlugin.h"
 
 namespace asst
@@ -46,6 +47,7 @@ public:
 
 protected:
     virtual bool _run() override;
+    virtual bool on_run_fails() override;
     virtual void reset_in_run_variables() override;
 
 private:
@@ -56,6 +58,7 @@ private:
     bool hijack_core_char_voucher();
     bool hijack_recruit_role_for(const std::string& char_name);
     bool hijack_recruit_role(const std::string& role_ocr_name);
+    bool hijack_blackflow_recruit_role(battle::Role expected_role, const std::string& role_ocr_name);
     std::vector<std::string> get_select_list() const;
 
 private:

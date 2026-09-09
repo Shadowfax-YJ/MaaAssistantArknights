@@ -1,10 +1,11 @@
 #include "BlackFlowSession.h"
 
+#include "BlackFlowAutomationCollectionRules.h"
 #include "BlackFlowDiagnosticTimeline.h"
 #include "BlackFlowEncounterRules.h"
 #include "BlackFlowInventoryRules.h"
-#include "BlackFlowPlannerRules.h"
 #include "BlackFlowMovementRecognition.h"
+#include "BlackFlowPlannerRules.h"
 #include "BlackFlowRevealSemantics.h"
 #include "BlackFlowRoutingLoop.h"
 
@@ -202,13 +203,13 @@ json::array serialize_map_nodes(const MapSnapshot& map, const RunState* run = nu
                 { "name", node.name },
                 { "node_name", node.name },
                 { "fate_event", node.fate_event },
-                { "stage_name",
-                  node.battle.has_value() ? node.battle->stage_name : std::string(battle_stage_name(node)) },
+                { "stage_name", std::string(battle_stage_name(node)) },
                 { "marker_type", node.marker_type },
                 { "marker_display_name", node.marker_display_name },
                 { "marker_score", node.marker_score },
                 { "marker_resident_overlap_possible", node.marker_resident_overlap_possible },
                 { "identity_revealed", node.identity_revealed },
+                { "identity_unrecoverable", node.identity_unrecoverable },
                 { "visually_hidden", node.visually_hidden },
                 { "identity_from_topology", node.identity_from_topology },
                 { "identity_from_prediction", node.identity_from_prediction },
@@ -392,6 +393,13 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
         return false;
     }
 
+    m_tree_outer.reset();
+    m_tree_continuation_projection = false;
+    m_tree_effect.clear();
+    m_tree_effect_description.clear();
+    m_tree_duel_page = 0;
+    m_portal_page = 0;
+    m_portal_item.clear();
     m_profile = std::move(profile);
     m_policy = std::move(resolved);
     m_facts = FactContext {};
@@ -402,6 +410,7 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
         }
     }
     m_facts.begin_run();
+    m_expedition_core_away = false;
     for (const auto& [name, definition_value] : BlackFlowStrategy.facts()) {
         if (definition_value.scope != FactScope::Candidate &&
             !m_facts.set(definition_value.scope, name, default_fact_value(definition_value.type), error)) {
@@ -415,6 +424,7 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
     m_run = RunState {};
     m_current_floor.reset();
     m_map_generation = 0;
+    m_map_section_generation = 0;
     m_initial_prediction_generation = 0;
     m_initial_reveal_checked_generation.reset();
     m_current_map_is_floor_four_remembrance = false;
@@ -544,6 +554,11 @@ bool BlackFlowSession::set_automation_collection_core_operator_elite_two(bool el
 
 std::optional<std::size_t> BlackFlowSession::preferred_encounter_choice(std::string_view event_name)
 {
+    if (tree_hole_duel_used() && m_page_context.has_value() && m_page_context->node_type == NodeType::Duel &&
+        m_page_context->page_revision != m_tree_duel_page) {
+        return 0U;
+    }
+
     if (event_name == FinalEncounterEventName) {
         if (!m_transaction.has_value() || !m_page_context.has_value() ||
             m_page_context->node_type != NodeType::Final) {
@@ -710,7 +725,7 @@ std::optional<std::size_t> BlackFlowSession::preferred_encounter_choice(std::str
             const BlackFlowPlan transferred_plan = transferred.plan(&transfer_error);
             const LinkedEncounterRouteValue baseline_value = encounter_route_value(baseline_plan);
             const LinkedEncounterRouteValue transferred_value = encounter_route_value(transferred_plan);
-            const int immediate_weight =
+            const double immediate_weight =
                 effective_node_weight_at_floor(*linked_type, current->floor, current->marker_type);
             const LinkedEncounterRouteValue adjusted_baseline = adjusted_linked_encounter_route_value(
                 baseline_value,
@@ -772,8 +787,105 @@ std::optional<std::size_t> BlackFlowSession::preferred_encounter_choice(std::str
     return stable_benefit ? 1U : 2U;
 }
 
-std::optional<std::vector<std::string>>
-    BlackFlowSession::preferred_encounter_choice_order(std::string_view event_name)
+std::unordered_set<NodeType> BlackFlowSession::forbidden_landing_types() const
+{
+    if (in_tree_hole()) {
+        auto forbidden = automation_collection_forbidden_landing_types(outer_floor());
+        forbidden.insert(NodeType::BattleNormal);
+        forbidden.insert(NodeType::BattleElite);
+        forbidden.insert(NodeType::HideBattle);
+        if (outer_floor() == 2 && m_expedition_core_away) {
+            forbidden.insert(NodeType::BattleSavage);
+            forbidden.insert(NodeType::BattleBoss);
+        }
+        return forbidden;
+    }
+    auto forbidden = automation_collection_forbidden_landing_types(m_run.floor);
+    if (m_run.floor == 2 && m_expedition_core_away) {
+        forbidden.insert(NodeType::BattleSavage);
+        forbidden.insert(NodeType::BattleBoss);
+    }
+    return forbidden;
+}
+
+void BlackFlowSession::record_expedition_dispatch(std::string_view operator_name)
+{
+    if (m_run.floor == 2 && operator_name == AutomationCollectionCoreOperator) {
+        m_expedition_core_away = true;
+        m_last_plan.reset();
+        m_pending_candidate.reset();
+        m_verified_move_arc.reset();
+        Log.info("BlackFlow expedition core dispatched; avoid all battles and roaming residents until floor exit");
+    }
+}
+
+bool BlackFlowSession::can_dispatch_expedition_core()
+{
+    // 页面落点未确定时不能用地图上另一个先行一步推算剩余路线。
+    if (m_profile != "automation_collection" || m_run.floor != 2 || m_expedition_core_away ||
+        !m_transaction.has_value() || !m_page_context.has_value() ||
+        m_map.snapshot().find_node(m_page_context->node) == nullptr) {
+        return false;
+    }
+    BlackFlowSession after_event = *this;
+    const MoveCandidate& entry = m_transaction->proposal();
+    const MovementSpec* movement = find_movement_spec(entry.movement);
+    const int cost = m_transaction->authoritative_cost();
+    if (movement == nullptr || cost < 0 || cost > after_event.m_run.resources.action_points ||
+        !project_consumed_entry_processing_item(after_event.m_run, entry.movement)) {
+        return false;
+    }
+    int gain = entry.predicted_action_point_gain;
+    if (const auto found = entry.landing_action_point_gains.find(m_page_context->node);
+        found != entry.landing_action_point_gains.end()) {
+        gain = found->second;
+    }
+    after_event.m_run.resources.action_points =
+        action_points_after(after_event.m_run.resources.action_points, cost, gain);
+    after_event.m_run.resources.hope += movement->effect.hope_gain;
+    after_event.m_run.resources.ingots += movement->effect.ingot_gain;
+    ++after_event.m_run.resources_revision;
+    Node completed = *after_event.m_map.snapshot().find_node(m_page_context->node);
+    completed.type = NodeType::Empty;
+    completed.name = std::string(EmptyNodeName);
+    completed.progress = NodeProgress::Completed;
+    completed.traversal = default_traversal_for(NodeType::Empty);
+    after_event.m_map.snapshot().upsert_node(std::move(completed));
+    after_event.m_run.current_node = m_page_context->node;
+    after_event.m_run.node_progress.insert_or_assign(m_page_context->node, NodeProgress::Completed);
+    after_event.m_run.visited_nodes.emplace(m_page_context->node);
+    after_event.m_transaction.reset();
+    after_event.m_page_context.reset();
+    after_event.m_pending_candidate.reset();
+    after_event.m_last_plan.reset();
+    after_event.m_temporarily_unavailable_movements.clear();
+    after_event.m_movement_inventory_refresh_required = false;
+    after_event.m_expedition_core_away = true;
+    std::string error;
+    if (!after_event.synchronize_resource_facts(&error)) {
+        return false;
+    }
+    after_event.refresh_mission();
+    // 直接在派遣后的禁行条件下证明能抵达物理出口，禁止借探索/追猎兜底放行。
+    const BlackFlowPlan plan = after_event.plan_internal(true, false, &error);
+    const auto combat_or_resident = [&](NodeId id) {
+        const Node* node = after_event.m_map.snapshot().find_node(id);
+        return node != nullptr && (is_route_battle_node_type(node->type) || node_has_roaming_resident_marker(*node));
+    };
+    const bool safe = static_cast<bool>(plan) && !plan.endpoint_fallback_active &&
+                      !plan.decision.planned_route_steps.empty() &&
+                      plan.decision.planned_route_steps.back().move.terminal_on_completion &&
+                      std::ranges::none_of(plan.decision.planned_route_steps, [&](const PlannedRouteStep& step) {
+                          // 通用规划允许先揭示未知凶戾再重规划；派遣前不能把这种假设当成无战斗证明。
+                          return combat_or_resident(step.move.landing) ||
+                                 std::ranges::any_of(step.move.possible_landings, combat_or_resident) ||
+                                 std::ranges::any_of(step.move.path, combat_or_resident);
+                      });
+    Log.info("BlackFlow expedition core battle-free exit assessment", safe, error);
+    return safe;
+}
+
+std::optional<std::vector<std::string>> BlackFlowSession::preferred_encounter_choice_order(std::string_view event_name)
 {
     if (event_name != HealingHeartEventName) {
         return std::nullopt;
@@ -1009,6 +1121,9 @@ std::optional<std::vector<std::string>>
 
 bool BlackFlowSession::no_action_points_is_terminal() const
 {
+    if (in_tree_hole()) {
+        return true;
+    }
     if (!m_policy.has_value()) {
         return false;
     }
@@ -1093,6 +1208,9 @@ bool BlackFlowSession::synchronize_resource_facts(std::string* error)
 
 void BlackFlowSession::refresh_mission()
 {
+    if (in_tree_hole()) {
+        return;
+    }
     const auto previous = m_mission.milestones;
     m_mission.refresh(m_policy->milestones, m_run.floor, m_facts.merged());
     publish_milestone_facts();
@@ -1209,6 +1327,9 @@ std::string BlackFlowSession::resolve_page_intent(const PageIdentityResolution& 
 
 void BlackFlowSession::evaluate_terminal_rules()
 {
+    if (in_tree_hole()) {
+        return;
+    }
     if (m_result.has_value() || !m_policy.has_value()) {
         return;
     }
@@ -1441,6 +1562,7 @@ void BlackFlowSession::queue_map_summary(const PerceptionSummary& summary)
             { "type", std::string(to_string(node.type)) },
             { "name", node.name },
             { "identity_revealed", node.identity_revealed },
+            { "identity_unrecoverable", node.identity_unrecoverable },
             { "visually_hidden", node.visually_hidden },
             { "identity_from_topology", node.identity_from_topology },
             { "identity_from_prediction", node.identity_from_prediction },
@@ -1513,6 +1635,7 @@ void BlackFlowSession::append_map_visualization(json::object& details) const
             { "marker_score", node.marker_score },
             { "marker_resident_overlap_possible", node.marker_resident_overlap_possible },
             { "identity_revealed", node.identity_revealed },
+            { "identity_unrecoverable", node.identity_unrecoverable },
             { "visually_hidden", node.visually_hidden },
             { "identity_from_topology", node.identity_from_topology },
             { "identity_from_prediction", node.identity_from_prediction },
@@ -1645,12 +1768,16 @@ void BlackFlowSession::request_diagnostics(
     snapshot["map_generation"] = m_map_generation;
     snapshot["floor_four_remembrance"] = m_current_map_is_floor_four_remembrance;
     const int artifact_floor = snapshot.get("floor", m_run.floor);
+    const int tree_hole_outer_floor = in_tree_hole() ? outer_floor() : 0;
+    snapshot["map_section_generation"] = m_map_section_generation;
+    snapshot["tree_hole_outer_floor"] = tree_hole_outer_floor;
     snapshot["map_section_key"] = diagnostic_map_section_key(
         artifact_floor,
-        m_map_generation,
-        m_current_map_is_floor_four_remembrance);
+        m_map_section_generation,
+        m_current_map_is_floor_four_remembrance,
+        tree_hole_outer_floor);
     snapshot["map_section_label"] =
-        diagnostic_map_section_label(artifact_floor, m_current_map_is_floor_four_remembrance);
+        diagnostic_map_section_label(artifact_floor, m_current_map_is_floor_four_remembrance, tree_hole_outer_floor);
     m_diagnostic_requests.emplace_back(
         DiagnosticArtifactRequest {
             trigger,
@@ -1739,7 +1866,7 @@ void BlackFlowSession::queue_decision(
         reason_detail = "在保留完整安全路线的前提下，优先探明更多未知节点";
     }
     else if (decision.decisive_rule_id == "effective_node_count") {
-        reason_detail = "在保留完整安全路线的前提下，优先提高不重复有效落点计分";
+        reason_detail = "在保留完整安全路线的前提下，优先提高不同落点的探索收益与发育收益之和";
     }
     else if (decision.decisive_rule_id == "persistent_processing_move_count") {
         reason_detail = "优先保留可以带到后续层数使用的加工品";
@@ -1931,7 +2058,7 @@ void BlackFlowSession::queue_decision(
         std::vector<json::value> forbidden_node_types;
         if (m_profile == "automation_collection") {
             std::vector<std::string> names;
-            for (const NodeType type : automation_collection_forbidden_landing_types(m_run.floor)) {
+            for (const NodeType type : forbidden_landing_types()) {
                 names.emplace_back(to_string(type));
             }
             std::ranges::sort(names);
@@ -1943,8 +2070,7 @@ void BlackFlowSession::queue_decision(
         std::vector<json::value> future_forbidden_node_types;
         if (m_profile == "automation_collection") {
             std::vector<std::string> names;
-            for (const NodeType type :
-                 future_forbidden_landing_types(automation_collection_forbidden_landing_types(m_run.floor))) {
+            for (const NodeType type : future_forbidden_landing_types(forbidden_landing_types())) {
                 names.emplace_back(to_string(type));
             }
             std::ranges::sort(names);
@@ -1954,7 +2080,7 @@ void BlackFlowSession::queue_decision(
         }
         details["future_forbidden_node_types"] = json::array(std::move(future_forbidden_node_types));
         std::vector<json::value> root_forbidden_marker_types;
-        if (m_profile == "automation_collection" && m_run.floor >= 2) {
+        if (m_profile == "automation_collection" && !roaming_residents_allowed()) {
             root_forbidden_marker_types.emplace_back("savage");
         }
         details["root_forbidden_marker_types"] = json::array(std::move(root_forbidden_marker_types));
@@ -2051,13 +2177,15 @@ void BlackFlowSession::queue_decision(
             const Node* candidate_target = m_map.snapshot().find_node(candidate.move.target);
             std::vector<json::value> score;
             score.reserve(candidate.lexicographic_score.size());
-            for (const int dimension : candidate.lexicographic_score) {
-                score.emplace_back(dimension);
+            for (std::size_t index = 0; index < candidate.lexicographic_score.size(); ++index) {
+                const double scale = candidate.lexicographic_score_labels[index] == "effective_node_count" ? 2.0 : 1.0;
+                score.emplace_back(candidate.lexicographic_score[index] / scale);
             }
             std::vector<json::value> expected_score_sum;
             expected_score_sum.reserve(candidate.expected_lexicographic_score_sum.size());
-            for (const std::int64_t dimension : candidate.expected_lexicographic_score_sum) {
-                expected_score_sum.emplace_back(dimension);
+            for (std::size_t index = 0; index < candidate.expected_lexicographic_score_sum.size(); ++index) {
+                const double scale = candidate.lexicographic_score_labels[index] == "effective_node_count" ? 2.0 : 1.0;
+                expected_score_sum.emplace_back(candidate.expected_lexicographic_score_sum[index] / scale);
             }
             std::vector<json::value> score_labels;
             score_labels.reserve(candidate.lexicographic_score_labels.size());
@@ -2076,30 +2204,64 @@ void BlackFlowSession::queue_decision(
             }
             std::vector<json::value> effective_node_details;
             std::unordered_set<NodeId> effective_nodes;
+            std::unordered_set<NodeId> completed_nodes;
+            std::unordered_set<NodeId> possible_residents;
+            for (const auto& [id, node] : m_map.snapshot().nodes()) {
+                if (node.progress == NodeProgress::Completed ||
+                    (m_run.node_progress.contains(id) && m_run.node_progress.at(id) == NodeProgress::Completed)) {
+                    completed_nodes.emplace(id);
+                }
+                if (node_has_roaming_resident_marker(node)) {
+                    possible_residents.emplace(id);
+                }
+            }
+            NodeIncome detailed_income;
+            bool first_step = true;
             for (const PlannedRouteStep& step : candidate.planned_route_steps) {
                 const NodeId landing = step.move.landing != InvalidNodeId ? step.move.landing : step.move.target;
                 const Node* landing_node = m_map.snapshot().find_node(landing);
                 if (landing_node == nullptr) {
                     continue;
                 }
-                const int weight = record_effective_landing(
-                    landing,
-                    landing_node->type,
-                    landing_node->marker_type,
-                    step.move.movement,
-                    m_run.current_node,
-                    m_run.visited_nodes,
-                    effective_nodes,
-                    landing_node->floor);
-                if (weight > 0) {
+                const NodeType type = completed_nodes.contains(landing) && !landing_node->traversal.repeatable
+                                          ? NodeType::Empty
+                                          : landing_node->type;
+                const std::string_view marker = !first_step && landing_node->marker_type == "savage"
+                                                    ? std::string_view {}
+                                                    : landing_node->marker_type;
+                NodeIncome income = node_income_at_floor(type, landing_node->floor, marker, step.move.movement);
+                const bool resident_uncertain = !first_step && possible_residents.contains(landing);
+                if (resident_uncertain) {
+                    income = conservative_resident_income(income);
+                }
+                if (income.total() > 0 && landing != m_run.current_node && !m_run.visited_nodes.contains(landing) &&
+                    effective_nodes.emplace(landing).second) {
+                    detailed_income += income;
                     effective_node_details.emplace_back(
                         json::object {
                             { "node", node_details(landing) },
-                            { "weight", weight },
+                            { "weight", income.total() },
+                            { "exploration_income", income.exploration },
+                            { "development_income", income.development },
                             { "movement", std::string(to_string(step.move.movement)) },
+                            { "resident_uncertain", resident_uncertain },
                             { "knot_tentacle_bonus", step.move.movement == MovementKind::M10 ? 1 : 0 },
                         });
                 }
+                std::unordered_set<NodeId> next_residents;
+                for (const NodeId resident : possible_residents) {
+                    if (resident == landing || completed_nodes.contains(resident)) {
+                        continue;
+                    }
+                    const auto positions = roaming_resident_next_positions(
+                        m_map.snapshot(), resident, landing, completed_nodes);
+                    next_residents.insert(positions.begin(), positions.end());
+                }
+                possible_residents = std::move(next_residents);
+                if (!landing_node->traversal.repeatable && !step.move.bypass_final_on_completion) {
+                    completed_nodes.emplace(landing);
+                }
+                first_step = false;
             }
             candidate_comparison.emplace_back(
                 json::object {
@@ -2116,6 +2278,12 @@ void BlackFlowSession::queue_decision(
                     { "safe_requirement", candidate.move.action_point_requirement },
                     { "revealed_node_count", candidate.revealed_node_count },
                     { "effective_node_count", candidate.effective_node_count },
+                    { "exploration_income", candidate.effective_node_income.exploration },
+                    { "development_income", candidate.effective_node_income.development },
+                    { "expected_exploration_income", candidate.expected_node_income.exploration },
+                    { "expected_development_income", candidate.expected_node_income.development },
+                    { "exploration_income_adjustment", candidate.effective_node_income.exploration - detailed_income.exploration },
+                    { "development_income_adjustment", candidate.effective_node_income.development - detailed_income.development },
                     { "effective_node_details", json::array(std::move(effective_node_details)) },
                     { "battle_count", candidate.battle_count },
                     { "processing_move_count", candidate.processing_move_count },
@@ -2200,7 +2368,7 @@ bool BlackFlowSession::merge_perception(
     }
 
     const bool initial_prediction_for_generation = m_initial_prediction_generation != m_map_generation;
-    if (initial_prediction_for_generation) {
+    if (initial_prediction_for_generation && !in_tree_hole()) {
         m_resident_settlement_prediction = predict_resident_settlement(
             normalized->map,
             normalized->current_node,
@@ -2249,6 +2417,7 @@ bool BlackFlowSession::merge_perception(
             m_movement_inventory_refresh_required,
             MovementInventoryRefreshEvent::FloorEntered);
         m_facts.begin_floor();
+        m_expedition_core_away = false;
         m_unreachable_actions.clear();
         m_temporarily_unavailable_movements.clear();
         m_pending_probe_target.reset();
@@ -2271,6 +2440,15 @@ bool BlackFlowSession::merge_perception(
     }
     // 两张地图消费同一批观测，但合并语义不同：当前地图允许空地覆盖旧身份并供规划使用；
     // 探索笔记保留已经揭示的身份和内容，仅用于诊断、数据收集和事件流重建。
+    if (tree_hole_nodes_shuffle()) {
+        m_map.reset();
+        m_exploration_notebook.reset();
+        m_run.visited_nodes.clear();
+        m_run.consumed_one_time_nodes.clear();
+        m_run.revealed_nodes.clear();
+        m_run.node_progress.clear();
+        m_last_plan.reset();
+    }
     if (!m_map.merge(normalized->map, MapMergePurpose::CurrentObservation, error) ||
         !m_exploration_notebook.merge(normalized->map, MapMergePurpose::ExplorationNotebook, error)) {
         return false;
@@ -2327,7 +2505,7 @@ bool BlackFlowSession::merge_perception(
     }
     m_viewport.replace(std::move(normalized->viewport), m_map.snapshot().revision, normalized->viewport_revision);
 
-    if (normalized->map.coverage == ObservationCoverage::FullMap &&
+    if (!in_tree_hole() && normalized->map.coverage == ObservationCoverage::FullMap &&
         (!m_initial_reveal_checked_generation.has_value() ||
          *m_initial_reveal_checked_generation != m_map_generation)) {
         const bool swaddled_eagle_full_reveal = has_start_reward("襁褓骏鹰") &&
@@ -2410,7 +2588,8 @@ bool BlackFlowSession::merge_perception(
     }
 
     for (const auto& [node_id, node] : m_map.snapshot().nodes()) {
-        if (node.identity_revealed) {
+        const Node* noted = m_exploration_notebook.snapshot().find_node(node_id);
+        if (node.identity_revealed && (noted == nullptr || !noted->identity_unrecoverable)) {
             m_run.revealed_nodes.emplace(node_id);
         }
     }
@@ -2515,19 +2694,29 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
     }
 
     // 当前观测可能已把完成节点画成空地；页面上下文才是这次实际进入节点的历史身份。
-    resolved.type = context.node_type;
-    resolved.name = context.node_name;
+    if (context.resident_occupied_node.has_value()) {
+        resolved = *context.resident_occupied_node;
+    }
+    else {
+        resolved.type = context.node_type;
+        resolved.name = context.node_name;
+    }
     if (context.battle.has_value()) {
         resolved.battle = context.battle;
     }
-    resolved.traversal = default_traversal_for(resolved.type);
-    if (resolved.type != NodeType::Unknown && resolved.type != NodeType::HideBattle &&
+    if (!context.resident_occupied_node.has_value()) {
+        resolved.traversal = default_traversal_for(resolved.type);
+    }
+    if (!context.resident_occupied_node.has_value() &&
+        resolved.type != NodeType::Unknown && resolved.type != NodeType::HideBattle &&
         resolved.type != NodeType::HideInvisible) {
         resolved.identity_revealed = true;
         resolved.identity_state = NodeIdentityState::Classified;
     }
-    resolved.identity_source = context.identity_from_event_name ? "event_name" : "entered_page";
-    if (context.identity_from_event_name) {
+    if (!context.resident_occupied_node.has_value()) {
+        resolved.identity_source = context.identity_from_event_name ? "event_name" : "entered_page";
+    }
+    if (!context.resident_occupied_node.has_value() && context.identity_from_event_name) {
         resolved.identity_from_topology = false;
         resolved.identity_from_prediction = false;
         resolved.prediction_rule.clear();
@@ -2537,14 +2726,14 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
     bool becomes_empty = false;
     if (context.result.has_value()) {
         const NodeStateUpdate& update = *context.result;
-        if (update.actual_type.has_value()) {
+        if (!context.resident_occupied_node.has_value() && update.actual_type.has_value()) {
             resolved.type = *update.actual_type;
             resolved.traversal = default_traversal_for(resolved.type);
         }
-        if (update.actual_name.has_value()) {
+        if (!context.resident_occupied_node.has_value() && update.actual_name.has_value()) {
             resolved.name = *update.actual_name;
         }
-        if (update.identity_revealed.has_value()) {
+        if (!context.resident_occupied_node.has_value() && update.identity_revealed.has_value()) {
             resolved.identity_revealed = *update.identity_revealed;
             resolved.identity_state =
                 *update.identity_revealed ? NodeIdentityState::Classified : NodeIdentityState::Hidden;
@@ -2563,14 +2752,19 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
     }
     if (becomes_empty) {
         resolved.progress = NodeProgress::Completed;
+        if (context.resident_occupied_node.has_value() && !resolved.identity_revealed) {
+            resolved.identity_unrecoverable = true;
+            m_run.revealed_nodes.erase(context.node);
+        }
     }
 
     m_run.visited_nodes.emplace(context.node);
     m_run.node_progress.insert_or_assign(context.node, resolved.progress);
-    if (resolved.type == NodeType::Light) {
+    if (!context.resident_occupied_node.has_value() && resolved.type == NodeType::Light) {
         m_run.consumed_one_time_nodes.emplace(context.node);
     }
-    if (page_completed && resolved.type != NodeType::Empty && context.page_intent != "final.pass") {
+    if (page_completed && !context.resident_occupied_node.has_value() &&
+        resolved.type != NodeType::Empty && context.page_intent != "final.pass") {
         m_mission.record_node(m_policy->milestones, m_facts.merged(), resolved);
     }
 
@@ -2614,7 +2808,8 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
             m_map.snapshot().upsert_node(std::move(updated));
         }
     }
-    else if (context.floor == m_run.floor && context.identity_from_event_name) {
+    else if (context.floor == m_run.floor && !context.resident_occupied_node.has_value() &&
+             context.identity_from_event_name) {
         const Node* observed = m_map.snapshot().find_node(context.node);
         if (observed != nullptr &&
             !(observed->type == NodeType::Empty && observed->progress == NodeProgress::Completed)) {
@@ -2642,7 +2837,10 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
             page_completed,
             m_utopia_ideology,
             m_ideal_source,
-            resolved.position)) {
+            m_map.floor(),
+            m_ideal_source_generation,
+            context.node,
+            context.map_generation)) {
         m_utopia_effect_expired = true;
         const auto clear_effect = [](NormalizedMap& map) {
             std::vector<Node> updates;
@@ -2918,7 +3116,7 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
         observation.target_progress = landed->progress;
     }
 
-    if (observation.floor == run_before_move.floor && !same_floor_recollection) {
+    if (observation.floor == run_before_move.floor && !same_floor_recollection && !tree_hole_nodes_shuffle()) {
         const bool endpoint_available =
             move_endpoint_observation_available(committed_move.terminal_on_completion, observation.action_points);
         NodeType entered_landing_type = NodeType::Unknown;
@@ -3019,6 +3217,13 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
         m_page_context->node == InvalidNodeId && observation.floor == m_page_context->floor &&
         !same_floor_recollection) {
         m_page_context->node = observation.current_node;
+    }
+    if (m_page_context.has_value() && !m_page_context->resident_occupied_node.has_value() &&
+        m_page_context->node_type == NodeType::BattleNormal && observation.floor == m_page_context->floor) {
+        if (const Node* occupied = map_before_move.find_node(m_page_context->node);
+            occupied != nullptr && node_has_roaming_resident_marker(*occupied)) {
+            m_page_context->resident_occupied_node = *occupied;
+        }
     }
 
     m_run.floor = observation.floor;
@@ -3240,6 +3445,9 @@ bool BlackFlowSession::report_movement_unavailable(MovementKind target, std::str
 bool BlackFlowSession::should_retry_initial_reveal_observation(
     const BlackFlowPerceptionSnapshot& snapshot) const
 {
+    if (in_tree_hole()) {
+        return false;
+    }
     if (m_initial_reveal_checked_generation.has_value() &&
         *m_initial_reveal_checked_generation == m_map_generation) {
         return false;
@@ -3266,6 +3474,9 @@ bool BlackFlowSession::should_retry_initial_reveal_observation(
 bool BlackFlowSession::should_retry_post_move_reveal_observation(
     const BlackFlowPerceptionSnapshot& snapshot) const
 {
+    if (in_tree_hole()) {
+        return false;
+    }
     if (!m_transaction.has_value() ||
         (m_transaction->stage() != MoveTransactionStage::Committed &&
          m_transaction->stage() != MoveTransactionStage::PageResolved)) {
@@ -3351,6 +3562,13 @@ bool BlackFlowSession::update(const BlackFlowPerceptionSnapshot& snapshot, std::
 
 bool BlackFlowSession::update_in_place(const BlackFlowPerceptionSnapshot& snapshot, std::string* error)
 {
+    if (in_tree_hole() && snapshot.observation.floor != 6 && !restore_outer_map(snapshot.observation.floor, error)) {
+        return false;
+    }
+    if (in_tree_hole()) {
+        m_tree_effect = snapshot.observation.tree_hole_effect;
+        m_tree_effect_description = snapshot.observation.tree_hole_effect_description;
+    }
     const bool pending_move =
         m_transaction.has_value() && (m_transaction->stage() == MoveTransactionStage::Committed ||
                                       m_transaction->stage() == MoveTransactionStage::PageResolved);
@@ -3362,10 +3580,17 @@ bool BlackFlowSession::update_in_place(const BlackFlowPerceptionSnapshot& snapsh
     else if (!merge_perception(snapshot.observation, snapshot.run, snapshot.observed_facts, false, error)) {
         return false;
     }
+    if (pending_move && tree_hole_nodes_shuffle() &&
+        !merge_perception(snapshot.observation, snapshot.run, snapshot.observed_facts, false, error)) {
+        return false;
+    }
     if (!synchronize_resource_facts(error)) {
         return false;
     }
 
+    if (in_tree_hole()) {
+        return true;
+    }
     refresh_mission();
     // 结算只放在观测这一拍。提交事务途中也会刷新里程碑，那时候终止会把页面丢在半路。
     evaluate_milestone_miss_actions();
@@ -3415,9 +3640,10 @@ BlackFlowPlan BlackFlowSession::plan_internal(
         request.undemotable_binding_count = goals.undemotable_count;
         request.no_AP_is_terminal = require_physical_endpoint ? false : no_action_points_is_terminal();
         if (m_profile == "automation_collection") {
-            request.forbidden_node_types = automation_collection_forbidden_landing_types(m_run.floor);
+            request.forbidden_node_types = forbidden_landing_types();
+            request.allow_initial_roaming_residents = roaming_residents_allowed();
         }
-        if (m_profile == "automation_collection" && m_run.floor >= 2) {
+        if (m_profile == "automation_collection" && !roaming_residents_allowed()) {
             // 当前动作仍避开现场标记；再枚举结算后一拍的“原地或沿确认连线一步”，要求每种
             // 居民结果各自存在安全应对。实际只执行首步并重新观测；严格检验无解才退回首步避让。
             request.root_forbidden_marker_types = { "savage" };
@@ -3443,6 +3669,18 @@ BlackFlowPlan BlackFlowSession::plan_internal(
             for (const PlannedRouteStep& step : m_last_plan->decision.planned_route_steps) {
                 request.route_hint_action_ids.emplace_back(step.move.action_id);
             }
+        }
+        if (in_tree_hole()) {
+            request.continuation = tree_hole_continuation();
+            request.observe_after_one_move = tree_hole_nodes_shuffle();
+            request.binding_milestone_candidates.clear();
+            request.undemotable_binding_count = 0;
+            request.strategy_terminal_nodes.clear();
+        }
+        if (m_tree_continuation_projection) {
+            request.route_search.time_budget_ms = 150;
+            request.route_search.total_expansions = 512;
+            request.route_search.expansions_per_root = 32;
         }
         result = BlackFlowPlanner {}.plan(request);
         // 自动化收集的 1--4 层通常都能证出安全出口路线；若当前观测下暂时证不出，
@@ -3799,7 +4037,7 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
             }
         }
         else if (
-            (identity_unresolved || preview_correction) &&
+            !resident_overlay && (identity_unresolved || preview_correction) &&
             (existing->type != preview.displayed_type || existing->name != preview.displayed_name ||
              existing->identity_revealed != preview.identity_revealed)) {
             Node updated = *existing;
@@ -3863,7 +4101,11 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
             mapped_landing,
             proposal.landing == proposal.target,
             preview.displayed_type);
-        if (automation_collection_forbidden_landing_types(m_run.floor).contains(landing_type)) {
+        const bool resident = mapped_landing != nullptr && node_has_roaming_resident_marker(*mapped_landing);
+        const bool forbidden_resident = resident && !roaming_residents_allowed();
+        const bool allowed_resident_battle = resident && roaming_residents_allowed() &&
+                                             preview.displayed_type == NodeType::BattleNormal;
+        if ((!allowed_resident_battle && forbidden_landing_types().contains(landing_type)) || forbidden_resident) {
             m_unreachable_actions.emplace(proposal.action_id);
             if (m_pending_probe_target == proposal.target) {
                 m_pending_probe_target.reset();
@@ -3875,6 +4117,12 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
                 { "observed_node_type", std::string(to_string(preview.displayed_type)) },
                 { "observed_node_name", preview.displayed_name },
                 { "landing_node_type", std::string(to_string(landing_type)) },
+                { "expedition_core_away", m_expedition_core_away },
+                { "in_tree_hole", in_tree_hole() },
+                { "outer_floor", outer_floor() },
+                { "tree_hole_effect", m_tree_effect },
+                { "tree_hole_effect_description", m_tree_effect_description },
+                { "roaming_resident_forbidden", forbidden_resident },
             };
             if (const Node* landing = m_map.snapshot().find_node(proposal.landing); landing != nullptr) {
                 evidence["preview_landing_row"] = landing->position.row;
@@ -3926,7 +4174,8 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
         request.no_AP_is_terminal =
             m_last_plan.has_value() ? m_last_plan->no_AP_is_terminal : no_action_points_is_terminal();
         if (m_profile == "automation_collection") {
-            request.forbidden_node_types = automation_collection_forbidden_landing_types(m_run.floor);
+            request.forbidden_node_types = forbidden_landing_types();
+            request.allow_initial_roaming_residents = roaming_residents_allowed();
         }
         const int reserved_full_map_charges =
             m_profile == "automation_collection"
@@ -4096,19 +4345,9 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
         const std::optional<NodeType> entered_type =
             event_effect.resolved_type.has_value() ? event_effect.resolved_type : entered_page.classified_type;
         if (entered_type.has_value()) {
-            NodeId semantic_landing = InvalidNodeId;
-            bool ambiguous = false;
-            for (const NodeId landing : proposal.possible_landings) {
-                if (move_landing_type(proposal, landing) != *entered_type) {
-                    continue;
-                }
-                if (semantic_landing != InvalidNodeId) {
-                    ambiguous = true;
-                    break;
-                }
-                semantic_landing = landing;
-            }
-            if (!ambiguous && semantic_landing != InvalidNodeId) {
+            const NodeId semantic_landing =
+                resolve_uncontrollable_page_landing(proposal, m_map.snapshot(), *entered_type);
+            if (semantic_landing != InvalidNodeId) {
                 page_node = semantic_landing;
                 target = m_map.snapshot().find_node(page_node);
                 map_type = target == nullptr ? *entered_type : target->type;
@@ -4128,9 +4367,11 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
     const bool event_identity_conflict =
         proposal.controllable && target != nullptr && event_effect.resolved_type.has_value() &&
         event_node_type_is_known(target->type) && target->type != *event_effect.resolved_type;
+    const bool resident_battle = target != nullptr && node_has_roaming_resident_marker(*target) &&
+                                 entered_page.classified_type == NodeType::BattleNormal;
     const bool entered_identity_conflict =
         entered_page.classification_conflict ||
-        (proposal.controllable && target != nullptr && target->identity_revealed &&
+        (proposal.controllable && target != nullptr && target->identity_revealed && !resident_battle &&
          entered_page.classified_type.has_value() &&
          target->type != *entered_page.classified_type);
     if (entered_identity_conflict || event_identity_conflict) {
@@ -4192,6 +4433,7 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
 
     m_page_context = PageExecutionContext {
         m_run_revision,
+        m_map_generation,
         ++m_page_revision,
         m_decision_id,
         m_transaction_id,
@@ -4204,6 +4446,10 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
         {},
         PageExecutionStage::PendingDispatch,
     };
+    if (resident_battle) {
+        const Node* noted = m_exploration_notebook.snapshot().find_node(page_node);
+        m_page_context->resident_occupied_node = noted != nullptr ? *noted : *target;
+    }
     if (entered_page.event_name.has_value()) {
         m_page_context->observed_contents.emplace_back(*entered_page.event_name);
         m_page_context->identity_from_event_name = event_effect.resolved_type.has_value();
@@ -4230,6 +4476,12 @@ void BlackFlowSession::cancel_transaction()
 
 bool BlackFlowSession::set_current_floor(int floor, std::string* error)
 {
+    if (floor == 6) {
+        return in_tree_hole() || enter_tree_hole(error);
+    }
+    if (in_tree_hole()) {
+        return restore_outer_map(floor, error);
+    }
     if (floor <= 0) {
         if (error != nullptr) {
             *error = "recognized floor must be positive";
@@ -4254,6 +4506,7 @@ bool BlackFlowSession::set_current_floor(int floor, std::string* error)
     m_floor_recognition_pending = false;
     if (new_map_generation) {
         ++m_map_generation;
+        m_map_section_generation = m_map_generation;
         m_map_preserved_after_inventory.reset();
         m_utopia_effect_expired = false;
         m_utopia_status.clear();
@@ -4275,6 +4528,7 @@ bool BlackFlowSession::set_current_floor(int floor, std::string* error)
             MovementInventoryRefreshEvent::FloorEntered);
         // 同一楼层打完战斗回图也可能再次识别到楼层标题，不能因此清空本层已经积累的事实。
         m_facts.begin_floor();
+        m_expedition_core_away = false;
     }
     if (!set_fact("current_floor", static_cast<std::int64_t>(floor), error)) {
         return false;
@@ -4304,7 +4558,10 @@ bool BlackFlowSession::completed_page_changes_floor() const noexcept
     if (node_type == NodeType::Final && m_page_context->page_intent == "final.pass") {
         return false;
     }
-    // Portal returns to the same main-map floor and does not require NextLevel.
+    if (node_type == NodeType::Portal && m_portal_page == m_page_context->page_revision) {
+        return true;
+    }
+    // An unentered portal stays on its current map.
     return m_page_context->changes_floor || node_type == NodeType::Final || node_type == NodeType::Evacuate ||
            node_type == NodeType::BattleBoss;
 }
@@ -4380,13 +4637,17 @@ bool BlackFlowSession::apply_node_signal(
 
 void BlackFlowSession::queue_node_resolution(const PageExecutionContext& context)
 {
-    NodeType resolved_type = context.node_type;
+    NodeType resolved_type = context.resident_occupied_node.has_value()
+                                 ? context.resident_occupied_node->type
+                                 : context.node_type;
     NodeProgress progress = NodeProgress::Completed;
     bool repeatable = false;
     bool becomes_empty = false;
     if (context.result.has_value()) {
         const NodeStateUpdate& result = *context.result;
-        resolved_type = result.actual_type.value_or(resolved_type);
+        if (!context.resident_occupied_node.has_value()) {
+            resolved_type = result.actual_type.value_or(resolved_type);
+        }
         progress = result.progress.value_or(progress);
         repeatable = result.repeatable.value_or(false);
         becomes_empty = result.becomes_empty.value_or(false);
@@ -4405,7 +4666,10 @@ void BlackFlowSession::queue_node_resolution(const PageExecutionContext& context
         { "page_revision", context.page_revision },
         { "floor", context.floor },
         { "node", context.node },
-        { "event_name", context.node_name },
+        { "event_name", context.resident_occupied_node.has_value()
+                            ? context.resident_occupied_node->name
+                            : context.node_name },
+        { "entry_kind", context.resident_occupied_node.has_value() ? "roaming_resident_battle" : "map_node" },
         { "observed_contents", json::array(std::move(observed_contents)) },
         { "node_type", std::string(to_string(resolved_type)) },
         { "progress",
@@ -4450,11 +4714,17 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
 
     PageExecutionContext& context = *m_page_context;
     const bool first_content = context.observed_contents.empty();
+    const PageContentEffect effect = classify_page_content_effect(source, content);
+    if (context.node == InvalidNodeId && m_transaction.has_value() &&
+        !m_transaction->proposal().controllable && effect.resolved_type.has_value()) {
+        // 初次页面分类尚未读到标题时，在事件回调处补做落点归属；此时仍保有旧层地图。
+        context.node = resolve_uncontrollable_page_landing(
+            m_transaction->proposal(), m_map.snapshot(), *effect.resolved_type);
+    }
     const Node* existing_noted =
         context.node == InvalidNodeId ? nullptr : m_exploration_notebook.snapshot().find_node(context.node);
     const bool page_is_fate_event =
         context.node_name == "命运所指" || (existing_noted != nullptr && existing_noted->fate_event);
-    const PageContentEffect effect = classify_page_content_effect(source, content);
     if (effect.resolved_type.has_value()) {
         if (context.identity_from_event_name && context.node_type != *effect.resolved_type) {
             queue_warning(
@@ -4483,7 +4753,7 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
     }
 
     bool notebook_identity_updated = false;
-    if (context.has_landing && context.node != InvalidNodeId &&
+    if (!context.resident_occupied_node.has_value() && context.has_landing && context.node != InvalidNodeId &&
         context.floor == m_exploration_notebook.floor()) {
         Node noted;
         if (existing_noted != nullptr) {
@@ -4496,15 +4766,9 @@ bool BlackFlowSession::observe_page_content(std::string content, std::string sou
             noted.traversal = default_traversal_for(noted.type);
         }
         if (effect.resolved_type.has_value()) {
-            noted.type = *effect.resolved_type;
-            noted.traversal = default_traversal_for(noted.type);
-            noted.identity_revealed = true;
-            noted.identity_state = NodeIdentityState::Classified;
-            noted.identity_from_topology = false;
-            noted.identity_from_prediction = false;
-            noted.prediction_rule.clear();
-            noted.identity_source = "event_name";
-            noted.detected_by_vision = true;
+            // classify_entered_event_name 已经预填 observed_contents 时，first_content
+            // 为 false；仍须把笔记里的“未知的诡秘”名称改成已确认的事件标题。
+            reveal_event_notebook_identity(noted, *effect.resolved_type, context.node_name);
         }
         if (first_content || noted.name.empty()) {
             noted.name = content;
@@ -4551,6 +4815,11 @@ bool BlackFlowSession::observe_battle_stage_name(std::string stage_name, std::st
 
     const bool running_page =
         m_page_context.has_value() && m_page_context->stage == PageExecutionStage::Running;
+    if (running_page && in_tree_hole() && m_page_context->node_type == NodeType::Duel && m_tree_duel_page == 0) {
+        m_tree_duel_page = m_page_context->page_revision;
+        m_last_plan.reset();
+        Log.info("BlackFlow tree-hole duel quota consumed", m_tree_effect, m_tree_duel_page);
+    }
     const bool running_combat_page = running_page && is_combat_node_type(m_page_context->node_type);
     const bool entered_floor_three_boss =
         running_combat_page && m_page_context->floor == 3 && m_page_context->node_type == NodeType::BattleBoss;
@@ -4788,6 +5057,7 @@ bool BlackFlowSession::record_battle_intel_probe(
         return true;
     }
 
+    bool notebook_updated = false;
     if (stage_name.has_value() && !stage_name->empty() && m_exploration_notebook.floor() == current->floor) {
         Node noted = *current;
         if (const Node* existing = m_exploration_notebook.snapshot().find_node(node); existing != nullptr) {
@@ -4798,8 +5068,11 @@ bool BlackFlowSession::record_battle_intel_probe(
         noted.name = *stage_name;
         noted.identity_revealed = true;
         noted.identity_state = NodeIdentityState::Classified;
+        noted.identity_from_prediction = false;
+        noted.identity_from_topology = false;
+        noted.prediction_rule.clear();
         noted.identity_source = "move_preview_stage_name";
-        m_exploration_notebook.snapshot().upsert_node(std::move(noted));
+        notebook_updated = m_exploration_notebook.snapshot().upsert_node(std::move(noted));
     }
 
     json::object details {
@@ -4815,7 +5088,13 @@ bool BlackFlowSession::record_battle_intel_probe(
     if (!observation_error.empty()) {
         details["error"] = std::move(observation_error);
     }
-    m_telemetry_events.emplace_back(BlackFlowTelemetryEvent { "BlackFlowBattleIntelObserved", std::move(details) });
+    m_telemetry_events.emplace_back(BlackFlowTelemetryEvent { "BlackFlowBattleIntelObserved", details });
+    if (notebook_updated) {
+        details["reason_category"] = "battle_stage_observation";
+        details["reason_detail"] = "战斗预览关卡名已回写探索笔记：" + *stage_name;
+        append_map_visualization(details);
+        request_diagnostics(DiagnosticTrigger::BattleStageObservation, std::move(details));
+    }
     return true;
 }
 
@@ -4996,6 +5275,8 @@ json::object BlackFlowSession::run_log_state() const
     json::object result {
         { "profile", m_profile },
         { "run_revision", m_run_revision },
+        { "expedition_core_away", m_expedition_core_away },
+        { "tree_hole_outer_floor", in_tree_hole() ? outer_floor() : 0 },
         { "floor", m_current_floor.value_or(m_run.floor) },
         { "map_generation", m_map_generation },
         { "map_revision", m_map.snapshot().revision },
@@ -5040,6 +5321,9 @@ json::object BlackFlowSession::run_log_state() const
             { "node", m_page_context->node },
             { "node_type", std::string(to_string(m_page_context->node_type)) },
             { "node_name", m_page_context->node_name },
+            { "entry_kind", m_page_context->resident_occupied_node.has_value()
+                                ? "roaming_resident_battle"
+                                : "map_node" },
             { "stage", static_cast<int>(m_page_context->stage) },
             { "changes_floor", m_page_context->changes_floor },
             { "has_landing", m_page_context->has_landing },

@@ -26,6 +26,7 @@ private:
         PrepareRecoveryRetry,
         RecordCurrentFloor,
         ResolveHuntedAction,
+        BeginTreeHoleReturn,
         ResolveTerminalAction,
         ResetAfterAbandon,
     };

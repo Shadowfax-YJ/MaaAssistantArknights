@@ -17,6 +17,8 @@ public:
 
     const auto& get_result() const noexcept { return m_result; }
     const auto& get_detected_names() const noexcept { return m_detected_names; }
+    // 从可见干员的职业交集确认招募券类别，不依赖精英化和等级识别是否成功。
+    std::optional<battle::Role> get_detected_role() const;
 
 private:
     int match_elite(const Rect& raw_roi);

@@ -534,7 +534,9 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, MapMergePurpose purp
             (*observed.identity_source == "map_template_fixed_identity" || hidden_preview_empty_fallback);
         const bool preserve_identity =
             preserve_door_identity || preserve_reliable_identity || current_has_active_observed_identity ||
-            preserve_completed_empty || preserve_preview_identity || preserve_battle_stage_name;
+            preserve_completed_empty || preserve_preview_identity || preserve_battle_stage_name ||
+            (purpose == MapMergePurpose::ExplorationNotebook && current != nullptr &&
+             current->identity_unrecoverable);
         Node node = current == nullptr ? Node {} : *current;
         if (current == nullptr) {
             node.id = *id;
@@ -850,6 +852,10 @@ bool should_apply_preview_identity(const Node& current, const MovePreview& previ
 
 bool preview_confirms_roaming_resident(const Node& current, const MovePreview& preview) noexcept
 {
+    if (node_has_explicit_roaming_resident_marker(current) && preview.identity_revealed &&
+        preview.displayed_type == NodeType::BattleNormal) {
+        return true;
+    }
     if (!current.identity_revealed || is_route_battle_node_type(current.type) ||
         preview.displayed_type != NodeType::BattleNormal || !preview.identity_revealed) {
         return false;

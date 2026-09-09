@@ -119,6 +119,27 @@ struct NodeTraversal
     bool operator==(const NodeTraversal&) const noexcept = default;
 };
 
+struct NodeIncome
+{
+    double exploration = 0.0;
+    double development = 0.0;
+
+    [[nodiscard]] constexpr double total() const noexcept { return exploration + development; }
+    constexpr NodeIncome& operator+=(const NodeIncome& other) noexcept
+    {
+        exploration += other.exploration;
+        development += other.development;
+        return *this;
+    }
+    bool operator==(const NodeIncome&) const noexcept = default;
+};
+
+// 收益只含整数或半分，乘二后进入现有整数字典序，随机期望求和也不会截断半分。
+[[nodiscard]] constexpr int income_order_score(double points) noexcept
+{
+    return static_cast<int>(points * 2);
+}
+
 struct NodeBattleRecord
 {
     std::string stage_name;
@@ -167,6 +188,9 @@ struct Node
     bool marker_resident_overlap_possible = false;
     bool badged = false;
     std::optional<NodeId> transfer_target;
+
+    // 未知节点被流窜居民占据并结算消失，原身份已无法再通过地图或页面探明。
+    bool identity_unrecoverable = false;
 
     bool operator==(const Node&) const noexcept = default;
 };

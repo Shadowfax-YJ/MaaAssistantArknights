@@ -262,6 +262,7 @@ int unknown_big_nodes_revealed(
 void add_newly_revealed_nodes(
     const MapSnapshot& map,
     const OnDemandStateGraph& graph,
+    SafetyStateId source,
     const RunState& run,
     const MoveCandidate& move,
     NodeId landing,
@@ -270,6 +271,10 @@ void add_newly_revealed_nodes(
 {
     const auto newly_revealed = expected_move_reveals(map, run, move, landing, endpoint_observation_available);
     for (const NodeId id : newly_revealed) {
+        // 先前完成而未探明的节点已经消失，后续视野也无法补回其原身份。
+        if (graph.is_completed(source, id)) {
+            continue;
+        }
         if (const auto bit = graph.node_mask(id); bit.has_value()) {
             revealed |= *bit;
         }
@@ -611,9 +616,13 @@ struct RouteLabel
     PlannerNodeMask revealed_nodes = 0;
     // 实际落点中的有效节点，按节点去重；徒步路径中间节点不会写入。
     PlannerNodeMask effective_nodes = 0;
+    PlannerNodeMask possible_residents = 0;
     // 具体基础分随节点类型和楼层决定；藏果地和坎诺特的触须落点各额外 +1。
     // 重复落点不重复计分。
-    int effective_node_score = 0;
+    double effective_node_score = 0;
+    NodeIncome effective_node_income;
+    RouteContinuationValue continuation;
+    bool continuation_evaluated = false;
     std::vector<std::string> immediate_milestone_ids;
     RouteTraceId trace = InvalidRouteTraceId;
     // 搜索过程中保持为空；只对最终胜出的标签从 trace 一次性还原。
@@ -656,6 +665,9 @@ bool route_label_better(
     const std::vector<RouteMilestone>& milestones,
     const RouteRankingOptions& options)
 {
+    if (lhs.continuation.safe != rhs.continuation.safe) {
+        return lhs.continuation.safe;
+    }
     const auto lhs_end = binding_progress_score(milestones, lhs.progress);
     const auto rhs_end = binding_progress_score(milestones, rhs.progress);
     if (score_greater(lhs_end, rhs_end)) {
@@ -664,11 +676,16 @@ bool route_label_better(
     if (score_greater(rhs_end, lhs_end)) {
         return false;
     }
-    if (options.maximize_revealed_nodes && node_mask_size(lhs.revealed_nodes) != node_mask_size(rhs.revealed_nodes)) {
-        return node_mask_size(lhs.revealed_nodes) > node_mask_size(rhs.revealed_nodes);
+    if (options.maximize_revealed_nodes &&
+        (static_cast<int>(node_mask_size(lhs.revealed_nodes)) + lhs.continuation.revealed_delta) !=
+            (static_cast<int>(node_mask_size(rhs.revealed_nodes)) + rhs.continuation.revealed_delta)) {
+        return (static_cast<int>(node_mask_size(lhs.revealed_nodes)) + lhs.continuation.revealed_delta) >
+               (static_cast<int>(node_mask_size(rhs.revealed_nodes)) + rhs.continuation.revealed_delta);
     }
-    if (options.maximize_effective_nodes && lhs.effective_node_score != rhs.effective_node_score) {
-        return lhs.effective_node_score > rhs.effective_node_score;
+    if (options.maximize_effective_nodes && (lhs.effective_node_score + lhs.continuation.effective_delta) !=
+                                                (rhs.effective_node_score + rhs.continuation.effective_delta)) {
+        return (lhs.effective_node_score + lhs.continuation.effective_delta) >
+               (rhs.effective_node_score + rhs.continuation.effective_delta);
     }
     const auto lhs_preferred = preferred_progress_score(milestones, lhs.progress);
     const auto rhs_preferred = preferred_progress_score(milestones, rhs.progress);
@@ -1231,25 +1248,58 @@ void add_effective_landing(
     SafetyStateId source,
     NodeId landing,
     MovementKind movement,
-    int& effective_node_score,
-    PlannerNodeMask& effective_nodes)
+    double& effective_node_score,
+    NodeIncome& effective_node_income,
+    PlannerNodeMask& effective_nodes,
+    PlannerNodeMask& possible_residents,
+    bool first_move = false)
 {
+    if (first_move) {
+        for (const auto& [id, node] : map.nodes()) {
+            if (node_has_roaming_resident_marker(node)) {
+                possible_residents |= graph.node_mask(id).value_or(0);
+            }
+        }
+    }
     const Node* landing_node = map.find_node(landing);
     const auto bit = graph.node_mask(landing);
-    if (landing == InvalidNodeId || landing == graph.source_run().current_node || landing_node == nullptr ||
-        !bit.has_value() || (effective_nodes & *bit) != 0 || graph.source_run().visited_nodes.contains(landing)) {
+    if (landing_node != nullptr && bit.has_value() && landing != graph.source_run().current_node &&
+        (effective_nodes & *bit) == 0 && !graph.source_run().visited_nodes.contains(landing)) {
+        // 首步使用现场标记的固定 1.5 分。后续居民可能原地停留或移动，不能把旧标记
+        // 固定在节点上重复预测收益；按可能占据/未占据两种结果的保底分比较路线。
+        const std::string_view marker = landing_node->marker_type == "savage" && !first_move
+                                            ? std::string_view {}
+                                            : landing_node->marker_type;
+        NodeIncome income = node_income_at_floor(
+            route_node_type(map, graph, source, landing), landing_node->floor, marker, movement);
+        if (!first_move && (possible_residents & *bit) != 0) {
+            income = conservative_resident_income(income);
+        }
+        if (income.total() > 0) {
+            effective_nodes |= *bit;
+            effective_node_score += income.total();
+            effective_node_income += income;
+        }
+    }
+    if (possible_residents == 0) {
         return;
     }
-    const int weight = effective_node_weight_at_floor(
-        route_node_type(map, graph, source, landing),
-        landing_node->floor,
-        landing_node->marker_type,
-        movement);
-    if (weight <= 0) {
-        return;
+    PlannerNodeMask next_positions = 0;
+    for (const auto& [id, node] : map.nodes()) {
+        const PlannerNodeMask resident_bit = graph.node_mask(id).value_or(0);
+        if ((possible_residents & resident_bit) == 0 || id == landing || graph.is_completed(source, id)) {
+            continue;
+        }
+        next_positions |= resident_bit; // 允许原地停留。
+        for (const NodeId neighbor : map.neighbors(id, GraphLayer::Confirmed)) {
+            const Node* target = map.find_node(neighbor);
+            if (neighbor != landing && target != nullptr && !graph.is_completed(source, neighbor) &&
+                !roaming_resident_destination_is_protected(*target, {})) {
+                next_positions |= graph.node_mask(neighbor).value_or(0);
+            }
+        }
     }
-    effective_nodes |= *bit;
-    effective_node_score += weight;
+    possible_residents = next_positions;
 }
 
 int maximum_future_entries(
@@ -1298,13 +1348,13 @@ int maximum_future_entries(
     return static_cast<int>(std::min<std::int64_t>(remaining_nodes, entries));
 }
 
-int maximum_effective_node_score(
+double maximum_effective_node_score(
     const MapSnapshot& map,
     const OnDemandStateGraph& graph,
     const RouteLabel& current,
     int entry_limit)
 {
-    std::vector<int> remaining_weights;
+    std::vector<double> remaining_weights;
     remaining_weights.reserve(map.nodes().size());
     for (const auto& [id, node] : map.nodes()) {
         if (node.progress == NodeProgress::Removed || id == graph.source_run().current_node ||
@@ -1315,12 +1365,12 @@ int maximum_effective_node_score(
             effective_node_weight_at_floor(
                 route_node_type(map, graph, current.state, id),
                 node.floor,
-                node.marker_type));
+                node.marker_type == "savage" ? std::string_view {} : node.marker_type));
     }
     std::ranges::sort(remaining_weights, std::greater {});
     const std::size_t possible_entries =
         std::min<std::size_t>(remaining_weights.size(), static_cast<std::size_t>(std::max(entry_limit, 0)));
-    int upper = current.effective_node_score;
+    double upper = current.effective_node_score;
     for (std::size_t index = 0; index < possible_entries; ++index) {
         upper += remaining_weights[index];
     }
@@ -1388,7 +1438,7 @@ bool route_may_beat(
         return true;
     }
     if (options.maximize_effective_nodes) {
-        const int upper_effective_score = maximum_effective_node_score(map, graph, current, entry_limit);
+        const double upper_effective_score = maximum_effective_node_score(map, graph, current, entry_limit);
         if (upper_effective_score > incumbent.effective_node_score) {
             return true;
         }
@@ -1602,6 +1652,8 @@ RouteLabel best_route_after_outcome(
     const std::vector<std::string>* route_hint_action_ids,
     std::size_t* route_hint_replayed_steps,
     const RouteSearchOptions& search_options,
+    const RouteContinuationEvaluator& continuation,
+    bool observe_after_one_move,
     RouteSearchBudget& search_budget,
     const RouteRankingOptions& ranking_options,
     RouteSearchStatistics* statistics,
@@ -1638,7 +1690,10 @@ RouteLabel best_route_after_outcome(
         graph.state(root_outcome.successor).node,
         root_move.movement,
         initial.effective_node_score,
-        initial.effective_nodes);
+        initial.effective_node_income,
+        initial.effective_nodes,
+        initial.possible_residents,
+        true);
     PlannedRouteStep initial_step {
             root_move,
             initial_action_points,
@@ -1674,6 +1729,7 @@ RouteLabel best_route_after_outcome(
         add_newly_revealed_nodes(
             map,
             graph,
+            graph.initial_state(),
             graph.source_run(),
             root_move,
             graph.state(root_outcome.successor).node,
@@ -1684,7 +1740,15 @@ RouteLabel best_route_after_outcome(
         initial.trace = traces.append(InvalidRouteTraceId, InvalidNodeId, std::move(initial_step));
     }
 
+    const auto assess_continuation = [&](RouteLabel route) {
+        if (continuation && !route.continuation_evaluated) {
+            route.continuation = continuation(route.metric.processing_move_counts);
+            route.continuation_evaluated = true;
+        }
+        return route;
+    };
     const auto materialize = [&](RouteLabel route) {
+        route = assess_continuation(std::move(route));
         route.route = traces.route(route.trace);
         route.steps = traces.steps(route.trace);
         if (statistics != nullptr) {
@@ -1706,6 +1770,9 @@ RouteLabel best_route_after_outcome(
         return true;
     };
 
+    if (observe_after_one_move) {
+        return materialize(initial);
+    }
     std::unordered_map<SafetyStateId, std::vector<RouteLabel>> labels;
     labels[initial.state].emplace_back(initial);
     std::size_t retained_labels = 1;
@@ -1801,7 +1868,9 @@ RouteLabel best_route_after_outcome(
             graph.state(outcome.successor).node,
             action.candidate.movement,
             next.effective_node_score,
-            next.effective_nodes);
+            next.effective_node_income,
+            next.effective_nodes,
+            next.possible_residents);
         if (ranking_options.minimize_intermediate_interactions && !graph.is_terminal(outcome.successor)) {
             next.intermediate_interactions +=
                 intermediate_interaction_cost(route_node_type(
@@ -1842,6 +1911,7 @@ RouteLabel best_route_after_outcome(
             add_newly_revealed_nodes(
                 map,
                 graph,
+                current.state,
                 graph.source_run(),
                 action.candidate,
                 graph.state(outcome.successor).node,
@@ -1873,7 +1943,11 @@ RouteLabel best_route_after_outcome(
             return route.action_points >= std::max(action.minimum_action_points_to_start, action.action_point_cost);
         });
     };
-    const auto completed_route = [&](const RouteLabel& route) -> std::optional<RouteLabel> {
+    const auto completed_route = [&](const RouteLabel& local) -> std::optional<RouteLabel> {
+        RouteLabel route = assess_continuation(local);
+        if (!route.continuation.safe) {
+            return std::nullopt;
+        }
         if (graph.is_terminal(route.state) || (graph.exhaustion_terminates() && route.action_points <= 0)) {
             return route;
         }
@@ -2290,13 +2364,8 @@ RouteLabel best_route_after_outcome(
             (graph.exhaustion_terminates() && current.action_points <= 0)) {
             continue;
         }
-        if (best.has_value() && !route_may_beat(
-                                    map,
-                                    graph,
-                                    milestones,
-                                    current,
-                                    *best,
-                                    ranking_options)) {
+        if (!continuation && best.has_value() &&
+            !route_may_beat(map, graph, milestones, current, *best, ranking_options)) {
             continue;
         }
 
@@ -2333,7 +2402,9 @@ RouteLabel best_route_after_outcome(
                 graph.state(outcome.successor).node,
                 action.candidate.movement,
                 next.effective_node_score,
-                next.effective_nodes);
+                next.effective_node_income,
+                next.effective_nodes,
+                next.possible_residents);
             if (ranking_options.minimize_intermediate_interactions && !graph.is_terminal(outcome.successor)) {
                 next.intermediate_interactions +=
                     intermediate_interaction_cost(route_node_type(
@@ -2376,6 +2447,7 @@ RouteLabel best_route_after_outcome(
                 add_newly_revealed_nodes(
                     map,
                     graph,
+                    current.state,
                     graph.source_run(),
                     action.candidate,
                     graph.state(outcome.successor).node,
@@ -2393,7 +2465,9 @@ RouteLabel best_route_after_outcome(
                        (!ranking_options.maximize_revealed_nodes ||
                         revealed_superset(value.revealed_nodes, next.revealed_nodes)) &&
                        (!ranking_options.maximize_effective_nodes ||
-                        revealed_superset(value.effective_nodes, next.effective_nodes)) &&
+                        (value.possible_residents == next.possible_residents &&
+                         value.effective_node_score >= next.effective_node_score &&
+                         revealed_superset(value.effective_nodes, next.effective_nodes))) &&
                        (!ranking_options.minimize_intermediate_interactions ||
                         value.intermediate_interactions <= next.intermediate_interactions) &&
                        route_metric_weakly_better(value.metric, next.metric, ranking_options);
@@ -2411,7 +2485,9 @@ RouteLabel best_route_after_outcome(
                        (!ranking_options.maximize_revealed_nodes ||
                         revealed_superset(next.revealed_nodes, value.revealed_nodes)) &&
                        (!ranking_options.maximize_effective_nodes ||
-                        revealed_superset(next.effective_nodes, value.effective_nodes)) &&
+                        (next.possible_residents == value.possible_residents &&
+                         next.effective_node_score >= value.effective_node_score &&
+                         revealed_superset(next.effective_nodes, value.effective_nodes))) &&
                        (!ranking_options.minimize_intermediate_interactions ||
                         next.intermediate_interactions <= value.intermediate_interactions) &&
                        route_metric_weakly_better(next.metric, value.metric, ranking_options);
@@ -2496,6 +2572,7 @@ FactStore on_demand_candidate_facts(
     const MoveCandidate& move = root_action.candidate;
     const Node* target = map.find_node(move.target);
     facts.set("candidate.node_type", std::string(target == nullptr ? "unclassified" : to_string(target->type)));
+    facts.set("candidate.roaming_resident_allowed", false);
     facts.set("candidate.node_name", target == nullptr ? std::string() : target->name);
     facts.set("candidate.badged", target != nullptr && target->badged);
     const bool combat = target != nullptr && is_route_battle_node_type(target->type);
@@ -2549,6 +2626,7 @@ BindingResolution resolve_binding_milestones(const BlackFlowPlanRequest& request
 
         StateExpansionOptions options;
         options.forbidden_node_types = future_forbidden_landing_types(request.forbidden_node_types);
+        options.allow_initial_roaming_residents = request.allow_initial_roaming_residents;
         options.allow_revealed_hidden_battle = request.run->floor == 1;
         options.reserved_movement_kinds = request.reserved_movement_kinds;
         options.reserved_movement_charges = request.reserved_movement_charges;
@@ -2648,7 +2726,8 @@ PreviewSafetyVerification BlackFlowPlanner::verify_previewed_move_impl(
         result.error = "preview safety request is incomplete";
         return result;
     }
-    if (move_lands_on_forbidden_node_type(*request.map, move, request.forbidden_node_types)) {
+    if (move_lands_on_forbidden_node_type(
+            *request.map, move, request.forbidden_node_types, request.allow_initial_roaming_residents)) {
         result.error = "immediate landing uses a forbidden node type";
         return result;
     }
@@ -2677,6 +2756,7 @@ PreviewSafetyVerification BlackFlowPlanner::verify_previewed_move_impl(
         if (entered->type == NodeType::Light) {
             StateExpansionOptions source_options;
             source_options.forbidden_node_types = future_forbidden_landing_types(request.forbidden_node_types);
+            source_options.allow_initial_roaming_residents = request.allow_initial_roaming_residents;
             source_options.allow_revealed_hidden_battle = request.run->floor == 1;
             source_options.reserved_movement_kinds = request.reserved_movement_kinds;
             source_options.reserved_movement_charges = request.reserved_movement_charges;
@@ -2712,6 +2792,7 @@ PreviewSafetyVerification BlackFlowPlanner::verify_previewed_move_impl(
 
     StateExpansionOptions options;
     options.forbidden_node_types = future_forbidden_landing_types(request.forbidden_node_types);
+    options.allow_initial_roaming_residents = request.allow_initial_roaming_residents;
     options.allow_revealed_hidden_battle = request.run->floor == 1;
     options.reserved_movement_kinds = request.reserved_movement_kinds;
     options.reserved_movement_charges = request.reserved_movement_charges;
@@ -2822,6 +2903,7 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
 
     StateExpansionOptions confirmed_options;
     confirmed_options.forbidden_node_types = future_forbidden_landing_types(request.forbidden_node_types);
+    confirmed_options.allow_initial_roaming_residents = request.allow_initial_roaming_residents;
     confirmed_options.allow_revealed_hidden_battle = request.run->floor == 1;
     confirmed_options.reserved_movement_kinds = request.reserved_movement_kinds;
     confirmed_options.reserved_movement_charges = request.reserved_movement_charges;
@@ -3001,7 +3083,8 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
     };
     for (const OnDemandSafetyAction* action_pointer : ordered_root_actions) {
         const OnDemandSafetyAction& action = *action_pointer;
-        if (move_lands_on_forbidden_node_type(*request.map, action.candidate, request.forbidden_node_types) ||
+        if (move_lands_on_forbidden_node_type(
+                *request.map, action.candidate, request.forbidden_node_types, request.allow_initial_roaming_residents) ||
             root_uses_forbidden_marker(action.candidate)) {
             continue;
         }
@@ -3041,6 +3124,10 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
         }
         candidate.facts.set("candidate.preview_required", candidate.move.requires_preview_verification);
         const Node* target = request.map->find_node(candidate.move.target);
+        candidate.facts.set(
+            "candidate.roaming_resident_allowed",
+            request.allow_initial_roaming_residents && target != nullptr &&
+                node_has_explicit_roaming_resident_marker(*target));
         candidate.battle_count = target != nullptr && is_route_battle_node_type(target->type) ? 1 : 0;
         candidate.route_length = candidate.move.movement == MovementKind::Walk
                                      ? std::max(1, static_cast<int>(candidate.move.path.size()))
@@ -3083,7 +3170,7 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
         RouteMetric worst_metric;
         int worst_intermediate_interactions = 0;
         int guaranteed_revealed_nodes = std::numeric_limits<int>::max();
-        int guaranteed_effective_nodes = std::numeric_limits<int>::max();
+        double guaranteed_effective_nodes = std::numeric_limits<double>::max();
         for (const OnDemandSafetyOutcome& outcome : action.outcomes) {
             const int remaining =
                 action_points_after(current_action_points, action.action_point_cost, outcome.action_point_gain);
@@ -3102,6 +3189,8 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
                 root_matches_hint ? &request.route_hint_action_ids : nullptr,
                 &replayed_hint_steps,
                 request.route_search,
+                request.continuation,
+                request.observe_after_one_move,
                 route_search_budget,
                 ranking_options,
                 &route_search_statistics,
@@ -3113,9 +3202,13 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
                 return result;
             }
 
+            candidate.safe = candidate.safe && route.continuation.safe;
             PolicyRouteOutcome route_outcome;
-            route_outcome.revealed_node_count = static_cast<int>(node_mask_size(route.revealed_nodes));
-            route_outcome.effective_node_count = route.effective_node_score;
+            route_outcome.revealed_node_count =
+                static_cast<int>(node_mask_size(route.revealed_nodes)) + route.continuation.revealed_delta;
+            route_outcome.effective_node_count = route.effective_node_score + route.continuation.effective_delta;
+            route_outcome.effective_node_income = route.effective_node_income;
+            route_outcome.effective_node_income += route.continuation.income_delta;
             route_outcome.battle_count = route.metric.battles;
             route_outcome.intermediate_interaction_count = route.intermediate_interactions;
             route_outcome.processing_move_counts = route.metric.processing_move_counts;
@@ -3138,13 +3231,18 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
             for (std::size_t index = 0; index < milestones.size() && index < route.progress.size(); ++index) {
                 route_outcome.milestone_progress.emplace(milestones[index].definition->id, route.progress[index]);
             }
+            if (route_outcome.effective_node_count < guaranteed_effective_nodes) {
+                candidate.effective_node_income = route_outcome.effective_node_income;
+            }
             candidate.route_outcomes.emplace_back(std::move(route_outcome));
 
             worst_intermediate_interactions =
                 std::max(worst_intermediate_interactions, route.intermediate_interactions);
-            guaranteed_revealed_nodes =
-                std::min(guaranteed_revealed_nodes, static_cast<int>(node_mask_size(route.revealed_nodes)));
-            guaranteed_effective_nodes = std::min(guaranteed_effective_nodes, route.effective_node_score);
+            guaranteed_revealed_nodes = std::min(
+                guaranteed_revealed_nodes,
+                static_cast<int>(node_mask_size(route.revealed_nodes)) + route.continuation.revealed_delta);
+            guaranteed_effective_nodes =
+                std::min(guaranteed_effective_nodes, route.effective_node_score + route.continuation.effective_delta);
             const ReachableFeatures outcome_features = planned_route_features(*request.map, route.route);
             merge_route_union(possible_route_features, outcome_features);
             if (!guaranteed_route_features.has_value()) {
@@ -3205,7 +3303,7 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
         candidate.revealed_node_count =
             guaranteed_revealed_nodes == std::numeric_limits<int>::max() ? 0 : guaranteed_revealed_nodes;
         candidate.effective_node_count =
-            guaranteed_effective_nodes == std::numeric_limits<int>::max() ? 0 : guaranteed_effective_nodes;
+            guaranteed_effective_nodes == std::numeric_limits<double>::max() ? 0 : guaranteed_effective_nodes;
         candidate.processing_move_counts = worst_metric.processing_move_counts;
         if (ranking_options.optimize_processing_moves) {
             candidate.processing_move_count = 0;
@@ -3258,6 +3356,24 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
     policy_facts.set(
         "floor_development_exhausted",
         boolean_fact(*request.facts, "floor_development_exhausted") || !has_safe_non_exit);
+
+    if (request.continuation && request.no_AP_is_terminal) {
+        PolicyCandidate direct;
+        direct.move.action_id = "direct_exhaustion";
+        direct.move.movement = MovementKind::Walk;
+        direct.move.source = direct.move.target = direct.move.landing = request.run->current_node;
+        direct.move.predicted_action_point_cost = current_action_points;
+        direct.move.direct_exhaustion = direct.move.terminal_on_completion = true;
+        direct.safe = request.continuation({}).safe;
+        direct.route_length = 1;
+        direct.planned_route = { request.run->current_node };
+        direct.planned_route_steps = { { direct.move, current_action_points, current_action_points, 0, 0 } };
+        OnDemandSafetyAction action;
+        action.candidate = direct.move;
+        direct.facts = on_demand_candidate_facts(*request.map, relaxed_graph, action, *request.run, false);
+        direct.facts.set("candidate.mobile_marker_robust", true);
+        policy_candidates.emplace_back(std::move(direct));
+    }
 
     ResourceRegistry resources;
     PolicyExecutor executor;
@@ -3389,6 +3505,8 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
                 approach_summary.move = selected;
                 approach_summary.revealed_node_count = 0;
                 approach_summary.effective_node_count = 0;
+                approach_summary.effective_node_income = {};
+                approach_summary.expected_node_income = {};
                 approach_summary.battle_count = 1;
                 approach_summary.processing_move_count = boss_approach->processing_moves;
                 approach_summary.persistent_processing_move_count = boss_approach->persistent_processing_moves;

@@ -45,7 +45,8 @@ inline constexpr int TransientRevealObservationMaximumAttempts = 4;
 {
     const Node* node = map.find_node(id);
     return node != nullptr && node->floor == run.floor && node->type != NodeType::Empty &&
-           node->progress != NodeProgress::Removed && !node->identity_revealed && !node->identity_from_prediction &&
+           node->progress == NodeProgress::Active && !node->identity_unrecoverable &&
+           !node->identity_revealed && !node->identity_from_prediction &&
            !run.revealed_nodes.contains(id);
 }
 
@@ -177,6 +178,12 @@ observed_initial_floor_reveals(const MapSnapshot& map, NodeId entrance = Invalid
 {
     std::unordered_set<NodeId> result;
     const auto add_if_initially_unknown = [&](NodeId id) {
+        if (id == landing) {
+            const Node* occupied = map.find_node(id);
+            if (occupied != nullptr && node_has_roaming_resident_marker(*occupied)) {
+                return;
+            }
+        }
         if (initially_unknown_for_reveal(map, run, id)) {
             result.emplace(id);
         }
@@ -269,6 +276,10 @@ observed_move_reveals(const MapSnapshot& before, const RunState& run, const MapS
             continue;
         }
         const Node* observed = after.find_node(id);
+        if (observed != nullptr && observed->type == NodeType::Empty && node_has_roaming_resident_marker(node)) {
+            // 居民战斗结算后空地可见，但原本的未知节点从未被探明。
+            continue;
+        }
         // map_topology_no_ocr_empty 只表示模板槽位存在、但该处没有识别到节点身份。
         // 尤其在右上角被行动力 HUD 遮挡时，它会暂时把未知节点写成空位；这不是一次
         // 有视觉证据的揭示，不能触发“比预期多揭示”的自洽性警告。
@@ -377,50 +388,75 @@ struct RevealConsistencyResult
     });
 }
 
-[[nodiscard]] constexpr int effective_node_weight_at_floor(
+[[nodiscard]] constexpr NodeIncome node_income_at_floor(
     NodeType type,
     int floor,
     std::string_view marker_type = {},
     MovementKind movement = MovementKind::Walk) noexcept
 {
-    int base = 1;
+    if (marker_type == "savage") {
+        return { 1.0, 0.5 };
+    }
+    NodeIncome income;
     switch (type) {
-    case NodeType::Empty:
-    case NodeType::Final:
-    case NodeType::BattleBoss:
-    case NodeType::Sacrifice:
-    case NodeType::Light:
-    case NodeType::Door:
-    case NodeType::Employ:
-    case NodeType::Expedition:
-        base = 0;
-        break;
     case NodeType::BattleElite:
     case NodeType::BattleSavage:
     case NodeType::ScrapShop:
     case NodeType::Duel:
-        base = 2;
+        income = { 1.0, 1.0 };
         break;
     case NodeType::Portal:
-        // 三层误入奇境的路线价值更高，其余楼层仍按两个有效节点计分。
-        base = floor == 3 ? 3 : 2;
+        income = { 2.0, 1.0 };
+        break;
+    case NodeType::Expedition:
+        income.exploration = floor == 2 ? 1.0 : 0.0;
+        break;
+    case NodeType::BattleNormal:
+    case NodeType::Shop:
+    case NodeType::Incident:
+    case NodeType::Rest:
+    case NodeType::Wish:
+    case NodeType::Evacuate:
+    case NodeType::HideBattle:
+    case NodeType::HideInvisible:
+    case NodeType::Sacrifice:
+        income.exploration = 1.0;
         break;
     default:
         break;
     }
 
-    // 藏果地与坎诺特的触须各自提供一个额外探索收益；奖励仍绑定实际落点，
-    // 由 record_effective_landing 按稳定节点 ID 去重。
+    // 标记和加工品收益仍绑定实际落点，与节点基础收益一起去重。
     if (marker_type == "fruit_cache") {
-        ++base;
+        income += { 0.5, 1.0 };
+    }
+    if (marker_type == "informant") {
+        income.development += 1.0;
+    }
+    if (marker_type == "civilization_ashes") {
+        income.exploration += 1.0;
     }
     if (movement == MovementKind::M10) {
-        ++base;
+        income.development += 1.0;
     }
-    return base;
+    return income;
 }
 
-[[nodiscard]] constexpr int effective_node_weight(NodeType type) noexcept
+[[nodiscard]] constexpr double effective_node_weight_at_floor(
+    NodeType type,
+    int floor,
+    std::string_view marker_type = {},
+    MovementKind movement = MovementKind::Walk) noexcept
+{
+    return node_income_at_floor(type, floor, marker_type, movement).total();
+}
+
+[[nodiscard]] constexpr NodeIncome conservative_resident_income(NodeIncome income) noexcept
+{
+    return income.total() > 1.5 ? NodeIncome { 1.0, 0.5 } : income;
+}
+
+[[nodiscard]] constexpr double effective_node_weight(NodeType type) noexcept
 {
     return effective_node_weight_at_floor(type, 0);
 }
@@ -430,12 +466,12 @@ struct RevealConsistencyResult
     return effective_node_weight(type) > 0;
 }
 
-[[nodiscard]] constexpr int effective_node_weight(NodeType type, std::string_view marker_type) noexcept
+[[nodiscard]] constexpr double effective_node_weight(NodeType type, std::string_view marker_type) noexcept
 {
     return effective_node_weight_at_floor(type, 0, marker_type);
 }
 
-[[nodiscard]] constexpr int effective_node_weight(
+[[nodiscard]] constexpr double effective_node_weight(
     NodeType type,
     std::string_view marker_type,
     MovementKind movement) noexcept
@@ -448,7 +484,7 @@ struct RevealConsistencyResult
     return effective_node_weight(type, marker_type) > 0;
 }
 
-inline int record_effective_landing(
+inline double record_effective_landing(
     NodeId landing,
     NodeType landing_type,
     std::string_view marker_type,
@@ -458,7 +494,7 @@ inline int record_effective_landing(
     std::unordered_set<NodeId>& effective_nodes,
     int floor = 0)
 {
-    const int weight = effective_node_weight_at_floor(landing_type, floor, marker_type, movement);
+    const double weight = effective_node_weight_at_floor(landing_type, floor, marker_type, movement);
     if (landing != InvalidNodeId && landing != initial_node && !previously_entered_nodes.contains(landing) &&
         weight > 0) {
         const auto [_, inserted] = effective_nodes.emplace(landing);
@@ -467,7 +503,7 @@ inline int record_effective_landing(
     return 0;
 }
 
-inline int record_effective_landing(
+inline double record_effective_landing(
     NodeId landing,
     NodeType landing_type,
     std::string_view marker_type,
@@ -485,7 +521,7 @@ inline int record_effective_landing(
         effective_nodes);
 }
 
-inline int record_effective_landing(
+inline double record_effective_landing(
     NodeId landing,
     NodeType landing_type,
     NodeId initial_node,

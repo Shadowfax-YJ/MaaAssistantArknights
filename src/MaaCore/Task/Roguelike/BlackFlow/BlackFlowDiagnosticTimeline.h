@@ -10,6 +10,16 @@
 
 namespace asst::blackflow
 {
+[[nodiscard]] inline std::string diagnostic_floor_directory(int floor, int tree_hole_outer_floor = 0)
+{
+    if (floor == 6) {
+        return tree_hole_outer_floor > 0
+                   ? "floor-" + std::to_string(tree_hole_outer_floor) + "-tree-hole"
+                   : "tree-hole";
+    }
+    return "floor-" + std::to_string(std::max(0, floor));
+}
+
 [[nodiscard]] constexpr int diagnostic_processing_item_floor(int run_floor) noexcept
 {
     // Normal routing now rebuilds the map before scanning the parts box. Keep a
@@ -101,18 +111,29 @@ template <typename EvidenceRange>
 
 [[nodiscard]] inline std::string diagnostic_map_section_key(
     int floor,
-    std::uint64_t map_generation,
-    bool floor_four_remembrance)
+    std::uint64_t section_generation,
+    bool floor_four_remembrance,
+    int tree_hole_outer_floor = 0)
 {
-    std::string result = "floor-" + std::to_string(floor) + "-generation-" + std::to_string(map_generation);
+    const int display_floor = tree_hole_outer_floor > 0 ? tree_hole_outer_floor : floor;
+    std::string result = "floor-" + std::to_string(display_floor) + "-generation-" + std::to_string(section_generation);
+    if (tree_hole_outer_floor > 0) {
+        result += "-tree-hole";
+    }
     if (floor_four_remembrance) {
         result += "-remembrance";
     }
     return result;
 }
 
-[[nodiscard]] inline std::string diagnostic_map_section_label(int floor, bool floor_four_remembrance)
+[[nodiscard]] inline std::string diagnostic_map_section_label(
+    int floor,
+    bool floor_four_remembrance,
+    int tree_hole_outer_floor = 0)
 {
+    if (tree_hole_outer_floor > 0) {
+        return std::to_string(tree_hole_outer_floor) + " 层树洞";
+    }
     return (floor_four_remembrance ? "追忆 " : "") + std::to_string(floor) + " 层";
 }
 

@@ -187,6 +187,10 @@ bool BlackFlowLifecycleTaskPlugin::verify(AsstMsg msg, const json::value& detail
         m_terminal_pre_task.clear();
         return true;
     }
+    if (msg == AsstMsg::SubTaskCompleted && task == "BlackFlow@Roguelike@TreeHoleLeaveConfirm") {
+        m_pending = PendingWork::BeginTreeHoleReturn;
+        return true;
+    }
     if (msg == AsstMsg::SubTaskStart && task == "BlackFlow@Roguelike@HuntedConfirmCompleted") {
         m_pending = PendingWork::ResolveHuntedAction;
         m_pending_details = {};
@@ -289,6 +293,13 @@ bool BlackFlowLifecycleTaskPlugin::_run()
     m_terminal_trigger.clear();
     m_terminal_pre_task.clear();
 
+    if (work == PendingWork::BeginTreeHoleReturn) {
+        // 停在离开弹窗时重启 MAA 也要回主菜单，不能依赖本进程曾经识别过树洞地图。
+        if (m_port != nullptr) {
+            m_port->begin_tree_hole_return();
+        }
+        return true;
+    }
     if (work == PendingWork::PrepareRecoveryRetry) {
         if (m_session != nullptr && m_session->terminated()) {
             configure_recovery_retry_action({});
@@ -395,6 +406,20 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             return true;
         }
 
+        if (m_session->in_tree_hole()) {
+            // “离开黑潭”另有确认链；真正的追猎说明已回到行动力为零的外层。
+            // 地图尚未出现也要先恢复外层归属，再走同一套追猎战斗路由。
+            std::string error;
+            if (!m_session->set_current_floor(m_session->outer_floor(), &error)) {
+                m_session->fail("tree_hole_pursuit_restore_failed", error, FailureDisposition::RestartRun);
+                Task.set_task_base("BlackFlow@Roguelike@HuntedAction", "BlackFlow@Roguelike@StrategyTerminated-Enter");
+                report_outputs();
+                return true;
+            }
+        }
+        if (m_port != nullptr) {
+            m_port->finish_tree_hole_return();
+        }
         const int floor = m_session->current_floor().value_or(m_session->run().floor);
         if (floor != 3 && floor >= 1 && floor <= 5) {
             // 自动化收集只适配第三层追猎。其他层明确结束这一局并走可重开的弃局链，

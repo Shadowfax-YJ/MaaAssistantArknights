@@ -12,9 +12,52 @@
 #include <vector>
 
 #include "Utils/FuzzyTextMatcher.h"
+#include "BlackFlowModel.h"
 
 namespace asst::blackflow
 {
+[[nodiscard]] inline NodeId resolve_uncontrollable_page_landing(
+    const MoveCandidate& proposal,
+    const MapSnapshot& map,
+    NodeType entered_type)
+{
+    NodeId resolved = InvalidNodeId;
+    for (const NodeId landing : proposal.possible_landings) {
+        const Node* possible = map.find_node(landing);
+        const bool resident_battle = entered_type == NodeType::BattleNormal && possible != nullptr &&
+                                     node_has_roaming_resident_marker(*possible);
+        const NodeType planned_type = move_landing_type(proposal, landing);
+        // 未知格是候选身份的集合。即便存在一个已知同类格，也必须把兼容的未知格
+        // 一并计入歧义；小八界选中的激活位置不能作为落点证据。
+        const bool compatible_hidden = planned_type == NodeType::Unknown ||
+                                       (planned_type == NodeType::HideInvisible &&
+                                        !is_combat_node_type(entered_type)) ||
+                                       (planned_type == NodeType::HideBattle && is_combat_node_type(entered_type));
+        if (!resident_battle && planned_type != entered_type && !compatible_hidden) {
+            continue;
+        }
+        if (resolved != InvalidNodeId) {
+            return InvalidNodeId;
+        }
+        resolved = landing;
+    }
+    return resolved;
+}
+
+inline void reveal_event_notebook_identity(Node& node, NodeType type, const std::string& event_name)
+{
+    node.type = type;
+    node.name = event_name;
+    node.traversal = default_traversal_for(type);
+    node.identity_revealed = true;
+    node.identity_state = NodeIdentityState::Classified;
+    node.identity_from_topology = false;
+    node.identity_from_prediction = false;
+    node.prediction_rule.clear();
+    node.identity_source = "event_name";
+    node.detected_by_vision = true;
+}
+
 inline constexpr const char* LakeFairyEventName = "湖中仙女";
 inline constexpr const char* GoldStasisEventName = "金色凝滞";
 inline constexpr const char* PeaceGuardEventName = "和平守卫者";
@@ -311,7 +354,7 @@ inline void append_healing_heart_route_sample(
 [[nodiscard]] inline LinkedEncounterRouteValue adjusted_linked_encounter_route_value(
     LinkedEncounterRouteValue route,
     int immediate_revealed_node_count,
-    int immediate_effective_node_weight)
+    double immediate_effective_node_weight)
 {
     for (std::size_t index = 0;
          index < route.lexicographic_score_labels.size() && index < route.lexicographic_score.size();
@@ -321,7 +364,7 @@ inline void append_healing_heart_route_sample(
             route.lexicographic_score[index] -= std::max(0, immediate_revealed_node_count);
         }
         else if (label == "effective_node_count") {
-            route.lexicographic_score[index] -= std::max(0, immediate_effective_node_weight);
+            route.lexicographic_score[index] -= income_order_score(std::max(0.0, immediate_effective_node_weight));
         }
     }
     return route;
@@ -330,7 +373,7 @@ inline void append_healing_heart_route_sample(
 [[nodiscard]] inline bool linked_encounter_free_transfer_is_stably_better(
     const LinkedEncounterRouteValue& baseline,
     const LinkedEncounterRouteValue& transferred,
-    int immediate_effective_node_weight,
+    double immediate_effective_node_weight,
     int baseline_immediate_revealed_node_count,
     int transferred_immediate_revealed_node_count)
 {

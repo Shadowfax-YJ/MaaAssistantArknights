@@ -70,9 +70,10 @@ enum class InventoryScanAction
 inline constexpr int InventoryMaximumSwipes = 4;
 inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
 
-// 固定次数的往返手势并不互相抵消。到达左端后，还需连续两次手势不再移动列表。
-template <typename Swipe, typename Unchanged>
-[[nodiscard]] bool scroll_inventory_to_start(Swipe swipe, Unchanged unchanged)
+// 固定次数的往返手势并不互相抵消。连续静止可确认回到左端；画面一直变化时，
+// 由调用方收起再展开零件箱恢复首屏。手势执行失败（包括用户停止）不能触发恢复点击。
+template <typename Swipe, typename Unchanged, typename Reopen>
+[[nodiscard]] bool scroll_inventory_to_start(Swipe swipe, Unchanged unchanged, Reopen reopen)
 {
     constexpr int MaximumResetSwipes = InventoryMaximumSwipes * 2 + 2;
     int stationary_swipes = 0;
@@ -85,7 +86,58 @@ template <typename Swipe, typename Unchanged>
             return true;
         }
     }
-    return false;
+    return reopen();
+}
+
+template <typename Swipe, typename Unchanged>
+[[nodiscard]] bool scroll_inventory_to_start(Swipe swipe, Unchanged unchanged)
+{
+    return scroll_inventory_to_start(swipe, unchanged, [] { return false; });
+}
+
+enum class InventoryPanelState
+{
+    Unknown,
+    Collapsed,
+    Expanded,
+};
+
+// 重开必须先确认收起，再确认展开。转换帧不能触发点击；丢失的点击允许重试，
+// 迟到的展开则只观察，避免紧接着第二次点击又把零件箱收起。
+template <typename Observe, typename Toggle, typename Wait>
+[[nodiscard]] bool reopen_inventory_to_start(Observe observe, Toggle toggle, Wait wait)
+{
+    constexpr int MaximumSamples = 16;
+    constexpr int MaximumClicks = 2;
+    constexpr int ClickObservationSamples = 5;
+    for (const auto target : { InventoryPanelState::Collapsed, InventoryPanelState::Expanded }) {
+        int clicks = 0;
+        int cooldown = 0;
+        int consecutive = 0;
+        for (int sample = 0; sample < MaximumSamples; ++sample) {
+            const auto current = observe();
+            consecutive = current == target ? consecutive + 1 : 0;
+            if (consecutive >= 2) {
+                break;
+            }
+            if (current != InventoryPanelState::Unknown && current != target && cooldown == 0 &&
+                clicks < MaximumClicks) {
+                if (!toggle(current)) {
+                    return false;
+                }
+                ++clicks;
+                cooldown = ClickObservationSamples;
+            }
+            if (!wait()) {
+                return false;
+            }
+            cooldown = std::max(0, cooldown - 1);
+        }
+        if (consecutive < 2) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // 到达最右端后游戏列表会回弹，最右名称的中心会明显向左退。

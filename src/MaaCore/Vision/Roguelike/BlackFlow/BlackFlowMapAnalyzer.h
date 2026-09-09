@@ -52,6 +52,7 @@ struct MapTopologyTemplate
     std::vector<TopologyCoordinate> terminals;
     std::vector<TopologyFixedNode> fixed_nodes;
     std::vector<TopologyEdge> edges;
+    std::string tree_hole_color;
 };
 
 struct MapRecognitionResult
@@ -67,6 +68,8 @@ struct MapRecognitionResult
     NodeDetectionResult node_detection;
     EdgeDetectionResult edge_detection;
     std::string topology_template_id;
+    std::string tree_hole_effect;
+    std::string tree_hole_color;
     std::string topology_source_digest;
     int topology_base_edge_count = 0;
     int topology_extra_edge_count = 0;
@@ -100,7 +103,8 @@ public:
         int difficulty,
         std::string_view utopia_ideology,
         std::string_view utopia_policy,
-        bool render_overlay) const;
+        bool render_overlay,
+        std::string_view tree_hole_effect = {}) const;
     void reset_topology_cache() const;
     [[nodiscard]] cv::Mat draw_overlay(const MapRecognitionResult& result) const;
     [[nodiscard]] bool loaded() const noexcept;

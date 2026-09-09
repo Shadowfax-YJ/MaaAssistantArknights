@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <string_view>
+#include <utility>
 
 namespace asst::blackflow::perception
 {
@@ -32,8 +34,47 @@ inline constexpr std::array FloorFiveProfileCandidates = {
     FloorProfile { 5, 5, 9 },
 };
 
+// Temporary maps have a separate coordinate namespace, not a sixth main floor.
+inline constexpr int TreeHoleFloor = 6;
+
+// 以弹层读到的乌托邦名称约束模板，不从地图背景的灰雾或红色标题图标猜颜色。
+[[nodiscard]] constexpr std::string_view tree_hole_mist_color(std::string_view effect) noexcept
+{
+    constexpr std::array<std::pair<std::string_view, std::string_view>, 9> colors = {
+        std::pair { "巨人摇篮", "red" },   { "迪斯科狂热", "red" }, { "已知浩劫", "red" },
+        { "孤立石林", "red" },           { "全知者盲区", "blue" }, { "未亡者遗怨", "green" },
+        { "源石之城", "gold" },           { "消耗螺旋", "orange" }, { "换心联结", "purple" },
+    };
+    std::string_view result;
+    for (const auto& [name, color] : colors) {
+        if (effect.find(name) != std::string_view::npos) {
+            if (!result.empty() && result != color) {
+                return {}; // 混合标题不提供可信的颜色约束。
+            }
+            result = color;
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] constexpr bool topology_matches_tree_hole_color(
+    int floor,
+    std::string_view template_color,
+    std::string_view observed_color) noexcept
+{
+    return floor != TreeHoleFloor || observed_color.empty() || template_color == observed_color;
+}
+
+inline constexpr std::array TreeHoleProfileCandidates = {
+    FloorProfile { 6, 4, 5 }, FloorProfile { 6, 3, 3 }, FloorProfile { 6, 3, 5 }, FloorProfile { 6, 1, 7 },
+    FloorProfile { 6, 4, 4 }, FloorProfile { 6, 2, 5 }, FloorProfile { 6, 1, 6 }, FloorProfile { 6, 5, 5 },
+};
+
 [[nodiscard]] constexpr std::span<const FloorProfile> floor_profile_candidates(int floor) noexcept
 {
+    if (floor == TreeHoleFloor) {
+        return TreeHoleProfileCandidates;
+    }
     if (floor < 1 || floor > static_cast<int>(FloorProfiles.size())) {
         return {};
     }
@@ -45,6 +86,9 @@ inline constexpr std::array FloorFiveProfileCandidates = {
 
 [[nodiscard]] constexpr std::optional<FloorProfile> floor_profile(int floor) noexcept
 {
+    if (floor == TreeHoleFloor) {
+        return FloorProfile { 6, 5, 7 };
+    }
     const auto candidates = floor_profile_candidates(floor);
     if (candidates.empty()) {
         return std::nullopt;

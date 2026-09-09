@@ -81,6 +81,7 @@ struct PendingMoveCandidate
 struct PageExecutionContext
 {
     std::uint64_t run_revision = 0;
+    std::uint64_t map_generation = 0;
     std::uint64_t page_revision = 0;
     std::string decision_id;
     std::string transaction_id;
@@ -105,6 +106,9 @@ struct PageExecutionContext
     bool linked_transfer_selected = false;
     std::optional<NodeType> linked_transfer_type;
     std::vector<NodeId> linked_transfer_targets;
+    // 流窜居民只决定实际执行的战斗页，不能证明被占据节点的身份。
+    // 在进入前保存原节点；随机移动则等回图确认落点后补齐。
+    std::optional<Node> resident_occupied_node;
 };
 
 struct NodeAttributionRecord
@@ -166,6 +170,22 @@ public:
 
     [[nodiscard]] bool completed_page_changes_floor() const noexcept;
 
+    [[nodiscard]] bool in_tree_hole() const noexcept { return m_tree_outer != nullptr; }
+
+    [[nodiscard]] int outer_floor() const noexcept { return in_tree_hole() ? m_tree_outer->m_run.floor : m_run.floor; }
+    [[nodiscard]] bool roaming_residents_allowed() const noexcept
+    {
+        return outer_floor() == 3 || (!in_tree_hole() && m_run.floor == 2 && !m_expedition_core_away);
+    }
+
+    [[nodiscard]] bool tree_hole_nodes_shuffle() const noexcept;
+    [[nodiscard]] bool tree_hole_duel_used() const noexcept;
+    std::optional<std::size_t> portal_choice(const std::vector<std::string>& prices) const;
+    void record_portal_choice(std::string item);
+    bool enter_tree_hole(std::string* error);
+    bool restore_outer_map(int floor, std::string* error);
+    RouteContinuationEvaluator tree_hole_continuation() const;
+
     [[nodiscard]] bool movement_inventory_refresh_required() const noexcept
     {
         return m_movement_inventory_refresh_required;
@@ -208,6 +228,10 @@ public:
     // 事件选项在页面识别完成后询问当前会话：关联节点免费传送由两份假设规划比较，
     // 险路尽头则直接服从本次已选路线的终局/路过语义。
     [[nodiscard]] std::optional<std::size_t> preferred_encounter_choice(std::string_view event_name);
+
+    [[nodiscard]] bool can_dispatch_expedition_core();
+    void record_expedition_dispatch(std::string_view operator_name);
+    [[nodiscard]] std::unordered_set<NodeType> forbidden_landing_types() const;
 
     // 需要按配置名称而非画面位置动态排序的事件走这个接口。“愈创之心”会先保留固定
     // 第一项，再按物理终点安全性与正常路线收益排列两个代价选项，并省略不安全的项。
@@ -352,6 +376,15 @@ private:
     bool set_fact(std::string_view name, FactValue value, std::string* error);
     bool apply_node_signal(const NodeStrategySignal& signal, const json::value& callback_details, std::string* error);
 
+    // The outer transaction remains pending until a real outer-map observation resolves its landing.
+    std::shared_ptr<const BlackFlowSession> m_tree_outer;
+    bool m_tree_continuation_projection = false;
+    std::string m_tree_effect;
+    std::string m_tree_effect_description;
+    std::uint64_t m_tree_duel_page = 0;
+    std::uint64_t m_portal_page = 0;
+    std::string m_portal_item;
+
     std::string m_profile;
     std::string m_start_core_char;
     std::string m_start_squad;
@@ -368,8 +401,11 @@ private:
     ViewportObservation m_viewport;
     RunState m_run;
     std::optional<int> m_current_floor;
+    bool m_expedition_core_away = false;
     int m_difficulty = 0;
     std::uint64_t m_map_generation = 0;
+    // A tree-hole round trip refreshes perception but resumes the same report section.
+    std::uint64_t m_map_section_generation = 0;
     std::uint64_t m_initial_prediction_generation = 0;
     std::optional<std::uint64_t> m_initial_reveal_checked_generation;
     bool m_current_map_is_floor_four_remembrance = false;

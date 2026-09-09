@@ -170,6 +170,21 @@ double NodeDetector::brightness_delta(const cv::Mat& gray, cv::Point2f center, N
 
 std::optional<GridGeometry> NodeDetector::fixed_grid(int rows, int columns)
 {
+    if (rows == 3 && columns == 3) {
+        return make_grid(rows, columns, 538.0, 194.0, 101.0, 101.0);
+    }
+    if (rows == 1 && (columns == 6 || columns == 7)) {
+        return make_grid(rows, columns, 387.5, 346.0, 101.0, 101.0);
+    }
+    if (rows == 4 && columns == 4) {
+        return make_grid(rows, columns, 488.5, 194.0, 101.0, 101.0);
+    }
+    if (rows == 2 && columns == 5) {
+        return make_grid(rows, columns, 438.0, 296.0, 101.0, 101.0);
+    }
+    if (rows == 5 && columns == 5) {
+        return make_grid(rows, columns, 438.0, 144.0, 101.0, 101.0);
+    }
     if (rows == 3 && columns == 5) {
         return make_grid(rows, columns, 438.0, 242.0, 101.0, 101.0);
     }
@@ -583,7 +598,9 @@ NodeDetectionResult NodeDetector::detect(
     }
 
     for (const auto& spec : m_bridge.node_marker_templates()) {
-        for (const auto& hit : m_bridge.query_multi(atlas, map_roi, spec, spec.threshold, 12)) {
+        // 自动上移后的首行角标可能位于 map_roi 上方；与当前位置标记共用扩展区域，
+        // 再用网格距离约束归属，不能在搜索前先裁掉流窜居民等节点角标。
+        for (const auto& hit : m_bridge.query_multi(atlas, marker_roi, spec, spec.threshold, 12)) {
             const auto index = nearest_cell(output.grid, hit.center(), m_config.marker_grid_tolerance);
             if (!index) {
                 continue;
@@ -605,6 +622,9 @@ NodeDetectionResult NodeDetector::detect(
         }
         else if (node.marker_type == "fruit_cache") {
             node.evidence.push_back("maa_fruit_cache_marker_score_atlas");
+        }
+        else if (!node.marker_type.empty()) {
+            node.evidence.push_back("maa_" + node.marker_type + "_marker_score_atlas");
         }
     }
 

@@ -4,6 +4,8 @@
 #include "AbstractRoguelikeTaskPlugin.h"
 #include "Config/Roguelike/RoguelikeStageEncounterConfig.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEncounterRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
 #include "Vision/Roguelike/RoguelikeEncounterOptionAnalyzer.h"
 
 namespace asst
@@ -47,6 +49,38 @@ public:
 
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
 
+    void
+        set_blackflow_expedition_context_provider(std::function<std::optional<blackflow::ExpeditionContext>()> provider)
+    {
+        m_expedition_context_provider = std::move(provider);
+    }
+
+    void set_blackflow_expedition_dispatch_observer(std::function<void(std::string_view)> observer)
+    {
+        m_expedition_dispatch_observer = std::move(observer);
+    }
+
+    virtual void reset_in_run_variables() override;
+
+    void set_blackflow_sacrifice_context_provider(std::function<std::optional<blackflow::SacrificeContext>()> provider)
+    {
+        m_sacrifice_context_provider = std::move(provider);
+    }
+
+    void set_event_detail_observer(
+        std::function<void(std::string_view, std::string_view, json::object, const cv::Mat&)> observer)
+    {
+        m_event_detail_observer = std::move(observer);
+    }
+
+    void set_blackflow_portal_handlers(
+        std::function<std::optional<std::size_t>(const std::vector<std::string>&)> choice,
+        std::function<void(std::string)> selected)
+    {
+        m_portal_choice = std::move(choice);
+        m_portal_selected = std::move(selected);
+    }
+
 protected:
     virtual bool _run() override;
 
@@ -57,6 +91,16 @@ protected:
     int hp(const cv::Mat& image) const;
 
 private:
+    bool refresh_sacrifice_context();
+    bool handle_sacrifice_event();
+    bool handle_sacrifice_picker();
+    bool finish_sacrifice_civilization();
+    std::optional<std::vector<std::string>> scan_sacrifice_natural_items(std::string_view phase);
+    void report_sacrifice(std::string_view phase, json::object details, const cv::Mat& image);
+    void refresh_expedition_context();
+    bool wait_for_secondary_event(std::string_view picker_task);
+    bool handle_expedition_picker();
+    void confirm_expedition_dispatch();
     bool update_option_list(std::string_view event_name);
     bool select_analyzed_option(size_t index);
     std::optional<Rect> wait_for_analyzed_option_stable(size_t index);
@@ -73,6 +117,8 @@ private:
 
     static bool save_img(const cv::Mat& image, std::string_view description = "image");
 
+    std::function<std::optional<std::size_t>(const std::vector<std::string>&)> m_portal_choice;
+    std::function<void(std::string)> m_portal_selected;
     OptionAnalyzer::Result m_option_list;
     size_t m_view_begin = 0;
     size_t m_view_end = 0;
@@ -87,6 +133,28 @@ private:
     std::optional<blackflow::LakeFairyChoicePlan> m_lake_fairy_plan;
     size_t m_lake_fairy_initial_choice_index = 0;
     bool m_lake_fairy_unique_choice_selected = false;
+    std::function<std::optional<blackflow::ExpeditionContext>()> m_expedition_context_provider;
+    std::function<void(std::string_view)> m_expedition_dispatch_observer;
+    std::optional<blackflow::ExpeditionContext> m_expedition_context;
+    std::string m_expedition_pending_operator;
+    bool m_expedition_finished = false;
+    std::optional<size_t> m_expedition_initial_choice;
+
+    std::function<std::optional<blackflow::SacrificeContext>()> m_sacrifice_context_provider;
+    std::function<void(std::string_view, std::string_view, json::object, const cv::Mat&)> m_event_detail_observer;
+
+    struct SacrificeState
+    {
+        std::optional<blackflow::SacrificeContext> context;
+        blackflow::SacrificePhase phase = blackflow::SacrificePhase::Initial;
+        int exchanges = 0;
+        std::optional<size_t> initial_choice;
+        std::optional<Rect> selected_card;
+        std::string selected_name;
+        std::optional<std::vector<std::string>> naturals_before;
+        bool civilization_inventory_scanned = false;
+        bool civilization_transition_seen = false;
+    } m_sacrifice;
 
     static constexpr size_t MAX_SWIPE_TIMES = 1;
     static constexpr size_t BLACKFLOW_MAX_SWIPE_TIMES = 8;

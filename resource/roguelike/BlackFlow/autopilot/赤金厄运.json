@@ -24,7 +24,7 @@
         },
         {
             "groups": ["古米"],
-            "location": [8, 1],
+            "location": [9, 1],
             "direction": "right"
         }
     ]

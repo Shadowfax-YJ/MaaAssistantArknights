@@ -116,16 +116,24 @@ std::vector<MapTopologyTemplate>
         MapTopologyTemplate topology;
         topology.id = entry.at("id").get<std::string>();
         topology.floor = entry.at("floor").get<int>();
+        topology.tree_hole_color = entry.value("tree_hole_color", std::string {});
+        if (topology.floor == TreeHoleFloor && topology.tree_hole_color != "red" &&
+            topology.tree_hole_color != "blue" && topology.tree_hole_color != "green" &&
+            topology.tree_hole_color != "gold" && topology.tree_hole_color != "orange" &&
+            topology.tree_hole_color != "purple") {
+            throw std::runtime_error("BlackFlow tree-hole topology has no valid mist color");
+        }
         const auto grid_shape = entry.at("grid_shape");
-        if (topology.id.empty() || !ids.emplace(topology.id).second || topology.floor < 1 || topology.floor > 5 ||
-            !grid_shape.is_array() || grid_shape.size() != 2) {
+        if (topology.id.empty() || !ids.emplace(topology.id).second || topology.floor < 1 ||
+            topology.floor > TreeHoleFloor || !grid_shape.is_array() || grid_shape.size() != 2) {
             throw std::runtime_error("invalid or duplicate BlackFlow topology template");
         }
         topology.columns = grid_shape.at(0).get<int>();
         topology.rows = grid_shape.at(1).get<int>();
         const auto profile = floor_profile(topology.floor);
         if (!profile.has_value() || topology.columns <= 0 || topology.columns > profile->columns ||
-            topology.rows != profile->rows) {
+            (topology.floor == TreeHoleFloor ? topology.rows <= 0 || topology.rows > profile->rows
+                                             : topology.rows != profile->rows)) {
             throw std::runtime_error("BlackFlow topology grid_shape exceeds its floor recognition grid");
         }
         topology.start = parse_topology_coordinate(entry.at("start_slot"), topology.columns, topology.rows);
@@ -196,9 +204,9 @@ std::vector<MapTopologyTemplate>
         ++floor_counts[topology.floor];
         result.emplace_back(std::move(topology));
     }
-    const std::map<int, int> expected_counts { { 1, 3 }, { 2, 10 }, { 3, 10 }, { 4, 10 }, { 5, 10 } };
-    if (result.size() != 43 || floor_counts != expected_counts) {
-        throw std::runtime_error("BlackFlow topology library must contain 3/10/10/10/10 templates");
+    const std::map<int, int> expected_counts { { 1, 3 }, { 2, 10 }, { 3, 10 }, { 4, 10 }, { 5, 10 }, { 6, 9 } };
+    if (result.size() != 52 || floor_counts != expected_counts) {
+        throw std::runtime_error("BlackFlow topology library must contain 3/10/10/10/10/9 templates");
     }
     return result;
 }
@@ -478,10 +486,15 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
     int difficulty,
     std::string_view utopia_ideology,
     std::string_view utopia_policy,
-    bool render_overlay) const
+    bool render_overlay,
+    std::string_view tree_hole_effect) const
 {
     MapRecognitionResult result;
     result.floor = floor;
+    if (floor == TreeHoleFloor) {
+        result.tree_hole_effect = tree_hole_effect;
+        result.tree_hole_color = tree_hole_mist_color(tree_hole_effect);
+    }
     std::chrono::steady_clock::time_point normalization_start;
     std::chrono::steady_clock::time_point recognition_start;
     bool normalization_started = false;
@@ -527,14 +540,30 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
             };
 
             std::vector<FloorProfile> profiles;
+            const auto eligible_topology = [&](const MapTopologyTemplate& topology) {
+                return topology.floor == floor &&
+                       topology_matches_tree_hole_color(floor, topology.tree_hole_color, result.tree_hole_color);
+            };
             const bool same_floor_template_locked =
                 m_cached_topology.has_value() && m_topologies[*m_cached_topology].floor == floor;
             if (same_floor_template_locked) {
                 const MapTopologyTemplate& topology = m_topologies[*m_cached_topology];
+                if (!eligible_topology(topology)) {
+                    throw std::runtime_error(
+                        "BlackFlow cached topology " + topology.id + " conflicts with tree-hole effect " +
+                        result.tree_hole_effect);
+                }
                 profiles.emplace_back(FloorProfile { floor, topology.rows, topology.columns });
             }
             else {
-                profiles.assign(profile_candidates.begin(), profile_candidates.end());
+                for (const auto& profile : profile_candidates) {
+                    if (std::ranges::any_of(m_topologies, [&](const auto& topology) {
+                            return eligible_topology(topology) && topology.rows == profile.rows &&
+                                   topology.columns == profile.columns;
+                        })) {
+                        profiles.emplace_back(profile);
+                    }
+                }
             }
 
             std::vector<ProfileRecognition> recognitions;
@@ -565,7 +594,29 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                 return recognition;
             };
             for (const FloorProfile& profile : profiles) {
-                recognitions.emplace_back(recognize_profile(profile));
+                try {
+                    recognitions.emplace_back(recognize_profile(profile));
+                }
+                catch (const std::exception&) {
+                    if (floor != TreeHoleFloor) {
+                        throw;
+                    }
+                }
+                // The two 3x3 layouts are centered half a row apart. Empty-node alignment is periodic,
+                // so evaluate the second observed layout explicitly rather than accepting shifted corridors as nodes.
+                try {
+                    if (floor == TreeHoleFloor && profile.rows == 3 && profile.columns == 3) {
+                        recognitions.emplace_back(recognize_profile(profile, cv::Point2d(0, 50)));
+                    }
+                }
+                catch (const std::exception&) {
+                    if (floor != TreeHoleFloor) {
+                        throw;
+                    }
+                }
+            }
+            if (recognitions.empty()) {
+                throw std::runtime_error("no supported grid matched visible tree-hole nodes");
             }
 
             // Auto-pan can move a five-row map by more than half a row after a movement. Empty-node anchors are
@@ -575,7 +626,11 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
             if (same_floor_template_locked) {
                 const MapTopologyTemplate& topology = m_topologies[*m_cached_topology];
                 const ProfileRecognition& primary = recognitions.front();
-                if (topology_match_score(topology, primary.nodes, primary.edges) == InvalidTopologyMatchScore) {
+                const bool already_matched = std::ranges::any_of(recognitions, [&](const auto& recognition) {
+                    return topology_match_score(topology, recognition.nodes, recognition.edges) !=
+                           InvalidTopologyMatchScore;
+                });
+                if (!already_matched) {
                     const FixedGridAliasRetryPlan retry_plan = make_fixed_grid_alias_retry_plan(
                         primary.profile.floor,
                         primary.profile.rows,
@@ -586,9 +641,14 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                     // retry_plan 在追加 recognitions 之前复制了全部参数。第一次 emplace 可能扩容，
                     // 不能再读取上面的 primary 引用，否则第二次重试会拿到损坏的行列数。
                     for (std::size_t index = 1; index < retry_plan.translation_y.size(); ++index) {
-                        recognitions.emplace_back(recognize_profile(
-                            FloorProfile { retry_plan.floor, retry_plan.rows, retry_plan.columns },
-                            cv::Point2d(retry_plan.translation_x, retry_plan.translation_y[index])));
+                        try {
+                            recognitions.emplace_back(recognize_profile(
+                                FloorProfile { retry_plan.floor, retry_plan.rows, retry_plan.columns },
+                                cv::Point2d(retry_plan.translation_x, retry_plan.translation_y[index])));
+                        }
+                        catch (const std::exception&) {
+                            // 一种坐标偏移没有节点时继续检查其他偏移，不能丢弃已有的有效识别。
+                        }
                     }
                 }
             }
@@ -596,7 +656,7 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                 bool any_initial_match = false;
                 for (const ProfileRecognition& recognition : recognitions) {
                     for (const MapTopologyTemplate& topology : m_topologies) {
-                        if (topology.floor == floor && topology.rows == recognition.profile.rows &&
+                        if (eligible_topology(topology) && topology.rows == recognition.profile.rows &&
                             topology.columns == recognition.profile.columns &&
                             topology_match_score(topology, recognition.nodes, recognition.edges) !=
                                 InvalidTopologyMatchScore) {
@@ -619,9 +679,14 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                         const double spacing_y = recognitions[primary_index].nodes.seed_grid.spacing_y;
                         const auto aliases = fixed_grid_row_alias_offsets(primary_y, spacing_y);
                         for (std::size_t index = 1; index < aliases.size(); ++index) {
-                            recognitions.emplace_back(recognize_profile(
-                                profile,
-                                cv::Point2d(primary_x, aliases[index])));
+                            try {
+                                recognitions.emplace_back(recognize_profile(
+                                    profile,
+                                    cv::Point2d(primary_x, aliases[index])));
+                            }
+                            catch (const std::exception&) {
+                                // 偏移试探失败不代表整张地图无法识别。
+                            }
                         }
                     }
                 }
@@ -655,7 +720,7 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                     const ProfileRecognition& recognition = recognitions[recognition_index];
                     for (std::size_t topology_index = 0; topology_index < m_topologies.size(); ++topology_index) {
                         const MapTopologyTemplate& topology = m_topologies[topology_index];
-                        if (topology.floor != floor || topology.rows != recognition.profile.rows ||
+                        if (!eligible_topology(topology) || topology.rows != recognition.profile.rows ||
                             topology.columns != recognition.profile.columns) {
                             continue;
                         }
@@ -667,6 +732,33 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                         else if (score == matched_score && score != std::numeric_limits<int>::min()) {
                             tied_matches.emplace_back(recognition_index, topology_index);
                         }
+                    }
+                }
+                if (floor == TreeHoleFloor && tied_matches.size() > 1) {
+                    const auto first = tied_matches.front();
+                    const auto& shape = m_topologies[first.second];
+                    const auto& grid = recognitions[first.first].nodes;
+                    // 只有节点、坐标和每条边完全相同才能合并并列结果。
+                    // 田字形与日字形虽然同为 3x3 网格，但连线不同，不能作为等价模板。
+                    const bool equivalent = std::ranges::all_of(tied_matches, [&](const auto& match) {
+                        const auto& other = m_topologies[match.second];
+                        const auto& observed = recognitions[match.first].nodes;
+                        return shape.rows == other.rows && shape.columns == other.columns &&
+                               shape.occupied == other.occupied && grid.grid.origin_x == observed.grid.origin_x &&
+                               grid.grid.origin_y == observed.grid.origin_y &&
+                               topology_edge_keys(shape, grid) == topology_edge_keys(other, observed);
+                    });
+                    if (equivalent) {
+                        auto selected = first;
+                        for (const auto& match : tied_matches) {
+                            const auto& t = m_topologies[match.second];
+                            const auto* start = find_node(recognitions[match.first].nodes, t.start);
+                            if (start != nullptr && start->current_marker) {
+                                selected = match;
+                                break;
+                            }
+                        }
+                        tied_matches = { selected };
                     }
                 }
                 if (tied_matches.size() == 1) {

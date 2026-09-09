@@ -13,6 +13,7 @@
 
 #include "BlackFlowCollectionPopup.h"
 
+#include "MaaUtils/Conf.h"
 #include "MaaUtils/ImageIo.h"
 
 namespace asst::blackflow
@@ -122,7 +123,7 @@ bool is_collection_node_directory(const std::filesystem::path& path)
     }
     const std::filesystem::path floor = path.parent_path();
     return path.filename().generic_string().starts_with("node-") &&
-           floor.filename().generic_string().starts_with("floor-") &&
+           (floor.filename().generic_string().starts_with("floor-") || floor.filename() == "tree-hole") &&
            floor.parent_path() == std::filesystem::path(CollectionPopupRootDirectory);
 }
 } // namespace
@@ -191,6 +192,7 @@ bool BlackFlowRunLog::ensure_started(
         const json::object manifest {
             { "schema_version", BlackFlowRunLogSchemaVersion },
             { "logger", "blackflow.run" },
+            { "collector_version", MAA_VERSION },
             { "run_revision", run_revision },
             { "started_at", utc_timestamp(now) },
             { "timezone", "UTC" },
@@ -293,12 +295,59 @@ bool BlackFlowRunLog::ensure_node_attribution_file(
         set_error(error, "BlackFlow node attribution directory is not a valid node path");
         return false;
     }
+    if (std::filesystem::exists(m_run_directory / relative_directory / BlackFlowNodeAttributionFileName)) {
+        return true;
+    }
+    return update_node_attribution_file(relative_directory, {}, std::nullopt, error);
+}
+
+bool BlackFlowRunLog::update_node_attribution_file(
+    const std::filesystem::path& relative_directory,
+    const json::object& attribution,
+    std::optional<std::string_view> annotation,
+    std::string* error) const
+{
+    if (!is_safe_relative_directory(relative_directory) ||
+        relative_directory.begin()->generic_string() != CollectionPopupRootDirectory) {
+        set_error(error, "BlackFlow node attribution directory is not a safe collection path");
+        return false;
+    }
+    const auto path = m_run_directory / relative_directory / BlackFlowNodeAttributionFileName;
+    json::object metadata;
+    if (std::filesystem::exists(path)) {
+        auto previous = json::open(path);
+        if (!previous.has_value() || !previous->is_object()) {
+            set_error(error, "failed to read node attribution metadata; preserving the existing file");
+            return false;
+        }
+        metadata = previous->as_object();
+    }
+    // 截图归属和身份修正只更新元数据，不能覆盖按发生顺序保存的来源说明。
+    // 重复说明代表多次触发（例如丰饶树冢），不能去重。
+    json::array annotations;
+    if (const auto* existing = metadata.find_value("annotations"); existing != nullptr) {
+        if (!existing->is_array() ||
+            !std::ranges::all_of(existing->as_array(), [](const auto& value) { return value.is_string(); })) {
+            set_error(error, "node attribution annotations must be an array of strings");
+            return false;
+        }
+        annotations = existing->as_array();
+    }
+    for (const auto& [key, value] : attribution) {
+        if (key != "annotations") {
+            metadata[key] = value;
+        }
+    }
+    if (annotation.has_value()) {
+        annotations.emplace_back(std::string(*annotation));
+    }
+    metadata["annotations"] = std::move(annotations);
     std::filesystem::create_directories(m_run_directory / relative_directory);
-    std::ofstream output(
-        m_run_directory / relative_directory / BlackFlowNodeAttributionFileName,
-        std::ios::out | std::ios::app | std::ios::binary);
+    std::ofstream output(path, std::ios::out | std::ios::binary);
+    output << json::value(metadata).format();
+    output.flush();
     if (!output) {
-        set_error(error, "failed to create BlackFlow node attribution text file");
+        set_error(error, "failed to write node attribution metadata");
         return false;
     }
     return true;
@@ -309,7 +358,7 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
     try {
         for (const NodeId node : run_log_collection_nodes_to_materialize(state)) {
             const int floor = static_cast<int>(node >> 48U);
-            if (!ensure_node_attribution_file(collection_popup_regular_node_directory(floor, node), error)) {
+            if (!ensure_node_attribution_file(collection_popup_regular_node_directory(floor, node, state.get("tree_hole_outer_floor", 0)), error)) {
                 return false;
             }
         }
@@ -319,7 +368,7 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
                 const json::value* raw_node = page->find_value("node");
                 const auto node = raw_node == nullptr ? std::nullopt : run_log_node_id(*raw_node);
                 if (node.has_value() && *node != 0 && *node != std::numeric_limits<std::uint64_t>::max() &&
-                    !ensure_node_attribution_file(collection_popup_regular_node_directory(floor, *node), error)) {
+                    !ensure_node_attribution_file(collection_popup_regular_node_directory(floor, *node, state.get("tree_hole_outer_floor", 0)), error)) {
                     return false;
                 }
             }
@@ -328,7 +377,7 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
                 const std::uint64_t revision = page->get("page_revision", std::uint64_t { 0 });
                 if (!name.empty() &&
                     !ensure_node_attribution_file(
-                        collection_popup_virtual_node_directory(floor, name, revision),
+                        collection_popup_virtual_node_directory(floor, name, revision, state.get("tree_hole_outer_floor", 0)),
                         error)) {
                     return false;
                 }
@@ -352,6 +401,64 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
     }
 }
 
+bool BlackFlowRunLog::sync_collection_node_identities(const json::object& state, std::string* error) const
+{
+    const json::value* nodes = state.find_value("exploration_note_nodes");
+    if (nodes == nullptr) {
+        if (const json::value* notebook = state.find_value("exploration_notebook");
+            notebook != nullptr && notebook->is_object()) {
+            nodes = notebook->find_value("nodes");
+        }
+    }
+    if (nodes == nullptr || !nodes->is_array()) {
+        return true;
+    }
+    for (const json::value& node : nodes->as_array()) {
+        if (!node.is_object() || !node.get("identity_revealed", false) ||
+            node.get("identity_from_prediction", false)) {
+            continue;
+        }
+        const json::value* raw_id = node.find_value("id");
+        const auto id = raw_id == nullptr ? std::nullopt : run_log_node_id(*raw_id);
+        if (!id.has_value() || *id == 0 || *id == std::numeric_limits<std::uint64_t>::max()) {
+            continue;
+        }
+        const int floor = static_cast<int>(*id >> 48U);
+        const auto relative_directory = collection_popup_regular_node_directory(floor, *id, state.get("tree_hole_outer_floor", 0));
+        const auto path = m_run_directory / relative_directory / BlackFlowNodeAttributionFileName;
+        // 只修正已有证据目录，不为仅观测到、尚未走过的节点创建证据。
+        if (!std::filesystem::exists(path)) {
+            continue;
+        }
+        auto metadata = json::open(path);
+        if (!metadata.has_value() || !metadata->is_object()) {
+            set_error(error, "failed to read node evidence attribution metadata");
+            return false;
+        }
+        if (metadata->get("kind", std::string()) != "node" || metadata->get("node", std::uint64_t { 0 }) != *id ||
+            metadata->get("floor", 0) != floor) {
+            continue;
+        }
+        json::object updated = metadata->as_object();
+        updated["node_name"] = node.get("name", std::string());
+        updated["node_type"] = node.get("type", std::string("unclassified"));
+        updated["identity_source"] = node.get("identity_source", std::string());
+        if (const json::value* battle = node.find_value("battle"); battle != nullptr && battle->is_object()) {
+            updated["battle"] = *battle;
+            if (const json::value* kills = node.find_value("battle_total_kills"); kills != nullptr) {
+                updated["battle_total_kills"] = *kills;
+            }
+        }
+        if (json::value(updated).to_string() == metadata->to_string()) {
+            continue;
+        }
+        if (!update_node_attribution_file(relative_directory, updated, std::nullopt, error)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool BlackFlowRunLog::append_node_attribution(
     const std::filesystem::path& root_directory,
     std::uint64_t run_revision,
@@ -369,19 +476,11 @@ bool BlackFlowRunLog::append_node_attribution(
             set_error(error, "BlackFlow node attribution must be one non-empty line");
             return false;
         }
-        if (!ensure_node_attribution_file(relative_directory, error)) {
+        if (!is_collection_node_directory(relative_directory)) {
+            set_error(error, "BlackFlow node attribution directory is not a valid node path");
             return false;
         }
-        std::ofstream output(
-            m_run_directory / relative_directory / BlackFlowNodeAttributionFileName,
-            std::ios::out | std::ios::app | std::ios::binary);
-        output << attribution << '\n';
-        output.flush();
-        if (!output) {
-            set_error(error, "failed to append BlackFlow node attribution text file");
-            return false;
-        }
-        return true;
+        return update_node_attribution_file(relative_directory, {}, attribution, error);
     }
     catch (const std::exception& exception) {
         set_error(error, "failed to append BlackFlow node attribution: " + std::string(exception.what()));
@@ -464,17 +563,7 @@ bool BlackFlowRunLog::record(
             if (node_evidence) {
                 if (const json::value* attribution = event.details.find_value("attribution");
                     attribution != nullptr && attribution->is_object()) {
-                    std::ofstream metadata(
-                        m_run_directory / image_directory / "attribution.json",
-                        std::ios::out | std::ios::binary);
-                    if (!metadata) {
-                        set_error(error, "failed to create node evidence attribution metadata");
-                        return false;
-                    }
-                    metadata << attribution->format();
-                    metadata.flush();
-                    if (!metadata) {
-                        set_error(error, "failed to flush node evidence attribution metadata");
+                    if (!update_node_attribution_file(image_directory, attribution->as_object(), std::nullopt, error)) {
                         return false;
                     }
                 }
@@ -502,6 +591,12 @@ bool BlackFlowRunLog::record(
         }
     }
 
+    // 身份可能在截图后才由事件回调或落点校正确定。与探索笔记一起回写目录描述，
+    // 不依赖这个节点之后是否还会产生截图，也不改写历史事件和原始图片。
+    if (!sync_collection_node_identities(event.state, error)) {
+        return false;
+    }
+
     json::object serialized {
         { "schema_version", BlackFlowRunLogSchemaVersion },
         { "logger", "blackflow.run" },
@@ -524,6 +619,10 @@ bool BlackFlowRunLog::record(
         { "state", event.state },
         { "details", event.details },
     };
+    // 首条事件携带实际程序版本，单独保存 JSONL 也能追溯采集来源。
+    if (sequence == 1) {
+        serialized["collector_version"] = MAA_VERSION;
+    }
     if (!image_details.empty()) {
         serialized["image"] = image_details;
     }
@@ -534,6 +633,9 @@ bool BlackFlowRunLog::record(
     m_replay_data << "BLACKFLOW_RUN_EVENTS.push(" << compact_event << ");\n";
     m_text << timestamp << " +" << elapsed.count() << "ms #" << sequence << " [" << to_string(event.level)
            << "] " << event.action << ' ' << event.phase << '/' << event.outcome;
+    if (sequence == 1) {
+        m_text << " collector_version=" << MAA_VERSION;
+    }
     if (!event.task.empty()) {
         m_text << " task=" << event.task;
     }

@@ -12,6 +12,7 @@ public:
         bool enabled;
         cv::Mat templ;
         std::string text;
+        std::string red_description;
     };
 
     using Result = std::vector<Option>;
@@ -27,6 +28,8 @@ public:
     /// 若识别成功，则返回 <c>true</c>，若识别失败或遇到不支持的 <c>m_theme</c> 则返回 <c>false</c>。
     /// </returns>
     bool analyze();
+
+    void set_analyze_red_description(bool value) noexcept { m_analyze_red_description = value; }
 
     /// <summary>
     /// 将 <c>new_image</c> 从下方拼接到 <c>m_image</c>。
@@ -128,6 +131,7 @@ private:
     /// 集成战略主题；目前适配界园和黑流树海主题。
     /// </summary>
     std::string m_theme;
+    bool m_analyze_red_description = false;
 
     /// <summary>
     /// y 坐标的无效哨兵值。

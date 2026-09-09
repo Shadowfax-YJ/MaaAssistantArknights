@@ -236,6 +236,11 @@
             "scope": "candidate"
         },
         {
+            "name": "candidate.roaming_resident_allowed",
+            "type": "bool",
+            "scope": "candidate"
+        },
+        {
             "name": "candidate.badged",
             "type": "bool",
             "scope": "candidate"
@@ -1571,7 +1576,7 @@
             "rules": [
                 {
                     "id": "automation_collection_avoid_regular_battles_after_floor1",
-                    "description": "第二层起禁止进入未知凶戾、作战和紧急作战；居民据点始终允许进入，第一层不避开这些节点",
+                    "description": "第二层起禁止进入未知凶戾、作战和紧急作战；二、三层及三层树洞的已确认流窜居民落点除外，天猫离队时仍避开",
                     "kind": "forbid",
                     "tier": "risk",
                     "rank": 0,
@@ -1581,21 +1586,30 @@
                         "value": 2
                     },
                     "candidate_if": {
-                        "any": [
+                        "all": [
                             {
-                                "fact": "candidate.node_type",
-                                "op": "eq",
-                                "value": "hide_battle"
+                                "any": [
+                                    {
+                                        "fact": "candidate.node_type",
+                                        "op": "eq",
+                                        "value": "hide_battle"
+                                    },
+                                    {
+                                        "fact": "candidate.node_type",
+                                        "op": "eq",
+                                        "value": "battle_normal"
+                                    },
+                                    {
+                                        "fact": "candidate.node_type",
+                                        "op": "eq",
+                                        "value": "battle_elite"
+                                    }
+                                ]
                             },
                             {
-                                "fact": "candidate.node_type",
+                                "fact": "candidate.roaming_resident_allowed",
                                 "op": "eq",
-                                "value": "battle_normal"
-                            },
-                            {
-                                "fact": "candidate.node_type",
-                                "op": "eq",
-                                "value": "battle_elite"
+                                "value": false
                             }
                         ]
                     }

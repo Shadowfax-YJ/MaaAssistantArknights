@@ -829,6 +829,11 @@ std::optional<std::vector<CompactMoveAction>>
         });
     });
 
+    // The outer graph owns strategy goal progress. It does not change whether this is
+    // the observed movement state, and may be initialized after this compact graph.
+    PlannerState physical_source = source;
+    physical_source.goal_progress_id = m_initial_state.goal_progress_id;
+    const bool initial_observation = physical_source == m_initial_state;
     std::vector<CompactMoveAction> result;
     result.reserve(generated.size());
     for (MoveAction& move : generated) {
@@ -840,6 +845,10 @@ std::optional<std::vector<CompactMoveAction>>
             const bool revealed_before_landing = index.has_value() &&
                                                  (source.revealed_hidden_battles &
                                                   (PlannerNodeMask { 1 } << *index)) != 0;
+            if (index.has_value() && m_options.allow_initial_roaming_residents && initial_observation &&
+                m_nodes[*index].explicit_roaming_resident_marker) {
+                return false;
+            }
             return index.has_value() && route_landing_is_forbidden(
                                             effective_type(source, *index),
                                             revealed_before_landing,

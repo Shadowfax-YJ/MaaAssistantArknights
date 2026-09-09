@@ -22,6 +22,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowDiagnosticTimeline.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEncounterRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowFailureRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowInventoryRefresh.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
@@ -37,6 +38,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowRevealSemantics.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunArchive.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPort.h"
 #include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
@@ -49,6 +51,206 @@
 
 using namespace asst::blackflow;
 using namespace asst::blackflow::perception;
+
+TEST_CASE("BlackFlow battle intel accepts an unconfigured title without timing out")
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    std::vector<std::string> configured_names;
+    for (const auto& entry : std::filesystem::directory_iterator(root / "resource/roguelike/BlackFlow/autopilot")) {
+        if (entry.path().extension() != ".json") {
+            continue;
+        }
+        const auto data = json::open(entry.path());
+        REQUIRE(data.has_value());
+        if (data->is_array()) {
+            for (const auto& stage : data->as_array()) {
+                configured_names.emplace_back(stage.at("stage_name").as_string());
+            }
+        }
+        else {
+            configured_names.emplace_back(data->at("stage_name").as_string());
+        }
+    }
+    REQUIRE(std::ranges::find(configured_names, "无效验尸") == configured_names.end());
+    MovePreviewSemanticStability stability;
+    int accepted_frame = 0;
+    std::optional<std::string> recorded;
+    // The captured run returned this same title at >99.9% confidence for all
+    // 24 attempts, yet the whitelist rejected every frame and discarded the name.
+    for (int frame = 1; frame <= 24; ++frame) {
+        const auto title = resolve_battle_intel_stage_name("无效验尸", configured_names);
+        if (!title.has_value()) {
+            stability.reset();
+            continue;
+        }
+        if (stability.observe("作战|" + *title)) {
+            accepted_frame = frame;
+            recorded = title;
+            break;
+        }
+    }
+    REQUIRE(accepted_frame == 2);
+    REQUIRE(recorded == "无效验尸");
+
+    Node noted;
+    noted.type = NodeType::BattleNormal;
+    noted.name = *recorded;
+    noted.identity_revealed = true;
+    noted.identity_source = "move_preview_stage_name";
+    REQUIRE(battle_stage_name(noted) == "无效验尸");
+}
+
+TEST_CASE("BlackFlow battle intel rejects placeholders and can still correct known titles")
+{
+    const std::vector<std::string> known { "急不可耐", "陌生旅伴" };
+    REQUIRE(resolve_battle_intel_stage_name(" 急不可耐\n", known) == "急不可耐");
+    REQUIRE(resolve_battle_intel_stage_name("急不可奈", known) == "急不可耐");
+    REQUIRE(resolve_battle_intel_stage_name("无效验尸", {}) == "无效验尸");
+    REQUIRE_FALSE(resolve_battle_intel_stage_name("", known).has_value());
+    REQUIRE_FALSE(resolve_battle_intel_stage_name("  \t\n", known).has_value());
+    REQUIRE_FALSE(resolve_battle_intel_stage_name("作战", known).has_value());
+    REQUIRE_FALSE(resolve_battle_intel_stage_name("紧急作战", known).has_value());
+    REQUIRE_FALSE(resolve_battle_intel_stage_name("未知的凶戾", known).has_value());
+
+    MovePreviewSemanticStability stability;
+    REQUIRE_FALSE(stability.observe("作战|无效验"));
+    REQUIRE_FALSE(stability.observe("作战|无效验尸"));
+    REQUIRE(stability.observe("作战|无效验尸"));
+}
+
+TEST_CASE("BlackFlow sacrifice prefers civilization only when enabled")
+{
+    struct Option
+    {
+        bool enabled;
+        std::string text;
+    };
+
+    std::vector<Option> options { { true, "复原藏品" },
+                                  { true, "复原零件" },
+                                  { false, "复原“文明”" },
+                                  { true, "离开" } };
+    CHECK(sacrifice_initial_choices(options) == std::vector<std::size_t> { 0, 1 });
+    options[2].enabled = true;
+    CHECK(sacrifice_initial_choices(options) == std::vector<std::size_t> { 2 });
+    for (const std::string text : { "复原“文明”", "复原\"文明\"", "复原‘文明’", "复原文明" }) {
+        CHECK(is_restore_civilization(text));
+    }
+    CHECK_FALSE(is_restore_civilization("复原藏品"));
+    options.erase(options.begin() + 2);
+    options[0].enabled = false;
+    CHECK(sacrifice_initial_choices(options) == std::vector<std::size_t> { 1 });
+    options[1].enabled = false;
+    CHECK(sacrifice_initial_choices(options).empty());
+}
+
+TEST_CASE("BlackFlow civilization inventory differences preserve duplicate natural items")
+{
+    CHECK(removed_natural_items({ "种子", "种子", "血蕈" }, { "血蕈" }) == std::vector<std::string> { "种子", "种子" });
+    CHECK(removed_natural_items({ "种子", "血蕈", "种子" }, { "种子", "血蕈" }) == std::vector<std::string> { "种子" });
+    CHECK(removed_natural_items({ "种子" }, { "种子", "血蕈" }).empty());
+    CHECK(removed_natural_items({}, {}).empty());
+    CHECK(removed_natural_items({ "种子", "血蕈" }, {}).size() == 2);
+    CHECK(SacrificeContext { 1, 2 } != SacrificeContext { 2, 2 });
+    CHECK(SacrificeContext { 1, 2 } != SacrificeContext { 1, 3 });
+}
+
+TEST_CASE("BlackFlow expedition dispatch requires floor two and a verified eligible operator")
+{
+    REQUIRE(expedition_eligible_operators(1, true, true, 1, true).empty());
+    REQUIRE(expedition_eligible_operators(3, true, true, 1, true).empty());
+    REQUIRE(expedition_eligible_operators(2, true, true, 2, true) == std::vector<std::string> { "古米", "伊桑" });
+    REQUIRE(expedition_eligible_operators(2, false, false, std::nullopt, true).empty());
+    REQUIRE(expedition_eligible_operators(2, false, false, -1, true).empty());
+    REQUIRE(expedition_eligible_operators(2, false, false, 1, false).empty());
+    REQUIRE(expedition_eligible_operators(2, false, false, 2, true).empty());
+    for (int elite : { 0, 1 }) {
+        REQUIRE(
+            expedition_eligible_operators(2, false, false, elite, true) ==
+            std::vector<std::string> { "凯尔希·思衡托" });
+    }
+    REQUIRE(expedition_operator_from_description("干员古米将会在本区域探索结束后归来") == "古米");
+    REQUIRE(expedition_operator_from_description("干员伊桑将会在本区域探索结束后归来") == "伊桑");
+    REQUIRE(expedition_operator_from_description("干员凯尔希·思衡托将会在本区域探索结束后归来") == "凯尔希·思衡托");
+    REQUIRE(expedition_operator_from_description("从右侧选择一名干员前往探索，将带回信标").empty());
+    REQUIRE(expedition_operator_from_description("干员凯尔希将会在本区域探索结束后归来") == "凯尔希");
+    REQUIRE(expedition_operator_from_description("古米").empty());
+}
+
+TEST_CASE("BlackFlow confirmed first-option core expedition records elite two")
+{
+    for (int previous : { 0, 1, 2 }) {
+        const int elite = confirmed_expedition_core_elite(0, AutomationCollectionCoreOperator, previous);
+        CHECK(elite == 2);
+        CHECK(expedition_eligible_operators(2, false, false, elite, true).empty());
+    }
+    CHECK(confirmed_expedition_core_elite(1, AutomationCollectionCoreOperator, 1) == 1);
+    CHECK(confirmed_expedition_core_elite(std::nullopt, AutomationCollectionCoreOperator, 1) == 1);
+    CHECK(confirmed_expedition_core_elite(0, "古米", 1) == 1);
+    CHECK(confirmed_expedition_core_elite(0, "伊桑", 1) == 1);
+    CHECK(confirmed_expedition_core_elite(0, AutomationCollectionCoreOperator, -1) == -1);
+}
+
+TEST_CASE("BlackFlow expedition gives the Gummy Ethan group and core equal probability")
+{
+    const auto first_choice_counts = [](const std::vector<std::string>& eligible) {
+        std::map<std::string, int> counts;
+        // 枚举组间、组内两次公平抽签的四种组合，不依赖统计误差。
+        for (int group_ticket : { 0, 1 }) {
+            for (int member_ticket : { 0, 1 }) {
+                int draws = 0;
+                const auto order = grouped_expedition_operator_order(eligible, [&](int total) {
+                    REQUIRE(total == 2);
+                    return draws++ == 0 ? group_ticket : member_ticket;
+                });
+                REQUIRE(draws <= 2);
+                REQUIRE(order.size() == eligible.size());
+                REQUIRE(
+                    std::set<std::string>(order.begin(), order.end()) ==
+                    std::set<std::string>(eligible.begin(), eligible.end()));
+                ++counts[order.front()];
+                if (order.size() == 3) {
+                    // 组内另一名干员先于天猫兜底；缺一名组员不会把组概率降成 1/3。
+                    REQUIRE((order.front() == "凯尔希·思衡托" || order.back() == "凯尔希·思衡托"));
+                }
+            }
+        }
+        return counts;
+    };
+    REQUIRE(
+        first_choice_counts({ "古米", "伊桑", "凯尔希·思衡托" }) ==
+        std::map<std::string, int> { { "古米", 1 }, { "伊桑", 1 }, { "凯尔希·思衡托", 2 } });
+    REQUIRE(
+        first_choice_counts({ "凯尔希·思衡托", "古米" }) ==
+        std::map<std::string, int> { { "古米", 2 }, { "凯尔希·思衡托", 2 } });
+    REQUIRE(
+        first_choice_counts({ "伊桑", "凯尔希·思衡托" }) ==
+        std::map<std::string, int> { { "伊桑", 2 }, { "凯尔希·思衡托", 2 } });
+    REQUIRE(first_choice_counts({ "伊桑", "古米" }) == std::map<std::string, int> { { "古米", 2 }, { "伊桑", 2 } });
+    REQUIRE(first_choice_counts({ "凯尔希·思衡托" }) == std::map<std::string, int> { { "凯尔希·思衡托", 4 } });
+    REQUIRE(first_choice_counts({ "古米" }) == std::map<std::string, int> { { "古米", 4 } });
+    bool drew = false;
+    REQUIRE(grouped_expedition_operator_order({}, [&](int) {
+                drew = true;
+                return 0;
+            }).empty());
+    REQUIRE_FALSE(drew);
+}
+
+TEST_CASE("BlackFlow expedition return popups belong to the incoming floor before floor OCR")
+{
+    for (const std::string task :
+         { "BlackFlow@Roguelike@NextLevelReturnCloseCollection",
+           "BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue",
+           "BlackFlow@Roguelike@MapCapturePopupDrain@BlackFlow@Roguelike@NextLevelReturnCloseCollection",
+           "BlackFlow@Roguelike@MapCapturePopupDrain@BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue" }) {
+        REQUIRE_FALSE(expedition_floor_popup_ocr_task(task).empty());
+        REQUIRE(collection_popup_button(task).has_value());
+        REQUIRE(collection_popup_source(task) == CollectionPopupSource::FloorEntry);
+        REQUIRE(collection_popup_pending_floor_entry(task, 2, NodeType::Final, "final.exit", true) == 3);
+        REQUIRE_FALSE(collection_popup_pending_floor_entry(task, 2, NodeType::Final, "final.pass", false));
+    }
+}
 
 namespace
 {
@@ -534,6 +736,10 @@ TEST_CASE("BlackFlow drains delayed floor-entry reward groups before map interac
     REQUIRE(
         floor_zoom_guard.get("next", std::vector<std::string> {}) ==
         std::vector<std::string> {
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@"
+            "NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick",
@@ -547,6 +753,9 @@ TEST_CASE("BlackFlow drains delayed floor-entry reward groups before map interac
     REQUIRE(
         drain_next ==
         std::vector<std::string> {
+            "BlackFlow@Roguelike@TreeHoleLeaveConfirmForCapture",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapCapturePopupDrainDone",
@@ -1655,6 +1864,69 @@ TEST_CASE("BlackFlow preparation combat waits for the camera and verifies the fi
     REQUIRE(deployment_attempt_confirmed(true, false, false, false));
 }
 
+TEST_CASE("BlackFlow preparation keeps a deployment pending across unrecognized frames")
+{
+    // MAA-011: the drag is sent once, several frames fail recognition, then the
+    // operator has disappeared from the deployment bar. Do not rollback or drag again.
+    const std::vector<std::optional<bool>> frames {
+        std::nullopt,
+        std::nullopt,
+        std::nullopt,
+        deployment_attempt_confirmed(true, false, false, false),
+    };
+    size_t observed = 0;
+    size_t waited = 0;
+    const auto result = wait_for_deployment_confirmation(
+        [&]() { return frames.at(observed++); },
+        [&]() {
+            ++waited;
+            return observed < frames.size();
+        });
+    REQUIRE(result == true);
+    REQUIRE(observed == 4);
+    REQUIRE(waited == 3);
+}
+
+TEST_CASE("BlackFlow preparation distinguishes a failed drag from unavailable observations")
+{
+    SECTION("a fresh available card permits another drag")
+    {
+        size_t waited = 0;
+        const auto result = wait_for_deployment_confirmation(
+            []() -> std::optional<bool> { return deployment_attempt_confirmed(true, true, false, true); },
+            [&]() {
+                ++waited;
+                return false;
+            });
+        REQUIRE(result == false);
+        REQUIRE(waited == 0);
+    }
+    SECTION("timeout preserves the unknown result instead of requesting another drag")
+    {
+        size_t observed = 0;
+        const auto result = wait_for_deployment_confirmation(
+            [&]() -> std::optional<bool> {
+                ++observed;
+                return std::nullopt;
+            },
+            [&]() { return observed < 4; });
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(observed == 4);
+    }
+    SECTION("cancellation stops waiting immediately")
+    {
+        size_t observed = 0;
+        const auto result = wait_for_deployment_confirmation(
+            [&]() -> std::optional<bool> {
+                ++observed;
+                return std::nullopt;
+            },
+            []() { return false; });
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(observed == 1);
+    }
+}
+
 TEST_CASE("BlackFlow refreshes the battle frame after the awaited virtual device activates")
 {
     REQUIRE(virtual_auto_skill_transition_requires_refresh(true, true));
@@ -2234,7 +2506,7 @@ TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
          }) {
         CAPTURE(completed, normal_destination);
         REQUIRE(tasks->at(completed).get("next", std::vector<std::string> {}) ==
-                std::vector<std::string> { "BlackFlow@Roguelike@HuntedConfirm", normal_destination });
+                std::vector<std::string> { "BlackFlow@Roguelike@NodeSettlementPopups#next", normal_destination });
     }
 
     const auto& inventory_hunted = tasks->at("BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted");
@@ -2841,6 +3113,147 @@ TEST_CASE("BlackFlow processing inventory OCR recognizes every ordered type boun
         REQUIRE(std::ranges::find(movement_inventory_names, concept_name) != movement_inventory_names.end());
     }
     REQUIRE(std::ranges::find(movement_inventory_names, "待收集零件") != movement_inventory_names.end());
+}
+
+TEST_CASE("BlackFlow tree-hole effects constrain the configured topology colors")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto library = json::open(repository_root / "resource/roguelike/BlackFlow/map_perception/topology.json");
+    REQUIRE(library.has_value());
+    const std::map<std::string, std::set<std::string>> expected {
+        { "全知者盲区", { "TH-T01" } },
+        { "未亡者遗怨", { "TH-T09" } },
+        { "源石之城", { "TH-T06" } },
+        { "消耗螺旋", { "TH-T08" } },
+        { "换心联结", { "TH-T07" } },
+        { "巨人摇篮", { "TH-T02", "TH-T03", "TH-T04", "TH-T05" } },
+        { "迪斯科狂热", { "TH-T02", "TH-T03", "TH-T04", "TH-T05" } },
+        { "已知浩劫", { "TH-T02", "TH-T03", "TH-T04", "TH-T05" } },
+        { "孤立石林", { "TH-T02", "TH-T03", "TH-T04", "TH-T05" } },
+    };
+    for (const auto& [effect, ids] : expected) {
+        const auto color = tree_hole_mist_color("“" + effect + "” \n");
+        REQUIRE_FALSE(color.empty());
+        std::set<std::string> eligible;
+        for (const auto& entry : library->at("templates").as_array()) {
+            const int floor = entry.at("floor").as_integer();
+            const auto template_color = entry.get("tree_hole_color", std::string {});
+            const bool matches = topology_matches_tree_hole_color(floor, template_color, color);
+            if (floor == TreeHoleFloor && matches) {
+                eligible.emplace(entry.at("id").as_string());
+            }
+            if (floor != TreeHoleFloor) {
+                REQUIRE(matches);
+            }
+            REQUIRE(topology_matches_tree_hole_color(floor, template_color, {}));
+        }
+        REQUIRE(eligible == ids);
+    }
+    CHECK(tree_hole_mist_color("").empty());
+    CHECK(tree_hole_mist_color("未识别的标题").empty());
+    CHECK(tree_hole_mist_color("源石之城 换心联结").empty());
+}
+
+TEST_CASE("BlackFlow binds a random cross-floor event to the only compatible hidden landing")
+{
+    // run-20260909-224030-658474: M07 -> 三重身 -> floor 3. The old map has
+    // exactly one hidden non-combat node, (2, 0), and one hidden combat node.
+    MapSnapshot map;
+    MoveCandidate move;
+    move.controllable = false;
+    for (const auto& [position, type] : std::vector<std::pair<GridPosition, NodeType>> {
+             { { 2, 0 }, NodeType::HideInvisible },
+             { { 3, 1 }, NodeType::HideBattle },
+             { { 3, 0 }, NodeType::Final },
+             { { 2, 4 }, NodeType::Incident },
+         }) {
+        Node node;
+        node.id = *make_stable_node_id(2, position);
+        node.floor = 2;
+        node.position = position;
+        node.type = type;
+        REQUIRE(map.upsert_node(node));
+        move.possible_landings.emplace_back(node.id);
+        move.landing_node_types[node.id] = type;
+    }
+    const auto entered = classify_entered_event_name("三重身");
+    REQUIRE(entered.classified_type == NodeType::Evacuate);
+    const NodeId landing = resolve_uncontrollable_page_landing(move, map, *entered.classified_type);
+    REQUIRE(landing == *make_stable_node_id(2, GridPosition { 2, 0 }));
+
+    Node noted = *map.find_node(landing);
+    noted.name = "未知的诡秘";
+    reveal_event_notebook_identity(noted, *entered.classified_type, *entered.event_name);
+    REQUIRE(noted.type == NodeType::Evacuate);
+    REQUIRE(noted.name == "三重身");
+    REQUIRE(noted.identity_revealed);
+    REQUIRE(noted.identity_source == "event_name");
+    REQUIRE(diagnostic_node_identity_checkpoint_required(map.upsert_node(noted), true));
+    REQUIRE(collection_popup_regular_node_directory(noted.floor, noted.id).generic_string() ==
+            "collection-popups/floor-2/node-562950020530176");
+
+    SECTION("a second hidden candidate stays ambiguous")
+    {
+        const NodeId second = *make_stable_node_id(2, GridPosition { 1, 0 });
+        move.possible_landings.emplace_back(second);
+        move.landing_node_types[second] = NodeType::HideInvisible;
+        REQUIRE(resolve_uncontrollable_page_landing(move, map, NodeType::Evacuate) == InvalidNodeId);
+    }
+    SECTION("a known matching node cannot exclude the hidden candidate")
+    {
+        move.landing_node_types[*make_stable_node_id(2, GridPosition { 2, 4 })] = NodeType::Evacuate;
+        REQUIRE(resolve_uncontrollable_page_landing(move, map, NodeType::Evacuate) == InvalidNodeId);
+    }
+}
+
+TEST_CASE("BlackFlow pending screenshots cannot adopt a different map")
+{
+    REQUIRE(collection_popup_pending_matches_map(2, 2, 2, 2));
+    REQUIRE_FALSE(collection_popup_pending_matches_map(2, 2, 3, 3));
+    REQUIRE_FALSE(collection_popup_pending_matches_map(4, 7, 4, 8));
+    REQUIRE_FALSE(collection_popup_pending_matches_map(6, 7, 6, 9));
+}
+
+TEST_CASE("BlackFlow tree-hole evidence directories identify the outer floor")
+{
+    const NodeId node = *make_stable_node_id(6, GridPosition { 1, 1 });
+    REQUIRE(diagnostic_floor_directory(2) == "floor-2");
+    REQUIRE(diagnostic_floor_directory(6, 2) == "floor-2-tree-hole");
+    REQUIRE(diagnostic_floor_directory(6, 5) == "floor-5-tree-hole");
+    REQUIRE(collection_popup_regular_node_directory(6, node, 2).generic_string() ==
+            "collection-popups/floor-2-tree-hole/node-" + std::to_string(node));
+    REQUIRE(collection_popup_virtual_node_directory(6, "安眠一隅", 17, 5).generic_string() ==
+            "collection-popups/floor-5-tree-hole/node-redacted-rest-corner-p17");
+    REQUIRE(collection_popup_source_directory(CollectionPopupSource::FloorEntry, 6, 2).generic_string() ==
+            "collection-popups/sources/floor-entry/floor-2-tree-hole");
+}
+
+TEST_CASE("BlackFlow purple tree-hole has a day-shaped graph distinct from the red field-shaped graph")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto library = json::open(repository_root / "resource/roguelike/BlackFlow/map_perception/topology.json");
+    REQUIRE(library.has_value());
+    int checked = 0;
+    for (const auto& entry : library->at("templates").as_array()) {
+        const auto id = entry.at("id").as_string();
+        if (id != "TH-T02" && id != "TH-T07") {
+            continue;
+        }
+        ++checked;
+        REQUIRE(entry.at("occupied_slots").as_array().size() == 9);
+        const auto& edges = entry.at("edges").as_array();
+        int center_vertical = 0;
+        for (const auto& edge : edges) {
+            if (edge.at(0).at(0).as_integer() == 1 && edge.at(1).at(0).as_integer() == 1) {
+                ++center_vertical;
+            }
+        }
+        REQUIRE(edges.size() == (id == "TH-T07" ? 10 : 12));
+        REQUIRE(center_vertical == (id == "TH-T07" ? 0 : 2));
+    }
+    REQUIRE(checked == 2);
 }
 
 TEST_CASE("BlackFlow floor five normalizes the viewport and tries every supported grid width")
@@ -3801,7 +4214,7 @@ TEST_CASE("BlackFlow emergency aid dispatches through a JustReturn adapter to th
     REQUIRE(
         employ_completed.get("next", std::vector<std::string> {}) ==
         std::vector<std::string> {
-            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@NodeCompletionAction",
         });
 }
@@ -4435,7 +4848,10 @@ TEST_CASE("BlackFlow encounter rewards can transition directly into pursuit")
 
     const auto successors = tasks->at("BlackFlow@Roguelike@StageEncounterReward")
                                 .get("next", std::vector<std::string> {});
-    REQUIRE(std::ranges::find(successors, "BlackFlow@Roguelike@HuntedConfirm") != successors.end());
+    REQUIRE(successors.front() == "BlackFlow@Roguelike@NodeSettlementPopups#next");
+    const auto popups = tasks->at("BlackFlow@Roguelike@NodeSettlementPopups")
+                            .get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(popups, "BlackFlow@Roguelike@HuntedConfirm") != popups.end());
 }
 
 TEST_CASE("BlackFlow direct exhaustion opens the movement panel and confirms pursuit")
@@ -4457,7 +4873,126 @@ TEST_CASE("BlackFlow direct exhaustion opens the movement panel and confirms pur
     REQUIRE(confirmation.get("algorithm", std::string {}) == "OcrDetect");
     REQUIRE(confirmation.get("text", std::vector<std::string> {}) == std::vector<std::string> { "确认" });
     const auto successors = confirmation.get("next", std::vector<std::string> {});
-    REQUIRE(std::ranges::find(successors, "BlackFlow@Roguelike@HuntedConfirm") != successors.end());
+    REQUIRE(std::ranges::find(successors, "BlackFlow@Roguelike@DirectExhaustDestination") != successors.end());
+    const auto& destination = tasks->at("BlackFlow@Roguelike@DirectExhaustDestination");
+    REQUIRE_FALSE(destination.contains("next")); // An explicit next would override dynamic set_task_base().
+    REQUIRE(destination.get("baseTask", std::string {}) == "BlackFlow@Roguelike@HuntedWait");
+    const auto return_titles =
+        tasks->at("BlackFlow@Roguelike@TreeHoleReturnTitle").get("text", std::vector<std::string> {});
+    REQUIRE(return_titles.size() == 5);
+    REQUIRE(std::ranges::find(return_titles, "未萌生的摇篮") == return_titles.end());
+}
+
+TEST_CASE("BlackFlow confirms the tree-hole leave popup before waiting for the outer map")
+{
+    const auto repository_root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const std::string confirm = "BlackFlow@Roguelike@TreeHoleLeaveConfirm";
+    REQUIRE(tasks->at("BlackFlow@Roguelike@TreeHoleReturnWait")
+                .get("next", std::vector<std::string> {}).front() == confirm);
+    REQUIRE(tasks->at("BlackFlow@Roguelike@NodeSettlementPopups")
+                .get("next", std::vector<std::string> {}).front() == confirm);
+    for (const std::string entry : { "BlackFlow@Roguelike@Stages_default",
+                                     "BlackFlow@Roguelike@StageEncounterReward",
+                                     "BlackFlow@Roguelike@NextLevel-Enter" }) {
+        const auto next = tasks->at(entry).get("next", std::vector<std::string> {});
+        REQUIRE_FALSE(next.empty());
+        REQUIRE(next.front() == "BlackFlow@Roguelike@NodeSettlementPopups#next");
+    }
+    REQUIRE(tasks->at(confirm).get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@TreeHoleReturnEnter" });
+    // The nested capture task only dismisses the popup. The outer lifecycle must
+    // still observe the returned map before updating the session or continuing.
+    REQUIRE(tasks->at("BlackFlow@Roguelike@MapCapturePopupDrain")
+                .get("next", std::vector<std::string> {}).front() == confirm + "ForCapture");
+    REQUIRE(tasks->at(confirm + "ForCapture").get("baseTask", std::string {}) == confirm);
+    REQUIRE(tasks->at(confirm + "ForCapture").at("next").as_array().empty());
+}
+
+TEST_CASE("BlackFlow every node settlement checks shared exit popups before page-specific fallbacks")
+{
+    const auto repository_root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const std::string prefix = "BlackFlow@Roguelike@";
+    const std::string shared = prefix + "NodeSettlementPopups#next";
+    REQUIRE(tasks->at(prefix + "NodeSettlementPopups").get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { prefix + "TreeHoleLeaveConfirm", prefix + "HuntedConfirm" });
+    // Cover every settlement family, including the passive intermediate waits that
+    // otherwise never reach the final node-completed/map dispatcher behind a popup.
+    for (const std::string suffix : {
+             "StageEncounterReward", "CloseEvent", "CloseEventAfterEncounter", "ClickToDrops",
+             "DropsFlag_default", "DropsFlag_mode1", "GetDrops", "GetDropWait", "GetDropConfirmed",
+             "GetDropCompletedWait", "GetDropCompletedConfirmed", "GetDropLeaveWait", "GetDropSelectWait",
+             "GetDropSelectConfirmed", "GetDropTrophyRewardWait", "GetDropTrophyRewardConfirmed",
+             "GetDropSelectRewardWait", "GetDropSelectRewardConfirmed", "StageTraderLeaveConfirmCompleted",
+             "EmployLeaveConfirmCompleted", "NodeResultDispatch", "MapPrepare", "MapPrepare-FloorEnterZoomGuard",
+             "Stages_default", "NextLevel-Enter", "Page-Door-Wait", "RecruitWithoutButton",
+             "RecruitWithoutButtonTransitionWait",
+         }) {
+        CAPTURE(suffix);
+        const auto next = tasks->at(prefix + suffix).get("next", std::vector<std::string> {});
+        REQUIRE_FALSE(next.empty());
+        REQUIRE(next.front() == shared);
+    }
+    const auto& leave_flag = tasks->at(prefix + "NodeSettlementTreeHoleLeaveFlag");
+    REQUIRE(leave_flag.get("baseTask", std::string {}) == prefix + "TreeHoleLeaveConfirm");
+    REQUIRE(leave_flag.get("action", std::string {}) == "DoNothing");
+    for (const std::string family : { "StageTrader", "Employ" }) {
+        const std::string destination = prefix + family + "LeaveDestinationTreeHole";
+        REQUIRE(tasks->at(destination).get("baseTask", std::string {}) == prefix + "NodeSettlementTreeHoleLeaveFlag");
+        REQUIRE(tasks->at(destination).get("next", std::vector<std::string> {}) ==
+                std::vector<std::string> { prefix + family + "LeaveConfirmCompleted" });
+        for (const std::string suffix : {
+                 "Leave", "LeaveObserve", "LeaveTransitionWait", "LeaveConfirmAbsentOnce", "LeaveConfirmTransitionWait",
+             }) {
+            CAPTURE(family, suffix);
+            const auto next = tasks->at(prefix + family + suffix).get("next", std::vector<std::string> {});
+            const auto popup = std::ranges::find(next, destination);
+            const auto map = std::ranges::find(next, prefix + family + "LeaveDestinationReady");
+            REQUIRE(popup != next.end());
+            REQUIRE(map != next.end());
+            REQUIRE(popup < map);
+        }
+    }
+}
+
+TEST_CASE("BlackFlow tree-hole return must continue from the menu before accepting the outer map")
+{
+    const auto repository_root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const std::string prefix = "BlackFlow@Roguelike@TreeHoleResume";
+
+    // Traverse both successful and exhausted paths before Continue. A visible map must
+    // never short-circuit the menu visit; inheritance must not leak into abandonment.
+    std::vector<std::string> pending { prefix + "MenuWait" };
+    std::set<std::string> visited;
+    while (!pending.empty()) {
+        const auto name = pending.back();
+        pending.pop_back();
+        if (!visited.emplace(name).second || name == prefix + "Continue") {
+            continue;
+        }
+        REQUIRE(name != prefix + "MapReady");
+        REQUIRE(name.starts_with(prefix));
+        const auto& task = tasks->at(name);
+        for (const auto edge : { "next", "onErrorNext", "exceededNext" }) {
+            for (const auto& next : task.get(edge, std::vector<std::string> {})) {
+                if (next != "#self") {
+                    pending.emplace_back(next);
+                }
+            }
+        }
+    }
+    REQUIRE(visited.contains(prefix + "Continue"));
+    const auto& exit = tasks->at(prefix + "Exit");
+    REQUIRE(exit.at("exceededNext").as_array().empty());
+    REQUIRE(exit.at("onErrorNext").as_array().empty());
+    REQUIRE(tasks->at(prefix + "Continue").get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { prefix + "MapWait" });
+    REQUIRE(tasks->at(prefix + "MapReady").at("next").as_array().empty());
 }
 
 TEST_CASE("BlackFlow replaces a route used only to exhaust action points with direct exhaustion")
@@ -5062,6 +5597,40 @@ TEST_CASE("BlackFlow Xiaobajie uses expected lexicographic value once every outc
     REQUIRE(decision.selected.has_value());
     REQUIRE(decision.selected->action_id == "z-xiaobajie");
     REQUIRE(decision.decisive_rule_id == "effective_node_count");
+}
+
+TEST_CASE("BlackFlow half-point income survives deterministic and random route ordering")
+{
+    ResolvedPolicy policy;
+    policy.route_preferences = { RoutePreference::MaximizeEffectiveNodes, RoutePreference::IgnoreBattleTieBreaks };
+    PolicyCandidate low;
+    low.safe = true;
+    low.move.action_id = "a-low";
+    low.effective_node_count = 1;
+    low.effective_node_income = { 1, 0 };
+    PolicyCandidate higher = low;
+    higher.move.action_id = "z-higher";
+    higher.effective_node_count = 1.5;
+    higher.effective_node_income = { 1, 0.5 };
+    SECTION("deterministic half point beats the earlier action id") {}
+    SECTION("random expectation retains the half point in each outcome")
+    {
+        low.effective_node_count = 1.5;
+        low.effective_node_income = { 1, 0.5 };
+        higher.effective_node_count = 1;
+        higher.effective_node_income = { 1, 0 };
+        higher.route_outcomes = {
+            PolicyRouteOutcome { .effective_node_count = 1, .effective_node_income = { 1, 0 } },
+            PolicyRouteOutcome { .effective_node_count = 2.5, .effective_node_income = { 1.5, 1 } },
+        };
+    }
+    const auto decision = PolicyExecutor {}.choose(
+        policy, FactStore {}, MissionState {}, RunState {}, ResourceRegistry {}, {}, { low, higher });
+    REQUIRE(decision.selected.has_value());
+    REQUIRE(decision.selected->action_id == "z-higher");
+    const auto& summary = decision.candidate_summaries.front();
+    REQUIRE(summary.effective_node_income.total() == higher.effective_node_count);
+    REQUIRE(summary.expected_node_income.total() == (higher.route_outcomes.empty() ? 1.5 : 1.75));
 }
 
 TEST_CASE("BlackFlow floor one hidden battle must be revealed before a future landing")
@@ -5879,6 +6448,10 @@ TEST_CASE("BlackFlow diagnostic report separates map generations and preserves r
     REQUIRE(diagnostic_map_section_key(4, 8, true) == "floor-4-generation-8-remembrance");
     REQUIRE(diagnostic_map_section_label(4, false) == "4 层");
     REQUIRE(diagnostic_map_section_label(4, true) == "追忆 4 层");
+    REQUIRE(diagnostic_map_section_label(6, false, 5) == "5 层树洞");
+    REQUIRE(diagnostic_map_section_label(6, false, 3) == "3 层树洞");
+    REQUIRE(diagnostic_map_section_key(6, 8, false, 5) == "floor-5-generation-8-tree-hole");
+    REQUIRE(diagnostic_map_section_key(6, 8, false, 5) != diagnostic_map_section_key(5, 7, false));
 
     const auto within_budget = diagnostic_image_selection(true, true, 2, 3);
     REQUIRE(within_budget.captured);
@@ -6229,6 +6802,39 @@ TEST_CASE("BlackFlow current observation does not let one missed OCR erase an ac
     REQUIRE(resolved != nullptr);
     REQUIRE(resolved->type == NodeType::Empty);
     REQUIRE(resolved->progress == NodeProgress::Completed);
+}
+
+TEST_CASE("BlackFlow exploration notebook cannot recover a hidden node consumed by a resident")
+{
+    NormalizedMap notebook;
+    MapObservationBatch batch;
+    batch.floor = 3;
+    ObservedNode observed;
+    observed.position = { 3, 1 };
+    observed.type = NodeType::HideInvisible;
+    observed.name = "未知的诡秘";
+    observed.identity_revealed = false;
+    observed.identity_state = NodeIdentityState::Hidden;
+    batch.nodes.emplace_back(observed);
+    REQUIRE(notebook.merge(batch, MapMergePurpose::ExplorationNotebook));
+    Node lost = *notebook.snapshot().find_node(3, observed.position);
+    lost.progress = NodeProgress::Completed;
+    lost.identity_unrecoverable = true;
+    REQUIRE(notebook.snapshot().upsert_node(lost));
+
+    for (const auto type : {NodeType::Empty, NodeType::BattleNormal, NodeType::Shop}) {
+        batch.nodes.front().type = type;
+        batch.nodes.front().name = "后来模板中的身份";
+        batch.nodes.front().identity_revealed = true;
+        batch.nodes.front().identity_state = NodeIdentityState::Classified;
+        REQUIRE(notebook.merge(batch, MapMergePurpose::ExplorationNotebook));
+        const auto* noted = notebook.snapshot().find_node(lost.id);
+        REQUIRE(noted->type == NodeType::HideInvisible);
+        REQUIRE(noted->name == "未知的诡秘");
+        REQUIRE_FALSE(noted->identity_revealed);
+        REQUIRE(noted->identity_unrecoverable);
+        REQUIRE(noted->progress == NodeProgress::Completed);
+    }
 }
 
 TEST_CASE("BlackFlow exploration notebook preserves revealed identity after the current node becomes empty")
@@ -6871,17 +7477,36 @@ TEST_CASE("BlackFlow ScrapShop counts as two effective nodes only on its first l
     REQUIRE(effective_nodes == std::unordered_set<NodeId> { 201, 202 });
 }
 
-TEST_CASE("BlackFlow weighted effective nodes include elite savage and floor-specific portals")
+TEST_CASE("BlackFlow portals combine two exploration points and one development point on every floor")
 {
     REQUIRE(effective_node_weight_at_floor(NodeType::BattleElite, 1) == 2);
     REQUIRE(effective_node_weight_at_floor(NodeType::BattleSavage, 5) == 2);
-    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 1) == 2);
-    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 2) == 2);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 1) == 3);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 2) == 3);
     REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 3) == 3);
-    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 4) == 2);
-    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 5) == 2);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 4) == 3);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 5) == 3);
     REQUIRE(effective_node_weight_at_floor(NodeType::BattleNormal, 3) == 1);
-    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 3, "fruit_cache", MovementKind::M10) == 5);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 3, "fruit_cache", MovementKind::M10) == 5.5);
+}
+
+TEST_CASE("BlackFlow expedition scores one effective node only on floor two and its first landing")
+{
+    for (int floor = 1; floor <= 6; ++floor) {
+        REQUIRE(effective_node_weight_at_floor(NodeType::Expedition, floor) == (floor == 2 ? 1 : 0));
+    }
+    REQUIRE(effective_node_weight_at_floor(NodeType::Expedition, 2, "fruit_cache", MovementKind::M10) == 3.5);
+    std::unordered_set<NodeId> effective_nodes;
+    const std::unordered_set<NodeId> previously_entered_nodes { 201 };
+    const auto land = [&](NodeId id, int floor) {
+        return record_effective_landing(
+            id, NodeType::Expedition, {}, MovementKind::Walk, 200, previously_entered_nodes, effective_nodes, floor);
+    };
+    REQUIRE(land(201, 2) == 0);
+    REQUIRE(land(202, 3) == 0);
+    REQUIRE(land(202, 2) == 1);
+    REQUIRE(land(202, 2) == 0);
+    REQUIRE(effective_nodes == std::unordered_set<NodeId> { 202 });
 }
 
 TEST_CASE("BlackFlow movement panel full scan normalizes every initial scroll position")
@@ -7203,16 +7828,14 @@ TEST_CASE("BlackFlow movement selection keeps a top-edge card click inside the v
     REQUIRE(click_rect.y + click_rect.height <= name_rect.y);
 }
 
-TEST_CASE("BlackFlow duel counts as two effective nodes while expedition and utility nodes do not")
+TEST_CASE("BlackFlow duel counts as two effective nodes while utility nodes do not")
 {
     constexpr std::array excluded_types {
         NodeType::Final,
         NodeType::BattleBoss,
-        NodeType::Sacrifice,
         NodeType::Light,
         NodeType::Door,
         NodeType::Employ,
-        NodeType::Expedition,
     };
     std::unordered_set<NodeId> effective_nodes;
     const std::unordered_set<NodeId> previously_entered_nodes;
@@ -7261,21 +7884,21 @@ TEST_CASE("BlackFlow floor three boss remains excluded from effective-node scori
     REQUIRE(effective_nodes.empty());
 }
 
-TEST_CASE("BlackFlow fruit-cache marker adds one effective-node weight to its node")
+TEST_CASE("BlackFlow fruit-cache adds one development point and half an exploration point")
 {
     std::unordered_set<NodeId> effective_nodes;
     const std::unordered_set<NodeId> previously_entered_nodes;
 
-    REQUIRE(effective_node_weight(NodeType::Incident, "fruit_cache") == 2);
-    REQUIRE(effective_node_weight(NodeType::Duel, "fruit_cache") == 3);
-    REQUIRE(effective_node_weight(NodeType::Empty, "fruit_cache") == 1);
+    REQUIRE(effective_node_weight(NodeType::Incident, "fruit_cache") == 2.5);
+    REQUIRE(effective_node_weight(NodeType::Duel, "fruit_cache") == 3.5);
+    REQUIRE(effective_node_weight(NodeType::Empty, "fruit_cache") == 1.5);
     REQUIRE(record_effective_landing(
                 301,
                 NodeType::Incident,
                 "fruit_cache",
                 InvalidNodeId,
                 previously_entered_nodes,
-                effective_nodes) == 2);
+                effective_nodes) == 2.5);
     REQUIRE(record_effective_landing(
                 301,
                 NodeType::Incident,
@@ -7289,7 +7912,7 @@ TEST_CASE("BlackFlow fruit-cache marker adds one effective-node weight to its no
                 "fruit_cache",
                 InvalidNodeId,
                 previously_entered_nodes,
-                effective_nodes) == 1);
+                effective_nodes) == 1.5);
 }
 
 TEST_CASE("BlackFlow Knot tentacle adds one effective-node point to its first distinct landing")
@@ -7442,7 +8065,7 @@ TEST_CASE("BlackFlow automation strategy resource does not forbid resident settl
                 continue;
             }
             rule_found = true;
-            for (const auto& condition : rule.at("candidate_if").at("any").as_array()) {
+            for (const auto& condition : rule.at("candidate_if").at("all").as_array().at(0).at("any").as_array()) {
                 REQUIRE(condition.get("value", std::string {}) != "battle_savage");
             }
         }
@@ -8238,6 +8861,88 @@ TEST_CASE("BlackFlow reveal consistency does not infer linked effects without th
     REQUIRE(non_event_expected.empty());
 }
 
+TEST_CASE("BlackFlow resident battle consumes a hidden node without revealing its original identity")
+{
+    MapSnapshot before;
+    RunState run;
+    run.floor = 3;
+    Node hidden;
+    hidden.floor = run.floor;
+    hidden.position = { 0, 1 };
+    hidden.id = *make_stable_node_id(hidden.floor, hidden.position);
+    hidden.type = NodeType::HideBattle;
+    hidden.identity_state = NodeIdentityState::Hidden;
+    hidden.traversal = default_traversal_for(hidden.type);
+    hidden.marker_type = "savage";
+    REQUIRE(before.upsert_node(hidden));
+    MoveCandidate move;
+    move.target = hidden.id;
+    move.landing = hidden.id;
+    REQUIRE_FALSE(expected_move_reveals(before, run, move, hidden.id, true).contains(hidden.id));
+
+    MapSnapshot after = before;
+    Node empty = hidden;
+    empty.type = NodeType::Empty;
+    empty.identity_revealed = true;
+    empty.progress = NodeProgress::Completed;
+    empty.marker_type.clear();
+    REQUIRE(after.upsert_node(empty));
+    REQUIRE_FALSE(observed_move_reveals(before, run, after).contains(hidden.id));
+
+    hidden.marker_type.clear();
+    REQUIRE(before.upsert_node(hidden));
+    REQUIRE(expected_move_reveals(before, run, move, hidden.id, true).contains(hidden.id));
+    REQUIRE(observed_move_reveals(before, run, after).contains(hidden.id));
+    hidden.identity_unrecoverable = true;
+    REQUIRE(before.upsert_node(hidden));
+    REQUIRE_FALSE(initially_unknown_for_reveal(before, run, hidden.id));
+}
+
+TEST_CASE("BlackFlow effective income supports half points and the revised exploration rewards")
+{
+    REQUIRE(effective_node_weight_at_floor(NodeType::Incident, 3, "savage") == 1.5);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Incident, 3, "fruit_cache") == 2.5);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Sacrifice, 3, "civilization_ashes") == 2);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Incident, 3, "informant") == 2);
+    REQUIRE(effective_node_weight_at_floor(NodeType::Portal, 2) == 3);
+    REQUIRE(effective_node_weight_at_floor(NodeType::BattleElite, 3) == 2);
+}
+
+TEST_CASE("BlackFlow node income splits exploration and development without losing half points")
+{
+    const auto check = [](NodeType type, int floor, std::string_view marker, MovementKind movement, NodeIncome expected) {
+        const NodeIncome actual = node_income_at_floor(type, floor, marker, movement);
+        REQUIRE(actual == expected);
+        REQUIRE(effective_node_weight_at_floor(type, floor, marker, movement) == expected.total());
+    };
+    for (int floor = 1; floor <= 6; ++floor) {
+        check(NodeType::Portal, floor, {}, MovementKind::Walk, { 2, 1 });
+        check(NodeType::Expedition, floor, {}, MovementKind::Walk, { floor == 2 ? 1.0 : 0.0, 0 });
+    }
+    for (NodeType type : { NodeType::BattleElite, NodeType::BattleSavage, NodeType::ScrapShop, NodeType::Duel }) {
+        check(type, 3, {}, MovementKind::Walk, { 1, 1 });
+    }
+    for (NodeType type : { NodeType::BattleNormal, NodeType::Shop, NodeType::Incident, NodeType::Rest,
+                          NodeType::Wish, NodeType::Evacuate, NodeType::HideBattle, NodeType::HideInvisible,
+                          NodeType::Sacrifice }) {
+        check(type, 3, {}, MovementKind::Walk, { 1, 0 });
+    }
+    for (NodeType type : { NodeType::Unknown, NodeType::Empty, NodeType::Final, NodeType::BattleBoss,
+                          NodeType::Light, NodeType::Door, NodeType::Employ }) {
+        check(type, 3, {}, MovementKind::Walk, {});
+    }
+    check(NodeType::Portal, 3, "savage", MovementKind::M10, { 1, 0.5 });
+    check(NodeType::Incident, 3, "fruit_cache", MovementKind::M10, { 1.5, 2 });
+    check(NodeType::Light, 3, "fruit_cache", MovementKind::Walk, { 0.5, 1 });
+    check(NodeType::Incident, 3, "informant", MovementKind::M10, { 1, 2 });
+    check(NodeType::Sacrifice, 3, "civilization_ashes", MovementKind::Walk, { 2, 0 });
+    check(NodeType::BattleNormal, 3, "light_end", MovementKind::Walk, { 1, 0 });
+    check(NodeType::Incident, 3, "god_sorrow", MovementKind::Walk, { 1, 0 });
+    REQUIRE(income_order_score(1.5) == 3);
+    REQUIRE(conservative_resident_income({ 1, 1 }) == NodeIncome { 1, 0.5 });
+    REQUIRE(conservative_resident_income({ 1, 0 }) == NodeIncome { 1, 0 });
+}
+
 TEST_CASE("BlackFlow reveal consistency ignores topology-only empty fallback under the HUD")
 {
     MapSnapshot before;
@@ -8879,11 +9584,54 @@ TEST_CASE("BlackFlow initial resident hypotheses ignore markers on non-empty nod
 TEST_CASE("BlackFlow Utopia effect expiration respects the Hopeful Soil exception")
 {
     const std::optional<GridPosition> source = GridPosition { 2, 3 };
-    REQUIRE(utopia_effect_expires_after_node_completion(true, "tilted-dune", source, { 2, 3 }));
-    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "hopeful-soil", source, { 2, 3 }));
-    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(false, "tilted-dune", source, { 2, 3 }));
-    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "tilted-dune", source, { 2, 2 }));
-    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "tilted-dune", std::nullopt, { 2, 3 }));
+    const NodeId center = *make_stable_node_id(3, *source);
+    REQUIRE(utopia_effect_expires_after_node_completion(true, "tilted-dune", source, 3, 3, center, 3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "hopeful-soil", source, 3, 3, center, 3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(false, "tilted-dune", source, 3, 3, center, 3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(
+        true,
+        "tilted-dune",
+        source,
+        3,
+        3,
+        *make_stable_node_id(3, { 2, 2 }),
+        3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "tilted-dune", std::nullopt, 3, 3, center, 3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "tilted-dune", source, 3, std::nullopt, center, 3));
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(true, "tilted-dune", source, 3, 3, InvalidNodeId, 3));
+}
+
+TEST_CASE("BlackFlow floor advance does not expire the new floor Utopia at the origin")
+{
+    // Archive 2026-09-05/1478880674/9: F2 exit settles after F3 is merged.
+    MapSnapshot new_map;
+    Node source;
+    source.id = *make_stable_node_id(3, { 0, 0 });
+    source.floor = 3;
+    source.position = { 0, 0 };
+    new_map.upsert_node(source);
+    const NodeId old_exit = *make_stable_node_id(2, { 0, 1 });
+    REQUIRE(new_map.find_node(old_exit) == nullptr);
+    REQUIRE_FALSE(
+        utopia_effect_expires_after_node_completion(true, "storage-room", source.position, 3, 3, old_exit, 2));
+    // Floor identity also rejects an old node if the generation stamp is wrong.
+    REQUIRE_FALSE(utopia_effect_expires_after_node_completion(
+        true,
+        "storage-room",
+        source.position,
+        3,
+        3,
+        *make_stable_node_id(2, { 0, 0 }),
+        3));
+    REQUIRE(utopia_effect_expires_after_node_completion(true, "storage-room", source.position, 3, 3, source.id, 3));
+}
+
+TEST_CASE("BlackFlow renewed maps do not share Utopia completion state")
+{
+    const NodeId center = *make_stable_node_id(4, { 0, 0 });
+    REQUIRE_FALSE(
+        utopia_effect_expires_after_node_completion(true, "storage-room", GridPosition { 0, 0 }, 4, 5, center, 4));
+    REQUIRE(utopia_effect_expires_after_node_completion(true, "storage-room", GridPosition { 0, 0 }, 4, 5, center, 5));
 }
 
 TEST_CASE("BlackFlow floor four remembrance skips resident forest-count evidence")
@@ -9320,7 +10068,9 @@ TEST_CASE("BlackFlow recruitment transitions continue the reveal screen without 
     const auto& start_explore_continuation =
         tasks->at("BlackFlow@StartExplore@Roguelike@RecruitWithoutButton");
     REQUIRE(start_explore_continuation.get("baseTask", std::string {}) == continuation);
-    REQUIRE(start_explore_continuation.get("specificRect", std::vector<int> {}) == safe_rect);
+    const auto start_safe_rect = start_explore_continuation.get("specificRect", std::vector<int> {});
+    REQUIRE(start_safe_rect == std::vector<int> { 50, 300, 80, 120 });
+    REQUIRE(start_explore_continuation.get("maxTimes", 0) == 1);
     const auto start_explore_successors =
         start_explore_continuation.get("next", std::vector<std::string> {});
     const auto start_explore_skip = std::ranges::find(
@@ -9330,13 +10080,20 @@ TEST_CASE("BlackFlow recruitment transitions continue the reveal screen without 
         start_explore_successors,
         "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton");
     REQUIRE(start_explore_skip != start_explore_successors.end());
-    REQUIRE(start_explore_self != start_explore_successors.end());
-    REQUIRE(start_explore_skip < start_explore_self);
+    REQUIRE(start_explore_self == start_explore_successors.end());
+    const std::string start_wait = "BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait";
+    REQUIRE(start_explore_successors.back() == start_wait);
+    const auto& start_passive_wait = tasks->at(start_wait);
+    REQUIRE(start_passive_wait.get("action", std::string {}) == "DoNothing");
+    REQUIRE(start_passive_wait.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(start_passive_wait.get("postDelay", 0) >= 300);
+    const auto start_wait_successors = start_passive_wait.get("next", std::vector<std::string> {});
+    REQUIRE(start_wait_successors.back() == start_wait);
+    REQUIRE(std::ranges::find(start_wait_successors,
+        "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton") == start_wait_successors.end());
     const auto start_explore_exceeded =
         start_explore_continuation.get("exceededNext", std::vector<std::string> {});
-    REQUIRE(std::ranges::find(
-                start_explore_exceeded,
-                "BlackFlow@StartExplore@Roguelike@RecruitSkip") != start_explore_exceeded.end());
+    REQUIRE(start_explore_exceeded == std::vector<std::string> { start_wait });
 
     const auto& start_explore_recruit_skip =
         tasks->at("BlackFlow@StartExplore@Roguelike@RecruitSkip");
@@ -9389,6 +10146,7 @@ TEST_CASE("BlackFlow recruitment transitions continue the reveal screen without 
     };
     require_ready_before_recruit_other(start_explore_recruit_skip.get("next", std::vector<std::string> {}));
     require_ready_before_recruit_other(start_explore_successors);
+    require_ready_before_recruit_other(start_wait_successors);
 }
 
 TEST_CASE("BlackFlow drop page classification recovers from a transient recruitment transition")
@@ -9415,7 +10173,9 @@ TEST_CASE("BlackFlow drop page classification recovers from a transient recruitm
     const auto classified_successors =
         tasks->at("BlackFlow@Roguelike@DropsFlag_default").get("next", std::vector<std::string> {});
     REQUIRE_FALSE(classified_successors.empty());
-    REQUIRE(classified_successors.front() == choose_oper);
+    REQUIRE(classified_successors.front() == "BlackFlow@Roguelike@NodeSettlementPopups#next");
+    REQUIRE(classified_successors.size() > 1);
+    REQUIRE(classified_successors[1] == choose_oper);
 
     // Reward/recruit page recognition exhaustion must preserve the active run.
     const auto& classifier = tasks->at("BlackFlow@Roguelike@DropsFlag");
@@ -9423,6 +10183,65 @@ TEST_CASE("BlackFlow drop page classification recovers from a transient recruitm
             std::vector<std::string> { safe_failure });
     REQUIRE(classifier.get("exceededNext", std::vector<std::string> {}) ==
             std::vector<std::string> { safe_failure });
+}
+
+TEST_CASE("BlackFlow recruitment submission waits for network feedback before redispatching the voucher")
+{
+    const std::filesystem::path repository_root =
+        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+
+    const std::string loading = "BlackFlow@Roguelike@RecruitTransitionLoading";
+    const std::string observe = "BlackFlow@Roguelike@RecruitTransitionObserve";
+    const std::string ready = "BlackFlow@Roguelike@RecruitTransitionReady";
+    const std::string drops = "BlackFlow@Roguelike@DropsFlag";
+    const std::string choose = "BlackFlow@Roguelike@ChooseOperFlag";
+
+    const auto& loading_task = tasks->at(loading);
+    REQUIRE(loading_task.get("baseTask", std::string {}) == "LoadingText");
+    REQUIRE(loading_task.get("action", std::string {}) == "DoNothing");
+    REQUIRE(loading_task.get("next", std::vector<std::string> {}) == std::vector<std::string> { "#self", observe });
+
+    // Once a submission/loading state has been observed, the old voucher page must not be
+    // dispatched again until it has remained after a bounded passive stability wait.
+    const auto& observer = tasks->at(observe);
+    REQUIRE(observer.get("algorithm", std::string {}) == "JustReturn");
+    REQUIRE(observer.get("action", std::string {}) == "DoNothing");
+    REQUIRE(observer.get("postDelay", 0) >= 400);
+    const auto observer_next = observer.get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(observer_next, drops) != observer_next.end());
+    REQUIRE(std::ranges::find(observer_next, choose) == observer_next.end());
+    REQUIRE(observer.get("exceededNext", std::vector<std::string> {}) == std::vector<std::string> { ready });
+
+    const auto ready_next = tasks->at(ready).get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(ready_next, drops) != ready_next.end());
+    REQUIRE(std::ranges::find(ready_next, choose) != ready_next.end());
+    REQUIRE(std::ranges::find(ready_next, drops) < std::ranges::find(ready_next, choose));
+
+    // Every entry into the recruitment plugin is gated, including callers that did not
+    // originate from ClickToDrops.
+    const auto choose_flag_next = tasks->at(choose).get("next", std::vector<std::string> {});
+    REQUIRE_FALSE(choose_flag_next.empty());
+    REQUIRE(choose_flag_next.front() == loading);
+    REQUIRE(std::ranges::find(choose_flag_next, "BlackFlow@Roguelike@ChooseOper") != choose_flag_next.end());
+
+    for (const std::string source : { "BlackFlow@Roguelike@ChooseOperConfirm",
+                                      "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
+                                      "BlackFlow@Roguelike@ClickToDrops" }) {
+        const auto successors = tasks->at(source).get("next", std::vector<std::string> {});
+        const auto loading_it = std::ranges::find(successors, loading);
+        REQUIRE(loading_it != successors.end());
+        const auto choose_it = std::ranges::find(successors, choose);
+        if (choose_it != successors.end()) {
+            REQUIRE(loading_it < choose_it);
+        }
+    }
+
+    // A completed recruit may land directly on the reward page; it must not require another
+    // blind ClickToDrops before the page classifier can take over.
+    const auto choose_oper_next = tasks->at("BlackFlow@Roguelike@ChooseOper").get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(choose_oper_next, drops) != choose_oper_next.end());
 }
 
 TEST_CASE("BlackFlow transient UI failures wait one minute before retrying the failed action")
@@ -9627,6 +10446,160 @@ TEST_CASE("BlackFlow inventory reset is bounded and requires consecutive station
     REQUIRE(swipes == (interrupted ? 1 : 10));
 }
 
+TEST_CASE("BlackFlow inventory reset reopens after left-edge confirmation times out")
+{
+    int swipes = 0;
+    int reopens = 0;
+    int tick = 0;
+    int clicks = 0;
+    int detail_click_x = -1;
+    bool detail_open = false;
+    InventoryPanelState panel = InventoryPanelState::Expanded;
+    // 模拟日志中十次回滑未获连续静止确认；恢复后，卡片位置必须重新识别。
+    int card_x = 820;
+    REQUIRE(scroll_inventory_to_start(
+        [&] {
+            ++swipes;
+            return true;
+        },
+        [] { return false; },
+        [&] {
+            ++reopens;
+            return reopen_inventory_to_start(
+                [&] { return panel; },
+                [&](InventoryPanelState current) {
+                    ++clicks;
+                    panel = current == InventoryPanelState::Expanded ? InventoryPanelState::Collapsed
+                                                                     : InventoryPanelState::Expanded;
+                    card_x = 393;
+                    return true;
+                },
+                [&] {
+                    ++tick;
+                    return true;
+                });
+        }));
+    REQUIRE(swipes == 10);
+    REQUIRE(reopens == 1);
+    REQUIRE(clicks == 2);
+    REQUIRE(panel == InventoryPanelState::Expanded);
+    REQUIRE(open_inventory_part_detail(
+        [&]() -> std::optional<asst::Rect> { return asst::Rect { card_x, 259, 70, 20 }; },
+        [&](const asst::Rect& rect) {
+            detail_click_x = rect.x + rect.width / 2;
+            detail_open = true;
+            return true;
+        },
+        [&] { return detail_open; },
+        [&] {
+            ++tick;
+            return true;
+        }));
+    REQUIRE(detail_click_x == 428);
+}
+
+TEST_CASE("BlackFlow inventory reopening confirms transitions and bounds lost clicks")
+{
+    int tick = 0;
+    int clicks = 0;
+    int last_click_tick = -1;
+    int dropped_clicks = 0;
+    bool stuck = false;
+    bool stuck_closed = false;
+    bool interrupted = false;
+    bool unknown = false;
+    SECTION("slow collapse and expansion include unknown animation frames")
+    {
+    }
+    SECTION("a lost click is retried")
+    {
+        dropped_clicks = 1;
+    }
+    SECTION("a permanently expanded panel stops before reopening")
+    {
+        stuck = true;
+    }
+    SECTION("a failed expansion stops after two verified clicks")
+    {
+        stuck_closed = true;
+    }
+    SECTION("unknown frames never trigger clicks")
+    {
+        unknown = true;
+    }
+    SECTION("an interrupted wait stops immediately")
+    {
+        interrupted = true;
+    }
+    InventoryPanelState panel = InventoryPanelState::Expanded;
+    InventoryPanelState pending = panel;
+    const bool reopened = reopen_inventory_to_start(
+        [&] {
+            if (unknown) {
+                return InventoryPanelState::Unknown;
+            }
+            const bool transition_stuck = stuck || (stuck_closed && panel == InventoryPanelState::Collapsed);
+            if (!transition_stuck && last_click_tick >= 0 && tick - last_click_tick >= 3) {
+                panel = pending;
+            }
+            return !transition_stuck && last_click_tick >= 0 && tick - last_click_tick < 3
+                       ? InventoryPanelState::Unknown
+                       : panel;
+        },
+        [&](InventoryPanelState current) {
+            REQUIRE(current != InventoryPanelState::Unknown);
+            ++clicks;
+            if (clicks > dropped_clicks) {
+                last_click_tick = tick;
+                pending = current == InventoryPanelState::Expanded ? InventoryPanelState::Collapsed
+                                                                   : InventoryPanelState::Expanded;
+            }
+            return true;
+        },
+        [&] {
+            ++tick;
+            return !interrupted;
+        });
+    REQUIRE(reopened == !(stuck || stuck_closed || interrupted || unknown));
+    REQUIRE(clicks == (unknown ? 0 : interrupted ? 1 : stuck ? 2 : stuck_closed ? 3 : 2 + dropped_clicks));
+    REQUIRE(tick <= 32);
+}
+
+TEST_CASE("BlackFlow inventory reset does not reopen on success or interruption")
+{
+    bool swipe_failed = false;
+    SECTION("the left edge is confirmed")
+    {
+    }
+    SECTION("a swipe is interrupted")
+    {
+        swipe_failed = true;
+    }
+    int reopens = 0;
+    REQUIRE(
+        scroll_inventory_to_start(
+            [&] { return !swipe_failed; },
+            [] { return true; },
+            [&] {
+                ++reopens;
+                return true;
+            }) == !swipe_failed);
+    REQUIRE(reopens == 0);
+}
+
+TEST_CASE("BlackFlow inventory reset propagates a failed reopen without looping")
+{
+    int reopens = 0;
+    REQUIRE_FALSE(scroll_inventory_to_start(
+        [] { return true; },
+        [] { return false; },
+        [&] {
+            ++reopens;
+            return false;
+        }));
+    REQUIRE(reopens == 1);
+}
+
 TEST_CASE("BlackFlow inventory relocates a clipped target before clicking")
 {
     bool target_visible = false;
@@ -9658,4 +10631,268 @@ TEST_CASE("BlackFlow inventory relocates a clipped target before clicking")
     REQUIRE(relocations == 1);
     REQUIRE(clicks == 1);
     REQUIRE(waits >= 12);
+}
+
+TEST_CASE("BlackFlow tree hole combines outer continuation without changing effective node weights")
+{
+    MapSnapshot map;
+    const auto add = [&](int col, NodeType type) {
+        Node n;
+        n.floor = 6;
+        n.position = { 0, col };
+        n.id = *make_stable_node_id(6, n.position);
+        n.type = type;
+        n.name = std::string(to_string(type));
+        n.traversal = default_traversal_for(type);
+        n.identity_state = NodeIdentityState::Classified;
+        n.identity_revealed = true;
+        const NodeId id = n.id;
+        REQUIRE(map.upsert_node(std::move(n)));
+        return id;
+    };
+    const NodeId start = add(0, NodeType::Empty);
+    const NodeId duel = add(1, NodeType::Duel);
+    const NodeId wish = add(2, NodeType::Wish);
+    REQUIRE(map.upsert_edge({ start, duel, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ duel, wish, EdgeKnowledge::Confirmed, {} }));
+    RunState run;
+    run.floor = 6;
+    run.current_node = start;
+    run.resources.action_points = 3;
+    run.visited_nodes.insert(start);
+    run.revealed_nodes = { start, duel, wish };
+    ResolvedPolicy policy;
+    policy.route_preferences = { RoutePreference::MaximizeRevealedNodes,
+                                 RoutePreference::MaximizeEffectiveNodes,
+                                 RoutePreference::IgnoreBattleTieBreaks,
+                                 RoutePreference::OptimizeProcessingMoves };
+    FactStore facts;
+    MissionState mission;
+    BlackFlowPlanRequest request;
+    request.map = &map;
+    request.run = &run;
+    request.policy = &policy;
+    request.facts = &facts;
+    request.mission = &mission;
+    request.no_AP_is_terminal = true;
+    request.continuation = [](const auto&) {
+        return RouteContinuationValue {};
+    };
+    SECTION("ordinary node value remains including measurement value")
+    {
+        const auto plan = BlackFlowPlanner {}.plan(request);
+        INFO(plan.error);
+        REQUIRE(plan);
+        const auto selected =
+            std::ranges::find(plan.decision.candidate_summaries, plan.decision.selected->action_id, [](const auto& c) {
+                return c.move.action_id;
+            });
+        REQUIRE(selected != plan.decision.candidate_summaries.end());
+        CHECK(
+            selected->effective_node_count ==
+            effective_node_weight_at_floor(NodeType::Duel, 6, {}, MovementKind::Walk) +
+                effective_node_weight_at_floor(NodeType::Wish, 6, {}, MovementKind::Walk));
+    }
+    SECTION("shuffling identities are observed after one movement")
+    {
+        request.observe_after_one_move = true;
+        const auto plan = BlackFlowPlanner {}.plan(request);
+        INFO(plan.error);
+        REQUIRE(plan);
+        REQUIRE_FALSE(plan.decision.selected->direct_exhaustion);
+        REQUIRE(plan.decision.planned_route_steps.size() == 1);
+    }
+    SECTION("blocked combat leaves direct exhaustion available")
+    {
+        Node normal = *map.find_node(duel);
+        normal.type = NodeType::BattleNormal;
+        normal.traversal = default_traversal_for(normal.type);
+        REQUIRE(map.upsert_node(normal));
+        Node elite = *map.find_node(wish);
+        elite.type = NodeType::BattleElite;
+        elite.traversal = default_traversal_for(elite.type);
+        REQUIRE(map.upsert_node(elite));
+        request.forbidden_node_types = { NodeType::BattleNormal, NodeType::BattleElite, NodeType::HideBattle };
+        const auto plan = BlackFlowPlanner {}.plan(request);
+        INFO(plan.error);
+        REQUIRE(plan);
+        REQUIRE(plan.decision.selected->direct_exhaustion);
+    }
+    SECTION("processing item needed outside is retained")
+    {
+        MapSnapshot disconnected;
+        for (const auto& [id, node] : map.nodes()) {
+            REQUIRE(disconnected.upsert_node(node));
+        }
+        map = std::move(disconnected);
+        run.resources.movement_charges[MovementKind::M03] = 1;
+        request.continuation = [](const auto& used) {
+            return RouteContinuationValue { used[static_cast<size_t>(MovementKind::M03)] == 0, 0, 0 };
+        };
+        const auto plan = BlackFlowPlanner {}.plan(request);
+        INFO(plan.error);
+        REQUIRE(plan);
+        REQUIRE(plan.decision.selected->direct_exhaustion);
+    }
+    SECTION("outer measurement and development value participate in the decision")
+    {
+        MapSnapshot disconnected;
+        for (const auto& [id, node] : map.nodes()) {
+            REQUIRE(disconnected.upsert_node(node));
+        }
+        map = std::move(disconnected);
+        run.resources.movement_charges[MovementKind::M03] = 1;
+        request.continuation = [](const auto& used) {
+            return RouteContinuationValue { true, 0, used[static_cast<size_t>(MovementKind::M03)] ? -10.0 : 0.0 };
+        };
+        const auto plan = BlackFlowPlanner {}.plan(request);
+        INFO(plan.error);
+        REQUIRE(plan);
+        REQUIRE(plan.decision.selected->direct_exhaustion);
+    }
+}
+
+TEST_CASE("BlackFlow roaming resident markers override node income with one and a half points")
+{
+    for (const auto type : { NodeType::Empty, NodeType::Portal, NodeType::Duel, NodeType::BattleNormal }) {
+        CHECK(effective_node_weight_at_floor(type, 3, "savage", MovementKind::Walk) == 1.5);
+        CHECK(effective_node_weight_at_floor(type, 6, "savage", MovementKind::M10) == 1.5);
+    }
+    Node node;
+    node.type = NodeType::Empty;
+    node.marker_type = "savage";
+    node.identity_source = "map_topology_no_ocr_empty";
+    MovePreview preview;
+    preview.displayed_type = NodeType::BattleNormal;
+    preview.identity_revealed = true;
+    CHECK(preview_confirms_roaming_resident(node, preview));
+    EnteredPageObservation entered;
+    entered.classified_type = NodeType::BattleNormal;
+    CHECK(resolve_page_identity(node.type, "", &preview, entered).type == NodeType::BattleNormal);
+}
+
+TEST_CASE("BlackFlow permits a confirmed resident battle only on the observed first move")
+{
+    MapSnapshot map;
+    for (int col = 0; col < 3; ++col) {
+        Node node;
+        node.floor = 3;
+        node.position = { 0, col };
+        node.id = *make_stable_node_id(3, node.position);
+        node.type = col == 0 ? NodeType::Empty : NodeType::BattleNormal;
+        node.marker_type = col == 0 ? "" : "savage";
+        node.traversal = default_traversal_for(node.type);
+        node.identity_revealed = true;
+        node.identity_state = NodeIdentityState::Classified;
+        REQUIRE(map.upsert_node(node));
+    }
+    const NodeId start = *make_stable_node_id(3, { 0, 0 });
+    const NodeId first = *make_stable_node_id(3, { 0, 1 });
+    const NodeId second = *make_stable_node_id(3, { 0, 2 });
+    REQUIRE(map.upsert_edge({ start, first, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ first, second, EdgeKnowledge::Confirmed, {} }));
+    RunState run;
+    run.floor = 3;
+    run.current_node = start;
+    run.resources.action_points = 3;
+    run.visited_nodes.insert(start);
+    ResolvedPolicy policy;
+    FactStore facts;
+    MissionState mission;
+    std::string compile_error;
+    auto goal = SafetyGoalProgram::compile(policy, mission, facts, {}, &compile_error);
+    REQUIRE(goal.has_value());
+    for (const bool compact : { false, true }) {
+        for (const bool allowed : { false, true }) {
+            StateExpansionOptions options;
+            options.use_compact_actions = compact;
+            options.safety_goal = &*goal;
+            options.safety_goal_facts = &facts;
+            options.no_AP_is_terminal = true;
+            options.forbidden_node_types = { NodeType::BattleNormal };
+            options.allow_initial_roaming_residents = allowed;
+            OnDemandStateGraph graph;
+            std::string error;
+            REQUIRE(graph.initialize(map, run, options, &error));
+            const auto* actions = graph.actions(graph.initial_state(), &error);
+            REQUIRE(actions != nullptr);
+            const auto found = std::ranges::find_if(*actions, [&](const auto& action) {
+                return action.candidate.landing == first;
+            });
+            REQUIRE((found != actions->end()) == allowed);
+            if (allowed) {
+                const auto successor = found->outcomes.front().successor;
+                const auto* later = graph.actions(successor, &error);
+                REQUIRE(later != nullptr);
+                CHECK(std::ranges::none_of(*later, [&](const auto& action) {
+                    return action.candidate.landing == second;
+                }));
+            }
+        }
+    }
+}
+
+TEST_CASE("BlackFlow future route value accounts for residents moving off or onto a node")
+{
+    MapSnapshot map;
+    const auto add = [&](GridPosition pos, NodeType type, std::string marker = "") {
+        Node node;
+        node.floor = 3;
+        node.position = pos;
+        node.id = *make_stable_node_id(3, pos);
+        node.type = type;
+        node.marker_type = marker;
+        node.traversal = default_traversal_for(type);
+        node.identity_revealed = true;
+        node.identity_state = NodeIdentityState::Classified;
+        REQUIRE(map.upsert_node(node));
+        return node.id;
+    };
+    const auto start = add({ 0, 0 }, NodeType::Empty);
+    const auto first = add({ 0, 1 }, NodeType::Wish);
+    NodeId next;
+    double expected;
+    SECTION("a resident can leave the empty node before arrival")
+    {
+        next = add({ 0, 2 }, NodeType::Empty, "savage");
+        expected = 1;
+    }
+    SECTION("a resident can occupy the duel after the first step")
+    {
+        next = add({ 0, 2 }, NodeType::Duel);
+        const auto resident = add({ 1, 2 }, NodeType::Empty, "savage");
+        REQUIRE(map.upsert_edge({ next, resident, EdgeKnowledge::Confirmed, {} }));
+        expected = 2.5;
+    }
+    REQUIRE(map.upsert_edge({ start, first, EdgeKnowledge::Confirmed, {} }));
+    REQUIRE(map.upsert_edge({ first, next, EdgeKnowledge::Confirmed, {} }));
+    RunState run;
+    run.floor = 3;
+    run.current_node = start;
+    run.resources.action_points = 2;
+    run.visited_nodes = { start };
+    for (const auto& [id, node] : map.nodes()) {
+        run.revealed_nodes.insert(id);
+    }
+    ResolvedPolicy policy;
+    policy.route_preferences = { RoutePreference::MaximizeEffectiveNodes, RoutePreference::IgnoreBattleTieBreaks };
+    FactStore facts;
+    MissionState mission;
+    BlackFlowPlanRequest request;
+    request.map = &map;
+    request.run = &run;
+    request.policy = &policy;
+    request.facts = &facts;
+    request.mission = &mission;
+    request.no_AP_is_terminal = true;
+    request.allow_initial_roaming_residents = true;
+    const auto plan = BlackFlowPlanner {}.plan(request);
+    INFO(plan.error);
+    REQUIRE(plan);
+    const auto found = std::ranges::find_if(plan.decision.candidate_summaries, [&](const auto& c) {
+        return c.move.landing == first && c.move.movement == MovementKind::Walk;
+    });
+    REQUIRE(found != plan.decision.candidate_summaries.end());
+    CHECK(found->effective_node_count == expected);
+    CHECK(found->effective_node_income.total() == expected);
 }

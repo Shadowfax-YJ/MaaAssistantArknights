@@ -63,9 +63,11 @@
         ]
     },
     "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton": {
-        "Doc": "只负责关闭招募展示页；核心干员职业券切换由重新出现的 CoreCharVoucherReady 页面证据触发。",
+        "Doc": "关闭开局招募展示页只点一次左侧空白；中央区域会在过渡时变成术师券，后续只等待目标页。",
         "baseTask": "BlackFlow@Roguelike@RecruitWithoutButton",
-        "specificRect": [550, 300, 180, 120],
+        "specificRect": [50, 300, 80, 120],
+        "maxTimes": 1,
+        "reduceOtherTimes": ["BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait*50"],
         "next": [
             "BlackFlow@StartExplore@Roguelike@RecruitSkip",
             "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
@@ -76,10 +78,17 @@
             "BlackFlow@Roguelike@NextLevel#next",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
-            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButton"
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait"
         ],
-        "exceededNext": [
-            "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+        "exceededNext": ["BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait"]
+    },
+    "BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait": {
+        "Doc": "关闭开局招募展示后等待券页、列表或地图；识别过渡帧时不得继续点击。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "maxTimes": 50,
+        "next": [
             "BlackFlow@StartExplore@Roguelike@ChooseOperFlag",
             "BlackFlow@StartExplore@Roguelike@CoreCharVoucherReady",
             "BlackFlow@StartExplore@Roguelike@RecruitOther",
@@ -87,8 +96,17 @@
             "BlackFlow@Roguelike@NextLevel",
             "BlackFlow@Roguelike@NextLevel#next",
             "BlackFlow@Roguelike@MapPrepare-Ready",
-            "BlackFlow@Roguelike@MapPrepare-ZoomOut"
-        ]
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@StartExplore@Roguelike@RecruitWithoutButtonTransitionWait"
+        ],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@StartExplore@Roguelike@ReturnToVouchers": {
+        "Doc": "已确认进入错误职业列表后返回开局招募券页，保留招募券重新选择。",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [25, 18, 70, 28],
+        "postDelay": 500
     },
     "BlackFlow@Roguelike@Abandon": {
         "template": "BlackFlow@Roguelike@Abandon.png"
@@ -188,7 +206,12 @@
         "roi": [958, 530, 322, 189]
     },
     "BlackFlow@Roguelike@ChooseOper": {
-        "next": ["BlackFlow@Roguelike@ChooseOperConfirm", "BlackFlow@Roguelike@ChooseOperConfirm#next"]
+        "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
+            "BlackFlow@Roguelike@ChooseOperConfirm",
+            "BlackFlow@Roguelike@ChooseOperConfirm#next",
+            "BlackFlow@Roguelike@DropsFlag"
+        ]
     },
     "BlackFlow@Roguelike@ChooseOperConfirm": {
         "Doc": "兼容普通的“确认招募”和增益招募的“招募并增益”，识别到哪个按钮就点击哪个按钮本身。",
@@ -199,6 +222,7 @@
         "templThreshold": [0.8, 0.8],
         "roi": [1016, 602, 264, 118],
         "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
             "BlackFlow@Roguelike@RecruitSkip",
             "BlackFlow@Roguelike@TraderShoppingResume",
             "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
@@ -218,6 +242,77 @@
             "BlackFlow@Roguelike@ClickToDrops*20",
             "BlackFlow@Roguelike@AutomationShopPurchaseWait*20",
             "BlackFlow@Roguelike@AutomationShopPurchaseTransition*50"
+        ],
+        "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
+            "BlackFlow@Roguelike@RecruitCloseGuide",
+            "BlackFlow@Roguelike@ChooseOper"
+        ]
+    },
+    "BlackFlow@Roguelike@RecruitTransitionLoading": {
+        "Doc": "提交招募或放弃招募时，旧招募页面可能仍在加载文字下保持可识别；此时只等待，禁止再次调用招募插件。",
+        "baseTask": "LoadingText",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@RecruitTransitionObserve"
+        ]
+    },
+    "BlackFlow@Roguelike@RecruitTransitionObserve": {
+        "Doc": "网络加载结束后先被动等待目标页稳定；奖励页、演出、商店和获得物弹窗可立即接管，残留的招募按钮不能立即触发第二次扫描。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
+            "BlackFlow@Roguelike@RecruitTransitionObserve@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@RecruitTransitionObserve@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
+            "BlackFlow@Roguelike@RecruitTransitionObserve@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@RecruitTransitionObserve@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@RecruitSkip",
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@StageEncounterSpecialClose",
+            "BlackFlow@Roguelike@CloseEventAfterEncounter",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@NextLevel#next",
+            "#self"
+        ],
+        "maxTimes": 2,
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecruitTransitionReady"
+        ]
+    },
+    "BlackFlow@Roguelike@RecruitTransitionReady": {
+        "Doc": "稳定等待后重新分类招募/战利品转场；先处理目标页和弹窗，只有旧招募页持续存在时才允许重新调用招募插件。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 300,
+        "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
+            "BlackFlow@Roguelike@RecruitTransitionReady@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@RecruitTransitionReady@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
+            "BlackFlow@Roguelike@RecruitTransitionReady@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@RecruitTransitionReady@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@RecruitSkip",
+            "BlackFlow@Roguelike@TraderShoppingResume",
+            "BlackFlow@Roguelike@StageTraderLeave",
+            "BlackFlow@Roguelike@DropsFlag",
+            "BlackFlow@Roguelike@StageEncounterSpecialClose",
+            "BlackFlow@Roguelike@CloseEventAfterEncounter",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@NextLevel#next",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@StageEncounterGiveUpRecruitConfirm",
+            "#self"
+        ],
+        "maxTimes": 50,
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
         ]
     },
     "BlackFlow@Roguelike@MissionCompletedFlag": {
@@ -237,8 +332,10 @@
         "maxTimes": 20,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@ClickToDrops@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@StageEncounterSpecialClose",
@@ -268,6 +365,7 @@
         "Doc": "关掉事件结算弹窗。进入节点由规划器负责，这里不接节点进入。",
         "template": "BlackFlow@Roguelike@CloseEvent.png",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@CloseEvent@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@CloseEvent@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages#next",
@@ -280,7 +378,11 @@
         "roi": [567, 584, 145, 136],
         "action": "ClickSelf",
         "postDelay": 600,
-        "next": ["#self", "BlackFlow@Roguelike@Stages"]
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "#self",
+            "BlackFlow@Roguelike@Stages"
+        ]
     },
     "BlackFlow@Roguelike@CloseInterview": {
         "template": "BlackFlow@Roguelike@CloseCollection.png"
@@ -1269,6 +1371,7 @@
     "BlackFlow@Roguelike@DropsFlag_default": {
         "template": "Roguelike@DropsFlag.png",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@GetDropLeave",
@@ -1283,6 +1386,7 @@
     "BlackFlow@Roguelike@DropsFlag_mode1": {
         "template": "Roguelike@DropsFlag.png",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropLeave",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@GetDropCompleted",
@@ -1306,6 +1410,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
@@ -1325,6 +1430,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "#self",
+            "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
@@ -1344,6 +1450,7 @@
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "BlackFlow@Roguelike@EmployLeaveObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
@@ -1387,6 +1494,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
@@ -1400,6 +1508,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@EmployLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve",
+            "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@EmployLeaveDestinationHunted",
             "BlackFlow@Roguelike@EmployLeaveDestinationReady",
             "BlackFlow@Roguelike@EmployLeaveDestinationZoomOut",
@@ -1438,7 +1547,10 @@
             "BlackFlow@Roguelike@EmployLeaveConfirmObserve*2",
             "BlackFlow@Roguelike@EmployLeaveConfirmTransitionWait*20"
         ],
-        "next": ["BlackFlow@Roguelike@HuntedConfirm", "BlackFlow@Roguelike@NodeCompletionAction"]
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@NodeCompletionAction"
+        ]
     },
     "BlackFlow@Roguelike@EnterAfterRecruit": {
         "template": "BlackFlow@Roguelike@EnterAfterRecruit.png",
@@ -1655,6 +1767,7 @@
         "algorithm": "JustReturn",
         "postDelay": 400,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropConfirmed",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ClickToDrops"
@@ -1666,6 +1779,7 @@
         "template": "BlackFlow@Roguelike@GetDrop.png",
         "action": "DoNothing",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@GetDropConfirmed@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@ChooseOperFlag",
@@ -1689,6 +1803,7 @@
         "algorithm": "JustReturn",
         "postDelay": 250,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@GetDropLeave",
@@ -1707,6 +1822,7 @@
         "specificRect": [600, 480, 80, 100],
         "postDelay": 100,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@NodeCompletionAction"
@@ -1722,6 +1838,7 @@
         "algorithm": "JustReturn",
         "postDelay": 700,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDrops#next",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@DropsFlag",
@@ -1742,6 +1859,7 @@
         "algorithm": "JustReturn",
         "postDelay": 400,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropSelectConfirmed",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ClickToDrops"
@@ -1752,6 +1870,7 @@
         "template": "BlackFlow@Roguelike@GetDropSelect.png",
         "action": "DoNothing",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropSelectConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@GetDropSelectConfirmed@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@CloseEvent",
@@ -1779,6 +1898,7 @@
         "algorithm": "JustReturn",
         "postDelay": 400,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ClickToDrops"
@@ -1792,6 +1912,7 @@
         "postDelay": 1000,
         "templThreshold": 0.75,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropTrophyReward",
             "BlackFlow@Roguelike@GetDropSelectReward",
             "BlackFlow@Roguelike@GetDropSelect",
@@ -1810,6 +1931,7 @@
         "algorithm": "JustReturn",
         "postDelay": 400,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropSelectRewardConfirmed",
             "BlackFlow@Roguelike@DropsFlag",
             "BlackFlow@Roguelike@ClickToDrops"
@@ -1820,6 +1942,7 @@
         "template": "BlackFlow@Roguelike@GetDropSelectReward.png",
         "action": "DoNothing",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropTrophyReward",
             "BlackFlow@Roguelike@GetDropSelectReward",
             "BlackFlow@Roguelike@ChooseOperFlag",
@@ -1829,6 +1952,7 @@
     },
     "BlackFlow@Roguelike@GetDrops": {
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDrops@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@GetDrops@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@CloseEvent",
@@ -2170,7 +2294,7 @@
     "BlackFlow@Roguelike@MapPrepare": {
         "algorithm": "JustReturn",
         "next": [
-            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut"
         ],
@@ -2187,6 +2311,9 @@
         "Doc": "确认已在地图后，优先处理可能稍晚出现的 NEXT/X 奖励链；若没有弹窗，再由点击任务重新确认地图并缩放。",
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick"
@@ -2489,6 +2616,39 @@
         "specificRect": [650, 430, 1, 1],
         "rectMove": [1080, 430, 1, 1]
     },
+    "BlackFlow@Roguelike@MovementInventoryResetCollapse": {
+        "Doc": "过载清理回滑无法确认到头时，单步收起零件箱；不得跳转路由或再次进入过载清理。",
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+        "roi": [
+            589,
+            639,
+            101,
+            80
+        ],
+        "action": "ClickSelf",
+        "postDelay": 500
+    },
+    "BlackFlow@Roguelike@MovementInventoryResetExpand": {
+        "Doc": "收起后以底栏超载按钮确认可重新展开；与收起图标互斥，过渡帧不点击。",
+        "algorithm": "OcrDetect",
+        "roi": [
+            593,
+            651,
+            99,
+            59
+        ],
+        "text": [
+            "超载"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": false,
+        "action": "ClickSelf",
+        "postDelay": 500
+    },
+    "BlackFlow@Roguelike@MovementInventoryResetWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 300
+    },
     "BlackFlow@Roguelike@MovementInventoryOverloadPrompt": {
         "Doc": "移动确认后弹出的零件箱过载提示。现场整行为‘零件箱已满，无法进入下个节点’，因此只做前缀/包含匹配。",
         "algorithm": "OcrDetect",
@@ -2782,6 +2942,9 @@
         "Doc": "稳定地图采样发现获得物弹窗时，先通过通用插件逐张截图并排空整条 NEXT/NEXT/X 奖励链，完成后再重新采样地图。",
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@TreeHoleLeaveConfirmForCapture",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MapCapturePopupDrain@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapCapturePopupDrainDone"
@@ -2889,9 +3052,67 @@
             "BlackFlow@Roguelike@DirectExhaustOpenPanel*3",
             "BlackFlow@Roguelike@DirectExhaustButton*3"
         ],
-        "next": ["BlackFlow@Roguelike@HuntedConfirm", "#self"],
+        "next": ["BlackFlow@Roguelike@DirectExhaustDestination", "#self"],
         "maxTimes": 3,
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@NextLevelReturnCloseCollection": {
+        "Doc": "先行一步的干员归队弹窗。采集插件在关闭前保存截图，不限定归队干员姓名。",
+        "algorithm": "OcrDetect",
+        "roi": [
+            435,
+            345,
+            415,
+            60
+        ],
+        "text": [
+            "归队了"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickRect",
+        "specificRect": [
+            628,
+            530,
+            38,
+            40
+        ],
+        "postDelay": 600,
+        "onErrorNext": [
+            "#back"
+        ],
+        "next": [
+            "#next"
+        ]
+    },
+    "BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue": {
+        "Doc": "乌托邦崛起弹窗。先保存截图，再点击中心下方勾选按钮。",
+        "algorithm": "OcrDetect",
+        "roi": [
+            545,
+            365,
+            235,
+            50
+        ],
+        "text": [
+            "乌托邦必将崛起"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickRect",
+        "specificRect": [
+            637,
+            505,
+            34,
+            35
+        ],
+        "postDelay": 600,
+        "onErrorNext": [
+            "#back"
+        ],
+        "next": [
+            "#next"
+        ]
     },
     "BlackFlow@Roguelike@NextLevel": {
         "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层。",
@@ -2904,6 +3125,8 @@
         "fuzzyMatch": true,
         "postDelay": 600,
         "next": [
+            "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MapPrepare-Ready",
@@ -2916,7 +3139,11 @@
     },
     "BlackFlow@Roguelike@NextLevel-Enter": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@MapPrepare-FloorEnterZoom", "BlackFlow@Roguelike@NextLevel"]
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
+            "BlackFlow@Roguelike@NextLevel"
+        ]
     },
     "BlackFlow@Roguelike@NodeCompletionAction": {
         "Doc": [
@@ -2959,9 +3186,38 @@
     "BlackFlow@Roguelike@NodeResultAction": {
         "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
     },
+    "BlackFlow@Roguelike@NodeSettlementPopups": {
+        "Doc": "所有节点结算出口共用的弹窗候选；用 #next 内联，保留离开黑潭与追猎任务的原名和生命周期回调。无弹窗时继续各节点原有的领奖、确认或返回地图流程。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleLeaveConfirm",
+            "BlackFlow@Roguelike@HuntedConfirm"
+        ]
+    },
+    "BlackFlow@Roguelike@NodeSettlementTreeHoleLeaveFlag": {
+        "Doc": "离开行商或应急助力时先确认离开动作已完成，再由公共结算分发点击出洞弹窗。",
+        "baseTask": "BlackFlow@Roguelike@TreeHoleLeaveConfirm",
+        "action": "DoNothing",
+        "next": []
+    },
+    "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole": {
+        "baseTask": "BlackFlow@Roguelike@NodeSettlementTreeHoleLeaveFlag",
+        "next": [
+            "BlackFlow@Roguelike@StageTraderLeaveConfirmCompleted"
+        ]
+    },
+    "BlackFlow@Roguelike@EmployLeaveDestinationTreeHole": {
+        "baseTask": "BlackFlow@Roguelike@NodeSettlementTreeHoleLeaveFlag",
+        "next": [
+            "BlackFlow@Roguelike@EmployLeaveConfirmCompleted"
+        ]
+    },
     "BlackFlow@Roguelike@NodeResultDispatch": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@NodeResultAction"]
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@NodeResultAction"
+        ]
     },
     "BlackFlow@Roguelike@Page-Combat": {
         "algorithm": "JustReturn",
@@ -2988,6 +3244,7 @@
         "postDelay": 200,
         "maxTimes": 50,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@DoorAnimationSkip",
             "BlackFlow@Roguelike@Page-Door-Wait@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages-MapReady",
@@ -3164,6 +3421,7 @@
         "Doc": "只在已识别并点击“跳过”后用于关闭招募展示页；点击屏幕中央安全区域，禁止沿用基类的右上角固定点击。",
         "specificRect": [550, 300, 180, 120],
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@RecruitOther",
             "BlackFlow@Roguelike@TraderShoppingResume",
             "BlackFlow@Roguelike@StageTraderLeave",
@@ -3183,6 +3441,7 @@
         "action": "DoNothing",
         "postDelay": 300,
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@RecruitOther",
             "BlackFlow@Roguelike@TraderShoppingResume",
             "BlackFlow@Roguelike@StageTraderLeave",
@@ -3318,6 +3577,7 @@
         "baseTask": "Roguelike@StageEncounterGiveUpRecruitConfirm",
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
         "next": [
+            "BlackFlow@Roguelike@RecruitTransitionLoading",
             "BlackFlow@Roguelike@TraderShoppingResume",
             "BlackFlow@Roguelike@StageTraderLeave",
             "BlackFlow@Roguelike@DropsFlag",
@@ -3433,10 +3693,247 @@
         "action": "ClickSelf",
         "postDelay": 800
     },
-    "BlackFlow@Roguelike@StageEncounterReward": {
-        "Doc": "事件选完之后领取奖励，可能连续弹出多个藏品、资源弹窗、直接进入干员招募或转入战斗预览。",
+    "BlackFlow@Roguelike@SacrificePicker": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            230,
+            125,
+            200,
+            60
+        ],
+        "text": [
+            "失与得"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@SacrificeSelectItem"
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeSelectItem": {
+        "Doc": "由通用事件插件随机选择失与得物品，核对左下名称后确认交换。",
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@StageEncounterReward"
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeContinuation": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@SacrificeContinue"
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeContinue": {
+        "Doc": "复原文明后先完成自然物复查；插件确认结束才恢复普通事件分发。",
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterResult"
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeFirstItem": {
+        "algorithm": "JustReturn",
+        "specificRect": [
+            686,
+            175,
+            102,
+            104
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeSelectedLabel": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            102,
+            497,
+            94,
+            42
+        ],
+        "text": [
+            "已选择"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificeSelectedName": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            196,
+            497,
+            445,
+            42
+        ],
+        "text": [],
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificeConfirm": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            890,
+            565,
+            315,
+            65
+        ],
+        "text": [
+            "失去",
+            "等待",
+            "换出"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickSelf",
+        "postDelay": 600
+    },
+    "BlackFlow@Roguelike@SacrificeBack": {
+        "baseTask": "BlackFlow@Roguelike@ExpeditionBack",
+        "roi": [
+            675,
+            562,
+            175,
+            65
+        ]
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryOpen": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            650,
+            639,
+            175,
+            80
+        ],
+        "text": [
+            "零件箱"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickSelf",
+        "postDelay": 500
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryExpanded": {
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+        "roi": [
+            589,
+            639,
+            101,
+            80
+        ],
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryClose": {
+        "baseTask": "BlackFlow@Roguelike@SacrificeInventoryExpanded",
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+        "action": "ClickSelf",
+        "postDelay": 500
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryCount": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            115,
+            380,
+            170,
+            45
+        ],
+        "text": [],
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificePopupClose": {
+        "baseTask": "BlackFlow@Roguelike@CloseCollection",
+        "template": "BlackFlow@Roguelike@CloseCollection.png",
+        "next": [],
+        "onErrorNext": []
+    },
+    "BlackFlow@Roguelike@SacrificePopupContinue": {
+        "baseTask": "BlackFlow@Roguelike@CloseCollectionContinue",
+        "template": "BlackFlow@Roguelike@CloseCollectionContinue.png",
+        "next": [],
+        "onErrorNext": []
+    },
+    "BlackFlow@Roguelike@ExpeditionPicker": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            230,
+            125,
+            200,
+            60
+        ],
+        "text": [
+            "先行一步"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@ExpeditionSelectOper"
+        ]
+    },
+    "BlackFlow@Roguelike@ExpeditionSelectOper": {
+        "Doc": "由 RoguelikeStageEncounterTaskPlugin 按左下角姓名选择可派遣干员。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@StageEncounterReward"
+        ]
+    },
+    "BlackFlow@Roguelike@ExpeditionFirstOper": {
+        "algorithm": "JustReturn",
+        "specificRect": [
+            685,
+            185,
+            85,
+            80
+        ]
+    },
+    "BlackFlow@Roguelike@ExpeditionOperDescription": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            80,
+            565,
+            550,
+            45
+        ],
+        "text": [],
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@ExpeditionDepart": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            895,
+            557,
+            250,
+            65
+        ],
+        "text": [
+            "另辟蹊径"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickSelf",
+        "postDelay": 600
+    },
+    "BlackFlow@Roguelike@ExpeditionBack": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            675,
+            552,
+            175,
+            75
+        ],
+        "text": [
+            "上一步"
+        ],
+        "fullMatch": false,
+        "fuzzyMatch": false,
+        "action": "ClickSelf",
+        "postDelay": 600
+    },
+    "BlackFlow@Roguelike@StageEncounterReward": {
+        "Doc": "事件选完之后领取奖励，可能连续弹出多个藏品、资源弹窗、直接进入干员招募或转入战斗预览。树洞最后一步的事件结算也会出现离开黑潭弹窗，须先接入出洞流程。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
+            "BlackFlow@Roguelike@SacrificePicker",
+            "BlackFlow@Roguelike@ExpeditionPicker",
             "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@StageEncounterReward@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@EmployLeave",
@@ -3445,7 +3942,6 @@
             "BlackFlow@Roguelike@Stages-MapReady",
             "BlackFlow@Roguelike@ResumeEncounterPage",
             "BlackFlow@Roguelike@NextLevel",
-            "BlackFlow@Roguelike@HuntedConfirm",
             "BlackFlow@Roguelike@CloseEventAfterEncounter"
         ]
     },
@@ -3614,6 +4110,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
@@ -3635,6 +4132,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "#self",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
@@ -3654,6 +4152,7 @@
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirm",
             "BlackFlow@Roguelike@StageTraderLeaveObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
@@ -3697,6 +4196,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
@@ -3710,6 +4210,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve",
+            "BlackFlow@Roguelike@StageTraderLeaveDestinationTreeHole",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationHunted",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationReady",
             "BlackFlow@Roguelike@StageTraderLeaveDestinationZoomOut",
@@ -3748,7 +4249,10 @@
             "BlackFlow@Roguelike@StageTraderLeaveConfirmObserve*2",
             "BlackFlow@Roguelike@StageTraderLeaveConfirmTransitionWait*20"
         ],
-        "next": ["BlackFlow@Roguelike@HuntedConfirm", "BlackFlow@Roguelike@Stages"]
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@Stages"
+        ]
     },
     "BlackFlow@Roguelike@Stages": {
         "baseTask": "BlackFlow@Roguelike@Stages_default",
@@ -3774,7 +4278,10 @@
     "BlackFlow@Roguelike@Stages_default": {
         "algorithm": "JustReturn",
         "next": [
-            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@Stages_default@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@Stages_default@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
+            "BlackFlow@Roguelike@SacrificePicker",
             "BlackFlow@Roguelike@Stages@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@Stages@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages-MapReady",
@@ -3981,5 +4488,198 @@
     },
     "BlackFlow@RoguelikeSettlementConfirm": {
         "template": "BlackFlow@Roguelike@GamePassTheEndConfirm.png"
+    },
+    "BlackFlow@Roguelike@PortalPrice": {
+        "algorithm": "OcrDetect",
+        "text": [],
+        "withoutDet": false,
+        "fullMatch": false
+    },
+    "BlackFlow@Roguelike@TreeHoleEffectTitle": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            500,
+            100,
+            360,
+            48
+        ],
+        "text": [],
+        "withoutDet": false
+    },
+    "BlackFlow@Roguelike@TreeHoleEffectDescription": {
+        "algorithm": "OcrDetect",
+        "roi": [
+            405,
+            161,
+            540,
+            90
+        ],
+        "text": [],
+        "withoutDet": false
+    },
+    "BlackFlow@Roguelike@DirectExhaustDestination": {
+        "baseTask": "BlackFlow@Roguelike@HuntedWait"
+    },
+    "BlackFlow@Roguelike@TreeHoleLeaveConfirm": {
+        "Doc": "树洞行动力耗尽后先确认离开黑潭弹窗，再等待外层地图出现。",
+        "algorithm": "OcrDetect",
+        "roi": [
+            550,
+            495,
+            180,
+            50
+        ],
+        "text": [
+            "离开黑潭"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": false,
+        "action": "ClickRect",
+        "specificRect": [
+            628,
+            628,
+            24,
+            24
+        ],
+        "postDelay": 600,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleReturnEnter"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleLeaveConfirmForCapture": {
+        "baseTask": "BlackFlow@Roguelike@TreeHoleLeaveConfirm",
+        "next": []
+    },
+    "BlackFlow@Roguelike@TreeHoleReturnEnter": {
+        "algorithm": "JustReturn",
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@TreeHoleReturnWait*80"
+        ],
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleReturnWait"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleReturnWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "maxTimes": 80,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleLeaveConfirm",
+            "BlackFlow@Roguelike@HuntedConfirm",
+            "BlackFlow@Roguelike@TreeHoleReturnTitle",
+            "BlackFlow@Roguelike@TreeHoleReturnWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@TreeHoleReturnWait@(BlackFlow@Roguelike@CloseCollection)",
+            "#self"
+        ],
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleReturnTitle": {
+        "baseTask": "BlackFlow@Roguelike@NextLevel",
+        "text": [
+            "玻利瓦尔肤层",
+            "甜美的伤口",
+            "血色空脉",
+            "受害者腐殖",
+            "卡德霍之颅"
+        ],
+        "next": [
+            "BlackFlow@Roguelike@NextLevel-Enter"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeMenuWait": {
+        "Doc": "出洞后必须先返回肉鸽主菜单并点击继续探索，不能因为已经看到地图就提前完成。",
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "maxTimes": 80,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeHunted",
+            "BlackFlow@Roguelike@TreeHoleResumeContinue",
+            "BlackFlow@Roguelike@TreeHoleResumeExit",
+            "#self"
+        ],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeExit": {
+        "baseTask": "BlackFlow@Roguelike@ExitThenAbandon",
+        "template": "Roguelike@ExitThenAbandon.png",
+        "postDelay": 500,
+        "maxTimes": 3,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeMenuWait"
+        ],
+        "onErrorNext": [],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeContinue": {
+        "baseTask": "BlackFlow@Roguelike@RecoverMap-Continue",
+        "template": "BlackFlow@Roguelike@Continue.png",
+        "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait"
+        ],
+        "onErrorNext": [],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeMapWait": {
+        "algorithm": "JustReturn",
+        "postDelay": 400,
+        "maxTimes": 80,
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeHunted",
+            "BlackFlow@Roguelike@TreeHoleResumeLoading",
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@TreeHoleResumeMapReady",
+            "BlackFlow@Roguelike@TreeHoleResumeZoomOut",
+            "BlackFlow@Roguelike@TreeHoleResumeDismiss"
+        ],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeLoading": {
+        "baseTask": "BlackFlow@Roguelike@RecoverMap-Loading",
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeDismiss": {
+        "baseTask": "BlackFlow@Roguelike@RecoverMap-Dismiss",
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait"
+        ],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeZoomOut": {
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+        "template": "BlackFlow@Roguelike@MapZoomOut.png",
+        "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeMapWait"
+        ],
+        "onErrorNext": [],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeMapReady": {
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-Ready",
+        "template": "BlackFlow@Roguelike@MapZoomIn.png",
+        "action": "DoNothing",
+        "next": [],
+        "onErrorNext": [],
+        "exceededNext": []
+    },
+    "BlackFlow@Roguelike@HuntedWait": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@HuntedConfirm"
+        ]
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeHunted": {
+        "baseTask": "BlackFlow@Roguelike@HuntedConfirm",
+        "template": "BlackFlow@Roguelike@HuntedConfirm.png",
+        "action": "DoNothing",
+        "next": [],
+        "exceededNext": []
     }
 }

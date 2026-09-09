@@ -155,6 +155,7 @@ struct BlackFlowObservationRequest
     std::string utopia_policy;
     int attempt_count = 1;
     std::int64_t capture_us = 0;
+    std::string tree_hole_effect;
 };
 
 // 地图拓扑缓存只在同一张地图的连续观测间有效。追忆四层会在 NextLevel 后仍然
@@ -389,23 +390,33 @@ public:
     virtual bool cleanup_depart_inventory_overload(std::string* error) = 0;
 
     virtual void reset_run() {}
+    virtual bool has_pending_pursuit() const { return false; }
+    virtual bool take_pending_pursuit() { return false; }
+    virtual void begin_tree_hole_return() {}
+    virtual void finish_tree_hole_return() {}
     virtual bool queue_current_run_archive(std::string* = nullptr) { return true; }
 
     virtual void configure_diagnostics(const DiagnosticSettings&) {}
 
     virtual void set_collection_popup_session(std::weak_ptr<BlackFlowSession>) {}
+
     virtual bool capture_collection_popup(std::string_view, std::string* = nullptr) { return true; }
+
     virtual bool capture_event_page(std::string_view, const cv::Mat&, std::string* = nullptr) { return true; }
+
+    virtual bool
+        capture_event_detail(std::string_view, std::string_view, json::object, const cv::Mat&, std::string* = nullptr)
+    {
+        return true;
+    }
+
     virtual bool capture_get_drop(std::string_view, std::optional<Rect> = std::nullopt, std::string* = nullptr)
     {
         return true;
     }
-    virtual bool capture_store_page(
-        std::string_view,
-        std::string_view,
-        int,
-        const cv::Mat* = nullptr,
-        std::string* = nullptr)
+
+    virtual bool
+        capture_store_page(std::string_view, std::string_view, int, const cv::Mat* = nullptr, std::string* = nullptr)
     {
         return true;
     }
@@ -472,15 +483,23 @@ public:
         confirm(const MoveTransaction& transaction, EnteredPageObservation& entered_page, std::string* error) override;
     bool cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error) override;
     bool cleanup_depart_inventory_overload(std::string* error) override;
+    bool has_pending_pursuit() const override;
+    bool take_pending_pursuit() override;
+    void begin_tree_hole_return() override { m_tree_return_pending = true; }
+    void finish_tree_hole_return() override { m_tree_return_pending = false; }
 
     void reset_run() override;
     bool queue_current_run_archive(std::string* error = nullptr) override;
     void configure_diagnostics(const DiagnosticSettings& settings) override;
     void set_collection_popup_session(std::weak_ptr<BlackFlowSession> session) override;
     bool capture_collection_popup(std::string_view task, std::string* error = nullptr) override;
-    bool capture_event_page(
+    bool capture_event_page(std::string_view event_name, const cv::Mat& stitched_image, std::string* error = nullptr)
+        override;
+    bool capture_event_detail(
         std::string_view event_name,
-        const cv::Mat& stitched_image,
+        std::string_view phase,
+        json::object details,
+        const cv::Mat& image,
         std::string* error = nullptr) override;
     bool capture_get_drop(
         std::string_view task,
@@ -555,6 +574,12 @@ private:
     std::weak_ptr<BlackFlowSession> m_collection_popup_session;
     std::optional<std::uint64_t> m_utopia_generation;
     UtopiaPanelObservation m_utopia_observation;
+    std::optional<std::uint64_t> m_tree_effect_generation;
+    std::string m_tree_effect;
+    std::string m_tree_effect_description;
+    bool inspect_tree_hole_effect(std::uint64_t generation, cv::Mat& image, std::string* error);
+    bool resume_exploration_after_tree_hole(int floor, cv::Mat& image, std::string* error);
+    bool m_tree_return_pending = false;
     std::unique_ptr<cv::Mat> m_last_stable_map_image;
     std::unique_ptr<cv::Mat> m_battle_preview_map_reference;
     std::unique_ptr<cv::Mat> m_pending_stable_map_image;

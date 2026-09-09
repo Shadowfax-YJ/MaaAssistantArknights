@@ -74,6 +74,8 @@ struct BlackFlowMapObservation
     int topology_base_edge_count = 0;
     int topology_extra_edge_count = 0;
     int topology_match_score = 0;
+    std::string tree_hole_effect;
+    std::string tree_hole_effect_description;
     std::string utopia_status;
     std::string utopia_reason;
     std::string utopia_ideology;

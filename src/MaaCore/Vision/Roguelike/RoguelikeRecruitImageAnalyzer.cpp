@@ -1,5 +1,8 @@
 #include "RoguelikeRecruitImageAnalyzer.h"
 
+#include <algorithm>
+
+#include "Config/Miscellaneous/BattleDataConfig.h"
 #include "Config/TaskData.h"
 #include "MaaUtils/NoWarningCV.hpp"
 #include "Utils/Logger.hpp"
@@ -58,6 +61,30 @@ bool asst::RoguelikeRecruitImageAnalyzer::analyze()
     }
 
     return !m_result.empty();
+}
+
+std::optional<asst::battle::Role> asst::RoguelikeRecruitImageAnalyzer::get_detected_role() const
+{
+    std::unordered_set<battle::Role> candidates;
+    std::size_t known_names = 0;
+    for (const auto& name : m_detected_names) {
+        auto roles = BattleData.get_roles(name);
+        roles.erase(battle::Role::Unknown);
+        if (roles.empty()) {
+            continue;
+        }
+        if (known_names++ == 0) {
+            candidates = std::move(roles);
+        }
+        else {
+            std::erase_if(candidates, [&](battle::Role role) { return !roles.contains(role); });
+        }
+    }
+    // 至少两名独立干员互相印证；多职业同名干员保留全部职业参与交集。
+    if (known_names < 2 || candidates.size() != 1) {
+        return std::nullopt;
+    }
+    return *candidates.begin();
 }
 
 int asst::RoguelikeRecruitImageAnalyzer::match_elite(const Rect& raw_roi)

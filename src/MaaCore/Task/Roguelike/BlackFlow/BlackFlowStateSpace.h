@@ -55,6 +55,8 @@ struct StateExpansionOptions
     std::unordered_set<NodeId> strategy_terminal_nodes;
     std::unordered_set<std::string> forbidden_action_ids;
     std::unordered_set<NodeType> forbidden_node_types;
+    // 只豁免当前帧已确认的居民落点；下一步居民可能移动，必须重新观测才可再次豁免。
+    bool allow_initial_roaming_residents = false;
     // 调用方把未知凶戾列为禁区时，可选择豁免抵达前已被先前落点揭示的后续落点。
     bool allow_revealed_hidden_battle = false;
     std::unordered_set<MovementKind> reserved_movement_kinds;

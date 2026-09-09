@@ -71,7 +71,7 @@ protected:
         }
     };
 
-    bool do_best_deploy();
+    bool do_best_deploy(bool wait_for_confirmation = false);
     bool calc_stage_info();
     bool run_preparation_phase();
     bool register_virtual_auto_skill_devices();

@@ -69,6 +69,15 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
 
     const bool has_preparation_camera_animation = !m_preparation_deploy_plan.empty();
     if (!run_preparation_phase()) {
+        if (!need_exit()) {
+            Log.error("Battle preparation failed; stopping the task before the battle-result wait", m_stage_name);
+            save_img(utils::path("debug/roguelike/battle-preparation"), false);
+            // Callback plugins do not propagate run() failures to their parent ProcessTask.
+            // A preparation screen also matches InBattleFlag but cannot finish on its own.
+            if (m_task_ptr != nullptr) {
+                m_task_ptr->set_enable(false);
+            }
+        }
         return false;
     }
 
@@ -392,8 +401,8 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
         }
 
         const size_t deployed_count = m_used_tiles.size();
-        if (!do_best_deploy()) {
-            Log.error("No available operator matches the battle preparation deploy plan", m_stage_name);
+        if (!do_best_deploy(true)) {
+            Log.error("Unable to complete the next battle preparation deployment", m_stage_name);
             restore_combat_plan();
             return false;
         }
@@ -645,7 +654,7 @@ bool asst::RoguelikeBattleTaskPlugin::get_position_full(const battle::Deployment
     return get_position_full(get_oper_location_type(oper));
 }
 
-bool asst::RoguelikeBattleTaskPlugin::do_best_deploy()
+bool asst::RoguelikeBattleTaskPlugin::do_best_deploy(bool wait_for_confirmation)
 {
     LogTraceFunction;
     Log.info("m_kills", m_kills);
@@ -743,20 +752,48 @@ bool asst::RoguelikeBattleTaskPlugin::do_best_deploy()
 
             // BattleHelper 会在发出拖拽后先乐观登记场上状态。失败的拖拽仍会让卡片
             // 保持选中并暂时不可用，因此必须先取消选中，再重新观察部署栏。
-            const bool selection_cleared = asst::BattleHelper::cancel_oper_selection();
-            const bool deployment_observed = update_deployment(false);
-            const auto visible_oper = std::ranges::find_if(m_cur_deployment_opers, [&](const auto& oper) {
-                return oper.role == deploy_plan.role && oper.name == deploy_plan.oper_name;
-            });
-            const bool card_visible = visible_oper != m_cur_deployment_opers.end();
-            const bool card_cooling = card_visible && visible_oper->cooling;
-            const bool card_available = card_visible && visible_oper->available;
-            if (!deployment_observed ||
-                !blackflow::deployment_attempt_confirmed(
-                    selection_cleared,
-                    card_visible,
-                    card_cooling,
-                    card_available)) {
+            bool selection_cleared = asst::BattleHelper::cancel_oper_selection();
+            bool deployment_observed = false;
+            bool card_visible = false;
+            bool card_cooling = false;
+            bool card_available = false;
+            const auto confirmation_start = std::chrono::steady_clock::now();
+            const auto confirmed = blackflow::wait_for_deployment_confirmation(
+                [&]() -> std::optional<bool> {
+                    if (!selection_cleared && wait_for_confirmation) {
+                        selection_cleared = asst::BattleHelper::cancel_oper_selection();
+                    }
+                    deployment_observed = update_deployment(false);
+                    if (!selection_cleared || !deployment_observed) {
+                        // Failed recognition leaves m_cur_deployment_opers unchanged. Those old
+                        // cards cannot tell us whether the gesture just sent succeeded.
+                        return std::nullopt;
+                    }
+                    const auto visible_oper = std::ranges::find_if(m_cur_deployment_opers, [&](const auto& oper) {
+                        return oper.role == deploy_plan.role && oper.name == deploy_plan.oper_name;
+                    });
+                    card_visible = visible_oper != m_cur_deployment_opers.end();
+                    card_cooling = card_visible && visible_oper->cooling;
+                    card_available = card_visible && visible_oper->available;
+                    return blackflow::deployment_attempt_confirmed(
+                        selection_cleared,
+                        card_visible,
+                        card_cooling,
+                        card_available);
+                },
+                [&]() {
+                    return wait_for_confirmation && !need_exit() &&
+                           std::chrono::steady_clock::now() - confirmation_start < std::chrono::seconds(5) &&
+                           sleep(200);
+                });
+            if (!confirmed.has_value() && wait_for_confirmation) {
+                Log.error(
+                    "Battle preparation deployment could not be observed; leaving its result unknown",
+                    deploy_plan.oper_name,
+                    deploy_plan.placed);
+                return false;
+            }
+            if (!confirmed.value_or(false)) {
                 const battle::OperNameTag failed_tag { deploy_plan.role, deploy_plan.oper_name };
                 m_used_tiles.erase(deploy_plan.placed);
                 m_battlefield_opers.erase(failed_tag);

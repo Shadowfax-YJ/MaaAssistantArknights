@@ -145,6 +145,12 @@ bool refresh_with_retries(Session& session, IBlackFlowTaskPort& port, std::strin
                 return true;
             }
         }
+        if (port.has_pending_pursuit()) {
+            if (error != nullptr) {
+                *error = current_error;
+            }
+            return false;
+        }
         const auto* failure = current_error.empty() ? "unknown" : current_error.c_str();
         if (attempt + 1 < TransientRevealObservationMaximumAttempts) {
             Log.info(

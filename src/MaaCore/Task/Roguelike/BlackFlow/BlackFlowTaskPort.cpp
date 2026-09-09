@@ -18,6 +18,7 @@
 #include <opencv2/core.hpp>
 
 #include "BlackFlowMovementRecognition.h"
+#include "BlackFlowBattleRules.h"
 #include "BlackFlowAutomationStoreRules.h"
 #include "BlackFlowInventoryRules.h"
 #include "BlackFlowCollectionPopup.h"
@@ -71,6 +72,9 @@ constexpr std::string_view MoveConfirmDoorAnimationWaitTask =
     "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait";
 constexpr std::string_view InventorySwipeTask = "BlackFlow@Roguelike@MovementInventorySwipe";
 constexpr std::string_view InventorySwipeToStartTask = "BlackFlow@Roguelike@MovementInventorySwipeToStart";
+constexpr std::string_view InventoryResetCollapseTask = "BlackFlow@Roguelike@MovementInventoryResetCollapse";
+constexpr std::string_view InventoryResetExpandTask = "BlackFlow@Roguelike@MovementInventoryResetExpand";
+constexpr std::string_view InventoryResetWaitTask = "BlackFlow@Roguelike@MovementInventoryResetWait";
 constexpr std::string_view InventoryOverloadPromptTask =
     "BlackFlow@Roguelike@MovementInventoryOverloadPrompt";
 constexpr std::string_view InventoryOverloadOpenTask = "BlackFlow@Roguelike@MovementInventoryOverloadOpen";
@@ -286,10 +290,15 @@ int collection_popup_floor(const BlackFlowSession& session)
 
 const Node* collection_popup_node(const BlackFlowSession& session, NodeId node)
 {
+    // 证据描述保留已确认的历史身份；结算后的当前地图会把节点显示为林间空地。
+    const Node* noted = session.exploration_notebook().snapshot().find_node(node);
+    if (noted != nullptr && noted->identity_revealed && !noted->identity_from_prediction) {
+        return noted;
+    }
     if (const Node* current = session.map().snapshot().find_node(node); current != nullptr) {
         return current;
     }
-    return session.exploration_notebook().snapshot().find_node(node);
+    return noted;
 }
 
 json::object serialize_node_battle(const NodeBattleRecord& battle)
@@ -335,14 +344,17 @@ CollectionPopupDestination regular_collection_popup_destination(
         attribution["column"] = metadata->position.column;
         add_battle_attribution(attribution, metadata->battle);
     }
-    return { collection_popup_regular_node_directory(floor, node), std::move(attribution) };
+    const int outer_floor = session.in_tree_hole() ? session.outer_floor() : 0;
+    attribution["tree_hole_outer_floor"] = floor == 6 ? outer_floor : 0;
+    return { collection_popup_regular_node_directory(floor, node, outer_floor), std::move(attribution) };
 }
 
 CollectionPopupDestination virtual_collection_popup_destination(
     int floor,
     std::string name,
     std::uint64_t page_revision,
-    std::string_view evidence)
+    std::string_view evidence,
+    int tree_hole_outer_floor = 0)
 {
     std::string type = "special_event";
     std::string type_display;
@@ -355,7 +367,7 @@ CollectionPopupDestination virtual_collection_popup_destination(
         type_display = "险路恶敌";
     }
     return {
-        collection_popup_virtual_node_directory(floor, name, page_revision),
+        collection_popup_virtual_node_directory(floor, name, page_revision, tree_hole_outer_floor),
         json::object {
             { "kind", "abstract_node" },
             { "evidence", std::string(evidence) },
@@ -364,6 +376,7 @@ CollectionPopupDestination virtual_collection_popup_destination(
             { "node_type", std::move(type) },
             { "node_type_display", std::move(type_display) },
             { "page_revision", page_revision },
+            { "tree_hole_outer_floor", floor == 6 ? tree_hole_outer_floor : 0 },
         },
     };
 }
@@ -398,11 +411,29 @@ CollectionPopupDestination pursuit_collection_popup_destination(
 std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
     const BlackFlowSession& session,
     std::string_view task,
-    bool allow_current_landing)
+    bool allow_current_landing,
+    std::optional<int> visible_floor = std::nullopt)
 {
-    const int floor = collection_popup_floor(session);
+    int floor = collection_popup_floor(session);
+    const int tree_hole_outer_floor = session.in_tree_hole() ? session.outer_floor() : 0;
     const CollectionPopupSource source = collection_popup_source(task);
     if (source != CollectionPopupSource::None) {
+        // 归队/乌托邦弹窗可能先于 NextLevel 提交楼层。优先采用截图中的标题，
+        // 标题暂不可读时才根据尚未提交的出口页面推断，避免沿用旧层或重复加层。
+        if (source == CollectionPopupSource::FloorEntry) {
+            if (visible_floor.has_value()) {
+                floor = *visible_floor;
+            }
+            else if (const auto& page = session.page_context(); page.has_value() && floor == page->floor) {
+                floor = collection_popup_pending_floor_entry(
+                            task,
+                            page->floor,
+                            page->node_type,
+                            page->page_intent,
+                            page->changes_floor)
+                            .value_or(floor);
+            }
+        }
         std::string source_name;
         switch (source) {
         case CollectionPopupSource::StartReward:
@@ -418,7 +449,7 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
             break;
         }
         return CollectionPopupDestination {
-            collection_popup_source_directory(source, floor),
+            collection_popup_source_directory(source, floor, tree_hole_outer_floor),
             json::object {
                 { "kind", "source" },
                 { "source", std::move(source_name) },
@@ -444,7 +475,7 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
                 page->changes_floor);
             entering_floor.has_value()) {
             return CollectionPopupDestination {
-                collection_popup_source_directory(CollectionPopupSource::FloorEntry, *entering_floor),
+                collection_popup_source_directory(CollectionPopupSource::FloorEntry, *entering_floor, tree_hole_outer_floor),
                 json::object {
                     { "kind", "source" },
                     { "source", "floor_entry" },
@@ -473,7 +504,7 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
     if (session.run().current_node != InvalidNodeId && floor > 0 &&
         static_cast<int>(session.run().current_node >> 48U) != floor) {
         return CollectionPopupDestination {
-            collection_popup_source_directory(CollectionPopupSource::FloorEntry, floor),
+            collection_popup_source_directory(CollectionPopupSource::FloorEntry, floor, tree_hole_outer_floor),
             json::object {
                 { "kind", "source" },
                 { "source", "floor_entry" },
@@ -496,7 +527,8 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
                 page->floor,
                 page->node_name,
                 page->page_revision,
-                "page_without_map_landing");
+                "page_without_map_landing",
+                tree_hole_outer_floor);
             add_battle_attribution(destination.attribution, page->battle);
             return destination;
         }
@@ -529,6 +561,78 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
         return regular_collection_popup_destination(session, current, floor, "current_node");
     }
     return std::nullopt;
+}
+
+struct CollectionPopupOrigin
+{
+    int floor = 0;
+    std::uint64_t map_generation = 0;
+    CollectionPopupDestination unresolved_destination;
+};
+
+std::optional<std::string> recognize_battle_intel_stage_name(const cv::Mat& image)
+{
+    const auto task = Task.get<OcrTaskInfo>(MovePreviewStageNameTask);
+    if (task == nullptr) {
+        return std::nullopt;
+    }
+    OCRer analyzer(image);
+    analyzer.set_task_info(task);
+    // 无效验尸等特殊关卡没有 autopilot 配置；读取标题时不能按可自动作战名单过滤。
+    analyzer.set_required(std::vector<std::string> {});
+    const auto results = analyzer.analyze();
+    if (!results.has_value() || results->size() != 1) {
+        return std::nullopt;
+    }
+    return resolve_battle_intel_stage_name(results->front().text, RoguelikeCopilot.get_stage_names("BlackFlow"));
+}
+
+CollectionPopupOrigin collection_popup_origin(const BlackFlowSession& session)
+{
+    const auto& page = session.page_context();
+    const int floor = page.has_value() ? page->floor : session.run().floor;
+    const auto transaction = session.transaction();
+    const std::string suffix = page.has_value() ? "p" + std::to_string(page->page_revision)
+                                              : "g" + std::to_string(session.map_generation());
+    json::object attribution {
+        { "kind", "unresolved_node" },
+        { "reason", "landing_remained_unresolved" },
+        { "floor", floor },
+        { "map_generation", session.map_generation() },
+        { "tree_hole_outer_floor", session.in_tree_hole() ? session.outer_floor() : 0 },
+    };
+    if (page.has_value()) {
+        attribution["node_name"] = page->node_name;
+        attribution["node_type"] = std::string(to_string(page->node_type));
+        attribution["page_revision"] = page->page_revision;
+        add_battle_attribution(attribution, page->battle);
+    }
+    if (transaction != nullptr) {
+        std::vector<json::value> candidates;
+        for (const NodeId id : transaction->proposal().possible_landings) {
+            candidates.emplace_back(id);
+        }
+        attribution["possible_landings"] = json::array(std::move(candidates));
+    }
+    return {
+        floor,
+        session.map_generation(),
+        { std::filesystem::path(CollectionPopupRootDirectory) /
+              diagnostic_floor_directory(floor, session.in_tree_hole() ? session.outer_floor() : 0) /
+              ("node-unresolved-" + suffix),
+          std::move(attribution) },
+    };
+}
+
+std::optional<CollectionPopupDestination> resolve_pending_collection_popup_destination(
+    const BlackFlowSession& session, std::string_view task, const CollectionPopupOrigin& origin)
+{
+    // 跨层及同层换图后，current_node 属于新地图，不能接收旧页面暂存的截图。
+    if (!collection_popup_pending_matches_map(
+            origin.floor, origin.map_generation, session.run().floor, session.map_generation())) {
+        return origin.unresolved_destination;
+    }
+    return resolve_collection_popup_destination(session, task, session.transaction() == nullptr);
 }
 
 bool node_evidence_is_combat_page(const BlackFlowSession& session)
@@ -864,15 +968,35 @@ public:
                 return false;
             }
             cv::Mat current = capture();
+            if (matches_template(current, "BlackFlow@Roguelike@HuntedConfirm")) {
+                m_pending_pursuit = true;
+                set_error(error, "pursuit popup requires the outer lifecycle route");
+                return false;
+            }
+            const auto map_popup_visible = [&]() {
+                if (current.empty()) {
+                    return false;
+                }
+                for (const std::string task : { "BlackFlow@Roguelike@NextLevelReturnCloseCollection",
+                                                "BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue",
+                                                "BlackFlow@Roguelike@TreeHoleLeaveConfirm" }) {
+                    OCRer popup(current);
+                    popup.set_task_info(task);
+                    if (popup.analyze()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
             if (matches_template(current, CloseCollectionContinueTask) ||
-                matches_template(current, CloseCollectionTask)) {
+                matches_template(current, CloseCollectionTask) || map_popup_visible()) {
                 std::string drain_error;
                 if (!execute({ std::string(MapCapturePopupDrainTask) }, &drain_error)) {
-                    set_error(error, "map capture could not drain a collection popup: " + drain_error);
+                    set_error(error, "map capture could not drain a popup: " + drain_error);
                     return false;
                 }
                 previous.reset();
-                last_rejection = "collection popup was drained before map capture";
+                last_rejection = "popup was drained before map capture";
                 continue;
             }
             if (!map_capture_candidate_is_unobstructed(current, last_rejection)) {
@@ -899,6 +1023,20 @@ public:
         return false;
     }
 
+    bool has_pending_pursuit() const
+    {
+        return m_pending_pursuit || m_last_task == "BlackFlow@Roguelike@TreeHoleResumeHunted";
+    }
+    bool take_pending_pursuit()
+    {
+        const bool pending = has_pending_pursuit();
+        m_pending_pursuit = false;
+        if (m_last_task == "BlackFlow@Roguelike@TreeHoleResumeHunted") {
+            m_last_task.clear();
+        }
+        return pending;
+    }
+
     bool click(const Rect& rect) const { return ctrler()->click(rect); }
 
 protected:
@@ -914,6 +1052,7 @@ protected:
     }
 
 private:
+    bool m_pending_pursuit = false;
     std::vector<std::string> m_tasks;
     std::string m_last_task;
     std::shared_ptr<cv::Mat> m_last_image;
@@ -929,6 +1068,7 @@ public:
         cv::Mat image;
         int sampled_frames = 0;
         double mean_difference = -1.0;
+        CollectionPopupOrigin origin;
     };
 
     struct PendingNodeEvidence
@@ -938,6 +1078,7 @@ public:
         std::string phase;
         cv::Mat image;
         json::object details;
+        CollectionPopupOrigin origin;
     };
 
     std::vector<Pending> pending;
@@ -989,24 +1130,59 @@ bool BlackFlowTaskPort::refresh(
         }
 
         BlackFlowObservationRequest current_request = request;
-        if (request.inspect_utopia) {
+        if (request.floor == 6) {
+            // Exhaustion may return directly to the outer map without a normal NextLevel callback.
+            OCRer title(image);
+            title.set_task_info("BlackFlow@Roguelike@NextLevel");
+            if (!title.analyze() || title.get_result().empty()) {
+                set_error(error, "tree-hole map title is not stable yet");
+                return false;
+            }
+            const auto names = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel")->text;
+            const auto found = std::ranges::find(names, title.get_result().front().text);
+            if (found == names.end()) {
+                set_error(error, "unknown tree-hole return title");
+                return false;
+            }
+            current_request.floor = static_cast<int>(found - names.begin()) + 1;
+            if (current_request.floor != 6) {
+                ++current_request.map_generation;
+                current_request.viewport_already_normalized = false;
+            }
+        }
+        // Both NextLevel and a direct map refresh can discover the outer map. Finish
+        // the menu round trip here, before either path supplies a map to the planner.
+        if (current_request.floor == 6) {
+            m_tree_return_pending = true;
+        }
+        else if (m_tree_return_pending) {
+            if (!resume_exploration_after_tree_hole(current_request.floor, image, error)) {
+                return false;
+            }
+            m_tree_return_pending = false;
+            current_request.viewport_already_normalized = false;
+        }
+        if (current_request.floor == 6) {
+            if (!inspect_tree_hole_effect(current_request.map_generation, image, error)) {
+                return false;
+            }
+            current_request.tree_hole_effect = m_tree_effect;
+            current_request.utopia_ideology.clear();
+            current_request.utopia_policy.clear();
+        }
+        else if (request.inspect_utopia) {
             UtopiaPanelObservation utopia;
-            if (!inspect_utopia_for_generation(
-                    request.map_generation,
-                    utopia,
-                    image,
-                    error)) {
+            if (!inspect_utopia_for_generation(current_request.map_generation, utopia, image, error)) {
                 return false;
             }
             current_request.utopia_ideology = std::move(utopia.ideology);
             current_request.utopia_policy = std::move(utopia.policy);
         }
 
-        if (const auto viewport = perception::floor_viewport_profile(request.floor);
-            viewport.has_value() &&
-            should_normalize_map_viewport(
-                viewport->before_every_capture,
-                request.viewport_already_normalized)) {
+        if (const auto viewport = perception::floor_viewport_profile(current_request.floor);
+            viewport.has_value() && should_normalize_map_viewport(
+                                        viewport->before_every_capture,
+                                        current_request.viewport_already_normalized)) {
             for (int swipe = 0; swipe < viewport->swipe_left_count; ++swipe) {
                 std::string swipe_error;
                 if (!m_task_context->execute({ std::string(FloorFiveViewportSwipeLeftTask) }, &swipe_error)) {
@@ -1048,6 +1224,10 @@ bool BlackFlowTaskPort::refresh(
                 "error",
                 perception_error);
             return false;
+        }
+        if (current_request.floor == 6) {
+            next.observation.tree_hole_effect = m_tree_effect;
+            next.observation.tree_hole_effect_description = m_tree_effect_description;
         }
         const auto action_points = recognize_action_points(image);
         const auto ingots = perception::recognize_ingots(image);
@@ -1203,8 +1383,7 @@ bool BlackFlowTaskPort::inspect_battle(
 
         std::optional<std::string> current_stage_name;
         if (is_battle_intel_preview_type(current_identity->type)) {
-            current_stage_name =
-                recognize_text(current, MovePreviewStageNameTask, RoguelikeCopilot.get_stage_names("BlackFlow"));
+            current_stage_name = recognize_battle_intel_stage_name(current);
             if (!current_stage_name.has_value()) {
                 semantic_stability.reset();
                 return false;
@@ -1418,19 +1597,25 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
     };
 
     const auto reset_to_start = [&]() {
+        int swipes = 0;
         cv::Mat previous = m_task_context->capture();
         const bool reset = scroll_inventory_to_start(
-            [&] { return run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns"); },
+            [&] {
+                ++swipes;
+                return run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns");
+            },
             [&] {
                 cv::Mat current = m_task_context->capture();
                 bool unchanged = false;
+                std::array<double, 3> differences { -1.0, -1.0, -1.0 };
                 if (!previous.empty() && !current.empty() && previous.size() == current.size() &&
                     previous.type() == current.type()) {
                     const auto before = inventory_card_region(previous);
                     const auto after = inventory_card_region(current);
                     // 只比较名称行，避开图标光效。三行都不再移动才算手势到头。
                     unchanged = !before.empty() && !after.empty();
-                    for (const int row : { 120, 282, 444 }) {
+                    for (std::size_t index = 0; index < differences.size(); ++index) {
+                        const int row = 120 + static_cast<int>(index) * 162;
                         if (before.rows < row + 35 || after.rows < row + 35) {
                             unchanged = false;
                             break;
@@ -1438,15 +1623,50 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                         const auto before_names = before.rowRange(row, row + 35);
                         const auto after_names = after.rowRange(row, row + 35);
                         const double denominator = static_cast<double>(after_names.total() * after_names.channels());
-                        unchanged = unchanged && cv::norm(before_names, after_names, cv::NORM_L1) / denominator <=
-                                                     InventoryUnchangedFrameMaximumDifference;
+                        differences[index] = cv::norm(before_names, after_names, cv::NORM_L1) / denominator;
+                        unchanged = unchanged && differences[index] <= InventoryUnchangedFrameMaximumDifference;
                     }
                 }
+                Log.info(
+                    "BlackFlow inventory scroll reset observed",
+                    "swipe",
+                    swipes,
+                    "name row differences",
+                    differences,
+                    "unchanged",
+                    unchanged);
                 previous = std::move(current);
                 return unchanged;
+            },
+            [&] {
+                Log.warn("BlackFlow inventory left-edge confirmation timed out; reopening the parts-box");
+                // 零件箱重新展开默认回到首屏。只执行本地单步任务，不进入外层的
+                // MovementInventoryObserve/路由；后续仍须重新识别目标名称、次数和坐标。
+                const bool reopened = reopen_inventory_to_start(
+                    [&] {
+                        const auto image = m_task_context->capture();
+                        if (image.empty()) {
+                            return InventoryPanelState::Unknown;
+                        }
+                        if (matches_template(image, InventoryResetCollapseTask)) {
+                            return InventoryPanelState::Expanded;
+                        }
+                        if (recognizes_text_fragment(image, InventoryResetExpandTask, "超载")) {
+                            return InventoryPanelState::Collapsed;
+                        }
+                        return InventoryPanelState::Unknown;
+                    },
+                    [&](InventoryPanelState current) {
+                        return current == InventoryPanelState::Expanded
+                                   ? run_task(InventoryResetCollapseTask, "parts-box could not collapse during reset")
+                                   : run_task(InventoryResetExpandTask, "parts-box could not reopen during reset");
+                    },
+                    [&] { return run_task(InventoryResetWaitTask, "parts-box reopen observation was interrupted"); });
+                Log.info("BlackFlow inventory reopen reset completed", "success", reopened);
+                return reopened;
             });
-        if (!reset) {
-            set_error(error, "parts-box could not confirm the left edge after scrolling");
+        if (!reset && (error == nullptr || error->empty())) {
+            set_error(error, "parts-box could not confirm the left edge after scrolling and reopening");
         }
         return reset;
     };
@@ -1762,6 +1982,8 @@ MoveConfirmationStatus BlackFlowTaskPort::confirm(
 
 void BlackFlowTaskPort::reset_run()
 {
+    m_task_context->take_pending_pursuit();
+    m_tree_return_pending = false;
     m_utopia_generation.reset();
     m_utopia_observation = {};
     m_last_stable_map_image.reset();
@@ -1914,13 +2136,31 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
     cv::Mat captured;
     int sampled_frames = 0;
     double mean_difference = -1.0;
+    const auto expedition_popup_task = expedition_floor_popup_ocr_task(task);
     if (!m_task_context->capture_stable_frame(captured, sampled_frames, mean_difference, error)) {
-        return false;
+        if (expedition_popup_task.empty()) {
+            return false;
+        }
+        // 鸟群和乌托邦背景一直在动。全图无法静止时仍保存弹窗文字阳性的当前帧。
+        captured = m_task_context->capture();
+        ++sampled_frames;
+        if (error != nullptr) {
+            error->clear();
+        }
     }
     const std::string_view template_task = *button == CollectionPopupButton::Continue
                                                ? "BlackFlow@Roguelike@CloseCollectionContinue"
                                                : "BlackFlow@Roguelike@CloseCollection";
-    if (!matches_template(captured, template_task)) {
+    bool recognized = false;
+    if (!captured.empty() && !expedition_popup_task.empty()) {
+        OCRer popup(captured);
+        popup.set_task_info(std::string(expedition_popup_task));
+        recognized = popup.analyze().has_value();
+    }
+    else if (!captured.empty()) {
+        recognized = matches_template(captured, template_task);
+    }
+    if (!recognized) {
         set_error(
             error,
             "stable frame no longer contains the recognized collection popup button: " +
@@ -1928,7 +2168,18 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
         return false;
     }
 
-    const auto destination = resolve_collection_popup_destination(*session, task, false);
+    std::optional<int> visible_floor;
+    if (collection_popup_source(task) == CollectionPopupSource::FloorEntry) {
+        const auto title = recognize_text(captured, "BlackFlow@Roguelike@NextLevel");
+        const auto& titles = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel")->text;
+        if (title.has_value()) {
+            const auto it = std::ranges::find(titles, *title);
+            if (it != titles.end()) {
+                visible_floor = static_cast<int>(std::distance(titles.begin(), it)) + 1;
+            }
+        }
+    }
+    const auto destination = resolve_collection_popup_destination(*session, task, false, visible_floor);
     if (!destination.has_value() && session->transaction() != nullptr &&
         !session->transaction()->proposal().controllable) {
         m_collection_popup_state->pending.emplace_back(
@@ -1938,6 +2189,7 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
                 std::move(captured),
                 sampled_frames,
                 mean_difference,
+                collection_popup_origin(*session),
             });
         return true;
     }
@@ -1968,6 +2220,25 @@ bool BlackFlowTaskPort::capture_event_page(
     const cv::Mat& stitched_image,
     std::string* error)
 {
+    return capture_event_detail(
+        event_name,
+        "after-scroll",
+        json::object {
+            { "capture_kind", "stitched_event_page" },
+            { "source_width", stitched_image.cols },
+            { "source_height", stitched_image.rows },
+        },
+        stitched_image,
+        error);
+}
+
+bool BlackFlowTaskPort::capture_event_detail(
+    std::string_view event_name,
+    std::string_view phase,
+    json::object details,
+    const cv::Mat& stitched_image,
+    std::string* error)
+{
     const auto session = m_collection_popup_session.lock();
     if (session == nullptr || session->profile() != "automation_collection") {
         return true;
@@ -1982,6 +2253,7 @@ bool BlackFlowTaskPort::capture_event_page(
         return false;
     }
 
+    details["event_name"] = std::string(event_name);
     const auto destination = resolve_collection_popup_destination(*session, {}, true);
     if (!destination.has_value() && session->transaction() != nullptr &&
         !session->transaction()->proposal().controllable && m_collection_popup_state != nullptr) {
@@ -1989,14 +2261,10 @@ bool BlackFlowTaskPort::capture_event_page(
             CollectionPopupCaptureState::PendingNodeEvidence {
                 std::string(NodeEventRunLogAction),
                 "RoguelikeEvent",
-                "after-scroll",
+                std::string(phase),
                 stitched_image.clone(),
-                json::object {
-                    { "event_name", std::string(event_name) },
-                    { "capture_kind", "stitched_event_page" },
-                    { "source_width", stitched_image.cols },
-                    { "source_height", stitched_image.rows },
-                },
+                std::move(details),
+                collection_popup_origin(*session),
             });
         return true;
     }
@@ -2012,16 +2280,11 @@ bool BlackFlowTaskPort::capture_event_page(
     return persist_node_evidence_capture(
         NodeEventRunLogAction,
         "RoguelikeEvent",
-        "after-scroll",
+        std::string(phase),
         stitched_image,
         resolved.directory,
         resolved.attribution,
-        json::object {
-            { "event_name", std::string(event_name) },
-            { "capture_kind", "stitched_event_page" },
-            { "source_width", stitched_image.cols },
-            { "source_height", stitched_image.rows },
-        },
+        std::move(details),
         error);
 }
 
@@ -2175,6 +2438,7 @@ bool BlackFlowTaskPort::capture_get_drop(
                 recruitment_page ? "entered" : "before-click",
                 std::move(captured),
                 std::move(details),
+                collection_popup_origin(*session),
             });
         return true;
     }
@@ -2229,6 +2493,31 @@ bool BlackFlowTaskPort::capture_store_page(
         return false;
     }
     const auto destination = resolve_collection_popup_destination(*session, {}, true);
+    json::object details {
+        { "store_kind", std::string(store_kind) },
+        { "capture_phase", std::string(capture_phase) },
+        { "refresh_index", refresh_index },
+        { "capture_kind", captured_image == nullptr ? "stable_store_page" : "stitched_store_goods" },
+        { "capture_stability",
+          json::object {
+              { "sampled_frames", sampled_frames },
+              { "mean_difference", mean_difference },
+          } },
+    };
+    if (!destination.has_value() && session->transaction() != nullptr &&
+        !session->transaction()->proposal().controllable && m_collection_popup_state != nullptr) {
+        details["deferred_attribution"] = true;
+        m_collection_popup_state->pending_node_evidence.emplace_back(
+            CollectionPopupCaptureState::PendingNodeEvidence {
+                std::string(NodeStoreRunLogAction),
+                "BlackFlowAutomationStore",
+                std::string(capture_phase),
+                std::move(captured),
+                std::move(details),
+                collection_popup_origin(*session),
+            });
+        return true;
+    }
     const CollectionPopupDestination resolved = destination.value_or(
         CollectionPopupDestination {
             collection_popup_other_directory(),
@@ -2245,17 +2534,7 @@ bool BlackFlowTaskPort::capture_store_page(
         captured,
         resolved.directory,
         resolved.attribution,
-        json::object {
-            { "store_kind", std::string(store_kind) },
-            { "capture_phase", std::string(capture_phase) },
-            { "refresh_index", refresh_index },
-            { "capture_kind", captured_image == nullptr ? "stable_store_page" : "stitched_store_goods" },
-            { "capture_stability",
-              json::object {
-                  { "sampled_frames", sampled_frames },
-                  { "mean_difference", mean_difference },
-              } },
-        },
+        std::move(details),
         error);
 }
 
@@ -2289,6 +2568,20 @@ bool BlackFlowTaskPort::record_store_purchase(
     }
 
     const auto destination = resolve_collection_popup_destination(*session, {}, true);
+    if (!destination.has_value() && session->transaction() != nullptr &&
+        !session->transaction()->proposal().controllable && m_collection_popup_state != nullptr) {
+        details["deferred_attribution"] = true;
+        m_collection_popup_state->pending_node_evidence.emplace_back(
+            CollectionPopupCaptureState::PendingNodeEvidence {
+                std::string(NodeStorePurchaseRunLogAction),
+                "BlackFlowAutomationStore",
+                "purchase-verification",
+                cv::Mat {},
+                std::move(details),
+                collection_popup_origin(*session),
+            });
+        return true;
+    }
     const CollectionPopupDestination resolved = destination.value_or(
         CollectionPopupDestination {
             collection_popup_other_directory(),
@@ -2319,14 +2612,11 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
         return true;
     }
 
-    const bool allow_current_landing = session->transaction() == nullptr;
+
     std::vector<CollectionPopupCaptureState::Pending> unresolved;
     unresolved.reserve(m_collection_popup_state->pending.size());
     for (auto& pending : m_collection_popup_state->pending) {
-        const auto destination = resolve_collection_popup_destination(
-            *session,
-            pending.task,
-            allow_current_landing);
+        const auto destination = resolve_pending_collection_popup_destination(*session, pending.task, pending.origin);
         if (!destination.has_value()) {
             unresolved.emplace_back(std::move(pending));
             continue;
@@ -2351,10 +2641,7 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
     std::vector<CollectionPopupCaptureState::PendingNodeEvidence> unresolved_evidence;
     unresolved_evidence.reserve(m_collection_popup_state->pending_node_evidence.size());
     for (auto& pending : m_collection_popup_state->pending_node_evidence) {
-        const auto destination = resolve_collection_popup_destination(
-            *session,
-            pending.task,
-            allow_current_landing);
+        const auto destination = resolve_pending_collection_popup_destination(*session, pending.task, pending.origin);
         if (!destination.has_value()) {
             unresolved_evidence.emplace_back(std::move(pending));
             continue;
@@ -2390,19 +2677,15 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
     std::vector<CollectionPopupCaptureState::Pending> unwritten;
     unwritten.reserve(m_collection_popup_state->pending.size());
     for (auto& pending : m_collection_popup_state->pending) {
-        json::object attribution {
-            { "kind", "other" },
-            { "reason", "landing_remained_unresolved" },
-            { "floor", collection_popup_floor(*session) },
-        };
+        const auto& destination = pending.origin.unresolved_destination;
         if (!persist_collection_popup_capture(
                 pending.task,
                 pending.button,
                 pending.image,
                 pending.sampled_frames,
                 pending.mean_difference,
-                collection_popup_other_directory(),
-                std::move(attribution),
+                destination.directory,
+                destination.attribution,
                 true,
                 error)) {
             unwritten.emplace_back(std::move(pending));
@@ -2415,18 +2698,14 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
     std::vector<CollectionPopupCaptureState::PendingNodeEvidence> unwritten_evidence;
     unwritten_evidence.reserve(m_collection_popup_state->pending_node_evidence.size());
     for (auto& pending : m_collection_popup_state->pending_node_evidence) {
-        json::object attribution {
-            { "kind", "other" },
-            { "reason", "landing_remained_unresolved" },
-            { "floor", collection_popup_floor(*session) },
-        };
+        const auto& destination = pending.origin.unresolved_destination;
         if (!persist_node_evidence_capture(
                 pending.action,
                 pending.task,
                 pending.phase,
                 pending.image,
-                collection_popup_other_directory(),
-                std::move(attribution),
+                destination.directory,
+                destination.attribution,
                 pending.details,
                 error)) {
             unwritten_evidence.emplace_back(std::move(pending));
@@ -2523,9 +2802,11 @@ bool BlackFlowTaskPort::record_node_attribution(
         set_error(error, "BlackFlow node attribution has no valid node target");
         return false;
     }
+    const auto session = m_collection_popup_session.lock();
+    const int outer_floor = session != nullptr && session->in_tree_hole() ? session->outer_floor() : 0;
     const std::filesystem::path directory = node != InvalidNodeId
-        ? collection_popup_regular_node_directory(floor, node)
-        : collection_popup_virtual_node_directory(floor, virtual_node_name, 0);
+        ? collection_popup_regular_node_directory(floor, node, outer_floor)
+        : collection_popup_virtual_node_directory(floor, virtual_node_name, 0, outer_floor);
     return m_map_source->record_node_attribution(run_revision, directory, attribution, error);
 }
 
@@ -2573,6 +2854,86 @@ UtopiaPanelObservation BlackFlowTaskPort::recognize_utopia_panel(const cv::Mat& 
         }
     }
     return result;
+}
+
+bool BlackFlowTaskPort::has_pending_pursuit() const
+{
+    return m_task_context->has_pending_pursuit();
+}
+
+bool BlackFlowTaskPort::take_pending_pursuit()
+{
+    return m_task_context->take_pending_pursuit();
+}
+
+bool BlackFlowTaskPort::resume_exploration_after_tree_hole(int floor, cv::Mat& image, std::string* error)
+{
+    Log.info("BlackFlow tree-hole return: exit to the menu and continue the saved exploration", floor);
+    if (!m_task_context->execute({ "BlackFlow@Roguelike@TreeHoleResumeMenuWait" }, error)) {
+        return false;
+    }
+    if (m_task_context->last_task() != "BlackFlow@Roguelike@TreeHoleResumeMapReady") {
+        set_error(error, "tree-hole menu return did not complete Continue and return to the map");
+        return false;
+    }
+    m_pending_stable_map_image.reset();
+    m_last_stable_map_image.reset();
+    m_battle_preview_map_reference.reset();
+    if (!m_task_context->capture_stable_map(image, error)) {
+        return false;
+    }
+    const auto names = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel")->text;
+    const auto title = recognize_text(image, "BlackFlow@Roguelike@NextLevel");
+    if (floor < 1 || floor > 5 || !title.has_value() || *title != names.at(floor - 1)) {
+        set_error(error, "continuing after the tree hole did not show the saved outer floor");
+        return false;
+    }
+    Log.info("BlackFlow tree-hole return: continued exploration on the original floor", floor);
+    return true;
+}
+
+bool BlackFlowTaskPort::inspect_tree_hole_effect(std::uint64_t generation, cv::Mat& image, std::string* error)
+{
+    if (m_tree_effect_generation == generation) {
+        return true;
+    }
+    if (!m_task_context->execute({ std::string(UtopiaPanelToggleTask) }, error)) {
+        return false;
+    }
+    const auto read = [&](std::string_view task) {
+        OCRer ocr(m_task_context->capture());
+        ocr.set_task_info(std::string(task));
+        std::string text;
+        if (ocr.analyze()) {
+            for (const auto& line : ocr.get_result()) {
+                text += line.text + " ";
+            }
+        }
+        return text;
+    };
+    const std::string title = read("BlackFlow@Roguelike@TreeHoleEffectTitle");
+    const std::string description = read("BlackFlow@Roguelike@TreeHoleEffectDescription");
+    const std::string confirmed_title = read("BlackFlow@Roguelike@TreeHoleEffectTitle");
+    if (!m_task_context->execute({ std::string(UtopiaPanelToggleTask) }, error) ||
+        !m_task_context->capture_stable_map(image, error)) {
+        return false;
+    }
+    if (title.empty() || description.empty() || title != confirmed_title) {
+        set_error(error, "tree-hole effect title/description OCR was incomplete or unstable");
+        return false;
+    }
+    m_tree_effect = title;
+    m_tree_effect_description = description;
+    m_tree_effect_generation = generation;
+    Log.info(
+        "BlackFlow tree-hole utopia recognized",
+        "generation",
+        generation,
+        "effect",
+        title,
+        "description",
+        description);
+    return true;
 }
 
 bool BlackFlowTaskPort::inspect_utopia_for_generation(

@@ -5,6 +5,7 @@
 #include "Task/Roguelike/RoguelikeConfig.h"
 #include "Utils/DebugImageHelper.hpp"
 #include "Utils/Logger.hpp"
+#include "Vision/OCRer.h"
 #include "Vision/RegionOCRer.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowOptionHeaderRules.h"
 
@@ -135,6 +136,32 @@ bool asst::RoguelikeEncounterOptionAnalyzer::analyze()
         else {
             Log.error(__FUNCTION__, "Failed to recognise option text");
             save_img(option.templ, "option template");
+        }
+
+        if (m_theme == RoguelikeTheme::BlackFlow && m_analyze_red_description) {
+            const std::size_t index = result.size();
+            const int top = rect.y + rect.height;
+            const int bottom =
+                index + 1 < option_analyze_result.size() ? option_analyze_result[index + 1].rect.y : m_image.rows;
+            const int left = std::clamp(templ_rect.x, 0, m_image.cols - 1);
+            if (bottom > top && top >= 0 && bottom <= m_image.rows) {
+                cv::Mat body = m_image(cv::Rect(left, top, m_image.cols - left, bottom - top));
+                cv::Mat hsv, red, low_red;
+                cv::cvtColor(body, hsv, cv::COLOR_BGR2HSV);
+                cv::inRange(hsv, cv::Scalar(155, 85, 80), cv::Scalar(180, 255, 255), red);
+                cv::inRange(hsv, cv::Scalar(0, 85, 80), cv::Scalar(12, 255, 255), low_red);
+                red |= low_red;
+                cv::Mat text_image;
+                cv::cvtColor(red, text_image, cv::COLOR_GRAY2BGR);
+                OCRer price(text_image);
+                price.set_task_info("BlackFlow@Roguelike@PortalPrice");
+                price.set_roi(Rect { 0, 0, text_image.cols, text_image.rows });
+                if (price.analyze()) {
+                    for (const auto& line : price.get_result()) {
+                        option.red_description += line.text + " ";
+                    }
+                }
+            }
         }
 
         Log.info(

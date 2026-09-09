@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "BlackFlowModel.h"
+#include "BlackFlowDiagnosticTimeline.h"
 
 namespace asst::blackflow
 {
@@ -21,6 +22,23 @@ inline constexpr std::string_view NodeGetDropRunLogAction = "node.get-drop.captu
 inline constexpr std::string_view NodeRecruitmentRunLogAction = "node.recruitment.capture";
 inline constexpr std::string_view NodeStoreRunLogAction = "node.store.capture";
 inline constexpr std::string_view NodeStorePurchaseRunLogAction = "node.store.purchase";
+
+[[nodiscard]] constexpr bool collection_popup_pending_matches_map(
+    int captured_floor, std::uint64_t captured_generation, int current_floor, std::uint64_t current_generation) noexcept
+{
+    return captured_floor == current_floor && captured_generation == current_generation;
+}
+
+[[nodiscard]] inline constexpr std::string_view expedition_floor_popup_ocr_task(std::string_view task) noexcept
+{
+    if (task.find("NextLevelReturnCloseCollection") != std::string_view::npos) {
+        return "BlackFlow@Roguelike@NextLevelReturnCloseCollection";
+    }
+    if (task.find("NextLevelUtopiaCloseCollectionContinue") != std::string_view::npos) {
+        return "BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue";
+    }
+    return {};
+}
 
 [[nodiscard]] inline constexpr bool is_node_evidence_run_log_action(std::string_view action) noexcept
 {
@@ -222,10 +240,10 @@ struct DropOptionSelection
     std::string_view page_intent,
     bool page_changes_floor) noexcept
 {
-    const bool observes_floor_transition =
-        collection_popup_stages_task(task) ||
-        task.find("MapPrepare-FloorEnterZoom") != std::string_view::npos ||
-        task.find("MapCapturePopupDrain") != std::string_view::npos;
+    const bool observes_floor_transition = collection_popup_stages_task(task) ||
+                                           !expedition_floor_popup_ocr_task(task).empty() ||
+                                           task.find("MapPrepare-FloorEnterZoom") != std::string_view::npos ||
+                                           task.find("MapCapturePopupDrain") != std::string_view::npos;
     if (page_floor <= 0 || !observes_floor_transition) {
         return std::nullopt;
     }
@@ -251,14 +269,16 @@ struct DropOptionSelection
     return task.find("HuntedConfirm") != std::string_view::npos;
 }
 
-[[nodiscard]] inline std::filesystem::path collection_popup_regular_node_directory(int floor, NodeId node)
+[[nodiscard]] inline std::filesystem::path
+    collection_popup_regular_node_directory(int floor, NodeId node, int tree_hole_outer_floor = 0)
 {
-    return std::filesystem::path(CollectionPopupRootDirectory) / ("floor-" + std::to_string(floor)) /
+    return std::filesystem::path(CollectionPopupRootDirectory) / diagnostic_floor_directory(floor, tree_hole_outer_floor) /
            ("node-" + std::to_string(node));
 }
 
 [[nodiscard]] inline std::filesystem::path
-    collection_popup_virtual_node_directory(int floor, std::string_view name, std::uint64_t page_revision = 0)
+    collection_popup_virtual_node_directory(
+        int floor, std::string_view name, std::uint64_t page_revision = 0, int tree_hole_outer_floor = 0)
 {
     std::string folder;
     if (name == "安眠一隅") {
@@ -273,10 +293,12 @@ struct DropOptionSelection
     if (page_revision != 0) {
         folder += "-p" + std::to_string(page_revision);
     }
-    return std::filesystem::path(CollectionPopupRootDirectory) / ("floor-" + std::to_string(floor)) / folder;
+    return std::filesystem::path(CollectionPopupRootDirectory) / diagnostic_floor_directory(floor, tree_hole_outer_floor) /
+           folder;
 }
 
-[[nodiscard]] inline std::filesystem::path collection_popup_source_directory(CollectionPopupSource source, int floor)
+[[nodiscard]] inline std::filesystem::path
+    collection_popup_source_directory(CollectionPopupSource source, int floor, int tree_hole_outer_floor = 0)
 {
     const std::filesystem::path sources = std::filesystem::path(CollectionPopupRootDirectory) / "sources";
     switch (source) {
@@ -285,7 +307,7 @@ struct DropOptionSelection
     case CollectionPopupSource::SquadReward:
         return sources / "squad-reward";
     case CollectionPopupSource::FloorEntry:
-        return sources / "floor-entry" / ("floor-" + std::to_string(floor));
+        return sources / "floor-entry" / diagnostic_floor_directory(floor, tree_hole_outer_floor);
     case CollectionPopupSource::None:
         break;
     }

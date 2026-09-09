@@ -377,7 +377,7 @@ struct PlannedRouteStep
 struct PolicyRouteOutcome
 {
     int revealed_node_count = 0;
-    int effective_node_count = 0;
+    double effective_node_count = 0;
     int battle_count = 0;
     int intermediate_interaction_count = 0;
     int processing_move_count = 0;
@@ -386,6 +386,7 @@ struct PolicyRouteOutcome
     int route_length = 0;
     int movement_action_count = 0;
     std::unordered_map<std::string, int> milestone_progress;
+    NodeIncome effective_node_income;
 };
 
 struct PolicyCandidate
@@ -398,7 +399,7 @@ struct PolicyCandidate
     // 从本轮观测时仍未知的节点中，整条安全路线至少能新揭示的数量。
     int revealed_node_count = 0;
     // 整条路线的有效落点保守计分；具体权重由 BlackFlowRevealSemantics 统一定义，按节点去重，徒步中间节点不计。
-    int effective_node_count = 0;
+    double effective_node_count = 0;
     int risk_score = 0;
     int battle_count = 0;
     int intermediate_interaction_count = 0;
@@ -413,6 +414,7 @@ struct PolicyCandidate
     std::vector<PlannedRouteStep> planned_route_steps;
     std::vector<NodeId> revealed_nodes;
     std::vector<PolicyRouteOutcome> route_outcomes;
+    NodeIncome effective_node_income;
 };
 
 enum class DecisionReasonCategory
@@ -432,7 +434,7 @@ struct PolicyCandidateSummary
     std::vector<int> lexicographic_score;
     std::vector<std::string> lexicographic_score_labels;
     int revealed_node_count = 0;
-    int effective_node_count = 0;
+    double effective_node_count = 0;
     int battle_count = 0;
     int processing_move_count = 0;
     int persistent_processing_move_count = 0;
@@ -443,6 +445,8 @@ struct PolicyCandidateSummary
     std::vector<NodeId> revealed_nodes;
     std::vector<std::int64_t> expected_lexicographic_score_sum;
     std::size_t route_outcome_count = 1;
+    NodeIncome effective_node_income;
+    NodeIncome expected_node_income;
 };
 
 struct PolicyDecision
