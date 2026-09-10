@@ -15,6 +15,8 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 
 配置在 `cdn.json`：`https://img.lubiao.wiki/maa/blackflow`，存储桶 `lubiao-wiki-1450633361`，地域 `ap-shanghai`。客户端内置同一地址；更换域名时需同步客户端并先发布过渡版本。
 
+发布端通过 `global_acceleration: true` 使用 COS 全球加速入口 `lubiao-wiki-1450633361.cos.accelerate.myqcloud.com`，用于 GitHub 运行器到存储桶的上传及发布校验请求。需先在 COS 控制台开启桶的全球加速，通常约 15 分钟生效，使用加速链路会产生额外流量费用。客户端更新和公开下载校验仍使用 `img.lubiao.wiki`；桶地域及目录授权按 `ap-shanghai` 配置。将该开关设为 `false` 可改回 COS 公网区域入口。参见[全球加速说明](https://cloud.tencent.com/document/product/436/38866)和 [Python SDK 接入](https://intl.cloud.tencent.com/zh/document/product/436/46484)。
+
 - 清单：`/maa/blackflow/latest.json` 和 `/maa/blackflow/appcast.xml`。
 - 版本包及校验表：`/maa/blackflow/vX.Y.Z/`。同版本文件不可覆盖成不同内容。
 - GitHub 清单指向 GitHub 包，CDN 清单指向 CDN 包；两边使用完全相同的安装包、SHA256 和 macOS 签名。

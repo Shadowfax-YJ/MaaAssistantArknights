@@ -51,11 +51,20 @@ class CosSdkTests(unittest.TestCase):
     def test_clients_construct_without_network_or_secret_output(self):
         with patch.dict("os.environ", {"BLACKFLOW_COS_SECRET_ID": "fixture-id", "BLACKFLOW_COS_SECRET_KEY": "fixture-key"}, clear=True):
             publisher = CosPublisher.from_environment(CDN_CONFIG)
+            regional = CosPublisher.from_environment({**CDN_CONFIG, "global_acceleration": False})
         self.assertEqual(publisher.store.bucket, "lubiao-wiki-1450633361")
         self.assertEqual(
             publisher.store.client._conf.uri(bucket=CDN_CONFIG["bucket"]),
+            "https://lubiao-wiki-1450633361.cos.accelerate.myqcloud.com/",
+        )
+        self.assertEqual(
+            regional.store.client._conf.uri(bucket=CDN_CONFIG["bucket"]),
             "https://lubiao-wiki-1450633361.cos.ap-shanghai.tencentcos.cn/",
         )
+
+    def test_acceleration_requires_a_boolean(self):
+        with self.assertRaisesRegex(ValueError, "global_acceleration must be a boolean"):
+            CosPublisher.from_environment({**CDN_CONFIG, "global_acceleration": "false"})
 
     def test_multipart_uses_object_requests_and_preserves_headers_and_bytes(self):
         requests, uploaded = [], []

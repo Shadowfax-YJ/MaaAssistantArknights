@@ -117,6 +117,9 @@ class CosPublisher:
 
     @classmethod
     def from_environment(cls, config):
+        acceleration = config.get("global_acceleration", False)
+        if not isinstance(acceleration, bool):
+            raise ValueError("global_acceleration must be a boolean")
         secret_id = os.environ.get("BLACKFLOW_COS_SECRET_ID", "")
         secret_key = os.environ.get("BLACKFLOW_COS_SECRET_KEY", "")
         if not secret_id or not secret_key:
@@ -129,6 +132,7 @@ class CosPublisher:
         client = CosS3Client(CosConfig(
             Region=config["region"], SecretId=secret_id, SecretKey=secret_key, Token=token,
             Scheme="https", EnableOldDomain=False, EnableInternalDomain=False,
+            Endpoint="cos.accelerate.myqcloud.com" if acceleration else None,
         ))
         cdn = cdn_client.CdnClient(credential.Credential(secret_id, secret_key, token), "")
 
@@ -162,10 +166,11 @@ class CosPublisher:
                     raise ValueError("Connection-check path already contains different data")
                 # Re-upload identical bytes on each check to verify write permissions on repeat runs too.
                 print(f"Uploading COS fixture: {name} ({len(data)} bytes)", flush=True)
+                started = time.monotonic()
                 self.store.upload(self._key(relative), path, "public, max-age=60, must-revalidate")
                 if self.store.head(self._key(relative)) != expected:
                     raise ValueError("Connection-check COS upload verification failed")
-                print(f"COS upload and object metadata verified: {name}", flush=True)
+                print(f"COS upload and object metadata verified: {name} ({time.monotonic() - started:.2f}s)", flush=True)
                 self.purge([self._url(relative)])
                 print("CDN URL purge accepted; verifying public download", flush=True)
                 self._verify_with_retry(self._url(relative), path)
