@@ -106,7 +106,6 @@ std::vector<battle::DeploymentOper> BattlefieldMatcher::deployment_analyze() con
         Rect role_rect = correct_rect(flag_res.rect.move(role_move), m_image);
         oper.role = oper_role_analyze(role_rect);
         if (oper.role == battle::Role::Unknown) {
-            Log.warn("Unknown role");
             continue;
         }
 
@@ -181,7 +180,7 @@ battle::Role BattlefieldMatcher::oper_role_analyze(const Rect& roi) const
     }
     auto role_opt = role_analyzer.analyze();
     if (!role_opt) {
-        Log.warn(__FUNCTION__, "unknown role");
+        Log.warn(__FUNCTION__, "unknown role", roi);
         return battle::Role::Unknown;
     }
 

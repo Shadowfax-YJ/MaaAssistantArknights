@@ -30,6 +30,22 @@ enum class SacrificePhase
     Finished,
 };
 
+// 保存在事件状态中，不能随着 StageEncounterReward -> SacrificePicker 循环重置。
+struct SacrificePickerAttempts
+{
+    static constexpr int Limit = 8;
+    int count = 0;
+
+    bool begin() noexcept
+    {
+        if (count >= Limit) {
+            return false;
+        }
+        ++count;
+        return true;
+    }
+};
+
 inline bool is_restore_civilization(std::string text)
 {
     for (const std::string_view token : { "\"", "'", "“", "”", "‘", "’", " ", "\t" }) {

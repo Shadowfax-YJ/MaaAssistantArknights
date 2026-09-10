@@ -532,12 +532,12 @@ RoutingCycleOutcome execute_routing_cycle(Session& session, IBlackFlowTaskPort& 
                       session.run().active_movement;
                       session.save_pending_candidate(candidate, &error);
                   }) {
-        if (!session.run().active_movement.has_value() || *session.run().active_movement != candidate.movement) {
-            if (!session.save_pending_candidate(candidate, &error)) {
-                return { RoutingCycleStatus::Failed, "movement_selection_proposal_failed", std::move(error) };
-            }
-            return { RoutingCycleStatus::MovementSelectionRequired, {}, {} };
+        // 整理零件箱、事件和耗尽加工品都可能让游戏自动切回徒步。会话缓存不能代替
+        // 本次装载核验；选择插件会先读 HUD，相符时直接返回，不必打开面板。
+        if (!session.save_pending_candidate(candidate, &error)) {
+            return { RoutingCycleStatus::Failed, "movement_selection_proposal_failed", std::move(error) };
         }
+        return { RoutingCycleStatus::MovementSelectionRequired, {}, {} };
     }
     if (!session.begin_transaction(candidate, &error)) {
         return { RoutingCycleStatus::Failed, "transaction_proposal_failed", std::move(error) };

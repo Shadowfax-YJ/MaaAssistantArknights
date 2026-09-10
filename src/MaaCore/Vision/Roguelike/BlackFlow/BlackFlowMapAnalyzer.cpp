@@ -794,12 +794,21 @@ MapRecognitionResult BlackFlowMapAnalyzer::recognize(
                 difficulty,
                 utopia_ideology,
                 utopia_policy);
-            m_same_map_ideal_domain.observe(ideal.status, ideal.source, ideal.domain);
-            if (ideal.status == "recognized" && m_same_map_ideal_domain.source().has_value()) {
+            m_same_map_ideal_domain.observe(ideal.status, ideal.source, ideal.domain, ideal.heads_agree);
+            if (m_same_map_ideal_domain.source().has_value()) {
                 // 识别器先确定中心、后续代码才会应用“非希望的沃土中心必为紧急”规则。
                 // 因而必须在改写节点身份之前冻结同图几何，避免相邻空地被误写成紧急。
                 ideal.source = m_same_map_ideal_domain.source();
                 ideal.domain = m_same_map_ideal_domain.domain();
+                ideal.status = "recognized";
+            }
+            else if (ideal.status == "recognized") {
+                // 单个识别头支持的候选尚不足以冻结整张地图，否则错误中心会让
+                // 弥散虚雾的遮蔽范围和“中心必为紧急”身份持续污染后续观测。
+                ideal.status = "abstained";
+                ideal.reason = "ideal_source_not_confirmed_by_both_heads";
+                ideal.source.reset();
+                ideal.domain.clear();
             }
             result.utopia_status = ideal.status;
             result.utopia_reason = ideal.reason;

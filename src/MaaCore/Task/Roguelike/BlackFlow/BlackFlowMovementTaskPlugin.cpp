@@ -1041,11 +1041,25 @@ bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
         if (!run_fixed_task(ClosePanelTask)) {
             continue;
         }
-        if (!title_visible(ctrler()->get_image())) {
-            return true;
+        // 关闭动画和截图可能晚于点击完成。先等待本次点击生效，再决定是否重试。
+        for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
+            if (!title_visible(ctrler()->get_image())) {
+                return true;
+            }
+            sleep(250);
         }
     }
     set_error(error, "movement panel title remained visible after the close action");
+    record_run_event(
+        RunLogLevel::Warning,
+        "movement.panel-close",
+        "failed",
+        "error",
+        json::object { { "attempts", MaxOpenAttempts },
+                       { "error", "movement panel title remained visible after the close action" } },
+        "BlackFlowMovement",
+        nullptr,
+        true);
     return false;
 }
 

@@ -3694,19 +3694,10 @@
         "postDelay": 800
     },
     "BlackFlow@Roguelike@SacrificePicker": {
-        "algorithm": "OcrDetect",
-        "roi": [
-            230,
-            125,
-            200,
-            60
-        ],
-        "text": [
-            "失与得"
-        ],
-        "fullMatch": false,
-        "fuzzyMatch": false,
+        "Doc": "以右下角交换按钮识别选择页；地图节点也叫失与得，不能只用左上同名文字判定。",
+        "baseTask": "BlackFlow@Roguelike@SacrificeConfirm",
         "action": "DoNothing",
+        "postDelay": 150,
         "next": [
             "BlackFlow@Roguelike@SacrificeSelectItem"
         ]

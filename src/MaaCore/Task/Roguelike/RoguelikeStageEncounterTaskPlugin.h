@@ -150,6 +150,7 @@ private:
         int exchanges = 0;
         std::optional<size_t> initial_choice;
         std::optional<Rect> selected_card;
+        blackflow::SacrificePickerAttempts picker_attempts;
         std::string selected_name;
         std::optional<std::vector<std::string>> naturals_before;
         bool civilization_inventory_scanned = false;

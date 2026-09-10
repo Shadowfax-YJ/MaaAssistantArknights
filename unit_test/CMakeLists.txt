@@ -53,6 +53,7 @@ catch_discover_tests(maa-controller-recovery-test TEST_PREFIX "controller-recove
 add_executable(maa-black-flow-routing-test
     MaaCore/BlackFlowRoutingTest.cpp
     MaaCore/BlackFlowTopologyTest.cpp
+    MaaCore/RoguelikeRecruitRoleTest.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowCompactStateSpace.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.cpp

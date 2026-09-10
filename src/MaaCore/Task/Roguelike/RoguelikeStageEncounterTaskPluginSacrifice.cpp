@@ -84,6 +84,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
             ++m_sacrifice.exchanges;
             m_sacrifice.phase = SacrificePhase::AwaitRepeat;
             m_sacrifice.selected_card.reset();
+            m_sacrifice.picker_attempts = {};
             m_sacrifice.selected_name.clear();
             m_sacrifice.initial_choice.reset();
             // 奖励后的第二轮仍是同一事件，复用通用链式事件的文字快进。
@@ -153,10 +154,32 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
 bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
 {
     using blackflow::SacrificePhase;
-    if (!refresh_sacrifice_context() || m_sacrifice.phase == SacrificePhase::Finished) {
+    const auto leave_picker = [&]() {
         ProcessTask back(*this, { std::string(Prefix) + "SacrificeBack" });
         back.set_retry_times(2);
-        return back.run();
+        if (back.run()) {
+            return true;
+        }
+        // 插件返回 false 不会阻断外层 ProcessTask；退不出选择页时必须显式停用它。
+        Log.error("BlackFlow sacrifice picker recovery failed; stopping the task");
+        if (m_task_ptr != nullptr) {
+            m_task_ptr->set_enable(false);
+        }
+        callback(AsstMsg::SubTaskError, basic_info_with_what("BlackFlowSacrificeRecoveryFailed"));
+        return false;
+    };
+    if (!refresh_sacrifice_context() || m_sacrifice.phase == SacrificePhase::Finished) {
+        return leave_picker();
+    }
+    if (!m_sacrifice.picker_attempts.begin()) {
+        Log.warn("BlackFlow sacrifice picker retry limit reached; leaving the exchange");
+        report_sacrifice(
+            "picker-recovery",
+            json::object { { "reason", "retry_limit_reached" },
+                           { "attempts", m_sacrifice.picker_attempts.count } },
+            ctrler()->get_image());
+        m_sacrifice.phase = SacrificePhase::Finished;
+        return leave_picker();
     }
     if (m_sacrifice.phase == SacrificePhase::AwaitReward) {
         wait_for_secondary_event(std::string(Prefix) + "SacrificePicker");

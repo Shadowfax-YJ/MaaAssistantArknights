@@ -1,4 +1,5 @@
 #include "RoguelikeRecruitImageAnalyzer.h"
+#include "RoguelikeRecruitRole.h"
 
 #include <algorithm>
 
@@ -65,26 +66,10 @@ bool asst::RoguelikeRecruitImageAnalyzer::analyze()
 
 std::optional<asst::battle::Role> asst::RoguelikeRecruitImageAnalyzer::get_detected_role() const
 {
-    std::unordered_set<battle::Role> candidates;
-    std::size_t known_names = 0;
-    for (const auto& name : m_detected_names) {
-        auto roles = BattleData.get_roles(name);
-        roles.erase(battle::Role::Unknown);
-        if (roles.empty()) {
-            continue;
-        }
-        if (known_names++ == 0) {
-            candidates = std::move(roles);
-        }
-        else {
-            std::erase_if(candidates, [&](battle::Role role) { return !roles.contains(role); });
-        }
-    }
-    // 至少两名独立干员互相印证；多职业同名干员保留全部职业参与交集。
-    if (known_names < 2 || candidates.size() != 1) {
-        return std::nullopt;
-    }
-    return *candidates.begin();
+    return resolve_recruitment_role(
+        m_detected_names,
+        [](const std::string& name) { return BattleData.get_roles(name); },
+        battle::Role::Unknown);
 }
 
 int asst::RoguelikeRecruitImageAnalyzer::match_elite(const Rect& raw_roi)

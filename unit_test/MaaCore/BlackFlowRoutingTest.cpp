@@ -155,6 +155,20 @@ TEST_CASE("BlackFlow civilization inventory differences preserve duplicate natur
     CHECK(SacrificeContext { 1, 2 } != SacrificeContext { 1, 3 });
 }
 
+TEST_CASE("BlackFlow sacrifice retries remain bounded across repeated picker dispatches")
+{
+    SacrificePickerAttempts attempts;
+    int allowed = 0;
+    for (int dispatch = 0; dispatch < 1897; ++dispatch) {
+        allowed += attempts.begin() ? 1 : 0;
+    }
+    CHECK(allowed == SacrificePickerAttempts::Limit);
+    CHECK(attempts.count == SacrificePickerAttempts::Limit);
+    attempts = {}; // A confirmed reward advances to the next exchange round.
+    CHECK(attempts.begin());
+    CHECK(attempts.count == 1);
+}
+
 TEST_CASE("BlackFlow expedition dispatch requires floor two and a verified eligible operator")
 {
     REQUIRE(expedition_eligible_operators(1, true, true, 1, true).empty());
@@ -3153,6 +3167,21 @@ TEST_CASE("BlackFlow tree-hole effects constrain the configured topology colors"
     CHECK(tree_hole_mist_color("").empty());
     CHECK(tree_hole_mist_color("未识别的标题").empty());
     CHECK(tree_hole_mist_color("源石之城 换心联结").empty());
+}
+
+TEST_CASE("BlackFlow uncertain ideal source cannot poison later reliable observations")
+{
+    SameMapIdealDomainState<GridPosition> state;
+    // MAA-014: a weak corner guess persisted through later diffused-mist observations.
+    state.observe("recognized", GridPosition { 0, 0 }, { GridPosition { 0, 0 } }, false);
+    CHECK_FALSE(state.source().has_value());
+    state.observe("recognized", GridPosition { 1, 2 }, { GridPosition { 1, 2 } }, false);
+    CHECK_FALSE(state.source().has_value());
+    state.observe("recognized", GridPosition { 2, 1 }, { GridPosition { 2, 1 }, GridPosition { 1, 1 } }, true);
+    REQUIRE(state.source() == GridPosition { 2, 1 });
+    state.observe("recognized", GridPosition { 0, 0 }, { GridPosition { 0, 0 } }, false);
+    CHECK(state.source() == GridPosition { 2, 1 });
+    CHECK(state.domain() == std::vector<GridPosition> { GridPosition { 2, 1 }, GridPosition { 1, 1 } });
 }
 
 TEST_CASE("BlackFlow binds a random cross-floor event to the only compatible hidden landing")

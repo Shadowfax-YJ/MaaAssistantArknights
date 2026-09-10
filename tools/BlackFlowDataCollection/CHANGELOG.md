@@ -1,4 +1,4 @@
-## v1.1.0
+## v1.1.1
 
 ### Highlights
 
@@ -28,6 +28,23 @@ Improve route evaluation for random landings, roaming residents and movement ite
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.1 (2026-09-10)</b></summary>
+
+### 修复 | Fix
+
+* 修复医疗、近卫招募页出现阿米娅时，职业校验无法通过并提前结束任务的问题。 @Shadowfax-YJ
+* 修复地图上的「失与得」节点被误认成祭献选择页的问题，并限制连续选择重试次数，避免长时间循环。 @Shadowfax-YJ
+* 每次移动前核对实际装载方式，修复游戏切回徒步后仍沿用加工品缓存的问题。 @Shadowfax-YJ
+* 理想域中心须经两个识别分支一致确认后缓存，避免不确定结果持续影响遮蔽范围与节点身份。 @Shadowfax-YJ
+* 关闭零件箱后等待界面变化，减少关闭动画尚未结束时的重复点击，并保存关闭失败的现场截图。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 减少全图识别产生的无效警告与重复职业识别警告，保留识别失败区域便于排查。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.0 (2026-09-10)</b></summary>
 
 ### 新增 | New
