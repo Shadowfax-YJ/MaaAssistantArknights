@@ -76,13 +76,17 @@ try {
         -c Release `
         -p:Platform=x64 `
         -p:BlackFlowDataCollection=true `
-        -p:BeautyUsePatch=false `
         "-p:Version=$numericVersion" `
         "-p:FileVersion=$numericVersion" `
         "-p:AssemblyVersion=$numericVersion.0" `
         "-p:InformationalVersion=$Version" `
         -o $uiPublish
     if ($LASTEXITCODE -ne 0) { throw "WPF publish failed: $LASTEXITCODE" }
+    foreach ($required in @('MAA.dll', 'hostfxr.dll', 'MAA.runtimeconfig.json', 'externals')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $uiPublish $required))) {
+            throw "WPF runtime layout is incomplete: $required"
+        }
+    }
 }
 finally {
     Pop-Location

@@ -29,6 +29,8 @@
     <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
     <BeautyLibsDir>./externals</BeautyLibsDir>
     <BeautyUsePatch Condition="'$(RuntimeIdentifier)' != ''">true</BeautyUsePatch>
+    <!-- Keep the collection publisher independent of third-party hostfxr patch availability. -->
+    <BeautyUsePatch Condition="'$(BlackFlowDataCollection)' == 'true'">false</BeautyUsePatch>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <PostBuildEvent>
