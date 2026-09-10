@@ -104,6 +104,39 @@ class CosSdkTests(unittest.TestCase):
                     complete.assert_not_called()
                     abort.assert_called_once_with(Bucket=CDN_CONFIG["bucket"], Key="maa/blackflow/v1.2.3/package.zip", UploadId="our-upload")
 
+    def test_sdk_rewinds_part_stream_after_partial_network_send(self):
+        from requests import ConnectionError
+
+        calls, uploaded = [], []
+
+        def send(url, **request):
+            body = request["data"]
+            calls.append(int(request["params"]["partNumber"]))
+            if len(calls) == 1:
+                self.assertEqual(body.read(65536), b"a" * 65536)
+                raise ConnectionError("simulated disconnect after a partial send")
+            data = body.read()
+            uploaded.append(data)
+            self.assertEqual(request["headers"]["Content-MD5"], base64.b64encode(hashlib.md5(data).digest()))
+            response = Mock(status_code=200)
+            response.headers = {"ETag": hashlib.md5(data).hexdigest()}
+            return response
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "package.zip"
+            contents = b"a" * (1024 * 1024) + b"b" * 1024
+            path.write_bytes(contents)
+            with patch.object(self.client, "create_multipart_upload", return_value={"UploadId": "our-upload"}), \
+                    patch.object(self.client, "complete_multipart_upload") as complete, \
+                    patch.object(self.client, "abort_multipart_upload") as abort, \
+                    patch.object(self.client._session, "put", side_effect=send), \
+                    patch("qcloud_cos.cos_client.time.sleep"):
+                self.store.upload("maa/blackflow/v1.2.3/package.zip", path, "immutable")
+            self.assertEqual(calls, [1, 1, 2])
+            self.assertEqual(b"".join(uploaded), contents)
+            self.assertEqual(len(complete.call_args.kwargs["MultipartUpload"]["Part"]), 2)
+            abort.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

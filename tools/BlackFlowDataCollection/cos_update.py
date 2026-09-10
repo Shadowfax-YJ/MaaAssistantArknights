@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -67,10 +68,13 @@ class CosStore:
                 parts = []
                 while chunk := stream.read(1024 * 1024):
                     number = len(parts) + 1
-                    response = self.client.upload_part(
-                        Bucket=self.bucket, Key=key, UploadId=upload_id,
-                        PartNumber=number, Body=chunk, EnableMD5=True,
-                    )
+                    # A seekable stream lets the HTTP transport send small buffers instead of one large socket write.
+                    # The SDK rewinds it before retrying a partially sent request.
+                    with BytesIO(chunk) as body:
+                        response = self.client.upload_part(
+                            Bucket=self.bucket, Key=key, UploadId=upload_id,
+                            PartNumber=number, Body=body, EnableMD5=True,
+                        )
                     parts.append({"PartNumber": number, "ETag": response["ETag"]})
                 self.client.complete_multipart_upload(
                     Bucket=self.bucket, Key=key, UploadId=upload_id, MultipartUpload={"Part": parts},
