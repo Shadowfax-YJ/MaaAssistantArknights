@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include "BlackFlowArchiveTestFixture.h"
 
 #include <array>
 #include <chrono>
@@ -3780,13 +3781,14 @@ TEST_CASE("BlackFlow completed run is verified before its directory is removed")
         output << R"({"source":"丰饶树冢"})";
     }
 
+    prepare_archive_fixture(run);
     RunArchiveResult result;
     std::string error;
     REQUIRE(archive_completed_run_directory(run, result, &error));
     INFO(error);
     REQUIRE_FALSE(std::filesystem::exists(run));
     REQUIRE(std::filesystem::is_regular_file(result.archive_path));
-    REQUIRE(result.entry_count == 2);
+    REQUIRE(result.entry_count == 7);
     REQUIRE(result.uncompressed_bytes > 0);
 }
 
@@ -3839,6 +3841,7 @@ TEST_CASE("BlackFlow completed run archive queue never waits for compression")
         output << "asynchronous archive";
     }
 
+    prepare_archive_fixture(run);
     const auto state = std::make_shared<AsyncState>();
     std::string enqueue_error;
     const auto before = std::chrono::steady_clock::now();
@@ -4993,6 +4996,25 @@ TEST_CASE("BlackFlow every node settlement checks shared exit popups before page
             REQUIRE(map != next.end());
             REQUIRE(popup < map);
         }
+    }
+}
+
+TEST_CASE("BlackFlow collection starts through abandonment instead of map routing")
+{
+    REQUIRE(initial_collection_task(false) == "BlackFlow@Roguelike@Begin");
+    REQUIRE(initial_collection_task(true) == "BlackFlow@Roguelike@CollectionBegin");
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const auto next = tasks->at(std::string(initial_collection_task(true))).get("next", std::vector<std::string> {});
+    REQUIRE(next.front() == "BlackFlow@Roguelike@ExitThenAbandon");
+    REQUIRE(next.at(1) == "BlackFlow@Roguelike@Abandon");
+    REQUIRE(std::ranges::find(next, "BlackFlow@Roguelike@StartExplore") != next.end());
+    for (const auto& task : next) {
+        REQUIRE(task.find("MapPrepare") == std::string::npos);
+        REQUIRE(task.find("NextLevel") == std::string::npos);
+        REQUIRE(task.find("Stages#") == std::string::npos);
+        REQUIRE(task.find("GetDrops#") == std::string::npos);
     }
 }
 

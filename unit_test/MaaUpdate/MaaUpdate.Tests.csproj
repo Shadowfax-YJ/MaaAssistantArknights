@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/MaaWpfGui/Services/BlackFlowUpdate.cs" Link="BlackFlowUpdate.cs" />
+    <Compile Include="../../src/MaaWpfGui/Services/InstallationDllPolicy.cs" Link="InstallationDllPolicy.cs" />
   </ItemGroup>
 </Project>

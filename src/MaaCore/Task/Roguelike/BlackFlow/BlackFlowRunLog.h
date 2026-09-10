@@ -48,8 +48,7 @@ inline constexpr std::string_view BlackFlowNodeAttributionFileName = "attributio
     run_log_collection_nodes_to_materialize(const json::object& state) noexcept
 {
     std::vector<std::uint64_t> nodes;
-    if (const json::value* visited = state.find_value("visited_nodes");
-        visited != nullptr && visited->is_array()) {
+    if (const json::value* visited = state.find_value("visited_nodes"); visited != nullptr && visited->is_array()) {
         for (const json::value& item : visited->as_array()) {
             if (const auto node = run_log_node_id(item); node.has_value() && *node != 0) {
                 nodes.emplace_back(*node);
@@ -130,8 +129,7 @@ enum class RunLogImageCaptureMode
         return RunLogImageCaptureMode::Omit;
     }
     // started 表示操作前决策证据，必须立即抓取；操作后画面则必须等动画稳定。
-    return phase == "started" ? RunLogImageCaptureMode::ImmediateSnapshot
-                              : RunLogImageCaptureMode::StableSnapshot;
+    return phase == "started" ? RunLogImageCaptureMode::ImmediateSnapshot : RunLogImageCaptureMode::StableSnapshot;
 }
 
 [[nodiscard]] constexpr bool run_log_frame_is_stable(double mean_difference) noexcept
@@ -139,10 +137,8 @@ enum class RunLogImageCaptureMode
     return mean_difference >= 0.0 && mean_difference <= BlackFlowRunLogStableFrameMaximumMeanDifference;
 }
 
-[[nodiscard]] constexpr bool should_reuse_run_log_image(
-    double mean_difference,
-    bool same_state,
-    bool same_action) noexcept
+[[nodiscard]] constexpr bool
+    should_reuse_run_log_image(double mean_difference, bool same_state, bool same_action) noexcept
 {
     // 完全相同的像素永远可以复用；轻微噪声只在语义状态和动作都相同时才视为冗余。
     return mean_difference == 0.0 ||
@@ -164,9 +160,8 @@ struct RunLogEvent
 
 // 供离线重放器在真正读取图片/执行动作前做廉价的流完整性检查。
 // JSONL 每行解析成一个 json::value 后按原序传入即可。
-[[nodiscard]] inline bool validate_run_log_replay_stream(
-    const std::vector<json::value>& events,
-    std::string* error = nullptr)
+[[nodiscard]] inline bool
+    validate_run_log_replay_stream(const std::vector<json::value>& events, std::string* error = nullptr)
 {
     std::int64_t expected_sequence = 1;
     std::int64_t previous_elapsed_ms = -1;
@@ -197,8 +192,7 @@ struct RunLogEvent
             }
             return false;
         }
-        if (event.get("timestamp", std::string()).empty() ||
-            !is_run_log_level(event.get("level", std::string())) ||
+        if (event.get("timestamp", std::string()).empty() || !is_run_log_level(event.get("level", std::string())) ||
             event.get("action", std::string()).empty()) {
             if (error != nullptr) {
                 *error = "run log event is missing timestamp, level, or action";
@@ -231,10 +225,9 @@ struct RunLogEvent
 class BlackFlowRunLog
 {
 public:
-    bool prepare(
-        const std::filesystem::path& root_directory,
-        std::uint64_t run_revision,
-        std::string* error = nullptr);
+    ~BlackFlowRunLog();
+
+    bool prepare(const std::filesystem::path& root_directory, std::uint64_t run_revision, std::string* error = nullptr);
     bool record(
         const std::filesystem::path& root_directory,
         std::uint64_t run_revision,
@@ -251,13 +244,11 @@ public:
     void reset() noexcept;
 
     [[nodiscard]] const std::filesystem::path& run_directory() const noexcept { return m_run_directory; }
+
     [[nodiscard]] std::uint64_t sequence() const noexcept { return m_sequence; }
 
 private:
-    bool ensure_started(
-        const std::filesystem::path& root_directory,
-        std::uint64_t run_revision,
-        std::string* error);
+    bool ensure_started(const std::filesystem::path& root_directory, std::uint64_t run_revision, std::string* error);
     bool write_image(
         const cv::Mat& image,
         const std::string& stem,
@@ -265,9 +256,7 @@ private:
         bool preserve_full_height,
         json::object& image_details,
         std::string* error) const;
-    bool ensure_node_attribution_file(
-        const std::filesystem::path& relative_directory,
-        std::string* error) const;
+    bool ensure_node_attribution_file(const std::filesystem::path& relative_directory, std::string* error) const;
     bool update_node_attribution_file(
         const std::filesystem::path& relative_directory,
         const json::object& attribution,

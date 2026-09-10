@@ -459,7 +459,11 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     const auto& theme = m_config_ptr->get_theme();
     const auto& mode = m_config_ptr->get_mode();
 
-    m_roguelike_task_ptr->set_tasks({ theme + "@Roguelike@Begin" });
+    m_roguelike_task_ptr->set_tasks({
+        theme == RoguelikeTheme::BlackFlow
+            ? std::string(blackflow::initial_collection_task(mode == RoguelikeMode::BlackFlowAutomationCollection))
+            : theme + "@Roguelike@Begin",
+    });
 
     if (mode == RoguelikeMode::Investment) {
         // 刷源石锭模式是否进入第二层

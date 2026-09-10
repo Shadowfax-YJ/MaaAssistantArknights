@@ -132,6 +132,24 @@
             "BlackFlow@Roguelike@RecoverMap-Continue*3"
         ]
     },
+    "BlackFlow@Roguelike@CollectionBegin": {
+        "Doc": "采集任务首次启动先退出并放弃已有探索；只有真正点击开始探索后才允许进入采集路线，避免接管局中地图生成不完整记录。",
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@ExitThenAbandon",
+            "BlackFlow@Roguelike@Abandon",
+            "BlackFlow@Roguelike@ChooseDifficulty",
+            "BlackFlow@Roguelike@StartExplore",
+            "BlackFlow@Roguelike@TodoEnter",
+            "BlackFlow@Roguelike@Continue",
+            "BlackFlow@Roguelike@StartExploreCD",
+            "(BlackFlow@Roguelike@IntegratedStrategies)@QuickSwitch@ToTerminal#next",
+            "BlackFlow@Roguelike@ReturnButtons#next",
+            "BlackFlow@Roguelike@ReturnConfirm",
+            "BlackFlow@Roguelike@DataSyncConfirm",
+            "BlackFlow@Roguelike@StartUpThemes#next"
+        ]
+    },
     "BlackFlow@Roguelike@Begin": {
         "baseTask": "Roguelike@Begin",
         "next": [

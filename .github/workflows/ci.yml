@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.2
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.3
 
 on:
   push:
@@ -825,17 +825,19 @@ jobs:
           mkdir -p "$staging" release
           cp -R "$app" "$staging/MAA.app"
           ln -s /Applications "$staging/Applications"
+          mkdir -p "$staging/tools"
+          cp tools/VerifyBlackFlowRunArchive.py "$staging/tools/"
           cat > "$staging/NOTICE.txt" <<'NOTICE'
           黑流树海数据收集专用 MAA ${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}
 
           注意事项：
           1、请下载后先打开 DMG，并将 MAA.app 拖入 Applications 后运行。请预留磁盘空间，一个完整的对局数据约为 200-300MB（压缩前）；对局结束后会自动压缩，压缩后约为 70-80MB。
           2、数据位于日志目录的 debug/BlackFlow 文件夹下，可通过菜单“文件 → 打开日志文件夹”定位。
-          3、请上传完整的对局，不要从中途让 MAA 接手，可能出现异常。
+          3、启动采集时会放弃已有探索并重新开局，请先结束自己正在玩的对局。
           4、优先使用 PlayCover 或可通过 ADB 连接的模拟器环境。
           5、一个完整的对局耗时约 40-50 分钟，请合理规划时间。
           6、请先完成群里发过的问卷。
-          7、数据暂定以局为单位，将程序自动生成的对局 ZIP 上传到 QQ 群文件；请使用与问卷相同的 QQ 账号。
+          7、数据暂定以局为单位，将程序自动生成的原始 ZIP 上传到 QQ 群文件；请使用与问卷相同的 QQ 账号。请勿修改或重新压缩，否则原签名无法通过校验。校验失败时保留日志目录，原因记录在 asst.log。
           8、不会存钱（），但是能点亮一些图鉴（？
 
           本专用版本使用独立的采集版更新渠道，更新会保留设置和采集数据。由于使用 ad-hoc 签名且未经过 Apple 公证，首次启动若被 macOS 拦截，请在 Finder 中右键 MAA.app 并选择“打开”。

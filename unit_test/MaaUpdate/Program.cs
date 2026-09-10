@@ -4,11 +4,37 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MaaWpfGui.Services;
 
+if (args.Length == 2 && args[0] == "--validate-installation-root")
+{
+    var unknown = InstallationDllPolicy.FindUnknown(Directory.GetFiles(args[1], "*.dll"),
+        File.Exists(Path.Combine(args[1], BlackFlowUpdate.MetadataFile)));
+    if (unknown.Count != 0) throw new InvalidDataException("Startup would reject package DLLs: " + string.Join(", ", unknown));
+    Console.WriteLine("PASS actual package startup DLL policy");
+    return;
+}
+if (args.Length == 2 && args[0] == "--validate-package-dlls")
+{
+    using var package = ZipFile.OpenRead(args[1]);
+    var unknown = InstallationDllPolicy.FindUnknown(package.Entries.Select(e => e.FullName)
+        .Where(n => !n.Contains('/') && n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)), true);
+    if (unknown.Count != 0) throw new InvalidDataException("Startup would reject package DLLs: " + string.Join(", ", unknown));
+    Console.WriteLine("PASS actual ZIP startup DLL policy");
+    return;
+}
+
 int passed = 0;
 string root = Path.Combine(Path.GetTempPath(), "maa-update-tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
 {
+    string[] runtimeDlls = ["clrjit.dll", "coreclr.dll", "PresentationFramework.dll", "System.Collections.dll",
+        "System.IO.FileSystem.dll", "System.IO.Packaging.dll", "System.Memory.dll", "System.Private.CoreLib.dll",
+        "System.Runtime.dll", "System.Runtime.Extensions.dll", "System.Runtime.InteropServices.dll",
+        "System.Runtime.InteropServices.RuntimeInformation.dll", "System.Runtime.Loader.dll", "System.Xaml.dll", "WindowsBase.dll"];
+    Check(InstallationDllPolicy.FindUnknown(runtimeDlls, true).Count == 0, "collection runtime passes startup DLL policy");
+    Check(InstallationDllPolicy.FindUnknown(runtimeDlls, false).Count == runtimeDlls.Length, "ordinary build keeps its DLL policy");
+    Check(InstallationDllPolicy.FindUnknown([.. runtimeDlls, "System.Injected.dll", "winhttp.dll"], true)
+        .SequenceEqual(new[] { "System.Injected.dll", "winhttp.dll" }), "collection still rejects unknown DLLs including System prefixes");
     string version = "v1.2.3";
     string name = $"MAA-BlackFlow-Data-Collection-{version}-win-x64.zip";
     string zipPath = Path.Combine(root, name);

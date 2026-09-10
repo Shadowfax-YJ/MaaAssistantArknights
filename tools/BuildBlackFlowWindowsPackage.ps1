@@ -121,8 +121,12 @@ foreach ($file in @('MaaAdbControlUnit.dll', 'MaaWin32ControlUnit.dll')) {
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/DependencySetup_依赖库安装.bat') -Destination (Join-Path $staging 'DependencySetup.bat')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BlackFlowDataCollection/gui.new.json') -Destination (Join-Path $staging 'resource/blackflow-gui-defaults.json')
+New-Item -ItemType Directory -Path (Join-Path $staging 'tools') -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'VerifyBlackFlowRunArchive.py') -Destination (Join-Path $staging 'tools/VerifyBlackFlowRunArchive.py')
 $identity = @{ schema_version = 1; channel = 'blackflow-data-collection'; version = $Version } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $staging 'blackflow-update.json'), $identity, [Text.UTF8Encoding]::new($false))
+& dotnet run --project (Join-Path $repoRoot 'unit_test/MaaUpdate/MaaUpdate.Tests.csproj') -c Release -- --validate-installation-root $staging
+if ($LASTEXITCODE -ne 0) { throw "Package startup DLL policy failed: $LASTEXITCODE" }
 $notice = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'BlackFlowDataCollection/NOTICE.txt')).Replace('{{VERSION}}', $Version)
 [IO.File]::WriteAllText((Join-Path $staging 'NOTICE.txt'), $notice, [Text.UTF8Encoding]::new($false))
 

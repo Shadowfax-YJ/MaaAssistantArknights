@@ -2,6 +2,7 @@
 
 #include "BlackFlowDiagnosticTimeline.h"
 #include "BlackFlowRunArchive.h"
+#include "BlackFlowRunIntegrity.h"
 
 #include <algorithm>
 #include <cctype>
@@ -74,10 +75,12 @@ bool write_image_if_present(const std::filesystem::path& path, const cv::Mat& im
         return true;
     }
     const std::vector<int> parameters { cv::IMWRITE_JPEG_QUALITY, 78, cv::IMWRITE_JPEG_OPTIMIZE, 1 };
+    run_integrity_before_write(path);
     if (!MAA_NS::imwrite(path, image, parameters)) {
         set_error(error, "failed to write BlackFlow diagnostic image: " + path.string());
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
@@ -87,10 +90,12 @@ bool write_captured_preview_if_present(const std::filesystem::path& path, const 
         return true;
     }
     const std::vector<int> parameters { cv::IMWRITE_JPEG_QUALITY, 78, cv::IMWRITE_JPEG_OPTIMIZE, 1 };
+    run_integrity_before_write(path);
     if (!MAA_NS::imwrite(path, image, parameters)) {
         set_error(error, "failed to write BlackFlow diagnostic captured preview: " + path.string());
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
@@ -147,6 +152,7 @@ bool write_text_file(
     std::string_view description,
     std::string* error)
 {
+    run_integrity_before_write(path);
     std::ofstream output(path, std::ios::out | std::ios::trunc | std::ios::binary);
     if (!output) {
         set_error(error, "failed to create BlackFlow " + std::string(description));
@@ -158,6 +164,7 @@ bool write_text_file(
         set_error(error, "failed to flush BlackFlow " + std::string(description));
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
@@ -169,6 +176,7 @@ bool append_framed_json_array_entry(
     std::string_view description,
     std::string* error)
 {
+    run_integrity_before_write(path);
     std::fstream output(path, std::ios::in | std::ios::out | std::ios::binary);
     if (!output) {
         set_error(error, "failed to open BlackFlow " + std::string(description));
@@ -207,11 +215,13 @@ bool append_framed_json_array_entry(
         set_error(error, "failed to flush BlackFlow " + std::string(description));
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
 bool write_routing_visualization(const std::filesystem::path& path, std::string* error)
 {
+    run_integrity_before_write(path);
     std::ofstream output(path, std::ios::out | std::ios::trunc | std::ios::binary);
     if (!output) {
         set_error(error, "failed to create BlackFlow routing visualization");
@@ -406,10 +416,12 @@ for(const button of document.querySelectorAll('[data-view]'))button.addEventList
 document.addEventListener('keydown',event=>{if(['INPUT','SELECT','BUTTON','TEXTAREA'].includes(event.target.tagName))return;if(event.key==='ArrowLeft')changeStep(-1);else if(event.key==='ArrowRight')changeStep(1)});
 renderFloorTabs();refreshDecisionOptions(true);renderDecision();
 </script></body></html>)HTML";
+    output.flush();
     if (!output) {
         set_error(error, "failed to write BlackFlow routing visualization");
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
@@ -847,13 +859,10 @@ bool BlackFlowMapObservationSource::persist_diagnostics(const DiagnosticArtifact
                 });
         }
         snapshot["evidence_images"] = json::array(std::move(evidence_images));
-        std::ofstream snapshot_file(directory / snapshot_name, std::ios::binary);
-        if (!snapshot_file) {
-            set_error(error, "failed to create BlackFlow diagnostic snapshot");
+        const std::string serialized_snapshot = json::value(snapshot).format();
+        if (!write_text_file(directory / snapshot_name, serialized_snapshot, "diagnostic snapshot", error)) {
             return false;
         }
-        const std::string serialized_snapshot = json::value(snapshot).format();
-        snapshot_file << serialized_snapshot;
         if (request.include_captured_image &&
             !write_captured_preview_if_present(directory / captured_name, m_last_result.captured_bgr, error)) {
             return false;

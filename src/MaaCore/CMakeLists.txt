@@ -17,6 +17,13 @@ if(WITH_MAC_SCK)
 endif()
 
 add_library(MaaCore SHARED ${maa_src})
+add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/monocypher ${CMAKE_BINARY_DIR}/monocypher)
+target_link_libraries(MaaCore maa-monocypher)
+if(WIN32)
+    target_link_libraries(MaaCore bcrypt)
+elseif(APPLE)
+    target_link_libraries(MaaCore "-framework Security")
+endif()
 
 if(WITH_EMULATOR_EXTRAS)
     if(EXISTS ${PROJECT_SOURCE_DIR}/3rdparty/EmulatorExtras/Mumu)

@@ -81,27 +81,9 @@ public class Bootstrapper : Bootstrapper<RootViewModel>
     {
         try
         {
-            // 属于 MAA 的 DLL 列表
-            // 因为经常有人把 MAA 和别的东西解压到一起然后发生 DLL 劫持然后报错，遂检测
-            var maaDlls = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "hostfxr.dll",
-                "hostpolicy.dll",
-                "libloader.dll",
-                "DirectML.dll",
-                "fastdeploy_ppocr.dll",
-                "MaaCore.dll",
-                "onnxruntime_maa.dll",
-                "opencv_world4_maa.dll",
-            };
-
             var currentDirectory = AppDomain.CurrentDomain.BaseDirectory;
-
-            var dllFiles = Directory.GetFiles(currentDirectory, "*.dll");
-
-            return [.. dllFiles
-                .Select(Path.GetFileName)
-                .Where(fileName => !maaDlls.Contains(fileName) && !fileName.Contains("maa", StringComparison.OrdinalIgnoreCase))];
+            return InstallationDllPolicy.FindUnknown(
+                Directory.GetFiles(currentDirectory, "*.dll"), BlackFlowUpdate.IsEnabled);
         }
         catch (Exception)
         {
@@ -596,12 +578,12 @@ public class Bootstrapper : Bootstrapper<RootViewModel>
             var unknownDlls = UnknownDllDetected();
             if (unknownDlls.Count > 0)
             {
+                _logger.Fatal("Unknown DLL(s) detected: {UnknownDlls}", string.Join(", ", unknownDlls));
                 MessageBoxHelper.Show(
                     LocalizationHelper.GetString("UnknownDllDetected") + "\n" + string.Join("\n", unknownDlls),
                     "MAA",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
-                _logger.Fatal("Unknown DLL(s) detected: {UnknownDlls}", string.Join(", ", unknownDlls));
                 Shutdown();
                 return;
             }

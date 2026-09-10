@@ -1,11 +1,12 @@
 #include "BlackFlowRunArchive.h"
+#include "BlackFlowRunIntegrity.h"
 
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
-#include <condition_variable>
 #include <deque>
 #include <fstream>
 #include <limits>
@@ -16,6 +17,7 @@
 #include <thread>
 #include <vector>
 
+#include <monocypher-ed25519.h>
 #include <zlib.h>
 
 namespace asst::blackflow
@@ -77,15 +79,13 @@ bool read_exact(std::istream& input, void* destination, std::size_t size)
 std::uint16_t read_u16(const std::uint8_t* bytes) noexcept
 {
     return static_cast<std::uint16_t>(bytes[0]) |
-        static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[1]) << 8U);
+           static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[1]) << 8U);
 }
 
 std::uint32_t read_u32(const std::uint8_t* bytes) noexcept
 {
-    return static_cast<std::uint32_t>(bytes[0]) |
-        (static_cast<std::uint32_t>(bytes[1]) << 8U) |
-        (static_cast<std::uint32_t>(bytes[2]) << 16U) |
-        (static_cast<std::uint32_t>(bytes[3]) << 24U);
+    return static_cast<std::uint32_t>(bytes[0]) | (static_cast<std::uint32_t>(bytes[1]) << 8U) |
+           (static_cast<std::uint32_t>(bytes[2]) << 16U) | (static_cast<std::uint32_t>(bytes[3]) << 24U);
 }
 
 struct ZipEntry
@@ -97,6 +97,7 @@ struct ZipEntry
     std::uint32_t compressed_size = 0;
     std::uint32_t uncompressed_size = 0;
     std::uint32_t local_offset = 0;
+    std::string expected_sha512;
 };
 
 bool should_store_without_deflating(const std::filesystem::path& path)
@@ -122,10 +123,8 @@ bool copy_stored_file(
         if (count <= 0) {
             continue;
         }
-        crc = static_cast<std::uint32_t>(::crc32(
-            crc,
-            reinterpret_cast<const Bytef*>(buffer.data()),
-            static_cast<uInt>(count)));
+        crc = static_cast<std::uint32_t>(
+            ::crc32(crc, reinterpret_cast<const Bytef*>(buffer.data()), static_cast<uInt>(count)));
         output.write(buffer.data(), count);
         written += static_cast<std::uint64_t>(count);
         if (!output) {
@@ -220,9 +219,9 @@ bool write_zip_entry(std::ofstream& output, ZipEntry& entry, std::string* error)
     entry.local_offset = static_cast<std::uint32_t>(offset);
     if (!write_u32(output, ZipLocalHeaderSignature) || !write_u16(output, ZipVersion) ||
         !write_u16(output, ZipDataDescriptorAndUtf8Flags) || !write_u16(output, entry.method) ||
-        !write_u16(output, 0) || !write_u16(output, ZipEpochDate) || !write_u32(output, 0) ||
-        !write_u32(output, 0) || !write_u32(output, 0) ||
-        !write_u16(output, static_cast<std::uint16_t>(entry.name.size())) || !write_u16(output, 0)) {
+        !write_u16(output, 0) || !write_u16(output, ZipEpochDate) || !write_u32(output, 0) || !write_u32(output, 0) ||
+        !write_u32(output, 0) || !write_u16(output, static_cast<std::uint16_t>(entry.name.size())) ||
+        !write_u16(output, 0)) {
         set_error(error, "failed to write ZIP local header");
         return false;
     }
@@ -241,8 +240,8 @@ bool write_zip_entry(std::ofstream& output, ZipEntry& entry, std::string* error)
     std::uint64_t uncompressed = 0;
     std::uint64_t compressed = 0;
     const bool copied = entry.method == ZipStoreMethod
-        ? copy_stored_file(input, output, crc, uncompressed, error)
-        : copy_deflated_file(input, output, crc, uncompressed, compressed, error);
+                            ? copy_stored_file(input, output, crc, uncompressed, error)
+                            : copy_deflated_file(input, output, crc, uncompressed, compressed, error);
     if (!copied) {
         return false;
     }
@@ -271,8 +270,7 @@ bool verify_zip_entry(std::ifstream& archive, const ZipEntry& entry, std::string
     archive.seekg(entry.local_offset);
     std::array<std::uint8_t, 30> header {};
     if (!read_exact(archive, header.data(), header.size()) || read_u32(header.data()) != ZipLocalHeaderSignature ||
-        read_u16(header.data() + 6) != ZipDataDescriptorAndUtf8Flags ||
-        read_u16(header.data() + 8) != entry.method) {
+        read_u16(header.data() + 6) != ZipDataDescriptorAndUtf8Flags || read_u16(header.data() + 8) != entry.method) {
         set_error(error, "run archive has an invalid local ZIP header");
         return false;
     }
@@ -292,6 +290,8 @@ bool verify_zip_entry(std::ifstream& archive, const ZipEntry& entry, std::string
     std::array<std::uint8_t, IoBufferSize> input_buffer {};
     std::array<std::uint8_t, IoBufferSize> output_buffer {};
     std::uint64_t remaining = entry.compressed_size;
+    crypto_sha512_ctx hash_context;
+    crypto_sha512_init(&hash_context);
     std::uint64_t uncompressed = 0;
     std::uint32_t crc = static_cast<std::uint32_t>(::crc32(0L, Z_NULL, 0));
     z_stream stream {};
@@ -313,6 +313,7 @@ bool verify_zip_entry(std::ifstream& archive, const ZipEntry& entry, std::string
         if (!deflated) {
             crc = static_cast<std::uint32_t>(::crc32(crc, input_buffer.data(), static_cast<uInt>(requested)));
             uncompressed += requested;
+            crypto_sha512_update(&hash_context, input_buffer.data(), requested);
             continue;
         }
         stream.next_in = input_buffer.data();
@@ -326,6 +327,7 @@ bool verify_zip_entry(std::ifstream& archive, const ZipEntry& entry, std::string
             if (produced > 0) {
                 crc = static_cast<std::uint32_t>(::crc32(crc, output_buffer.data(), static_cast<uInt>(produced)));
                 uncompressed += produced;
+                crypto_sha512_update(&hash_context, output_buffer.data(), produced);
             }
             if (status == Z_STREAM_END) {
                 stream_finished = true;
@@ -343,6 +345,18 @@ bool verify_zip_entry(std::ifstream& archive, const ZipEntry& entry, std::string
     }
     if (deflated) {
         inflateEnd(&stream);
+    }
+    std::array<std::uint8_t, 64> hash {};
+    crypto_sha512_final(&hash_context, hash.data());
+    constexpr char hex_digits[] = "0123456789abcdef";
+    std::string actual_hash;
+    for (const auto byte : hash) {
+        actual_hash += hex_digits[byte >> 4];
+        actual_hash += hex_digits[byte & 15];
+    }
+    if (actual_hash != entry.expected_sha512) {
+        set_error(error, "run archive content differs from the in-memory file digest: " + entry.name);
+        return false;
     }
     if (!ok || !stream_finished || uncompressed != entry.uncompressed_size || crc != entry.crc) {
         if (ok) {
@@ -364,7 +378,8 @@ bool verify_zip_central_directory(
     archive.seekg(central_offset);
     for (const ZipEntry& entry : entries) {
         std::array<std::uint8_t, 46> header {};
-        if (!read_exact(archive, header.data(), header.size()) || read_u32(header.data()) != ZipCentralHeaderSignature ||
+        if (!read_exact(archive, header.data(), header.size()) ||
+            read_u32(header.data()) != ZipCentralHeaderSignature ||
             read_u16(header.data() + 8) != ZipDataDescriptorAndUtf8Flags ||
             read_u16(header.data() + 10) != entry.method || read_u32(header.data() + 16) != entry.crc ||
             read_u32(header.data() + 20) != entry.compressed_size ||
@@ -384,8 +399,8 @@ bool verify_zip_central_directory(
         archive.seekg(static_cast<std::streamoff>(extra_size) + comment_size, std::ios::cur);
     }
     const auto after_central = archive.tellg();
-    if (after_central < 0 || static_cast<std::uint64_t>(after_central) !=
-            static_cast<std::uint64_t>(central_offset) + central_size) {
+    if (after_central < 0 ||
+        static_cast<std::uint64_t>(after_central) != static_cast<std::uint64_t>(central_offset) + central_size) {
         set_error(error, "run archive central ZIP directory size is invalid");
         return false;
     }
@@ -462,8 +477,8 @@ bool write_zip_archive(
         }
     }
     const auto central_end = output.tellp();
-    if (central_end < 0 || static_cast<std::uint64_t>(central_end - central_begin) >
-            std::numeric_limits<std::uint32_t>::max()) {
+    if (central_end < 0 ||
+        static_cast<std::uint64_t>(central_end - central_begin) > std::numeric_limits<std::uint32_t>::max()) {
         set_error(error, "run archive central directory exceeds the ZIP32 size limit");
         return false;
     }
@@ -486,6 +501,7 @@ bool write_zip_archive(
 
 bool collect_zip_entries(
     const std::filesystem::path& run_directory,
+    const RunIntegrity& integrity,
     std::vector<ZipEntry>& entries,
     std::uint64_t& uncompressed_bytes,
     std::string* error)
@@ -523,11 +539,13 @@ bool collect_zip_entries(
             set_error(error, "a run log ZIP entry name is too long");
             return false;
         }
-        entries.emplace_back(ZipEntry {
-            .source = item.path(),
-            .name = name,
-            .method = should_store_without_deflating(item.path()) ? ZipStoreMethod : ZipDeflateMethod,
-        });
+        entries.emplace_back(
+            ZipEntry {
+                .source = item.path(),
+                .name = name,
+                .method = should_store_without_deflating(item.path()) ? ZipStoreMethod : ZipDeflateMethod,
+                .expected_sha512 = integrity.expected_hash(item.path()),
+            });
         uncompressed_bytes += size;
     }
     if (iterator_error) {
@@ -558,8 +576,13 @@ public:
             if (m_pending.contains(key)) {
                 return true;
             }
+            auto integrity = take_run_integrity(run_directory);
+            if (!integrity) {
+                set_error(error, "run has no live integrity ledger; refusing to sign a manually created directory");
+                return false;
+            }
             m_pending.emplace(key);
-            m_jobs.emplace_back(Job { std::move(run_directory), std::move(completion), key });
+            m_jobs.emplace_back(Job { std::move(run_directory), std::move(completion), key, std::move(integrity) });
             m_ready.notify_one();
             return true;
         }
@@ -579,6 +602,7 @@ private:
         std::filesystem::path run_directory;
         RunArchiveCompletion completion;
         std::string key;
+        std::shared_ptr<RunIntegrity> integrity;
     };
 
     void work() noexcept
@@ -595,7 +619,7 @@ private:
             RunArchiveResult result;
             std::string error;
             try {
-                archive_completed_run_directory(job.run_directory, result, &error);
+                archive_completed_run_directory(job.run_directory, result, &error, std::move(job.integrity));
             }
             catch (const std::exception& exception) {
                 error = "completed run archive threw an exception: " + std::string(exception.what());
@@ -635,61 +659,83 @@ RunArchiveQueue& archive_queue()
 bool archive_completed_run_directory(
     const std::filesystem::path& run_directory,
     RunArchiveResult& result,
-    std::string* error)
+    std::string* error,
+    std::shared_ptr<RunIntegrity> integrity)
 {
-    result = {};
-    if (error != nullptr) {
-        error->clear();
-    }
-    std::error_code filesystem_error;
-    if (!std::filesystem::is_directory(run_directory, filesystem_error) || filesystem_error ||
-        !run_directory.filename().string().starts_with("run-")) {
-        set_error(error, "completed run archive source is not a run directory");
-        return false;
-    }
+    try {
+        result = {};
+        if (error != nullptr) {
+            error->clear();
+        }
+        std::error_code filesystem_error;
+        if (!std::filesystem::is_directory(run_directory, filesystem_error) || filesystem_error ||
+            !run_directory.filename().string().starts_with("run-")) {
+            set_error(error, "completed run archive source is not a run directory");
+            return false;
+        }
 
-    std::filesystem::path archive_path = run_directory;
-    archive_path += ".zip";
-    if (std::filesystem::exists(archive_path, filesystem_error)) {
-        set_error(error, "completed run archive already exists");
-        return false;
-    }
-    std::filesystem::path temporary_archive = archive_path;
-    temporary_archive += ".tmp";
-    std::filesystem::remove(temporary_archive, filesystem_error);
-
-    std::vector<ZipEntry> entries;
-    std::uint64_t uncompressed_bytes = 0;
-    if (!collect_zip_entries(run_directory, entries, uncompressed_bytes, error)) {
-        return false;
-    }
-    std::uint32_t central_offset = 0;
-    std::uint32_t central_size = 0;
-    if (!write_zip_archive(temporary_archive, entries, central_offset, central_size, error) ||
-        !verify_zip_archive(temporary_archive, entries, central_offset, central_size, error)) {
+        std::filesystem::path archive_path = run_directory;
+        archive_path += ".zip";
+        if (std::filesystem::exists(archive_path, filesystem_error)) {
+            set_error(error, "completed run archive already exists");
+            return false;
+        }
+        if (!integrity) {
+            integrity = take_run_integrity(run_directory);
+        }
+        if (!integrity) {
+            set_error(error, "run has no live integrity ledger; refusing to sign a manually created directory");
+            return false;
+        }
+        integrity->prepare_manifest();
+        std::filesystem::path temporary_archive = archive_path;
+        temporary_archive += ".tmp";
         std::filesystem::remove(temporary_archive, filesystem_error);
-        return false;
-    }
 
-    std::filesystem::rename(temporary_archive, archive_path, filesystem_error);
-    if (filesystem_error) {
-        set_error(error, "failed to publish completed run archive: " + filesystem_error.message());
-        std::filesystem::remove(temporary_archive, filesystem_error);
-        return false;
-    }
+        std::vector<ZipEntry> entries;
+        std::uint64_t uncompressed_bytes = 0;
+        if (!collect_zip_entries(run_directory, *integrity, entries, uncompressed_bytes, error)) {
+            return false;
+        }
+        std::uint32_t central_offset = 0;
+        std::uint32_t central_size = 0;
+        if (!write_zip_archive(temporary_archive, entries, central_offset, central_size, error) ||
+            !verify_zip_archive(temporary_archive, entries, central_offset, central_size, error)) {
+            std::filesystem::remove(temporary_archive, filesystem_error);
+            return false;
+        }
 
-    result.archive_path = archive_path;
-    result.entry_count = entries.size();
-    result.uncompressed_bytes = uncompressed_bytes;
-    const std::uintmax_t removed = std::filesystem::remove_all(run_directory, filesystem_error);
-    if (filesystem_error || removed == 0) {
-        set_error(
-            error,
-            "completed run was archived but its source directory could not be removed" +
-                (filesystem_error ? ": " + filesystem_error.message() : std::string {}));
+        integrity->verify_files();
+        integrity->sign_zip(temporary_archive);
+        integrity->verify_files();
+        std::filesystem::rename(temporary_archive, archive_path, filesystem_error);
+        if (filesystem_error) {
+            set_error(error, "failed to publish completed run archive: " + filesystem_error.message());
+            std::filesystem::remove(temporary_archive, filesystem_error);
+            return false;
+        }
+
+        result.archive_path = archive_path;
+        result.entry_count = entries.size();
+        result.uncompressed_bytes = uncompressed_bytes;
+        const std::uintmax_t removed = std::filesystem::remove_all(run_directory, filesystem_error);
+        if (filesystem_error || removed == 0) {
+            set_error(
+                error,
+                "completed run was archived but its source directory could not be removed" +
+                    (filesystem_error ? ": " + filesystem_error.message() : std::string {}));
+            return false;
+        }
+        return true;
+    }
+    catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        std::error_code ignored;
+        auto temporary = run_directory;
+        temporary += ".zip.tmp";
+        std::filesystem::remove(temporary, ignored);
         return false;
     }
-    return true;
 }
 
 bool enqueue_completed_run_archive(

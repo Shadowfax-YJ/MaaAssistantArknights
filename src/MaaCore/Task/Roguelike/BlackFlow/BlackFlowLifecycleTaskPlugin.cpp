@@ -218,9 +218,17 @@ void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
     m_start_explore_seen = true;
     if (disposition == StartExploreRunDisposition::KeepInitialRun) {
         Log.info("BlackFlow initial StartExplore keeps the initialized run log");
-        return;
     }
-    finish_current_run(true);
+    else {
+        finish_current_run(true);
+    }
+    record_run_event(
+        RunLogLevel::Info,
+        "run.start_confirmed",
+        "started",
+        "success",
+        json::object { { "source", "BlackFlow@Roguelike@StartExplore" } },
+        "BlackFlowLifecycle");
 }
 
 void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(MAAUnitTests LANGUAGES CXX)
+project(MAAUnitTests LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)
@@ -27,6 +27,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(Catch2)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/monocypher ${CMAKE_BINARY_DIR}/monocypher)
 
 include(Catch)
 
@@ -52,6 +53,7 @@ catch_discover_tests(maa-controller-recovery-test TEST_PREFIX "controller-recove
 
 add_executable(maa-black-flow-routing-test
     MaaCore/BlackFlowRoutingTest.cpp
+    MaaCore/BlackFlowRunIntegrityTest.cpp
     MaaCore/BlackFlowTopologyTest.cpp
     MaaCore/RoguelikeRecruitRoleTest.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.cpp
@@ -62,6 +64,7 @@ add_executable(maa-black-flow-routing-test
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPlanner.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowPolicy.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowRunArchive.cpp
+    ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowRunIntegrity.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyGoal.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowSafetyValue.cpp
     ../src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowStateSpace.cpp
@@ -69,6 +72,12 @@ add_executable(maa-black-flow-routing-test
 
 target_compile_features(maa-black-flow-routing-test PRIVATE cxx_std_20)
 target_link_libraries(maa-black-flow-routing-test PRIVATE Catch2::Catch2WithMain ZLIB::ZLIB)
+target_link_libraries(maa-black-flow-routing-test PRIVATE maa-monocypher)
+if(WIN32)
+    target_link_libraries(maa-black-flow-routing-test PRIVATE bcrypt)
+elseif(APPLE)
+    target_link_libraries(maa-black-flow-routing-test PRIVATE "-framework Security")
+endif()
 target_include_directories(maa-black-flow-routing-test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaUtils/include

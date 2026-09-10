@@ -3,10 +3,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace asst::blackflow
 {
+class RunIntegrity;
+
 struct RunArchiveResult
 {
     std::filesystem::path archive_path;
@@ -17,12 +20,11 @@ struct RunArchiveResult
 bool archive_completed_run_directory(
     const std::filesystem::path& run_directory,
     RunArchiveResult& result,
-    std::string* error = nullptr);
+    std::string* error = nullptr,
+    std::shared_ptr<RunIntegrity> integrity = {});
 
-using RunArchiveCompletion = std::function<void(
-    const std::filesystem::path& run_directory,
-    const RunArchiveResult& result,
-    const std::string& error)>;
+using RunArchiveCompletion = std::function<
+    void(const std::filesystem::path& run_directory, const RunArchiveResult& result, const std::string& error)>;
 
 bool enqueue_completed_run_archive(
     std::filesystem::path run_directory,

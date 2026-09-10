@@ -1,4 +1,5 @@
 #include "BlackFlowRunLog.h"
+#include "BlackFlowRunIntegrity.h"
 
 #include <algorithm>
 #include <cctype>
@@ -102,8 +103,7 @@ bool is_safe_existing_jpeg(const std::filesystem::path& run_directory, const std
     std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char character) {
         return static_cast<char>(std::tolower(character));
     });
-    return (extension == ".jpg" || extension == ".jpeg") &&
-           std::filesystem::is_regular_file(run_directory / path);
+    return (extension == ".jpg" || extension == ".jpeg") && std::filesystem::is_regular_file(run_directory / path);
 }
 
 bool is_safe_relative_directory(const std::filesystem::path& path)
@@ -127,6 +127,11 @@ bool is_collection_node_directory(const std::filesystem::path& path)
            floor.parent_path() == std::filesystem::path(CollectionPopupRootDirectory);
 }
 } // namespace
+
+BlackFlowRunLog::~BlackFlowRunLog()
+{
+    reset();
+}
 
 bool BlackFlowRunLog::prepare(
     const std::filesystem::path& root_directory,
@@ -154,6 +159,9 @@ bool BlackFlowRunLog::ensure_started(
     if (m_replay_data.is_open()) {
         m_replay_data.close();
     }
+    if (!m_run_directory.empty()) {
+        forget_run_integrity(m_run_directory);
+    }
     m_run_directory.clear();
     m_sequence = 0;
     m_last_image.reset();
@@ -166,6 +174,7 @@ bool BlackFlowRunLog::ensure_started(
         const auto now = std::chrono::system_clock::now();
         m_run_directory = root_directory / ("run-" + directory_timestamp(now));
         std::filesystem::create_directories(m_run_directory / "images");
+        begin_run_integrity(m_run_directory);
         std::filesystem::create_directories(m_run_directory / collection_popup_other_directory());
         m_jsonl.open(m_run_directory / "run-events.jsonl", std::ios::out | std::ios::app | std::ios::binary);
         m_text.open(m_run_directory / "run.log", std::ios::out | std::ios::app | std::ios::binary);
@@ -183,9 +192,13 @@ bool BlackFlowRunLog::ensure_started(
         std::ofstream replay(m_run_directory / "replay.html", std::ios::out | std::ios::binary);
         replay << replay_html;
         replay.flush();
+        m_replay_data.flush();
         if (!m_replay_data || !replay) {
             set_error(error, "failed to create BlackFlow offline replay files");
             return false;
+        }
+        for (const auto* name : { "run-events.jsonl", "run.log", "replay-data.js", "replay.html" }) {
+            run_integrity_record_file(m_run_directory / name);
         }
         m_run_revision = run_revision;
         m_monotonic_start = std::chrono::steady_clock::now();
@@ -223,6 +236,7 @@ bool BlackFlowRunLog::ensure_started(
             set_error(error, "failed to flush BlackFlow run log manifest");
             return false;
         }
+        run_integrity_record_file(m_run_directory / "manifest.json");
         return true;
     }
     catch (const std::exception& exception) {
@@ -243,9 +257,8 @@ bool BlackFlowRunLog::write_image(
         return true;
     }
     const double width_scale = static_cast<double>(BlackFlowRunLogMaximumImageWidth) / image.cols;
-    const double height_scale = preserve_full_height
-        ? 1.0
-        : static_cast<double>(BlackFlowRunLogMaximumImageHeight) / image.rows;
+    const double height_scale =
+        preserve_full_height ? 1.0 : static_cast<double>(BlackFlowRunLogMaximumImageHeight) / image.rows;
     const double scale = std::min({ 1.0, width_scale, height_scale });
     cv::Mat compressed_source;
     if (scale < 1.0) {
@@ -260,8 +273,7 @@ bool BlackFlowRunLog::write_image(
         return false;
     }
     std::filesystem::create_directories(m_run_directory / relative_directory);
-    if (is_collection_node_directory(relative_directory) &&
-        !ensure_node_attribution_file(relative_directory, error)) {
+    if (is_collection_node_directory(relative_directory) && !ensure_node_attribution_file(relative_directory, error)) {
         return false;
     }
     const std::filesystem::path path = m_run_directory / relative_directory / filename;
@@ -271,10 +283,12 @@ bool BlackFlowRunLog::write_image(
         cv::IMWRITE_JPEG_OPTIMIZE,
         1,
     };
+    run_integrity_before_write(path);
     if (!MAA_NS::imwrite(path, compressed_source, parameters)) {
         set_error(error, "failed to write BlackFlow run log JPEG: " + path.string());
         return false;
     }
+    run_integrity_record_file(path);
     image_details = json::object {
         { "path", (relative_directory / filename).generic_string() },
         { "codec", "jpeg" },
@@ -287,9 +301,8 @@ bool BlackFlowRunLog::write_image(
     return true;
 }
 
-bool BlackFlowRunLog::ensure_node_attribution_file(
-    const std::filesystem::path& relative_directory,
-    std::string* error) const
+bool BlackFlowRunLog::ensure_node_attribution_file(const std::filesystem::path& relative_directory, std::string* error)
+    const
 {
     if (!is_collection_node_directory(relative_directory)) {
         set_error(error, "BlackFlow node attribution directory is not a valid node path");
@@ -313,6 +326,7 @@ bool BlackFlowRunLog::update_node_attribution_file(
         return false;
     }
     const auto path = m_run_directory / relative_directory / BlackFlowNodeAttributionFileName;
+    run_integrity_before_write(path);
     json::object metadata;
     if (std::filesystem::exists(path)) {
         auto previous = json::open(path);
@@ -350,6 +364,7 @@ bool BlackFlowRunLog::update_node_attribution_file(
         set_error(error, "failed to write node attribution metadata");
         return false;
     }
+    run_integrity_record_file(path);
     return true;
 }
 
@@ -358,7 +373,9 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
     try {
         for (const NodeId node : run_log_collection_nodes_to_materialize(state)) {
             const int floor = static_cast<int>(node >> 48U);
-            if (!ensure_node_attribution_file(collection_popup_regular_node_directory(floor, node, state.get("tree_hole_outer_floor", 0)), error)) {
+            if (!ensure_node_attribution_file(
+                    collection_popup_regular_node_directory(floor, node, state.get("tree_hole_outer_floor", 0)),
+                    error)) {
                 return false;
             }
         }
@@ -368,17 +385,22 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
                 const json::value* raw_node = page->find_value("node");
                 const auto node = raw_node == nullptr ? std::nullopt : run_log_node_id(*raw_node);
                 if (node.has_value() && *node != 0 && *node != std::numeric_limits<std::uint64_t>::max() &&
-                    !ensure_node_attribution_file(collection_popup_regular_node_directory(floor, *node, state.get("tree_hole_outer_floor", 0)), error)) {
+                    !ensure_node_attribution_file(
+                        collection_popup_regular_node_directory(floor, *node, state.get("tree_hole_outer_floor", 0)),
+                        error)) {
                     return false;
                 }
             }
             else {
                 const std::string name = page->get("node_name", std::string());
                 const std::uint64_t revision = page->get("page_revision", std::uint64_t { 0 });
-                if (!name.empty() &&
-                    !ensure_node_attribution_file(
-                        collection_popup_virtual_node_directory(floor, name, revision, state.get("tree_hole_outer_floor", 0)),
-                        error)) {
+                if (!name.empty() && !ensure_node_attribution_file(
+                                         collection_popup_virtual_node_directory(
+                                             floor,
+                                             name,
+                                             revision,
+                                             state.get("tree_hole_outer_floor", 0)),
+                                         error)) {
                     return false;
                 }
             }
@@ -387,9 +409,7 @@ bool BlackFlowRunLog::ensure_collection_node_directories(const json::object& sta
             abstract_node != nullptr && abstract_node->is_object() &&
             abstract_node->get("kind", std::string()) == "pursuit") {
             const int floor = abstract_node->get("floor", state.get("floor", 0));
-            if (!ensure_node_attribution_file(
-                    collection_popup_virtual_node_directory(floor, "追猎", 0),
-                    error)) {
+            if (!ensure_node_attribution_file(collection_popup_virtual_node_directory(floor, "追猎", 0), error)) {
                 return false;
             }
         }
@@ -414,8 +434,7 @@ bool BlackFlowRunLog::sync_collection_node_identities(const json::object& state,
         return true;
     }
     for (const json::value& node : nodes->as_array()) {
-        if (!node.is_object() || !node.get("identity_revealed", false) ||
-            node.get("identity_from_prediction", false)) {
+        if (!node.is_object() || !node.get("identity_revealed", false) || node.get("identity_from_prediction", false)) {
             continue;
         }
         const json::value* raw_id = node.find_value("id");
@@ -424,7 +443,8 @@ bool BlackFlowRunLog::sync_collection_node_identities(const json::object& state,
             continue;
         }
         const int floor = static_cast<int>(*id >> 48U);
-        const auto relative_directory = collection_popup_regular_node_directory(floor, *id, state.get("tree_hole_outer_floor", 0));
+        const auto relative_directory =
+            collection_popup_regular_node_directory(floor, *id, state.get("tree_hole_outer_floor", 0));
         const auto path = m_run_directory / relative_directory / BlackFlowNodeAttributionFileName;
         // 只修正已有证据目录，不为仅观测到、尚未走过的节点创建证据。
         if (!std::filesystem::exists(path)) {
@@ -512,147 +532,152 @@ bool BlackFlowRunLog::record(
             return false;
         }
 
-    const std::uint64_t sequence = ++m_sequence;
-    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - m_monotonic_start);
-    const std::string timestamp = utc_timestamp();
-    json::object image_details;
-    if (image != nullptr && !image->empty()) {
-        const std::string state = json::value(event.state).to_string();
-        double mean_difference = -1.0;
-        if (m_last_image != nullptr && !m_last_image->empty() && m_last_image->size() == image->size() &&
-            m_last_image->type() == image->type()) {
-            const double denominator = static_cast<double>(image->total()) * static_cast<double>(image->channels());
-            mean_difference = cv::norm(*m_last_image, *image, cv::NORM_L1) / denominator;
-        }
-        const bool node_evidence = is_node_evidence_run_log_action(event.action);
-        if (!node_evidence && should_reuse_run_log_image(
-                mean_difference,
-                state == m_last_image_state,
-                event.action == m_last_image_action)) {
-            image_details = m_last_image_details;
-            image_details["reused"] = true;
-            image_details["reused_from_sequence"] = m_last_image_sequence;
-            image_details["mean_difference"] = mean_difference;
-        }
-        else {
-            std::ostringstream stem;
-            stem << std::setfill('0') << std::setw(6) << sequence << '-' << safe_stem(event.action) << '-'
-                 << safe_stem(event.phase);
-            std::filesystem::path image_directory = "images";
-            if (node_evidence) {
-                image_directory = event.action == CollectionPopupRunLogAction
-                    ? event.details.get("collection_popup_directory", std::string())
-                    : event.details.get("node_evidence_directory", std::string());
-                if (image_directory.empty() || image_directory.begin() == image_directory.end() ||
-                    image_directory.begin()->generic_string() != CollectionPopupRootDirectory) {
-                    set_error(error, "node evidence event has an invalid image directory");
-                    return false;
-                }
+        const std::uint64_t sequence = ++m_sequence;
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_monotonic_start);
+        const std::string timestamp = utc_timestamp();
+        json::object image_details;
+        if (image != nullptr && !image->empty()) {
+            const std::string state = json::value(event.state).to_string();
+            double mean_difference = -1.0;
+            if (m_last_image != nullptr && !m_last_image->empty() && m_last_image->size() == image->size() &&
+                m_last_image->type() == image->type()) {
+                const double denominator = static_cast<double>(image->total()) * static_cast<double>(image->channels());
+                mean_difference = cv::norm(*m_last_image, *image, cv::NORM_L1) / denominator;
             }
-            const bool preserve_full_height = event.action == NodeEventRunLogAction;
-            if (!write_image(
-                    *image,
-                    stem.str(),
-                    image_directory,
-                    preserve_full_height,
-                    image_details,
-                    error)) {
-                return false;
+            const bool node_evidence = is_node_evidence_run_log_action(event.action);
+            if (!node_evidence && should_reuse_run_log_image(
+                                      mean_difference,
+                                      state == m_last_image_state,
+                                      event.action == m_last_image_action)) {
+                image_details = m_last_image_details;
+                image_details["reused"] = true;
+                image_details["reused_from_sequence"] = m_last_image_sequence;
+                image_details["mean_difference"] = mean_difference;
             }
-            if (node_evidence) {
-                if (const json::value* attribution = event.details.find_value("attribution");
-                    attribution != nullptr && attribution->is_object()) {
-                    if (!update_node_attribution_file(image_directory, attribution->as_object(), std::nullopt, error)) {
+            else {
+                std::ostringstream stem;
+                stem << std::setfill('0') << std::setw(6) << sequence << '-' << safe_stem(event.action) << '-'
+                     << safe_stem(event.phase);
+                std::filesystem::path image_directory = "images";
+                if (node_evidence) {
+                    image_directory = event.action == CollectionPopupRunLogAction
+                                          ? event.details.get("collection_popup_directory", std::string())
+                                          : event.details.get("node_evidence_directory", std::string());
+                    if (image_directory.empty() || image_directory.begin() == image_directory.end() ||
+                        image_directory.begin()->generic_string() != CollectionPopupRootDirectory) {
+                        set_error(error, "node evidence event has an invalid image directory");
                         return false;
                     }
                 }
+                const bool preserve_full_height = event.action == NodeEventRunLogAction;
+                if (!write_image(*image, stem.str(), image_directory, preserve_full_height, image_details, error)) {
+                    return false;
+                }
+                if (node_evidence) {
+                    if (const json::value* attribution = event.details.find_value("attribution");
+                        attribution != nullptr && attribution->is_object()) {
+                        if (!update_node_attribution_file(
+                                image_directory,
+                                attribution->as_object(),
+                                std::nullopt,
+                                error)) {
+                            return false;
+                        }
+                    }
+                }
+                m_last_image = std::make_shared<cv::Mat>(image->clone());
+                m_last_image_details = image_details;
+                m_last_image_state = state;
+                m_last_image_action = event.action;
+                m_last_image_sequence = sequence;
             }
-            m_last_image = std::make_shared<cv::Mat>(image->clone());
-            m_last_image_details = image_details;
-            m_last_image_state = state;
-            m_last_image_action = event.action;
-            m_last_image_sequence = sequence;
         }
-    }
-    else {
-        // 重放默认保持原始游戏画面；只有未保存 captured 时才回退到识别叠加图。
-        std::string artifact_path = event.details.get("captured_image_file", std::string());
-        if (!is_safe_existing_jpeg(m_run_directory, artifact_path)) {
-            artifact_path = event.details.get("overlay_image_file", std::string());
+        else {
+            // 重放默认保持原始游戏画面；只有未保存 captured 时才回退到识别叠加图。
+            std::string artifact_path = event.details.get("captured_image_file", std::string());
+            if (!is_safe_existing_jpeg(m_run_directory, artifact_path)) {
+                artifact_path = event.details.get("overlay_image_file", std::string());
+            }
+            if (is_safe_existing_jpeg(m_run_directory, artifact_path)) {
+                image_details = json::object {
+                    { "path", artifact_path },
+                    { "codec", "jpeg" },
+                    { "source", "diagnostic_artifact" },
+                    { "reused", true },
+                };
+            }
         }
-        if (is_safe_existing_jpeg(m_run_directory, artifact_path)) {
-            image_details = json::object {
-                { "path", artifact_path },
-                { "codec", "jpeg" },
-                { "source", "diagnostic_artifact" },
-                { "reused", true },
-            };
+
+        // 身份可能在截图后才由事件回调或落点校正确定。与探索笔记一起回写目录描述，
+        // 不依赖这个节点之后是否还会产生截图，也不改写历史事件和原始图片。
+        if (!sync_collection_node_identities(event.state, error)) {
+            return false;
         }
-    }
 
-    // 身份可能在截图后才由事件回调或落点校正确定。与探索笔记一起回写目录描述，
-    // 不依赖这个节点之后是否还会产生截图，也不改写历史事件和原始图片。
-    if (!sync_collection_node_identities(event.state, error)) {
-        return false;
-    }
+        json::object serialized {
+            { "schema_version", BlackFlowRunLogSchemaVersion },
+            { "logger", "blackflow.run" },
+            { "event_id", "BF-R" + std::to_string(run_revision) + "-" + std::to_string(sequence) },
+            { "sequence", sequence },
+            { "timestamp", timestamp },
+            { "timezone", "UTC" },
+            { "elapsed_ms", elapsed.count() },
+            { "level", std::string(to_string(event.level)) },
+            { "thread_id", thread_id() },
+            { "run_revision", run_revision },
+            { "action", event.action },
+            { "phase", event.phase },
+            { "outcome", event.outcome },
+            { "task", event.task },
+            { "transaction_id", event.transaction_id },
+            { "floor", event.state.get("floor", 0) },
+            { "map_generation", event.state.get("map_generation", std::uint64_t { 0 }) },
+            { "map_revision", event.state.get("map_revision", std::uint64_t { 0 }) },
+            { "state", event.state },
+            { "details", event.details },
+        };
+        // 首条事件携带实际程序版本，单独保存 JSONL 也能追溯采集来源。
+        if (sequence == 1) {
+            serialized["collector_version"] = MAA_VERSION;
+        }
+        if (!image_details.empty()) {
+            serialized["image"] = image_details;
+        }
 
-    json::object serialized {
-        { "schema_version", BlackFlowRunLogSchemaVersion },
-        { "logger", "blackflow.run" },
-        { "event_id", "BF-R" + std::to_string(run_revision) + "-" + std::to_string(sequence) },
-        { "sequence", sequence },
-        { "timestamp", timestamp },
-        { "timezone", "UTC" },
-        { "elapsed_ms", elapsed.count() },
-        { "level", std::string(to_string(event.level)) },
-        { "thread_id", thread_id() },
-        { "run_revision", run_revision },
-        { "action", event.action },
-        { "phase", event.phase },
-        { "outcome", event.outcome },
-        { "task", event.task },
-        { "transaction_id", event.transaction_id },
-        { "floor", event.state.get("floor", 0) },
-        { "map_generation", event.state.get("map_generation", std::uint64_t { 0 }) },
-        { "map_revision", event.state.get("map_revision", std::uint64_t { 0 }) },
-        { "state", event.state },
-        { "details", event.details },
-    };
-    // 首条事件携带实际程序版本，单独保存 JSONL 也能追溯采集来源。
-    if (sequence == 1) {
-        serialized["collector_version"] = MAA_VERSION;
-    }
-    if (!image_details.empty()) {
-        serialized["image"] = image_details;
-    }
-
-    // JSONL 要求一条事件严格占一行；format() 会插入缩进和换行，只能用于 manifest。
-    const std::string compact_event = json::value(serialized).to_string();
-    m_jsonl << compact_event << '\n';
-    m_replay_data << "BLACKFLOW_RUN_EVENTS.push(" << compact_event << ");\n";
-    m_text << timestamp << " +" << elapsed.count() << "ms #" << sequence << " [" << to_string(event.level)
-           << "] " << event.action << ' ' << event.phase << '/' << event.outcome;
-    if (sequence == 1) {
-        m_text << " collector_version=" << MAA_VERSION;
-    }
-    if (!event.task.empty()) {
-        m_text << " task=" << event.task;
-    }
-    if (!event.transaction_id.empty()) {
-        m_text << " transaction=" << event.transaction_id;
-    }
-    if (!image_details.empty()) {
-        m_text << " image=" << image_details.get("path", std::string());
-    }
-    m_text << '\n';
-    m_jsonl.flush();
-    m_text.flush();
-    m_replay_data.flush();
-    if (!m_jsonl || !m_text || !m_replay_data) {
-        set_error(error, "failed to flush BlackFlow run log event");
-        return false;
-    }
+        // JSONL 要求一条事件严格占一行；format() 会插入缩进和换行，只能用于 manifest。
+        const std::string compact_event = json::value(serialized).to_string();
+        const std::string json_line = compact_event + '\n';
+        const std::string replay_line = "BLACKFLOW_RUN_EVENTS.push(" + compact_event + ");\n";
+        std::ostringstream text_line;
+        text_line << timestamp << " +" << elapsed.count() << "ms #" << sequence << " [" << to_string(event.level)
+                  << "] " << event.action << ' ' << event.phase << '/' << event.outcome;
+        if (sequence == 1) {
+            text_line << " collector_version=" << MAA_VERSION;
+        }
+        if (!event.task.empty()) {
+            text_line << " task=" << event.task;
+        }
+        if (!event.transaction_id.empty()) {
+            text_line << " transaction=" << event.transaction_id;
+        }
+        if (!image_details.empty()) {
+            text_line << " image=" << image_details.get("path", std::string());
+        }
+        text_line << '\n';
+        m_jsonl << json_line;
+        m_replay_data << replay_line;
+        m_text << text_line.str();
+        run_integrity_record_append(m_run_directory / "run-events.jsonl", json_line);
+        run_integrity_record_append(m_run_directory / "replay-data.js", replay_line);
+        run_integrity_record_append(m_run_directory / "run.log", text_line.str());
+        m_jsonl.flush();
+        m_text.flush();
+        m_replay_data.flush();
+        if (!m_jsonl || !m_text || !m_replay_data) {
+            set_error(error, "failed to flush BlackFlow run log event");
+            return false;
+        }
         return true;
     }
     catch (const std::exception& exception) {
@@ -694,6 +719,9 @@ std::filesystem::path BlackFlowRunLog::close_current_run() noexcept
 
 void BlackFlowRunLog::reset() noexcept
 {
-    (void)close_current_run();
+    const auto directory = close_current_run();
+    if (!directory.empty()) {
+        forget_run_integrity(directory);
+    }
 }
 } // namespace asst::blackflow
