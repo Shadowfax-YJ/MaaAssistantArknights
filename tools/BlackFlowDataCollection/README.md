@@ -23,6 +23,8 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 
 配置好后可运行 `Release Pipeline`，选择 `build_scope=blackflow-cdn-check`。此检查只在 `maa/blackflow/checks/cos-cdn-v1.bin` 写入固定的 2 MiB 测试文件，验证分块上传、CDN 刷新和公开下载后的完整 SHA256；不构建应用、不创建 Release、不更改版本清单。测试文件保留供后续连通检查复用。
 
+腾讯云检查和发布任务只在 `Shadowfax-YJ/MaaAssistantArknights` 的 `feat/blackflow-automatic-collection` 分支手动触发时运行，不在 PR 构建中注入凭据。公开仓库不会公开 Secrets 的值，fork 也不会复制这些值；但拥有写权限的人可以修改工作流来使用或外传仓库级 Secrets，因此应只给可信任的维护者写权限。日志脱敏不能阻止恶意代码外传密钥。
+
 上传身份需要该桶 `maa/blackflow/*` 下的 `cos:GetObject`、`cos:HeadObject`、`cos:PutObject`、`cos:InitiateMultipartUpload`、`cos:ListParts`、`cos:UploadPart`、`cos:CompleteMultipartUpload`、`cos:AbortMultipartUpload` 权限，桶的 `cos:ListMultipartUploads` 权限，以及 `img.lubiao.wiki` 的 `cdn:PurgeUrlsCache` 权限。脚本不修改桶 ACL，不删除现有文件。
 
 如果使用私有桶，在 CDN 中为更新目录配置 COS 服务授权及私有桶回源鉴权。客户端从 CDN 下载时不携带 COS 密钥、Referer 或临时下载令牌，因此更新目录需允许普通 HTTPS 客户端下载。配置仅针对更新目录；原有图片目录策略按原用途保留。参见[腾讯云源站配置](https://cloud.tencent.com/document/product/228/41334)。

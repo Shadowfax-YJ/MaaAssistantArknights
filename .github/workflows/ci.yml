@@ -163,7 +163,11 @@ jobs:
 
   blackflow-cdn-check:
     name: Verify COS and CDN connectivity
-    if: inputs.build_scope == 'blackflow-cdn-check'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'Shadowfax-YJ/MaaAssistantArknights' &&
+      github.ref == 'refs/heads/feat/blackflow-automatic-collection' &&
+      inputs.build_scope == 'blackflow-cdn-check'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -180,7 +184,11 @@ jobs:
 
   blackflow-publish:
     name: Publish BlackFlow update channel
-    if: inputs.build_scope == 'blackflow-packages' && inputs.publish_blackflow
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'Shadowfax-YJ/MaaAssistantArknights' &&
+      github.ref == 'refs/heads/feat/blackflow-automatic-collection' &&
+      inputs.build_scope == 'blackflow-packages' && inputs.publish_blackflow
     needs: [meta, blackflow-windows, macOS-GUI]
     runs-on: ubuntu-latest
     permissions:
