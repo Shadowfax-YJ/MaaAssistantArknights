@@ -78,12 +78,12 @@ class CosSdkTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "package.zip"
-            contents = b"a" * (8 * 1024 * 1024) + b"b" * 1024
+            contents = b"a" * (1024 * 1024) + b"b" * 1024
             path.write_bytes(contents)
             with patch.object(self.client, "send_request", side_effect=transport):
                 self.store.upload("maa/blackflow/v1.2.3/package.zip", path, "public, max-age=31536000, immutable")
             self.assertEqual(b"".join(uploaded), contents)
-            self.assertEqual([len(chunk) for chunk in uploaded], [8 * 1024 * 1024, 1024])
+            self.assertEqual([len(chunk) for chunk in uploaded], [1024 * 1024, 1024])
             self.assertEqual(requests[0]["headers"]["x-cos-meta-sha256"], sha256(path))
             self.assertIn("immutable", requests[0]["headers"]["Cache-Control"])
             self.assertEqual(len(requests), 4)

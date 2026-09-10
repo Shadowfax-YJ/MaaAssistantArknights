@@ -65,7 +65,7 @@ class CosStore:
             upload_id = self.client.create_multipart_upload(Bucket=self.bucket, Key=key, **headers)["UploadId"]
             try:
                 parts = []
-                while chunk := stream.read(8 * 1024 * 1024):
+                while chunk := stream.read(1024 * 1024):
                     number = len(parts) + 1
                     response = self.client.upload_part(
                         Bucket=self.bucket, Key=key, UploadId=upload_id,
@@ -141,6 +141,7 @@ class CosPublisher:
     def check_connection(self):
         # GET includes a structured COS error body, unlike HEAD; diagnose authentication/bucket errors first.
         self.store.read(self._key("latest.json"))
+        print("COS update-directory read verified", flush=True)
         # Use a separate, deterministic 2 MiB fixture to exercise multipart permissions without advancing any feed.
         relative = "checks/cos-cdn-v1.bin"
         with tempfile.TemporaryDirectory(prefix="blackflow-cdn-check-") as temporary:
@@ -151,10 +152,13 @@ class CosPublisher:
             if existing is not None and existing != expected:
                 raise ValueError("Connection-check path already contains different data")
             # Re-upload the same fixture on each check to verify write permissions, including on repeat runs.
+            print("Uploading the 2 MiB COS multipart fixture", flush=True)
             self.store.upload(self._key(relative), path, "public, max-age=60, must-revalidate")
             if self.store.head(self._key(relative)) != expected:
                 raise ValueError("Connection-check COS upload verification failed")
+            print("COS multipart upload and object metadata verified", flush=True)
             self.purge([self._url(relative)])
+            print("CDN URL purge accepted; verifying public download", flush=True)
             self._verify_with_retry(self._url(relative), path)
         return self._url(relative)
 
