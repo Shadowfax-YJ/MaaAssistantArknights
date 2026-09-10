@@ -114,6 +114,8 @@ class CosPublisher:
         return self.config["base_url"] + "/" + relative
 
     def check_connection(self):
+        # GET includes a structured COS error body, unlike HEAD; diagnose authentication/bucket errors first.
+        self.store.read(self._key("latest.json"))
         # Use a separate, deterministic 2 MiB fixture to exercise multipart permissions without advancing any feed.
         relative = "checks/cos-cdn-v1.bin"
         with tempfile.TemporaryDirectory(prefix="blackflow-cdn-check-") as temporary:
