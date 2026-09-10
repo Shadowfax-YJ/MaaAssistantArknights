@@ -3115,7 +3115,7 @@
         ]
     },
     "BlackFlow@Roguelike@NextLevel": {
-        "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层。",
+        "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层；失与得选择页也保留层名，循环中必须允许恢复物品选择。",
         "algorithm": "OcrDetect",
         "action": "DoNothing",
         "roi": [524, 0, 246, 42],
@@ -3129,6 +3129,7 @@
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@SacrificePicker",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
             "BlackFlow@Roguelike@ResumeEncounterPage",
@@ -3694,8 +3695,11 @@
         "postDelay": 800
     },
     "BlackFlow@Roguelike@SacrificePicker": {
-        "Doc": "以右下角交换按钮识别选择页；地图节点也叫失与得，不能只用左上同名文字判定。",
-        "baseTask": "BlackFlow@Roguelike@SacrificeConfirm",
+        "Doc": "匹配选择页左上失与得标题及两侧装饰、英文副标题，覆盖未选择和已选择状态，并与地图同名节点区分。",
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@SacrificePicker.png",
+        "roi": [230, 120, 200, 70],
+        "templThreshold": 0.85,
         "action": "DoNothing",
         "postDelay": 150,
         "next": [

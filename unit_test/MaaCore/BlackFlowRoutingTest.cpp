@@ -2869,6 +2869,15 @@ TEST_CASE("BlackFlow open encounter pages take precedence over the visible floor
     REQUIRE(floor_reachable_preview < floor_self);
     REQUIRE(floor_blocked_preview < floor_self);
 
+    // 失与得选择页也保留层名；转场时漏检一次后，必须能从楼层检测循环回到物品选择。
+    for (const auto& successors : { reward_next, floor_next }) {
+        const auto picker = std::ranges::find(successors, "BlackFlow@Roguelike@SacrificePicker");
+        const auto floor = std::ranges::find(successors, "BlackFlow@Roguelike@NextLevel");
+        REQUIRE(picker != successors.end());
+        REQUIRE(floor != successors.end());
+        REQUIRE(picker < floor);
+    }
+
     const auto& resume_enter = tasks->at("BlackFlow@Roguelike@ResumeMovePreviewEnter");
     REQUIRE(resume_enter.get("template", std::string {}) ==
             "BlackFlow@Roguelike@MovePreviewEnter.png");

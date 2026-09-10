@@ -2,6 +2,7 @@
 
 #include "Config/TaskData.h"
 #include "MaaUtils/NoWarningCV.hpp"
+#include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
 
 namespace asst::blackflow::perception
@@ -21,7 +22,7 @@ bool sacrifice_item_selected(const cv::Mat& image, const Rect& card)
 
 std::vector<Rect> sacrifice_visible_items(const cv::Mat& image)
 {
-    OCRer title(image);
+    Matcher title(image);
     title.set_task_info("BlackFlow@Roguelike@SacrificePicker");
     if (!title.analyze()) {
         return {};

@@ -17,6 +17,7 @@
 #include "Utils/FuzzyTextMatcher.h"
 #include "Utils/Logger.hpp"
 #include "Vision/Matcher.h"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/RegionOCRer.h"
 #include "Vision/Roguelike/BlackFlow/HudOcr.h"
 
@@ -130,8 +131,8 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
                 return true;
             }
         }
-        OCRer picker(image);
-        picker.set_task_info(std::string(picker_task));
+        PipelineAnalyzer picker(image);
+        picker.set_tasks({ std::string(picker_task) });
         OCRer loading(image);
         loading.set_task_info("LoadingText");
         if (picker.analyze() || loading.analyze()) {
@@ -230,7 +231,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
                                             m_sacrifice.phase == blackflow::SacrificePhase::BeforeCivilization)) {
             return finish_sacrifice_civilization();
         }
-        OCRer sacrifice_picker(ctrler()->get_image());
+        Matcher sacrifice_picker(ctrler()->get_image());
         sacrifice_picker.set_task_info("BlackFlow@Roguelike@SacrificePicker");
         if (sacrifice_picker.analyze()) {
             return handle_sacrifice_picker();
