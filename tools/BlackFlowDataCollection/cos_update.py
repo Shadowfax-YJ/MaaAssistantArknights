@@ -142,25 +142,28 @@ class CosPublisher:
         # GET includes a structured COS error body, unlike HEAD; diagnose authentication/bucket errors first.
         self.store.read(self._key("latest.json"))
         print("COS update-directory read verified", flush=True)
-        # Use a separate, deterministic 2 MiB fixture to exercise multipart permissions without advancing any feed.
-        relative = "checks/cos-cdn-v1.bin"
+        # Diagnose small writes and public access before sending the separate 2 MiB multipart fixture.
+        fixture = b"MAA BlackFlow COS/CDN connectivity test\n".ljust(64, b" ")
         with tempfile.TemporaryDirectory(prefix="blackflow-cdn-check-") as temporary:
-            path = Path(temporary) / "cos-cdn-v1.bin"
-            path.write_bytes(b"MAA BlackFlow COS/CDN connectivity test\n".ljust(64, b" ") * 32768)
-            expected = path.stat().st_size, sha256(path)
-            existing = self.store.head(self._key(relative))
-            if existing is not None and existing != expected:
-                raise ValueError("Connection-check path already contains different data")
-            # Re-upload the same fixture on each check to verify write permissions, including on repeat runs.
-            print("Uploading the 2 MiB COS multipart fixture", flush=True)
-            self.store.upload(self._key(relative), path, "public, max-age=60, must-revalidate")
-            if self.store.head(self._key(relative)) != expected:
-                raise ValueError("Connection-check COS upload verification failed")
-            print("COS multipart upload and object metadata verified", flush=True)
-            self.purge([self._url(relative)])
-            print("CDN URL purge accepted; verifying public download", flush=True)
-            self._verify_with_retry(self._url(relative), path)
-        return self._url(relative)
+            for name, data in (("cos-cdn-small-v1.txt", fixture), ("cos-cdn-v1.bin", fixture * 32768)):
+                relative = "checks/" + name
+                path = Path(temporary) / name
+                path.write_bytes(data)
+                expected = path.stat().st_size, sha256(path)
+                existing = self.store.head(self._key(relative))
+                if existing is not None and existing != expected:
+                    raise ValueError("Connection-check path already contains different data")
+                # Re-upload identical bytes on each check to verify write permissions on repeat runs too.
+                print(f"Uploading COS fixture: {name} ({len(data)} bytes)", flush=True)
+                self.store.upload(self._key(relative), path, "public, max-age=60, must-revalidate")
+                if self.store.head(self._key(relative)) != expected:
+                    raise ValueError("Connection-check COS upload verification failed")
+                print(f"COS upload and object metadata verified: {name}", flush=True)
+                self.purge([self._url(relative)])
+                print("CDN URL purge accepted; verifying public download", flush=True)
+                self._verify_with_retry(self._url(relative), path)
+                print(f"Public CDN download and SHA256 verified: {name}", flush=True)
+        return self._url("checks/cos-cdn-v1.bin")
 
     def preflight(self, version, windows, macos, output):
         numeric_version(version)

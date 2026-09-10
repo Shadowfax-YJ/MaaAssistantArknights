@@ -21,7 +21,7 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 
 在[仓库 Actions secrets](https://github.com/Shadowfax-YJ/MaaAssistantArknights/settings/secrets/actions)添加 `BLACKFLOW_COS_SECRET_ID` 和 `BLACKFLOW_COS_SECRET_KEY`。只配置在发布端，不写入仓库和客户端。临时凭据还需要 `BLACKFLOW_COS_SESSION_TOKEN`，并应在实际发布时仍然有效。
 
-配置好后可运行 `Release Pipeline`，选择 `build_scope=blackflow-cdn-check`。此检查只在 `maa/blackflow/checks/cos-cdn-v1.bin` 写入固定的 2 MiB 测试文件，验证分块上传、CDN 刷新和公开下载后的完整 SHA256；不构建应用、不创建 Release、不更改版本清单。测试文件保留供后续连通检查复用。
+配置好后可运行 `Release Pipeline`，选择 `build_scope=blackflow-cdn-check`。此检查先在 `maa/blackflow/checks/cos-cdn-small-v1.txt` 写入固定的 64 字节测试文件，验证简单上传、CDN 刷新和公开下载，再用 `maa/blackflow/checks/cos-cdn-v1.bin` 的固定 2 MiB 文件验证分块上传及同样的下载流程。两种下载都校验完整 SHA256；不构建应用、不创建 Release、不更改版本清单。测试文件保留供后续连通检查复用。
 
 腾讯云检查和发布任务只在 `Shadowfax-YJ/MaaAssistantArknights` 的 `feat/blackflow-automatic-collection` 分支手动触发时运行，不在 PR 构建中注入凭据。公开仓库不会公开 Secrets 的值，fork 也不会复制这些值；但拥有写权限的人可以修改工作流来使用或外传仓库级 Secrets，因此应只给可信任的维护者写权限。日志脱敏不能阻止恶意代码外传密钥。
 

@@ -175,9 +175,12 @@ class UpdateTests(unittest.TestCase):
         publisher, store, purges = self.publisher()
         url = publisher.check_connection()
         self.assertEqual(url, updates.FEED_ROOT + "/checks/cos-cdn-v1.bin")
-        self.assertEqual(len(store.objects), 1)
-        self.assertEqual(len(next(iter(store.objects.values()))), 2 * 1024 * 1024)
-        self.assertEqual(purges, [[url]])
+        self.assertEqual(set(store.objects), {
+            updates.CDN_CONFIG['prefix'] + "/checks/cos-cdn-small-v1.txt",
+            updates.CDN_CONFIG['prefix'] + "/checks/cos-cdn-v1.bin",
+        })
+        self.assertEqual(sorted(map(len, store.objects.values())), [64, 2 * 1024 * 1024])
+        self.assertEqual(purges, [[updates.FEED_ROOT + "/checks/cos-cdn-small-v1.txt"], [url]])
 
     def test_cos_conflict_aborts_before_any_upload(self):
         self.generate()
