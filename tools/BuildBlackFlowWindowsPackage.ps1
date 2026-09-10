@@ -76,6 +76,7 @@ try {
         -c Release `
         -p:Platform=x64 `
         -p:BlackFlowDataCollection=true `
+        -p:BeautyUsePatch=false `
         "-p:Version=$numericVersion" `
         "-p:FileVersion=$numericVersion" `
         "-p:AssemblyVersion=$numericVersion.0" `
