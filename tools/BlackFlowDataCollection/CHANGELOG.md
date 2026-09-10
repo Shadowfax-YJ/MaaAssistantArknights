@@ -38,19 +38,9 @@ Windows and macOS now support a dedicated collection update channel that preserv
 <details open>
 <summary><b>v1.1.4 (2026-09-11)</b></summary>
 
-### 新增 | New
-
-* 支持在难度区域连续点击 5 次解锁采集难度选择，解锁状态和所选难度随任务配置保存。 @Shadowfax-YJ
-
 ### 改进 | Improved
 
 * 每局采集日志记录所选难度，便于整理和核对数据。 @Shadowfax-YJ
-
-### MaaMacGui
-
-#### 新增 | New
-
-* 同步支持连续点击 5 次解锁采集难度选择，并保留解锁状态和所选难度。 @Shadowfax-YJ
 
 </details>
 

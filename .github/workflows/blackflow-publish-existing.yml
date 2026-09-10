@@ -1,0 +1,113 @@
+name: Publish existing BlackFlow packages
+
+on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Release Pipeline run containing both verified packages
+        required: true
+        type: string
+      version:
+        description: Version already built by the source run
+        required: true
+        type: string
+
+jobs:
+  publish:
+    if: github.repository == 'Shadowfax-YJ/MaaAssistantArknights' && github.ref == 'refs/heads/feat/blackflow-automatic-collection'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: blackflow-update-channel-publisher
+      cancel-in-progress: false
+    env:
+      BLACKFLOW_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify the original build and its version
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, re, subprocess
+          repo = os.environ['GITHUB_REPOSITORY']
+          run_id = os.environ['SOURCE_RUN_ID']
+          version = os.environ['BLACKFLOW_VERSION']
+          if not re.fullmatch(r'[0-9]+', run_id) or not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', version):
+              raise ValueError('Invalid source run or version')
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{path}'], text=True))
+          source = api(f'actions/runs/{run_id}')
+          if (source['status'] != 'completed' or source['event'] != 'workflow_dispatch'
+                  or source['path'] != '.github/workflows/ci.yml'
+                  or source['head_branch'] != 'feat/blackflow-automatic-collection'
+                  or source['head_repository']['full_name'] != repo):
+              raise ValueError('Source must be a completed collection pipeline from this repository')
+          jobs = api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
+          for name in ('Build BlackFlow for Windows', 'Build GUI for macOS'):
+              matches = [job for job in jobs if job['name'] == name]
+              if len(matches) != 1 or matches[0]['conclusion'] != 'success':
+                  raise ValueError(f'Original build did not pass: {name}')
+          commit = source['head_sha']
+          workflow = api(f'contents/.github/workflows/ci.yml?ref={commit}')
+          content = base64.b64decode(workflow['content']).decode()
+          declared = [line.split(':', 1)[1].strip() for line in content.splitlines()
+                      if line.startswith('  BLACKFLOW_DATA_COLLECTION_VERSION:')]
+          if declared != [version]:
+              raise ValueError('Requested version differs from the original build')
+          notes = open('tools/BlackFlowDataCollection/RELEASE_NOTES.md', encoding='utf-8').read()
+          if notes.splitlines()[0] != f'黑流树海采集版 {version}':
+              raise ValueError('Release notes do not match this version')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'commit={commit}\n')
+          print(f'Verified {version} packages from {commit}')
+          PY
+      - uses: actions/download-artifact@v8
+        with:
+          name: MAA-BlackFlow-win-x64
+          path: release
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: MAA-macos-universal
+          path: release
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install publication dependencies and run checks
+        run: |
+          python3 -m pip install 'cryptography>=43,<47' 'cos-python-sdk-v5>=1.9,<2' 'tencentcloud-sdk-python-cdn>=3,<4'
+          python3 -m unittest discover -s tools/BlackFlowDataCollection -p 'test_*.py' -v
+      - name: Publish the original packages with current release notes
+        env:
+          BLACKFLOW_SPARKLE_PRIVATE_KEY: ${{ secrets.BLACKFLOW_SPARKLE_PRIVATE_KEY }}
+          BLACKFLOW_COS_SECRET_ID: ${{ secrets.BLACKFLOW_COS_SECRET_ID }}
+          BLACKFLOW_COS_SECRET_KEY: ${{ secrets.BLACKFLOW_COS_SECRET_KEY }}
+          BLACKFLOW_COS_SESSION_TOKEN: ${{ secrets.BLACKFLOW_COS_SESSION_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          python3 tools/BlackFlowDataCollection/updates.py generate \
+            --version "$BLACKFLOW_VERSION" \
+            --windows "release/MAA-BlackFlow-Data-Collection-${BLACKFLOW_VERSION}-win-x64.zip" \
+            --macos "release/MAA-BlackFlow-Data-Collection-${BLACKFLOW_VERSION}-macos-universal.dmg" \
+            --mac-metadata release/blackflow-macos-metadata.json \
+            --notes tools/BlackFlowDataCollection/RELEASE_NOTES.md \
+            --output release/feed --publish --commit "$BUILD_COMMIT"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: BlackFlow-update-feed
+          path: release/feed/*

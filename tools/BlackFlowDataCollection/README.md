@@ -71,12 +71,14 @@ python tools/VerifyBlackFlowRunArchive.py "D:\reports\run-example.zip" --json
 
 ## 发布
 
-`RELEASE_NOTES.md` 会直接显示在 GitHub Release 和客户端更新提示中，只写用户可感知的变化、必要操作及升级方式。实现细节、维护者验包命令和本地签名的技术边界留在开发文档中，不放进用户更新日志；也不要把本地校验描述成官方来源保证。
+`RELEASE_NOTES.md` 会直接显示在 GitHub Release 和客户端更新提示中，只写用户可感知的变化、必要操作及升级方式。隐藏入口及其触发方式不写入公开更新说明（包括本目录 `CHANGELOG.md`）。实现细节、维护者验包命令和本地签名的技术边界留在开发文档中，不放进用户更新日志；也不要把本地校验描述成官方来源保证。
 
 1. 在 `.github/workflows/ci.yml` 增加 `BLACKFLOW_DATA_COLLECTION_VERSION`，同步编写本目录 `RELEASE_NOTES.md`。已发布版本不可重新打包覆盖。
 2. 运行 `Release Pipeline`，选择 `build_scope=blackflow-packages`。默认只构建和验证两个平台。
 3. 正式发布时勾选 `publish_blackflow`。必须使用正式发布代码的提交。工作流将验证 Windows 包身份、两个平台版本、DMG 构建证明、哈希以及签名公钥。
 4. 校验 COS 凭据及已有渠道后，版本包先发布到 `blackflow-vX.Y.Z` Release，随后更新 `blackflow-updates/latest.json` 和 `appcast.xml`。再同步版本包到 COS，经 CDN 公开下载及完整 SHA256 校验成功后更新国内清单。不更改普通版的 Latest Release。发布串行运行且拒绝渠道降级。同一提交、同一字节的包可以重试清单上传；重新构建出不同内容时必须增加版本。COS/CDN 失败会使发布任务失败，已成功发布的 GitHub 版本仍可作为备用源。
+
+若两个平台已构建成功，仅需修正发布说明或重试发布，可停止原发布流程后运行 `Release Pipeline`，选择 `build_scope=blackflow-publish-existing`，填写原构建的 `source_run_id` 并勾选 `publish_blackflow`。该流程核对原构建、版本和制品，使用当前的发布说明，复用原包并将版本关联到原构建提交。
 
 发布需要仓库 Secret `BLACKFLOW_SPARKLE_PRIVATE_KEY`：base64 编码的 **32 字节原始 Ed25519 seed**。对应的 32 字节公钥在 `sparkle-public-key.txt`，由构建步骤写入 macOS 应用。私钥须保存在仓库外并备份；丢失会影响已安装版本继续信任后续更新。发布脚本不输出私钥，也不把它放入制品。
 

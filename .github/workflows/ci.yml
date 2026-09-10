@@ -43,6 +43,11 @@ on:
           - "blackflow-windows-package"
           - "blackflow-packages"
           - "blackflow-cdn-check"
+          - "blackflow-publish-existing"
+      source_run_id:
+        description: "Original run ID when publishing existing BlackFlow packages"
+        type: string
+        required: false
       publish_blackflow:
         description: "Publish both BlackFlow packages and advance the signed update feed"
         type: boolean
@@ -230,6 +235,18 @@ jobs:
         with:
           name: BlackFlow-update-feed
           path: release/feed/*
+
+  blackflow-publish-existing:
+    if: inputs.build_scope == 'blackflow-publish-existing' && inputs.publish_blackflow
+    needs: meta
+    permissions:
+      actions: read
+      contents: write
+    uses: ./.github/workflows/blackflow-publish-existing.yml
+    with:
+      source_run_id: ${{ inputs.source_run_id }}
+      version: ${{ needs.meta.outputs.tag }}
+    secrets: inherit
 
   windows:
     name: Build for Windows
@@ -593,7 +610,7 @@ jobs:
 
   macOS-Core:
     name: Build Core for macOS
-    if: inputs.build_scope != 'blackflow-windows-package' && inputs.build_scope != 'blackflow-cdn-check'
+    if: inputs.build_scope != 'blackflow-windows-package' && inputs.build_scope != 'blackflow-cdn-check' && inputs.build_scope != 'blackflow-publish-existing'
     needs: meta
     runs-on: macos-26
     strategy:
