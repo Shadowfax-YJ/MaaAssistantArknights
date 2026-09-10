@@ -11,6 +11,14 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 - 实例管理器“更新采集版选中”下载一次完整包，校验 SHA256 后更新选中的已停止实例。每个实例保留自己的 ADB 地址、任务配置和日志。运行中的实例会跳过。
 - Windows、macOS 和实例管理器均提供“自动（国内 CDN 优先）／国内 CDN／GitHub”选择。手动选择一个源时不会切换；自动模式中 Windows 的清单/下载/校验失败会尝试备用源，macOS 在清单或下载网络错误结束后发起一次 GitHub 后台重试，不重试取消、签名或安装错误。
 
+## 难度解锁
+
+采集模式默认锁定难度 6。在难度标签或选择框上连续点击 5 次即可解锁（相邻两次间隔不超过 1 秒，鼠标移出难度区域会重新计数），随后可以选择其他难度；解锁状态和所选难度随当前任务配置保存，重启后仍保留。Windows 和 macOS 均支持。
+
+每局的 `run.started`、`run.start_confirmed` 事件在 `details.difficulty` 中记录提交给核心的难度；事件状态和 `run.log` 的 `selected_difficulty` 也保留该值，并随日志一起参与归档校验与签名。这是用户所选的目标值，不冒充游戏识别结果；`-1` 表示“不切换”，`2147483647` 表示“最高可用难度”。
+
+Windows 回归检查：`dotnet run --project unit_test/MaaCollectionGui -c Release -p:Platform=x64 -p:BlackFlowDataCollection=true`。
+
 ## 完整对局与本地归档签名
 
 采集任务使用专用启动入口：若启动时游戏已在探索中，先退出并放弃旧局，重新开始探索。日志会记录 `run.start_confirmed`；缺少确认开局、结束事件、连续事件序号或必要文件的记录不会签名归档。

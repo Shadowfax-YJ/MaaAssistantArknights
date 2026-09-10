@@ -56,6 +56,8 @@ public class AsstRoguelikeTask : AsstBaseTask
     /// </summary>
     public int Difficulty { get; set; }
 
+    public bool AutomationCollectionDifficultyUnlocked { get; set; }
+
     /// <summary>
     /// Gets or sets 开始探索次数
     /// </summary>
@@ -213,7 +215,9 @@ public class AsstRoguelikeTask : AsstBaseTask
         string squad = isAutomationCollection ? "堡垒战术分队" : Squad;
         string roles = isAutomationCollection ? "坚不可摧" : Roles;
         string coreChar = isAutomationCollection ? "凯尔希·思衡托" : CoreChar;
-        int difficulty = isAutomationCollection ? AutomationCollectionDifficulty : Difficulty;
+        int difficulty = isAutomationCollection && !AutomationCollectionDifficultyUnlocked
+            ? AutomationCollectionDifficulty
+            : Difficulty;
         bool investmentEnabled = !isAutomationCollection && InvestmentEnabled;
         string? startWithSeed = isAutomationCollection ? null : StartWithSeed;
 

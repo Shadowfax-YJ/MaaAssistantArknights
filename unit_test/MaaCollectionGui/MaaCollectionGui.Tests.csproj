@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MaaWpfGui/MaaWpfGui.csproj" />
+    <Compile Include="../../src/MaaWpfGui/Services/CollectionDifficultyUnlockGesture.cs" Link="CollectionDifficultyUnlockGesture.cs" />
+  </ItemGroup>
+</Project>

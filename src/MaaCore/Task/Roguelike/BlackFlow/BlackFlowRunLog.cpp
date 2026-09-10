@@ -655,6 +655,9 @@ bool BlackFlowRunLog::record(
         if (sequence == 1) {
             text_line << " collector_version=" << MAA_VERSION;
         }
+        if (const auto difficulty = event.state.find<int>("selected_difficulty")) {
+            text_line << " selected_difficulty=" << *difficulty;
+        }
         if (!event.task.empty()) {
             text_line << " task=" << event.task;
         }

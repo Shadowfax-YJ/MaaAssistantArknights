@@ -26,6 +26,7 @@ using MaaWpfGui.Helper;
 using MaaWpfGui.Main;
 using MaaWpfGui.Models;
 using MaaWpfGui.Models.AsstTasks;
+using MaaWpfGui.Services;
 using MaaWpfGui.Utilities;
 using MaaWpfGui.Utilities.ValueType;
 using MaaWpfGui.ViewModels.UI;
@@ -50,6 +51,8 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
     }
 
     public static RoguelikeSettingsUserControlModel Instance { get; }
+
+    private readonly CollectionDifficultyUnlockGesture _difficultyUnlockGesture = new();
 
     public void InitRoguelike()
     {
@@ -460,18 +463,45 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
     public bool RoguelikeAutomationCollectionSettingsLocked =>
         RoguelikeTheme == Theme.BlackFlow && RoguelikeMode == Mode.BlackFlowAutomationCollection;
 
+    public bool RoguelikeAutomationCollectionDifficultyUnlocked
+    {
+        get => GetTaskConfig<RoguelikeTask>().AutomationCollectionDifficultyUnlocked;
+        set => SetTaskConfig<RoguelikeTask>(
+            t => t.AutomationCollectionDifficultyUnlocked == value,
+            t => t.AutomationCollectionDifficultyUnlocked = value);
+    }
+
+    [PropertyDependsOn(nameof(RoguelikeAutomationCollectionSettingsLocked), nameof(RoguelikeAutomationCollectionDifficultyUnlocked))]
+    public bool RoguelikeAutomationCollectionDifficultyLocked =>
+        RoguelikeAutomationCollectionSettingsLocked && !RoguelikeAutomationCollectionDifficultyUnlocked;
+
+    public void RegisterAutomationCollectionDifficultyClick()
+    {
+        if (RoguelikeAutomationCollectionDifficultyLocked &&
+            _difficultyUnlockGesture.RegisterClick(Environment.TickCount64))
+        {
+            RoguelikeAutomationCollectionDifficultyUnlocked = true;
+        }
+    }
+
+    public void ResetAutomationCollectionDifficultyClicks() => _difficultyUnlockGesture.Reset();
+
     [PropertyDependsOn(nameof(RoguelikeMode), nameof(RoguelikeTheme))]
     public bool RoguelikeStartWithSeedSettingsVisible =>
         RoguelikeTheme == Theme.JieGarden && !RoguelikeAutomationCollectionSettingsLocked;
 
     private void ApplyAutomationCollectionSettings()
     {
+        ResetAutomationCollectionDifficultyClicks();
         if (!RoguelikeAutomationCollectionSettingsLocked)
         {
             return;
         }
 
-        RoguelikeDifficulty = AsstRoguelikeTask.AutomationCollectionDifficulty;
+        if (RoguelikeAutomationCollectionDifficultyLocked)
+        {
+            RoguelikeDifficulty = AsstRoguelikeTask.AutomationCollectionDifficulty;
+        }
         RoguelikeInvestmentEnabled = false;
         RoguelikeStartWithSeed = false;
         RoguelikeSquad = "堡垒战术分队";
@@ -1419,6 +1449,7 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                 Mode = roguelike.Mode,
                 Starts = roguelike.StartCount,
                 Difficulty = roguelike.Difficulty,
+                AutomationCollectionDifficultyUnlocked = roguelike.AutomationCollectionDifficultyUnlocked,
                 Squad = roguelike.Squad,
                 Roles = roguelike.Roles,
                 CoreChar = DataHelper.GetCharacterByNameOrAlias(roguelike.CoreChar)?.Name ?? roguelike.CoreChar,

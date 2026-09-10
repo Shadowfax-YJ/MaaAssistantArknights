@@ -5274,6 +5274,8 @@ json::object BlackFlowSession::run_log_state() const
 
     json::object result {
         { "profile", m_profile },
+        // Requested GUI/Core parameter; -1 means current and INT_MAX means maximum.
+        { "selected_difficulty", m_difficulty },
         { "run_revision", m_run_revision },
         { "expedition_core_away", m_expedition_core_away },
         { "tree_hole_outer_floor", in_tree_hole() ? outer_floor() : 0 },

@@ -31,6 +31,8 @@ public class RoguelikeTask : BaseTask
 
     public int Difficulty { get; set; } = int.MaxValue;
 
+    public bool AutomationCollectionDifficultyUnlocked { get; set; }
+
     public RoguelikeMode Mode { get; set; } = RoguelikeMode.Exp;
 
     /// <summary>

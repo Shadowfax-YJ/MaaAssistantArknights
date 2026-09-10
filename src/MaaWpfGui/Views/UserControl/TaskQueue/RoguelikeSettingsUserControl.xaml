@@ -32,24 +32,31 @@
                 ItemsSource="{Binding RoguelikeThemeList}"
                 SelectedValue="{Binding RoguelikeTheme}"
                 SelectedValuePath="Value" />
-            <StackPanel Margin="0,3">
-                <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
-                    <controls:TextBlock Margin="8,0,0,0" Text="{DynamicResource RoguelikeDifficulty}" />
-                    <controls:TooltipBlock
-                        d:Visibility="Visible"
-                        TooltipText="{DynamicResource RoguelikeJieGardenDifficultyTip}"
-                        Visibility="{c:Binding '(RoguelikeMode == task:RoguelikeMode.Investment) and (RoguelikeTheme == task:RoguelikeTheme.JieGarden)',
-                                               Source={x:Static taskQueue_vms:RoguelikeSettingsUserControlModel.Instance}}" />
+            <Grid Margin="0,3">
+                <StackPanel>
+                    <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
+                        <controls:TextBlock Margin="8,0,0,0" Text="{DynamicResource RoguelikeDifficulty}" />
+                        <controls:TooltipBlock
+                            d:Visibility="Visible"
+                            TooltipText="{DynamicResource RoguelikeJieGardenDifficultyTip}"
+                            Visibility="{c:Binding '(RoguelikeMode == task:RoguelikeMode.Investment) and (RoguelikeTheme == task:RoguelikeTheme.JieGarden)',
+                                                   Source={x:Static taskQueue_vms:RoguelikeSettingsUserControlModel.Instance}}" />
+                    </StackPanel>
+                    <hc:ComboBox
+                        DisplayMemberPath="Display"
+                        IsEnabled="{c:Binding !RoguelikeAutomationCollectionDifficultyLocked, Source={x:Static taskQueue_vms:RoguelikeSettingsUserControlModel.Instance}}"
+                        IsHitTestVisible="{Binding Path=Idle, Source={x:Static ui_vms:TaskQueueViewModel.TaskSettingDataContext}}"
+                        ItemsSource="{Binding RoguelikeDifficultyList}"
+                        ScrollViewer.CanContentScroll="False"
+                        SelectedValue="{Binding RoguelikeDifficulty}"
+                        SelectedValuePath="Value" />
                 </StackPanel>
-                <hc:ComboBox
-                    DisplayMemberPath="Display"
-                    IsEnabled="{c:Binding !RoguelikeAutomationCollectionSettingsLocked, Source={x:Static taskQueue_vms:RoguelikeSettingsUserControlModel.Instance}}"
-                    IsHitTestVisible="{Binding Path=Idle, Source={x:Static ui_vms:TaskQueueViewModel.TaskSettingDataContext}}"
-                    ItemsSource="{Binding RoguelikeDifficultyList}"
-                    ScrollViewer.CanContentScroll="False"
-                    SelectedValue="{Binding RoguelikeDifficulty}"
-                    SelectedValuePath="Value" />
-            </StackPanel>
+                <Border
+                    Background="Transparent"
+                    MouseLeftButtonDown="DifficultyUnlock_MouseLeftButtonDown"
+                    MouseLeave="DifficultyUnlock_MouseLeave"
+                    Visibility="{c:Binding RoguelikeAutomationCollectionDifficultyLocked, Source={x:Static taskQueue_vms:RoguelikeSettingsUserControlModel.Instance}}" />
+            </Grid>
             <hc:ComboBox
                 Margin="0,3"
                 hc:InfoElement.Title="{DynamicResource Strategy}"

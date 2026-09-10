@@ -1,4 +1,4 @@
-## v1.1.2
+## v1.1.4
 
 ### Highlights
 
@@ -36,6 +36,39 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.4 (2026-09-11)</b></summary>
+
+### 新增 | New
+
+* 支持在难度区域连续点击 5 次解锁采集难度选择，解锁状态和所选难度随任务配置保存。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 每局采集日志记录所选难度，便于整理和核对数据。 @Shadowfax-YJ
+
+### MaaMacGui
+
+#### 新增 | New
+
+* 同步支持连续点击 5 次解锁采集难度选择，并保留解锁状态和所选难度。 @Shadowfax-YJ
+
+</details>
+
+<details>
+<summary><b>v1.1.3 (2026-09-11)</b></summary>
+
+### 修复 | Fix
+
+* 修复 Windows v1.1.2 提示未知 DLL、导致无法启动的问题。 @Shadowfax-YJ
+* 从探索中的地图启动采集时，先放弃已有探索再重新开局，避免生成半途开始的不完整记录。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 自动检查并打包完整对局日志，支持校验原始 ZIP；提交数据时无需再手工压缩。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.2 (2026-09-11)</b></summary>
 
 ### 新增 | New

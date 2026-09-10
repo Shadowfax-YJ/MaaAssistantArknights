@@ -16,8 +16,10 @@
 using System;
 using System.Globalization;
 using System.Windows.Controls;
+using System.Windows.Input;
 using MaaWpfGui.Extensions;
 using MaaWpfGui.Helper;
+using MaaWpfGui.ViewModels.UserControl.TaskQueue;
 
 namespace MaaWpfGui.Views.UserControl.TaskQueue;
 
@@ -37,6 +39,24 @@ public partial class RoguelikeSettingsUserControl : System.Windows.Controls.User
 
     private static RoguelikeSettingsUserControl _current;
     private static bool _isValidResult;
+
+    private void DifficultyUnlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is RoguelikeSettingsUserControlModel model)
+        {
+            model.RegisterAutomationCollectionDifficultyClick();
+        }
+
+        e.Handled = true;
+    }
+
+    private void DifficultyUnlock_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (DataContext is RoguelikeSettingsUserControlModel model)
+        {
+            model.ResetAutomationCollectionDifficultyClicks();
+        }
+    }
 
     internal static bool IsValidResult
     {

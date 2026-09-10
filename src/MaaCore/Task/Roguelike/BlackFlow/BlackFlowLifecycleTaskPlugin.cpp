@@ -227,7 +227,10 @@ void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
         "run.start_confirmed",
         "started",
         "success",
-        json::object { { "source", "BlackFlow@Roguelike@StartExplore" } },
+        json::object {
+            { "source", "BlackFlow@Roguelike@StartExplore" },
+            { "difficulty", m_config->get_difficulty() },
+        },
         "BlackFlowLifecycle");
 }
 
@@ -282,7 +285,10 @@ void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
                 "run.started",
                 "started",
                 "success",
-                json::object { { "profile", m_session->profile() } },
+                json::object {
+                    { "profile", m_session->profile() },
+                    { "difficulty", m_config->get_difficulty() },
+                },
                 "BlackFlowLifecycle");
         }
     }
