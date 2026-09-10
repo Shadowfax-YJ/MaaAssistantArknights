@@ -180,7 +180,10 @@ def generate(
 
 
 def gh(*args: str) -> str:
-    result = subprocess.run(["gh", *args, "--repo", REPOSITORY], check=True, text=True, capture_output=True)
+    try:
+        result = subprocess.run(["gh", *args, "--repo", REPOSITORY], check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"GitHub CLI failed ({error.returncode}): {error.stderr.strip()}") from error
     return result.stdout
 
 
