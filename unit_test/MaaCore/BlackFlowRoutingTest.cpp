@@ -41,6 +41,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowBurnRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPort.h"
 #include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
@@ -2277,6 +2278,19 @@ TEST_CASE("BlackFlow start reward templates document all six actual rewards")
         REQUIRE(tasks->contains(task_name));
         const std::string doc = tasks->at(task_name).get("Doc", std::string {});
         REQUIRE(doc.find(reward_name) != std::string::npos);
+    }
+}
+
+TEST_CASE("BlackFlow burn checks utopia only after reaching the third floor")
+{
+    for (const std::string_view profile :
+         { "burn", "burn_with_investment", "investment", "baby", "automation_collection" }) {
+        for (int floor = 0; floor <= 6; ++floor) {
+            CAPTURE(profile, floor);
+            const bool expected = (profile == "burn" || profile == "burn_with_investment") && floor == 3;
+            REQUIRE(should_inspect_burn_utopia(profile, floor, "burn_completed") == expected);
+            REQUIRE_FALSE(should_inspect_burn_utopia(profile, floor, "map_rebuild_failed"));
+        }
     }
 }
 
@@ -10179,6 +10193,7 @@ TEST_CASE("BlackFlow recruitment transitions continue the reveal screen without 
     REQUIRE(wait.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> {
                 "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+                "BlackFlow@StartExplore@Roguelike@ChooseOperConfirmToGiveUp",
                 animation_wait,
             });
     REQUIRE(wait.get("exceededNext", std::vector<std::string> {}) ==

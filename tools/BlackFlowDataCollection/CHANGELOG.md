@@ -38,8 +38,13 @@ Windows and macOS now support a dedicated collection update channel that preserv
 <details open>
 <summary><b>v1.1.4 (2026-09-11)</b></summary>
 
+### 修复 | Fix
+
+* 修复刷等级策略在开局奖励和放弃招募确认时卡住的问题。 @Shadowfax-YJ
+
 ### 改进 | Improved
 
+* 刷等级快速飞三层策略到达第三层后检查实托邦并保存截图，再按原流程重开。 @Shadowfax-YJ
 * 每局采集日志记录所选难度，便于整理和核对数据。 @Shadowfax-YJ
 
 </details>

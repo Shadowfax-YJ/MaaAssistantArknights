@@ -19,6 +19,7 @@
 
 #include "BlackFlowMovementRecognition.h"
 #include "BlackFlowBattleRules.h"
+#include "BlackFlowBurnRules.h"
 #include "BlackFlowAutomationStoreRules.h"
 #include "BlackFlowInventoryRules.h"
 #include "BlackFlowCollectionPopup.h"
@@ -1985,6 +1986,7 @@ void BlackFlowTaskPort::reset_run()
     m_task_context->take_pending_pursuit();
     m_tree_return_pending = false;
     m_utopia_generation.reset();
+    m_burn_utopia_inspected_generation.reset();
     m_utopia_observation = {};
     m_last_stable_map_image.reset();
     m_battle_preview_map_reference.reset();
@@ -2936,11 +2938,71 @@ bool BlackFlowTaskPort::inspect_tree_hole_effect(std::uint64_t generation, cv::M
     return true;
 }
 
+bool BlackFlowTaskPort::inspect_burn_utopia(std::string* error)
+{
+    const auto session = m_collection_popup_session.lock();
+    if (session == nullptr || !session->result().has_value() ||
+        !should_inspect_burn_utopia(
+            session->profile(),
+            session->current_floor().value_or(0),
+            session->result()->outcome)) {
+        return true;
+    }
+    const auto generation = session->map_generation();
+    if (m_burn_utopia_inspected_generation == generation) {
+        return true;
+    }
+    // 即使识别失败也只尝试一次，截图故障不能改变刷等级的重开策略。
+    m_burn_utopia_inspected_generation = generation;
+    cv::Mat map_image;
+    cv::Mat panel_image;
+    UtopiaPanelObservation observation;
+    std::string inspection_error;
+    bool inspected = m_task_context != nullptr && m_task_context->capture_stable_map(map_image, &inspection_error);
+    if (inspected) {
+        inspected = inspect_utopia_for_generation(generation, observation, map_image, &inspection_error, &panel_image);
+    }
+    if (!inspected && inspection_error.empty()) {
+        inspection_error = "third-floor map capture context is unavailable";
+    }
+    const bool present = observation.complete();
+    const RunLogEvent event {
+        .level = inspected ? RunLogLevel::Info : RunLogLevel::Warning,
+        .action = "utopia.inspection",
+        .phase = inspected ? "completed" : "failed",
+        .outcome = inspected ? (present ? "present" : "absent") : "unrecognized",
+        .task = "BlackFlowRouting",
+        .state = session->run_log_state(),
+        .details =
+            json::object {
+                { "scope", "burn_third_floor" },
+                { "policy", observation.policy },
+                { "ideology", observation.ideology },
+                { "error", inspection_error },
+            },
+    };
+    const cv::Mat& evidence = panel_image.empty() ? map_image : panel_image;
+    std::string persistence_error;
+    const bool saved = record_run_event(
+        session->run_revision(),
+        event,
+        std::make_shared<cv::Mat>(evidence.clone()),
+        false,
+        &persistence_error);
+    Log.info("BlackFlow third-floor utopia inspection", event.outcome, "screenshot saved", saved && !evidence.empty());
+    if (!inspected || !saved) {
+        set_error(error, inspected ? persistence_error : inspection_error);
+        return false;
+    }
+    return true;
+}
+
 bool BlackFlowTaskPort::inspect_utopia_for_generation(
     std::uint64_t map_generation,
     UtopiaPanelObservation& observation,
     cv::Mat& stable_map_image,
-    std::string* error)
+    std::string* error,
+    cv::Mat* panel_evidence)
 {
     if (m_utopia_generation == map_generation) {
         observation = m_utopia_observation;
@@ -2958,6 +3020,9 @@ bool BlackFlowTaskPort::inspect_utopia_for_generation(
         return false;
     }
     const cv::Mat panel_image = m_task_context->capture();
+    if (panel_evidence != nullptr) {
+        *panel_evidence = panel_image.clone();
+    }
     const UtopiaPanelObservation recognized = recognize_utopia_panel(panel_image);
     UtopiaPanelInspectionDisposition disposition = classify_utopia_panel_inspection(recognized);
 

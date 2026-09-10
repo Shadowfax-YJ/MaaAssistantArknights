@@ -71,6 +71,14 @@ bool BlackFlowRoutingTaskPlugin::_run()
         }
     }
 
+    if (work == PendingWork::ObserveAndPlan && m_session->terminated()) {
+        // 刷等级到三层仍按原规则重开；离开地图前补一次实托邦检查和截图。
+        std::string inspection_error;
+        if (!m_port->inspect_burn_utopia(&inspection_error)) {
+            Log.warn("BlackFlow third-floor utopia inspection failed before restart", inspection_error);
+        }
+    }
+
     const RoutingCycleOutcome cycle = work == PendingWork::ResumePendingMove
                                           ? execute_pending_routing_cycle(*m_session, *m_port)
                                           : execute_routing_cycle(*m_session, *m_port);

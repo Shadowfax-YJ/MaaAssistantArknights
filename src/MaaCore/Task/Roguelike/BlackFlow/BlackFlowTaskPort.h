@@ -401,6 +401,7 @@ public:
     virtual void set_collection_popup_session(std::weak_ptr<BlackFlowSession>) {}
 
     virtual bool capture_collection_popup(std::string_view, std::string* = nullptr) { return true; }
+    virtual bool inspect_burn_utopia(std::string* = nullptr) { return true; }
 
     virtual bool capture_event_page(std::string_view, const cv::Mat&, std::string* = nullptr) { return true; }
 
@@ -493,6 +494,7 @@ public:
     void configure_diagnostics(const DiagnosticSettings& settings) override;
     void set_collection_popup_session(std::weak_ptr<BlackFlowSession> session) override;
     bool capture_collection_popup(std::string_view task, std::string* error = nullptr) override;
+    bool inspect_burn_utopia(std::string* error = nullptr) override;
     bool capture_event_page(std::string_view event_name, const cv::Mat& stitched_image, std::string* error = nullptr)
         override;
     bool capture_event_detail(
@@ -545,7 +547,8 @@ private:
         std::uint64_t map_generation,
         UtopiaPanelObservation& observation,
         cv::Mat& stable_map_image,
-        std::string* error);
+        std::string* error,
+        cv::Mat* panel_evidence = nullptr);
     bool cleanup_overloaded_inventory(bool inventory_already_open, std::string* error);
     bool classify_entered_page(const cv::Mat& image, EnteredPageObservation& observation, std::string* error) const;
     bool persist_collection_popup_capture(
@@ -573,6 +576,7 @@ private:
     std::shared_ptr<IBlackFlowMapObservationSource> m_map_source;
     std::weak_ptr<BlackFlowSession> m_collection_popup_session;
     std::optional<std::uint64_t> m_utopia_generation;
+    std::optional<std::uint64_t> m_burn_utopia_inspected_generation;
     UtopiaPanelObservation m_utopia_observation;
     std::optional<std::uint64_t> m_tree_effect_generation;
     std::string m_tree_effect;

@@ -1,6 +1,7 @@
 {
     "BlackFlow@StartExplore@Roguelike@ChooseOper": {
         "next": [
+            "BlackFlow@StartExplore@Roguelike@ChooseOperConfirmToGiveUp",
             "BlackFlow@StartExplore@Roguelike@ChooseOperConfirm",
             "BlackFlow@StartExplore@Roguelike@ChooseOperConfirm#next"
         ]
@@ -48,6 +49,7 @@
         "maxTimes": 50,
         "next": [
             "BlackFlow@StartExplore@Roguelike@RecruitSkip",
+            "BlackFlow@StartExplore@Roguelike@ChooseOperConfirmToGiveUp",
             "BlackFlow@StartExplore@Roguelike@RecruitAnimationWait"
         ],
         "exceededNext": ["BlackFlow@StartExplore@Roguelike@RecruitWithoutButton"]
@@ -2239,9 +2241,9 @@
         "fuzzyMatch": true,
         "next": [
             "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
-            "BlackFlow@Roguelike@LastReward-EnterPoint",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@LastRewardConfirm",
+            "BlackFlow@Roguelike@LastReward-EnterPoint",
             "BlackFlow@Roguelike@RecruitMain",
             "BlackFlow@Roguelike@Stages#next",
             "BlackFlow@Roguelike@AbandonConfirm#next"
