@@ -126,7 +126,10 @@ class CosPublisher:
         from tencentcloud.cdn.v20180606 import cdn_client, models
 
         token = os.environ.get("BLACKFLOW_COS_SESSION_TOKEN") or None
-        client = CosS3Client(CosConfig(Region=config["region"], SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme="https"))
+        client = CosS3Client(CosConfig(
+            Region=config["region"], SecretId=secret_id, SecretKey=secret_key, Token=token,
+            Scheme="https", EnableOldDomain=False,
+        ))
         cdn = cdn_client.CdnClient(credential.Credential(secret_id, secret_key, token), "")
 
         def purge(urls):
