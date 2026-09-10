@@ -25,7 +25,12 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 
 腾讯云检查和发布任务只在 `Shadowfax-YJ/MaaAssistantArknights` 的 `feat/blackflow-automatic-collection` 分支手动触发时运行，不在 PR 构建中注入凭据。公开仓库不会公开 Secrets 的值，fork 也不会复制这些值；但拥有写权限的人可以修改工作流来使用或外传仓库级 Secrets，因此应只给可信任的维护者写权限。日志脱敏不能阻止恶意代码外传密钥。
 
-上传身份需要该桶 `maa/blackflow/*` 下的 `cos:GetObject`、`cos:HeadObject`、`cos:PutObject`、`cos:InitiateMultipartUpload`、`cos:ListParts`、`cos:UploadPart`、`cos:CompleteMultipartUpload`、`cos:AbortMultipartUpload` 权限，桶的 `cos:ListMultipartUploads` 权限，以及 `img.lubiao.wiki` 的 `cdn:PurgeUrlsCache` 权限。脚本不修改桶 ACL，不删除现有文件。
+上传身份需要两份自定义 CAM 策略。本目录提供的 JSON 已填好当前桶、地域和更新路径，可在 CAM 的策略页面通过策略语法创建，再关联到 Actions 密钥所属的子用户。已有业务策略继续保留，以下策略作为额外授权；同一子用户的权限会累加。
+
+- `cos-publish-policy.json`：只增加 `maa/blackflow/*` 下的读取、查看元数据、上传及分块上传权限。脚本直接初始化分块任务，按 8 MiB 读取并上传，每块校验 MD5，完成后仍校验对象元数据和公开下载的 SHA256；失败时尝试终止本次分块任务。重试会创建新任务，无需 `ListMultipartUploads` 或 `ListParts` 查询权限。此策略不授予删除对象、修改 ACL 或其他目录的对象读写权限。参见 [COS API 授权策略](https://intl.cloud.tencent.com/zh/document/product/436/30580)。
+- `cdn-purge-policy.json`：只增加 `cdn:PurgeUrlsCache` 操作。腾讯云当前将此接口列为操作级，要求 `resource: "*"`，不能通过资源字段限制到 `img.lubiao.wiki` 或更新目录。这会授予账号范围内的 CDN URL 刷新权限，不包含域名配置修改或源文件写入权限。发布脚本实际只刷新配置中的更新 URL，但这是脚本行为，并非 CAM 的权限隔离。参见[腾讯云 CDN 接口授权粒度](https://cloud.tencent.com/document/product/598/98110)。
+
+当前发布和连通检查流程均需要这两份授权，缺少 CDN 刷新权限也会失败。仅授予 `lubiao-wiki/sources/*` 或 `lubiao-wiki/incoming/shadowfax/*` 不覆盖 `maa/blackflow/*`；这种情况下，检查会在读取 `/maa/blackflow/latest.json` 时返回 `AccessDenied`。关联策略后可以沿用已有的子用户密钥，无需重新生成；尚需重新执行 `blackflow-cdn-check` 验证实际权限及 CDN 回源下载。
 
 如果使用私有桶，在 CDN 中为更新目录配置 COS 服务授权及私有桶回源鉴权。客户端从 CDN 下载时不携带 COS 密钥、Referer 或临时下载令牌，因此更新目录需允许普通 HTTPS 客户端下载。配置仅针对更新目录；原有图片目录策略按原用途保留。参见[腾讯云源站配置](https://cloud.tencent.com/document/product/228/41334)。
 

@@ -50,13 +50,38 @@ class CosStore:
         return int(response["Content-Length"]), response.get("x-cos-meta-sha256", "")
 
     def upload(self, key, path, cache):
-        self.client.upload_file(
-            Bucket=self.bucket, Key=key, LocalFilePath=str(path), EnableMD5=True,
-            CacheControl=cache,
-            ContentType={".json": "application/json; charset=utf-8", ".xml": "application/xml; charset=utf-8",
-                         ".txt": "text/plain; charset=utf-8"}.get(path.suffix, "application/octet-stream"),
-            Metadata={"x-cos-meta-sha256": sha256(path)},
-        )
+        headers = {
+            "CacheControl": cache,
+            "ContentType": {".json": "application/json; charset=utf-8", ".xml": "application/xml; charset=utf-8",
+                            ".txt": "text/plain; charset=utf-8"}.get(path.suffix, "application/octet-stream"),
+            "Metadata": {"x-cos-meta-sha256": sha256(path)},
+        }
+        with path.open("rb") as stream:
+            if path.stat().st_size <= 1024 * 1024:
+                self.client.put_object(Bucket=self.bucket, Key=key, Body=stream, EnableMD5=True, **headers)
+                return
+            # Start a fresh multipart upload: upload_file() first lists the bucket to discover resumable tasks.
+            # Keeping our own UploadId requires only permissions on this object, and bounds memory to one part.
+            upload_id = self.client.create_multipart_upload(Bucket=self.bucket, Key=key, **headers)["UploadId"]
+            try:
+                parts = []
+                while chunk := stream.read(8 * 1024 * 1024):
+                    number = len(parts) + 1
+                    response = self.client.upload_part(
+                        Bucket=self.bucket, Key=key, UploadId=upload_id,
+                        PartNumber=number, Body=chunk, EnableMD5=True,
+                    )
+                    parts.append({"PartNumber": number, "ETag": response["ETag"]})
+                self.client.complete_multipart_upload(
+                    Bucket=self.bucket, Key=key, UploadId=upload_id, MultipartUpload={"Part": parts},
+                )
+            except Exception:
+                try:
+                    self.client.abort_multipart_upload(Bucket=self.bucket, Key=key, UploadId=upload_id)
+                except Exception:
+                    # Preserve the original upload failure if cleanup is also unavailable.
+                    pass
+                raise
 
 
 def verify_public_file(url, path):

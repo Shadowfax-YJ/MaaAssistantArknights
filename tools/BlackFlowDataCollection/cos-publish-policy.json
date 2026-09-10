@@ -1,0 +1,20 @@
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "cos:GetObject",
+        "cos:HeadObject",
+        "cos:PutObject",
+        "cos:InitiateMultipartUpload",
+        "cos:UploadPart",
+        "cos:CompleteMultipartUpload",
+        "cos:AbortMultipartUpload"
+      ],
+      "resource": [
+        "qcs::cos:ap-shanghai:uid/1450633361:lubiao-wiki-1450633361/maa/blackflow/*"
+      ]
+    }
+  ]
+}
