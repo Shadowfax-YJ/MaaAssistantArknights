@@ -128,7 +128,7 @@ class CosPublisher:
         token = os.environ.get("BLACKFLOW_COS_SESSION_TOKEN") or None
         client = CosS3Client(CosConfig(
             Region=config["region"], SecretId=secret_id, SecretKey=secret_key, Token=token,
-            Scheme="https", EnableOldDomain=False,
+            Scheme="https", EnableOldDomain=False, EnableInternalDomain=False,
         ))
         cdn = cdn_client.CdnClient(credential.Credential(secret_id, secret_key, token), "")
 

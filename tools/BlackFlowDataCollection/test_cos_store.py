@@ -52,6 +52,10 @@ class CosSdkTests(unittest.TestCase):
         with patch.dict("os.environ", {"BLACKFLOW_COS_SECRET_ID": "fixture-id", "BLACKFLOW_COS_SECRET_KEY": "fixture-key"}, clear=True):
             publisher = CosPublisher.from_environment(CDN_CONFIG)
         self.assertEqual(publisher.store.bucket, "lubiao-wiki-1450633361")
+        self.assertEqual(
+            publisher.store.client._conf.uri(bucket=CDN_CONFIG["bucket"]),
+            "https://lubiao-wiki-1450633361.cos.ap-shanghai.tencentcos.cn/",
+        )
 
     def test_multipart_uses_object_requests_and_preserves_headers_and_bytes(self):
         requests, uploaded = [], []
