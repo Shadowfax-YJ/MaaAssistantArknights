@@ -32,7 +32,9 @@ Windows 使用现有的独立更新程序安装完整包；macOS 使用 Sparkle�
 
 当前发布和连通检查流程均需要这两份授权，缺少 CDN 刷新权限也会失败。仅授予 `lubiao-wiki/sources/*` 或 `lubiao-wiki/incoming/shadowfax/*` 不覆盖 `maa/blackflow/*`；这种情况下，检查会在读取 `/maa/blackflow/latest.json` 时返回 `AccessDenied`。关联策略后可以沿用已有的子用户密钥，无需重新生成；尚需重新执行 `blackflow-cdn-check` 验证实际权限及 CDN 回源下载。
 
-如果使用私有桶，在 CDN 中为更新目录配置 COS 服务授权及私有桶回源鉴权。客户端从 CDN 下载时不携带 COS 密钥、Referer 或临时下载令牌，因此更新目录需允许普通 HTTPS 客户端下载。配置仅针对更新目录；原有图片目录策略按原用途保留。参见[腾讯云源站配置](https://cloud.tencent.com/document/product/228/41334)。
+客户端从 CDN 下载时不携带 COS 密钥、Referer 或临时下载令牌，因此更新目录需允许普通 HTTPS 客户端下载。若现有 CDN 未配置私有桶回源，可以在 COS 文件列表中只将 `maa/blackflow/` 文件夹设置为“公有读私有写”，该目录下的更新文件将允许通过 COS 和 CDN 地址直接下载；原有图片目录按原用途保留。此操作在 COS 文件夹权限中完成，给发布子用户增加 CAM 读权限并不等于开放匿名下载。参见[腾讯云文件夹权限](https://cloud.tencent.com/document/product/436/39298)。
+
+若要求 COS 源文件保持私有，则为 CDN 配置 COS 服务授权及私有桶回源鉴权，并检查既有目录的访问限制；CDN 服务授权与发布子用户的密钥是不同身份。参见[腾讯云源站配置](https://cloud.tencent.com/document/product/228/41334)。检查日志若已出现 `COS upload and object metadata verified` 和 `CDN URL purge accepted`，随后公开下载报 403，应检查这里的回源及公开访问配置。
 
 缓存规则仅覆盖更新目录：清单缓存 60 秒，带版本路径的包长期缓存。脚本上传时设置对应 Cache-Control；CDN 的显式规则不能把清单强制缓存更长时间。发版后通过 `PurgeUrlsCache` 刷新对应 URL，再校验公开下载的实际内容。参见[腾讯云缓存配置](https://cloud.tencent.com/document/product/228/44388)。
 
