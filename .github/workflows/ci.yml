@@ -180,13 +180,16 @@ jobs:
         with:
           name: MAA-macos-universal
           path: release
-      - name: Install signing dependency
-        run: python3 -m pip install 'cryptography>=43,<47'
+      - name: Install signing and COS publication dependencies
+        run: python3 -m pip install 'cryptography>=43,<47' 'cos-python-sdk-v5>=1.9,<2' 'tencentcloud-sdk-python-cdn>=3,<4'
       - name: Test feed signing and publication safeguards
         run: python3 -m unittest discover -s tools/BlackFlowDataCollection -p 'test_*.py' -v
       - name: Publish verified packages, then advance the update feed
         env:
           BLACKFLOW_SPARKLE_PRIVATE_KEY: ${{ secrets.BLACKFLOW_SPARKLE_PRIVATE_KEY }}
+          BLACKFLOW_COS_SECRET_ID: ${{ secrets.BLACKFLOW_COS_SECRET_ID }}
+          BLACKFLOW_COS_SECRET_KEY: ${{ secrets.BLACKFLOW_COS_SECRET_KEY }}
+          BLACKFLOW_COS_SESSION_TOKEN: ${{ secrets.BLACKFLOW_COS_SESSION_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 tools/BlackFlowDataCollection/updates.py generate \

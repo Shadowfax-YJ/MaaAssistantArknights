@@ -13,6 +13,25 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
 
 import updates
+from cos_update import CosPublisher
+
+
+class MemoryStore:
+    def __init__(self):
+        self.objects = {}
+        self.writes = []
+
+    def read(self, key):
+        return self.objects.get(key)
+
+    def head(self, key):
+        import hashlib
+        data = self.read(key)
+        return None if data is None else (len(data), hashlib.sha256(data).hexdigest())
+
+    def upload(self, key, path, cache):
+        self.objects[key] = path.read_bytes()
+        self.writes.append((key, cache))
 
 
 class UpdateTests(unittest.TestCase):
@@ -116,6 +135,82 @@ class UpdateTests(unittest.TestCase):
                 updates.publish(self.version, self.windows, self.macos, self.notes, self.output, "a" * 40)
             self.assertEqual(cli.call_count, 1)
             self.assertEqual(cli.call_args.args[:2], ("release", "list"))
+
+    def publisher(self, store=None, verify=None):
+        store = store or MemoryStore()
+        purges = []
+        def check(url, path):
+            key = updates.CDN_CONFIG["prefix"] + url.removeprefix(updates.FEED_ROOT)
+            self.assertEqual(store.objects[key], path.read_bytes())
+        return CosPublisher(updates.CDN_CONFIG, store, purges.append, verify or check), store, purges
+
+    def test_mirrored_feeds_use_identical_signed_bytes(self):
+        self.generate()
+        original = json.loads((self.output / "latest.json").read_text(encoding="utf-8"))
+        mirror = json.loads((self.output / "cdn/latest.json").read_text(encoding="utf-8"))
+        for platform in original["assets"]:
+            github, cdn = original["assets"][platform], mirror["assets"][platform]
+            self.assertTrue(github["url"].startswith("https://github.com/"))
+            self.assertTrue(cdn["url"].startswith(updates.FEED_ROOT + "/v1.2.3/"))
+            self.assertEqual(github["sha256"], cdn["sha256"])
+        a = ET.parse(self.output / "appcast.xml").find("channel/item/enclosure")
+        b = ET.parse(self.output / "cdn/appcast.xml").find("channel/item/enclosure")
+        self.assertNotEqual(a.get("url"), b.get("url"))
+        self.assertEqual(a.get(f"{{{updates.SPARKLE}}}edSignature"), b.get(f"{{{updates.SPARKLE}}}edSignature"))
+
+    def test_cos_packages_verified_before_feeds(self):
+        self.generate()
+        publisher, store, purges = self.publisher()
+        publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertEqual([key.rsplit("/", 1)[-1] for key, cache in store.writes],
+                         [self.windows.name, self.macos.name, "SHA256.txt", "appcast.xml", "latest.json"])
+        self.assertIn("immutable", store.writes[0][1])
+        self.assertIn("max-age=60", store.writes[-1][1])
+        self.assertEqual(len(purges), 2)
+        store.writes.clear()
+        publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertEqual(len(store.writes), 2, "retry must reuse immutable objects")
+
+    def test_cos_conflict_aborts_before_any_upload(self):
+        self.generate()
+        publisher, store, _ = self.publisher()
+        store.objects[f"{updates.CDN_CONFIG['prefix']}/{self.version}/{self.macos.name}"] = b"previous release"
+        with self.assertRaises(ValueError):
+            publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertEqual(store.writes, [])
+
+    def test_cos_read_failure_is_not_missing_feed(self):
+        self.generate()
+        publisher, store, _ = self.publisher()
+        with patch.object(store, "read", side_effect=PermissionError("403")):
+            with self.assertRaises(PermissionError):
+                publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertEqual(store.writes, [])
+
+    def test_cdn_download_failure_does_not_advance_feed(self):
+        self.generate()
+        def denied(url, path):
+            raise PermissionError("CDN cannot read the private origin")
+        publisher, store, _ = self.publisher(verify=denied)
+        with patch("cos_update.time.sleep"):
+            with self.assertRaises(PermissionError):
+                publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertFalse(any(key.endswith("latest.json") or key.endswith("appcast.xml") for key in store.objects))
+
+    def test_cos_downgrade_rejected(self):
+        self.generate()
+        publisher, store, _ = self.publisher()
+        current = json.loads((self.output / "cdn/latest.json").read_text(encoding="utf-8"))
+        current["version"] = "v9.0.0"
+        store.objects[updates.CDN_CONFIG["prefix"] + "/latest.json"] = json.dumps(current).encode()
+        with self.assertRaises(ValueError):
+            publisher.publish(self.version, self.windows, self.macos, self.output)
+        self.assertEqual(store.writes, [])
+
+    def test_missing_cos_credentials_fail_without_network(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "BLACKFLOW_COS_SECRET_ID"):
+                CosPublisher.from_environment(updates.CDN_CONFIG)
 
 
 if __name__ == "__main__":

@@ -54,6 +54,14 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
 
     public bool IsBlackFlowCollection => BlackFlowUpdate.IsEnabled;
 
+    public string BlackFlowSource
+    {
+        get; set {
+            SetAndNotify(ref field, value);
+            ConfigFactory.Root.Update.BlackFlowSource = value;
+        }
+    } = ConfigFactory.Root.Update.BlackFlowSource;
+
     public enum UpdateVersionType
     {
         /// <summary>

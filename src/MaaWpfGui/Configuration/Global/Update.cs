@@ -48,6 +48,8 @@ public partial class Update
 
     public bool BlackFlowChannelInitialized { get; set; }
 
+    public string BlackFlowSource { get; set; } = "Auto";
+
     public bool CheckOnSchedule { get; set; }
 
     public string Proxy { get; set; } = string.Empty;

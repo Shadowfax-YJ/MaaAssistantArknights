@@ -28,7 +28,9 @@ internal static class BlackFlowUpdate
 {
     public const string Channel = "blackflow-data-collection";
     public const string MetadataFile = "blackflow-update.json";
-    public const string FeedUrl = "https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/download/blackflow-updates/latest.json";
+    public const string CdnRoot = "https://img.lubiao.wiki/maa/blackflow";
+    public const string GitHubRoot = "https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/download";
+    public const string FeedUrl = CdnRoot + "/latest.json";
 
 #if BLACKFLOW_DATA_COLLECTION
     public static bool IsEnabled => true;
@@ -39,6 +41,67 @@ internal static class BlackFlowUpdate
     public sealed record Asset(string Name, Uri Url, long Size, string Sha256);
 
     public sealed record Release(string Version, Uri ReleaseUrl, string Notes, Asset Package);
+
+    public static Uri[] SourceUrls(string cdn, string github, string source = "Auto") => source switch {
+        "CDN" => [new(cdn)],
+        "GitHub" => [new(github)],
+        _ => [new(cdn), new(github)],
+    };
+
+    public static async Task<Release> CheckAsync(Func<Uri, Task<string?>> fetch, string architecture, string source = "Auto")
+    {
+        var errors = new List<Exception>();
+        foreach (var url in SourceUrls(FeedUrl, GitHubRoot + "/blackflow-updates/latest.json", source))
+        {
+            try
+            {
+                return ParseRelease(await fetch(url) ?? throw new IOException("Empty update response"), architecture);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
+
+        throw new AggregateException("BlackFlow update sources are unavailable", errors);
+    }
+
+    public static async Task DownloadAsync(Release release, string path, Func<Uri, string, Task<bool>> download, string source = "Auto")
+    {
+        var errors = new List<Exception>();
+        foreach (var url in SourceUrls(
+                     $"{CdnRoot}/{release.Version}/{release.Package.Name}",
+                     $"{GitHubRoot}/blackflow-{release.Version}/{release.Package.Name}", source))
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                if (!await download(url, path))
+                {
+                    throw new IOException("Package download failed: " + url.Host);
+                }
+
+                await VerifyFileAsync(path, release.Package);
+                ValidatePackage(path, release.Version);
+                return;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(ex);
+            }
+        }
+
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
+        throw new AggregateException("No source supplied a valid BlackFlow package", errors);
+    }
 
     public static Version VersionNumber(string version)
     {

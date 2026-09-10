@@ -467,13 +467,9 @@ public class VersionUpdateDialogViewModel : Screen
     {
         try
         {
-            string? json = await Instances.HttpService.GetStringAsync(new Uri(BlackFlowUpdate.FeedUrl));
-            if (json == null)
-            {
-                return CheckUpdateRetT.NetworkError;
-            }
-
-            var release = BlackFlowUpdate.ParseRelease(json, IsArm ? "arm64" : "x64");
+            string source = ConfigFactory.Root.Update.BlackFlowSource;
+            var release = await BlackFlowUpdate.CheckAsync(
+                url => Instances.HttpService.GetStringAsync(url), IsArm ? "arm64" : "x64", source);
             int comparison = BlackFlowUpdate.VersionNumber(release.Version).CompareTo(BlackFlowUpdate.VersionNumber(_curVersion));
             if (comparison < 0 || (comparison == 0 && !repair))
             {
@@ -496,15 +492,9 @@ public class VersionUpdateDialogViewModel : Screen
             string temporaryPath = packagePath + ".download";
             try
             {
-                if (!await DownloadUpdatePackageWithRetryAsync(
-                        () => Instances.HttpService.DownloadFileAsync(release.Package.Url, temporaryPath),
-                        release.Package.Url))
-                {
-                    return CheckUpdateRetT.NetworkError;
-                }
-
-                await BlackFlowUpdate.VerifyFileAsync(temporaryPath, release.Package);
-                BlackFlowUpdate.ValidatePackage(temporaryPath, release.Version);
+                await BlackFlowUpdate.DownloadAsync(release, temporaryPath,
+                    (url, path) => DownloadUpdatePackageWithRetryAsync(
+                        () => Instances.HttpService.DownloadFileAsync(url, path), url), source);
                 File.Move(temporaryPath, packagePath, overwrite: true);
                 UpdatePackageName = packagePath;
                 OutputDownloadProgress(downloading: false, output: LocalizationHelper.GetString("NewVersionDownloadCompletedTitle"));

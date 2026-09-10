@@ -42,6 +42,14 @@
                     Text="黑流树海采集版独立更新，保留配置和采集数据。"
                     TextWrapping="Wrap"
                     Visibility="{c:Binding IsBlackFlowCollection}" />
+                <StackPanel Margin="8" Visibility="{c:Binding IsBlackFlowCollection}">
+                    <TextBlock Margin="0,0,0,5" Text="采集版下载源" />
+                    <ComboBox SelectedValue="{Binding BlackFlowSource}" SelectedValuePath="Tag">
+                        <ComboBoxItem Content="自动（国内 CDN 优先）" Tag="Auto" />
+                        <ComboBoxItem Content="国内 CDN" Tag="CDN" />
+                        <ComboBoxItem Content="GitHub" Tag="GitHub" />
+                    </ComboBox>
+                </StackPanel>
                 <CheckBox
                     Margin="8"
                     HorizontalAlignment="Left"
@@ -120,7 +128,7 @@
                 </StackPanel>
 
                 <StackPanel>
-                    <StackPanel Margin="8">
+                    <StackPanel Margin="8" Visibility="{c:Binding '!IsBlackFlowCollection'}">
                         <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
                             <controls:TextBlock
                                 Margin="8,0,0,0"

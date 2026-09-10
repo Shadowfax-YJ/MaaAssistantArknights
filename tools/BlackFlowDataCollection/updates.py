@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -19,10 +20,11 @@ import zipfile
 CHANNEL = "blackflow-data-collection"
 REPOSITORY = "Shadowfax-YJ/MaaAssistantArknights"
 RELEASE_ROOT = f"https://github.com/{REPOSITORY}/releases"
-FEED_ROOT = f"{RELEASE_ROOT}/download/blackflow-updates"
 SPARKLE = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
+CDN_CONFIG = json.loads((HERE / "cdn.json").read_text(encoding="utf-8"))
+FEED_ROOT = CDN_CONFIG["base_url"]
 
 
 def numeric_version(version: str) -> str:
@@ -164,6 +166,16 @@ def generate(
     (output / "SHA256.txt").write_text(
         "".join(f"{entry['sha256']}  {entry['name']}\n" for entry in (win_asset, mac_asset)), encoding="utf-8"
     )
+    # Both feeds describe the same signed bytes, with independent download URLs.
+    cdn_manifest = copy.deepcopy(manifest)
+    for entry in cdn_manifest["assets"].values():
+        entry["url"] = f"{FEED_ROOT}/{version}/{entry['name']}"
+    cdn_rss = copy.deepcopy(rss)
+    cdn_rss.find("channel/item/enclosure").set("url", cdn_manifest["assets"]["macos-universal"]["url"])
+    cdn = output / "cdn"
+    cdn.mkdir(exist_ok=True)
+    (cdn / "latest.json").write_text(json.dumps(cdn_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    ET.ElementTree(cdn_rss).write(cdn / "appcast.xml", encoding="utf-8", xml_declaration=True)
     return manifest
 
 
@@ -248,7 +260,12 @@ def main() -> None:
             parser.error("BLACKFLOW_SPARKLE_PRIVATE_KEY is required; it is never printed or packaged")
         generate(args.version, args.windows, args.macos, args.mac_metadata, args.notes, args.public_key, args.output, key)
         if args.publish:
+            from cos_update import CosPublisher
+
+            cdn = CosPublisher.from_environment(CDN_CONFIG)
+            cdn.preflight(args.version, args.windows, args.macos, args.output)
             publish(args.version, args.windows, args.macos, args.notes, args.output, args.commit)
+            cdn.publish(args.version, args.windows, args.macos, args.output)
         print(f"Prepared BlackFlow {args.version} update feed in {args.output}")
 
 
