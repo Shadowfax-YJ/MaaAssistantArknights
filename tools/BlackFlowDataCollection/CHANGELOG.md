@@ -1,4 +1,4 @@
-## v1.1.1
+## v1.1.2
 
 ### Highlights
 
@@ -9,6 +9,10 @@
 #### 路线规划与事件处理
 
 改进随机落点、流窜居民与加工品的路线评估，完善派遣和祭献流程，并修复零件箱恢复首屏时的卡顿。
+
+#### 独立自动更新与国内下载
+
+Windows 和 macOS 支持采集版独立自动更新，保留已有设置与采集数据；默认使用国内 CDN，支持自动切换到 GitHub 或手动选择更新源。
 
 <details>
 <summary><b>English</b></summary>
@@ -21,6 +25,10 @@ Improve tree-hole exploration and return routing, correct template corridors and
 
 Improve route evaluation for random landings, roaming residents and movement items, refine expedition and sacrifice handling, and recover the inventory panel when scrolling cannot settle.
 
+#### Dedicated automatic updates and CDN downloads
+
+Windows and macOS now support a dedicated collection update channel that preserves settings and collected data, with a China CDN by default, automatic GitHub fallback and manual source selection.
+
 </details>
 
 ----
@@ -28,6 +36,31 @@ Improve route evaluation for random landings, roaming residents and movement ite
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.2 (2026-09-11)</b></summary>
+
+### 新增 | New
+
+* Windows 新增采集版独立自动更新，支持检查、下载和重启安装，保留已有连接设置、任务配置与采集数据。 @Shadowfax-YJ
+* 新增国内 CDN 与 GitHub 更新源选择，自动模式优先使用国内 CDN，失败时尝试 GitHub，并校验安装包版本、渠道身份与 SHA256。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 采集版资源随完整程序包更新，避免普通版资源和旧资源缓存影响采集流程。 @Shadowfax-YJ
+
+### 修复 | Fix
+
+* 使用「失与得」标题区域的模板识别物品选择页，覆盖选择前后的状态，并完善流程恢复，修复停留在该界面无法继续的问题。 @Shadowfax-YJ
+* 调整 Windows 自带 .NET 运行时的打包方式，避免依赖特定补丁版本的目录布局。 @Shadowfax-YJ
+
+### MaaMacGui
+
+#### 新增 | New
+
+* 新增采集版 Sparkle 自动更新与签名校验，支持国内 CDN 和 GitHub 更新源，等待任务空闲后安装并保留已有设置与采集数据。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.1 (2026-09-10)</b></summary>
 
 ### 修复 | Fix
