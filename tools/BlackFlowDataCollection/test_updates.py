@@ -171,6 +171,14 @@ class UpdateTests(unittest.TestCase):
         publisher.publish(self.version, self.windows, self.macos, self.output)
         self.assertEqual(len(store.writes), 2, "retry must reuse immutable objects")
 
+    def test_connectivity_check_does_not_publish_release(self):
+        publisher, store, purges = self.publisher()
+        url = publisher.check_connection()
+        self.assertEqual(url, updates.FEED_ROOT + "/checks/cos-cdn-v1.bin")
+        self.assertEqual(len(store.objects), 1)
+        self.assertEqual(len(next(iter(store.objects.values()))), 2 * 1024 * 1024)
+        self.assertEqual(purges, [[url]])
+
     def test_cos_conflict_aborts_before_any_upload(self):
         self.generate()
         publisher, store, _ = self.publisher()

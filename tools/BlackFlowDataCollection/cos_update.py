@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import tempfile
 import time
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -112,6 +113,24 @@ class CosPublisher:
     def _url(self, relative):
         return self.config["base_url"] + "/" + relative
 
+    def check_connection(self):
+        # Use a separate, deterministic 2 MiB fixture to exercise multipart permissions without advancing any feed.
+        relative = "checks/cos-cdn-v1.bin"
+        with tempfile.TemporaryDirectory(prefix="blackflow-cdn-check-") as temporary:
+            path = Path(temporary) / "cos-cdn-v1.bin"
+            path.write_bytes(b"MAA BlackFlow COS/CDN connectivity test\n".ljust(64, b" ") * 32768)
+            expected = path.stat().st_size, sha256(path)
+            existing = self.store.head(self._key(relative))
+            if existing is not None and existing != expected:
+                raise ValueError("Connection-check path already contains different data")
+            # Re-upload the same fixture on each check to verify write permissions, including on repeat runs.
+            self.store.upload(self._key(relative), path, "public, max-age=60, must-revalidate")
+            if self.store.head(self._key(relative)) != expected:
+                raise ValueError("Connection-check COS upload verification failed")
+            self.purge([self._url(relative)])
+            self._verify_with_retry(self._url(relative), path)
+        return self._url(relative)
+
     def preflight(self, version, windows, macos, output):
         numeric_version(version)
         manifest = json.loads((output / "cdn/latest.json").read_text(encoding="utf-8"))
@@ -158,3 +177,13 @@ class CosPublisher:
                 if attempt == 12:
                     raise
                 time.sleep(10)
+
+
+if __name__ == "__main__":
+    import argparse
+    from updates import CDN_CONFIG
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=["check"])
+    parser.parse_args()
+    print("COS multipart upload and CDN download verified: " + CosPublisher.from_environment(CDN_CONFIG).check_connection())

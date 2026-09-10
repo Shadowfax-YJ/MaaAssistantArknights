@@ -42,13 +42,14 @@ on:
           - "blackflow-macos-package"
           - "blackflow-windows-package"
           - "blackflow-packages"
+          - "blackflow-cdn-check"
       publish_blackflow:
         description: "Publish both BlackFlow packages and advance the signed update feed"
         type: boolean
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}${{ github.ref == 'refs/heads/dev-v2' && format('-{0}', github.sha) || '' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}${{ github.ref == 'refs/heads/dev-v2' && format('-{0}', github.sha) || '' }}${{ inputs.build_scope == 'blackflow-cdn-check' && '-cdn-check' || '' }}
   cancel-in-progress: ${{ !inputs.publish_blackflow }}
 
 jobs:
@@ -159,6 +160,23 @@ jobs:
           name: MAA-BlackFlow-win-x64
           path: release/*.zip
           compression-level: 0
+
+  blackflow-cdn-check:
+    name: Verify COS and CDN connectivity
+    if: inputs.build_scope == 'blackflow-cdn-check'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tencent SDKs
+        run: python3 -m pip install 'cos-python-sdk-v5>=1.9,<2' 'tencentcloud-sdk-python-cdn>=3,<4'
+      - name: Upload a connection fixture and verify its public CDN download
+        env:
+          BLACKFLOW_COS_SECRET_ID: ${{ secrets.BLACKFLOW_COS_SECRET_ID }}
+          BLACKFLOW_COS_SECRET_KEY: ${{ secrets.BLACKFLOW_COS_SECRET_KEY }}
+          BLACKFLOW_COS_SESSION_TOKEN: ${{ secrets.BLACKFLOW_COS_SESSION_TOKEN }}
+        run: python3 tools/BlackFlowDataCollection/cos_update.py check
 
   blackflow-publish:
     name: Publish BlackFlow update channel
@@ -567,7 +585,7 @@ jobs:
 
   macOS-Core:
     name: Build Core for macOS
-    if: inputs.build_scope != 'blackflow-windows-package'
+    if: inputs.build_scope != 'blackflow-windows-package' && inputs.build_scope != 'blackflow-cdn-check'
     needs: meta
     runs-on: macos-26
     strategy:
