@@ -71,6 +71,8 @@ python tools/VerifyBlackFlowRunArchive.py "D:\reports\run-example.zip" --json
 
 ## 发布
 
+`RELEASE_NOTES.md` 会直接显示在 GitHub Release 和客户端更新提示中，只写用户可感知的变化、必要操作及升级方式。实现细节、维护者验包命令和本地签名的技术边界留在开发文档中，不放进用户更新日志；也不要把本地校验描述成官方来源保证。
+
 1. 在 `.github/workflows/ci.yml` 增加 `BLACKFLOW_DATA_COLLECTION_VERSION`，同步编写本目录 `RELEASE_NOTES.md`。已发布版本不可重新打包覆盖。
 2. 运行 `Release Pipeline`，选择 `build_scope=blackflow-packages`。默认只构建和验证两个平台。
 3. 正式发布时勾选 `publish_blackflow`。必须使用正式发布代码的提交。工作流将验证 Windows 包身份、两个平台版本、DMG 构建证明、哈希以及签名公钥。
