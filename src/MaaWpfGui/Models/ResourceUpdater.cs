@@ -24,6 +24,7 @@ using MaaWpfGui.Constants;
 using MaaWpfGui.Constants.Enums;
 using MaaWpfGui.Extensions;
 using MaaWpfGui.Helper;
+using MaaWpfGui.Services;
 using MaaWpfGui.Utilities;
 using MaaWpfGui.ViewModels.UI;
 using MaaWpfGui.ViewModels.UserControl.Settings;
@@ -40,6 +41,12 @@ public static class ResourceUpdater
 
     public static async Task<bool> UpdateFromGithubAsync()
     {
+        if (BlackFlowUpdate.IsEnabled)
+        {
+            ToastNotification.ShowDirect("采集版资源随应用一起更新，请使用检查更新。");
+            return false;
+        }
+
         ToastNotification.ShowDirect(LocalizationHelper.GetString("GameResourceUpdating"));
 
         const string GithubZipFileName = "MaaResourceGithub.zip";
@@ -90,6 +97,11 @@ public static class ResourceUpdater
     /// </list></returns>
     public static async Task<(CheckUpdateRetT Ret, string? UpdateUrl, string? ReleaseNote)> CheckFromMirrorChyanAsync()
     {
+        if (BlackFlowUpdate.IsEnabled)
+        {
+            return (CheckUpdateRetT.AlreadyLatest, null, null);
+        }
+
         // https://mirrorc.top/api/resources/MaaResource/latest?current_version=<当前版本日期，从 version.json 里拿时间戳>&cdk=<cdk>&sp_id=<唯一识别码>
         // 响应格式为 {"code":0,"msg":"success","data":{"version_name":"2025-01-22 14:28:32.839","version_number":9,"url":"<增量更新网址>"}}
         const string BaseUrl = MaaUrls.MirrorChyanResourceUpdate;
@@ -330,6 +342,11 @@ public static class ResourceUpdater
     /// </list></returns>
     public static async Task<CheckUpdateRetT> CheckAndDownloadResourceUpdate()
     {
+        if (BlackFlowUpdate.IsEnabled)
+        {
+            return CheckUpdateRetT.AlreadyLatest;
+        }
+
         try
         {
             SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates = true;

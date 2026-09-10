@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup Condition="'$(BlackFlowDataCollection)' == 'true'">
+    <DefineConstants>$(DefineConstants);BLACKFLOW_DATA_COLLECTION</DefineConstants>
+  </PropertyGroup>
 
   <!-- Project -->
   <PropertyGroup>

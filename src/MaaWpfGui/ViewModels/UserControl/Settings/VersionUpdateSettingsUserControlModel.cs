@@ -52,6 +52,8 @@ public class VersionUpdateSettingsUserControlModel : PropertyChangedBase
 
     public static VersionUpdateSettingsUserControlModel Instance { get; }
 
+    public bool IsBlackFlowCollection => BlackFlowUpdate.IsEnabled;
+
     public enum UpdateVersionType
     {
         /// <summary>

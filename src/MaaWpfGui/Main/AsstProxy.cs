@@ -482,7 +482,16 @@ public class AsstProxy
         string globalCacheRes = Path.Combine(mainCacheRes, "global", clientType.ToCustomString(), "resource");
 
         bool loaded;
-        if (clientType is ClientType.Official or ClientType.Bilibili)
+        if (BlackFlowUpdate.IsEnabled)
+        {
+            // The collection build and its bundled resources are released together.
+            loaded = LoadResIfExists(mainRes);
+            if (clientType is not (ClientType.Official or ClientType.Bilibili))
+            {
+                loaded &= LoadResIfExists(globalRes);
+            }
+        }
+        else if (clientType is ClientType.Official or ClientType.Bilibili)
         {
             // Read resources first, then read cache
             CopyTasksJson(mainCacheRes);

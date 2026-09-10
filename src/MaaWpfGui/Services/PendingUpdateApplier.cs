@@ -40,7 +40,7 @@ internal static partial class PendingUpdateApplier
     [GeneratedRegex(@"^MAAComponent-OTA-(?<from>v.+?|DEBUG_VERSION)_(?<to>v.+?)-win-(?<arch>x64|arm64)\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant)]
     private static partial Regex OtaPackageNameRegex();
 
-    [GeneratedRegex(@"^MAA-(?<version>v.+?)-win-(?<arch>x64|arm64)\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^MAA-(?:BlackFlow-Data-Collection-)?(?<version>v.+?)-win-(?<arch>x64|arm64)\.zip$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant)]
     private static partial Regex FullPackageNameRegex();
 
     private static readonly HashSet<string> s_controlFiles = new(StringComparer.OrdinalIgnoreCase)
@@ -56,6 +56,7 @@ internal static partial class PendingUpdateApplier
         "config",
         "data",
         "debug",
+        "reports",
         "MAA.Updater.exe",
     };
 
@@ -196,6 +197,12 @@ internal static partial class PendingUpdateApplier
         Match fullPackageMatch = FullPackageNameRegex().Match(fileName);
         if (fullPackageMatch.Success)
         {
+            bool blackFlowPackage = fileName.StartsWith("MAA-BlackFlow-Data-Collection-", StringComparison.OrdinalIgnoreCase);
+            if (blackFlowPackage != BlackFlowUpdate.IsEnabled)
+            {
+                return new(PackageInspectionStatus.FullRejected);
+            }
+
             string targetVersion = fullPackageMatch.Groups["version"].Value;
             string packageArchitecture = fullPackageMatch.Groups["arch"].Value;
             bool architectureMatched = string.Equals(normalizedArchitecture, packageArchitecture, StringComparison.OrdinalIgnoreCase);
@@ -216,6 +223,19 @@ internal static partial class PendingUpdateApplier
                 return new(PackageInspectionStatus.FullRejected, TargetVersion: targetVersion);
             }
 
+            if (BlackFlowUpdate.IsEnabled)
+            {
+                try
+                {
+                    BlackFlowUpdate.ValidatePackage(fullPackagePath, targetVersion);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning(ex, "Rejected invalid BlackFlow local package");
+                    return new(PackageInspectionStatus.FullRejected, TargetVersion: targetVersion);
+                }
+            }
+
             return new(PackageInspectionStatus.FullSupported, TargetVersion: targetVersion);
         }
 
@@ -223,6 +243,11 @@ internal static partial class PendingUpdateApplier
         Match otaMatch = OtaPackageNameRegex().Match(fileName);
         if (otaMatch.Success)
         {
+            if (BlackFlowUpdate.IsEnabled)
+            {
+                return new(PackageInspectionStatus.OtaRejected);
+            }
+
             string sourceVersion = otaMatch.Groups["from"].Value;
             string targetVersion = otaMatch.Groups["to"].Value;
             string packageArchitecture = otaMatch.Groups["arch"].Value;
@@ -298,6 +323,11 @@ internal static partial class PendingUpdateApplier
 
         try
         {
+            if (BlackFlowUpdate.IsEnabled)
+            {
+                BlackFlowUpdate.ValidatePackage(context.PackagePath, updateTag);
+            }
+
             PrepareExtractDirectory(context.ExtractDir);
 
             try

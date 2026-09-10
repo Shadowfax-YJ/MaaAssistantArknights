@@ -26,10 +26,11 @@
   "ConfigVersion": 1,
   "Current": "Default",
   "Update": {
-    "DoNotShowUpdate": true,
-    "CheckOnStartup": false,
+    "DoNotShowUpdate": false,
+    "BlackFlowChannelInitialized": true,
+    "CheckOnStartup": true,
     "CheckOnSchedule": false,
-    "AutoDownloadUpdatePackage": false,
+    "AutoDownloadUpdatePackage": true,
     "AutoInstallUpdatePackage": false
   },
   "Gui": {

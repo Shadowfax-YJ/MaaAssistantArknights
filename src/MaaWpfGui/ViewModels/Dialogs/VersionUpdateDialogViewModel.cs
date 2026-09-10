@@ -284,7 +284,7 @@ public class VersionUpdateDialogViewModel : Screen
 
             if (!IsDebugVersion())
             {
-                if (SettingsViewModel.VersionUpdateSettings.UpdateSource == "MirrorChyan" && string.IsNullOrEmpty(SettingsViewModel.VersionUpdateSettings.MirrorChyanCdk))
+                if (!BlackFlowUpdate.IsEnabled && SettingsViewModel.VersionUpdateSettings.UpdateSource == "MirrorChyan" && string.IsNullOrEmpty(SettingsViewModel.VersionUpdateSettings.MirrorChyanCdk))
                 {
                     _ = Task.Run(() =>
                         MessageBoxHelper.Show(
@@ -353,6 +353,11 @@ public class VersionUpdateDialogViewModel : Screen
         try
         {
             SettingsViewModel.VersionUpdateSettings.IsCheckingForUpdates = true;
+
+            if (BlackFlowUpdate.IsEnabled)
+            {
+                return await HandleBlackFlowUpdateAsync();
+            }
 
             if (FakeUpdateHelper.IsEnabled)
             {
@@ -456,6 +461,69 @@ public class VersionUpdateDialogViewModel : Screen
 
         await Task.Delay(TimeSpan.FromSeconds(MinimumDownloadDisplaySeconds));
         OutputDownloadProgress(downloading: false, output: LocalizationHelper.GetString("NewVersionDownloadCompletedTitle"));
+    }
+
+    private async Task<CheckUpdateRetT> HandleBlackFlowUpdateAsync(bool repair = false)
+    {
+        try
+        {
+            string? json = await Instances.HttpService.GetStringAsync(new Uri(BlackFlowUpdate.FeedUrl));
+            if (json == null)
+            {
+                return CheckUpdateRetT.NetworkError;
+            }
+
+            var release = BlackFlowUpdate.ParseRelease(json, IsArm ? "arm64" : "x64");
+            int comparison = BlackFlowUpdate.VersionNumber(release.Version).CompareTo(BlackFlowUpdate.VersionNumber(_curVersion));
+            if (comparison < 0 || (comparison == 0 && !repair))
+            {
+                return CheckUpdateRetT.AlreadyLatest;
+            }
+
+            // Never leave an older pending package associated with a newer release tag after a failed download.
+            UpdatePackageName = string.Empty;
+            UpdateTag = release.Version;
+            UpdateInfo = release.Notes;
+            UpdateUrl = release.ReleaseUrl.AbsoluteUri;
+            SettingsViewModel.VersionUpdateSettings.NewVersionFoundInfo = $"黑流树海采集版 {release.Version}";
+            ShowUpdateInfo(true, LocalizationHelper.GetString("NewVersionFoundButtonGoWebpage"), true);
+            if (!repair && !SettingsViewModel.VersionUpdateSettings.AutoDownloadUpdatePackage)
+            {
+                return CheckUpdateRetT.NoNeedToUpdate;
+            }
+
+            string packagePath = GetPlannedUpdatePackagePath(release.Package.Name);
+            string temporaryPath = packagePath + ".download";
+            try
+            {
+                if (!await DownloadUpdatePackageWithRetryAsync(
+                        () => Instances.HttpService.DownloadFileAsync(release.Package.Url, temporaryPath),
+                        release.Package.Url))
+                {
+                    return CheckUpdateRetT.NetworkError;
+                }
+
+                await BlackFlowUpdate.VerifyFileAsync(temporaryPath, release.Package);
+                BlackFlowUpdate.ValidatePackage(temporaryPath, release.Version);
+                File.Move(temporaryPath, packagePath, overwrite: true);
+                UpdatePackageName = packagePath;
+                OutputDownloadProgress(downloading: false, output: LocalizationHelper.GetString("NewVersionDownloadCompletedTitle"));
+                return CheckUpdateRetT.OK;
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                {
+                    File.Delete(temporaryPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "BlackFlow update failed; upstream update sources will not be used");
+            OutputDownloadProgress(downloading: false, output: LocalizationHelper.GetString("NewVersionDownloadFailedTitle"));
+            return CheckUpdateRetT.FailedToGetInfo;
+        }
     }
 
     private async Task<CheckUpdateRetT> HandleUpdateFromMaaApi()
@@ -753,6 +821,17 @@ public class VersionUpdateDialogViewModel : Screen
     /// <returns>修复流程的结果，用于区分成功、用户取消与失败。</returns>
     public async Task<IntegrityRepairResult> RunIntegrityRepairAsync()
     {
+        if (BlackFlowUpdate.IsEnabled)
+        {
+            if (await HandleBlackFlowUpdateAsync(repair: true) != CheckUpdateRetT.OK)
+            {
+                return IntegrityRepairResult.Failed;
+            }
+
+            await AskToRestart();
+            return IntegrityRepairResult.Succeeded;
+        }
+
         _logger.Information("Starting integrity repair");
         OutputDownloadProgress(LocalizationHelper.GetString("ResourceIntegrityRepairDownloading"), downloading: false);
 

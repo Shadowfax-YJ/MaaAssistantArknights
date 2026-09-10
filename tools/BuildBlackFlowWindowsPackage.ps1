@@ -75,6 +75,7 @@ try {
     & dotnet publish src/MaaWpfGui/MaaWpfGui.csproj `
         -c Release `
         -p:Platform=x64 `
+        -p:BlackFlowDataCollection=true `
         "-p:Version=$numericVersion" `
         "-p:FileVersion=$numericVersion" `
         "-p:AssemblyVersion=$numericVersion.0" `
@@ -96,6 +97,7 @@ foreach ($file in @('MaaCore.dll', 'MaaUtils.dll', 'fastdeploy_ppocr_maa.dll', '
 Copy-Item -LiteralPath (Join-Path $nativeOutput 'MaaAppHostStub.exe') -Destination (Join-Path $staging 'MAA.exe') -Force
 
 $controlUnitCandidates = @(
+    (Join-Path $repoRoot 'MaaFramework-temp/bin'),
     (Join-Path $repoRoot 'build/bin/RelWithDebInfo'),
     (Join-Path $repoRoot 'build/bin/Release'),
     (Join-Path $repoRoot 'build-publish-x64/maaframework-temp/extracted/bin')
@@ -113,8 +115,9 @@ foreach ($file in @('MaaAdbControlUnit.dll', 'MaaWin32ControlUnit.dll')) {
 }
 
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/DependencySetup_依赖库安装.bat') -Destination (Join-Path $staging 'DependencySetup.bat')
-New-Item -ItemType Directory -Path (Join-Path $staging 'config') -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BlackFlowDataCollection/gui.new.json') -Destination (Join-Path $staging 'config/gui.new.json')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BlackFlowDataCollection/gui.new.json') -Destination (Join-Path $staging 'resource/blackflow-gui-defaults.json')
+$identity = @{ schema_version = 1; channel = 'blackflow-data-collection'; version = $Version } | ConvertTo-Json
+[IO.File]::WriteAllText((Join-Path $staging 'blackflow-update.json'), $identity, [Text.UTF8Encoding]::new($false))
 $notice = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'BlackFlowDataCollection/NOTICE.txt')).Replace('{{VERSION}}', $Version)
 [IO.File]::WriteAllText((Join-Path $staging 'NOTICE.txt'), $notice, [Text.UTF8Encoding]::new($false))
 

@@ -31,6 +31,7 @@ using MaaWpfGui.Configuration.Converter.Specific;
 using MaaWpfGui.Configuration.Single;
 using MaaWpfGui.Configuration.Single.MaaTask;
 using MaaWpfGui.Helper;
+using MaaWpfGui.Services;
 using ObservableCollections;
 using Serilog;
 using static MaaWpfGui.Helper.PathsHelper;
@@ -117,11 +118,29 @@ public static class ConfigFactory
                 }
             }
 
+            if (parsed is null && BlackFlowUpdate.IsEnabled && !File.Exists(ConfigFile) && !File.Exists(_configBakFile))
+            {
+                string defaults = Path.Combine(ResourceDir, "blackflow-gui-defaults.json");
+                if (File.Exists(defaults))
+                {
+                    parsed = JsonSerializer.Deserialize<Root>(File.ReadAllText(defaults), _options);
+                }
+            }
+
             if (parsed is null)
             {
                 _logger.Information("Failed to load configuration file, creating a new one");
                 parsed = new Root();
                 parsed.Configurations.Add(parsed.Current, new SpecificConfig());
+            }
+
+            if (BlackFlowUpdate.IsEnabled && !parsed.Update.BlackFlowChannelInitialized)
+            {
+                parsed.Update.CheckOnStartup = true;
+                parsed.Update.AutoDownloadUpdatePackage = true;
+                parsed.Update.AutoInstallUpdatePackage = false;
+                parsed.Update.DoNotShowUpdate = false;
+                parsed.Update.BlackFlowChannelInitialized = true;
             }
 
             parsed.PropertyChanged += Handler.OnPropertyChangedFactory("Root.");

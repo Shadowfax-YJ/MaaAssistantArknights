@@ -37,13 +37,18 @@
                 Grid.Row="0"
                 Grid.Column="0"
                 VerticalAlignment="Top">
+                <TextBlock
+                    Margin="8"
+                    Text="黑流树海采集版独立更新，保留配置和采集数据。"
+                    TextWrapping="Wrap"
+                    Visibility="{c:Binding IsBlackFlowCollection}" />
                 <CheckBox
                     Margin="8"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     Content="{DynamicResource StartupUpdateCheck}"
                     IsChecked="{Binding StartupUpdateCheck}"
-                    IsEnabled="False" />
+                    IsEnabled="{Binding IsBlackFlowCollection}" />
                 <StackPanel Margin="8" Orientation="Horizontal">
                     <CheckBox
                         HorizontalAlignment="Left"
@@ -87,7 +92,7 @@
                 <StackPanel
                     Margin="8"
                     Orientation="Horizontal"
-                    Visibility="{c:Binding 'UpdateSource == &quot;Github&quot;'}">
+                    Visibility="{c:Binding '!IsBlackFlowCollection and UpdateSource == &quot;Github&quot;'}">
                     <CheckBox
                         HorizontalAlignment="Left"
                         VerticalAlignment="Center"
@@ -109,6 +114,7 @@
                         VerticalAlignment="Center"
                         DisplayMemberPath="Display"
                         ItemsSource="{Binding VersionTypeList}"
+                        IsEnabled="{c:Binding '!IsBlackFlowCollection'}"
                         SelectedValue="{Binding VersionType}"
                         SelectedValuePath="Value" />
                 </StackPanel>
@@ -128,13 +134,14 @@
                             VerticalAlignment="Center"
                             DisplayMemberPath="Display"
                             ItemsSource="{Binding UpdateSourceList}"
+                            IsEnabled="{c:Binding '!IsBlackFlowCollection'}"
                             SelectedValue="{Binding UpdateSource}"
                             SelectedValuePath="Value" />
                     </StackPanel>
                     <StackPanel
                         Margin="8"
                         HorizontalAlignment="Left"
-                        Visibility="{c:Binding 'UpdateSource == &quot;MirrorChyan&quot;'}">
+                        Visibility="{c:Binding '!IsBlackFlowCollection and UpdateSource == &quot;MirrorChyan&quot;'}">
                         <controls:TextBlock Margin="8,0,0,5" HorizontalAlignment="Left">
                             <TextBlock.Text>
                                 <MultiBinding StringFormat="{}{0} CDK">

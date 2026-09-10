@@ -46,6 +46,8 @@ public partial class Update
 
     public bool CheckOnStartup { get; set; } = true;
 
+    public bool BlackFlowChannelInitialized { get; set; }
+
     public bool CheckOnSchedule { get; set; }
 
     public string Proxy { get; set; } = string.Empty;
