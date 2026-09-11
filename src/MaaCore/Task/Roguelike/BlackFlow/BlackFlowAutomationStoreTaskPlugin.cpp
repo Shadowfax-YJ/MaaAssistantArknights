@@ -1,7 +1,8 @@
 #include "BlackFlowAutomationStoreTaskPlugin.h"
 
-#include "BlackFlowAutomationStoreRules.h"
 #include "BlackFlowAutomationCollectionRules.h"
+#include "BlackFlowAutomationStoreRules.h"
+#include "BlackFlowEvidenceFrame.h"
 #include "BlackFlowInventoryRules.h"
 
 #include <algorithm>
@@ -178,10 +179,8 @@ bool BlackFlowAutomationStoreTaskPlugin::verify(AsstMsg msg, const json::value& 
 void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
 {
     m_pending = PendingWork::None;
-    m_pending_purchase.reset();
-    m_pending_purchase_name.reset();
-    m_pending_purchase_ingots_before.reset();
-    m_pending_purchase_confirmed = false;
+    clear_pending_purchase();
+    m_purchase_sequence = 0;
     m_pending_sale.reset();
     m_pending_sale_name.reset();
     m_shop_purchased.clear();
@@ -247,6 +246,8 @@ void BlackFlowAutomationStoreTaskPlugin::clear_pending_purchase() noexcept
     m_pending_purchase.reset();
     m_pending_purchase_name.reset();
     m_pending_purchase_ingots_before.reset();
+    m_pending_purchase_price.reset();
+    m_pending_purchase_id.clear();
     m_pending_purchase_confirmed = false;
 }
 
@@ -338,13 +339,40 @@ void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase(AutomationSto
         return;
     }
 
-    const cv::Mat image = ctrler()->get_image();
-    const std::string wallet_task = std::string(
-        kind == AutomationStoreKind::Eerie ? ShopWalletTask : ScrapShopWalletTask);
-    const std::optional<int> ingots_after = read_optional_number(image, wallet_task);
-    const bool succeeded = automation_store_purchase_succeeded(
+    cv::Mat image = ctrler()->get_image();
+    bool wallet_page_verified = purchase_wallet_page(image, kind);
+    if (wallet_page_verified) {
+        if (!sleep(150)) {
+            return;
+        }
+        const cv::Mat next = ctrler()->get_image();
+        wallet_page_verified =
+            purchase_wallet_page(next, kind) && evidence_frames_match(image, next, cv::Rect(395, 159, 857, 401));
+        image = next;
+    }
+    const std::string wallet_task(kind == AutomationStoreKind::Eerie ? ShopWalletTask : ScrapShopWalletTask);
+    const std::optional<int> ingots_after =
+        wallet_page_verified ? read_optional_number(image, wallet_task) : std::nullopt;
+    const bool consumed = wallet_page_verified && purchased_good_sold_out(image, kind);
+    const auto verification = verify_store_purchase_evidence(
+        wallet_page_verified,
         m_pending_purchase_ingots_before,
-        ingots_after);
+        ingots_after,
+        m_pending_purchase_price,
+        consumed);
+    const bool succeeded = verification.succeeded();
+    const json::object evidence {
+        { "purchase_id", m_pending_purchase_id },
+        { "planned_item_name", *m_pending_purchase_name },
+        { "actual_item_name", succeeded ? *m_pending_purchase_name : std::string {} },
+        { "purchase_status", std::string(verification.status) },
+        { "verification", std::string(verification.reason) },
+        { "purchase_succeeded", succeeded },
+        { "wallet_page_verified", wallet_page_verified },
+        { "item_consumption_verified", consumed },
+        { "expected_price",
+          m_pending_purchase_price.has_value() ? json::value(*m_pending_purchase_price) : json::value(nullptr) },
+    };
     const bool collectible =
         kind == AutomationStoreKind::Eerie && is_eerie_store_collectible(*m_pending_purchase_name);
 
@@ -352,11 +380,13 @@ void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase(AutomationSto
         std::string error;
         if (!m_port->record_store_purchase(
                 kind == AutomationStoreKind::Eerie ? "eerie_merchant" : "secret_merchant",
-                *m_pending_purchase_name,
+                succeeded ? *m_pending_purchase_name : std::string {},
                 m_pending_purchase_ingots_before,
                 ingots_after,
-                collectible,
-                &error)) {
+                succeeded && collectible,
+                &error,
+                &evidence,
+                &image)) {
             Log.warn("BlackFlow store purchase record failed", *m_pending_purchase_name, error);
         }
     }
@@ -441,13 +471,14 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             const std::string_view recognition_task = selection->page == ShelfPage::Top
                                                           ? ShopGoodsTask
                                                           : ShopGoodsBottomTask;
-            if (!relocate_selection(*selection, recognition_task)) {
+            if (!relocate_selection(*selection, recognition_task) || !click_verified_selection(*selection)) {
                 // 刷新转场可能先露出旧的下半货架，随后才回到顶部。缓存名称仍然有效，
                 // 但旧坐标可能已经落在投资入口上；找不到当前同名商品时只重扫，绝不盲点。
                 Log.warn(
                     "BlackFlow automation 诡意行商商品当前坐标校验失败，重新扫描货架",
                     normalized_good_name(selection->good.text));
                 m_shop_goods.clear();
+                m_shop_attempted_names.emplace_back(normalized_good_name(selection->good.text));
                 Task.set_task_base(std::string(ShopAction), std::string(ShopDecisionEntry));
                 return true;
             }
@@ -459,16 +490,20 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
                 json::object {
                     { "name", selection->good.text },
                     { "shelf", selection->page == ShelfPage::Top ? "top" : "bottom" },
-                    { "rect", json::array { selection->good.rect.x, selection->good.rect.y,
-                                             selection->good.rect.width, selection->good.rect.height } },
+                    { "purchase_id", m_pending_purchase_id },
+                    { "selection_verification", "stable_name_price_and_card" },
+                    { "rect",
+                      json::array { selection->good.rect.x,
+                                    selection->good.rect.y,
+                                    selection->good.rect.width,
+                                    selection->good.rect.height } },
                 },
                 "BlackFlowAutomationStore",
-                nullptr,
-                true);
-            ctrler()->click(selection->good.rect);
+                selection->image);
             m_pending_purchase = ShelfSlot { selection->good.rect, selection->page };
             m_pending_purchase_name = std::string(normalized_good_name(selection->good.text));
             m_pending_purchase_ingots_before = selection->ingots_before;
+            m_pending_purchase_price = selection->price;
             m_pending_purchase_confirmed = false;
             Task.set_task_base(
                 std::string(ShopPurchaseTransitionTask),
@@ -500,8 +535,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             m_shop_attempted_names.emplace_back(std::move(*m_pending_purchase_name));
             m_pending_purchase_name.reset();
         }
-        m_pending_purchase_ingots_before.reset();
-        m_pending_purchase_confirmed = false;
+        clear_pending_purchase();
         return true;
     }
     if (work == PendingWork::ShopSellDecision) {
@@ -650,6 +684,13 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             return false;
         }
         if (selection.has_value()) {
+            if (!relocate_selection(*selection, ScrapShopBuyGoodsTask) || !click_verified_selection(*selection)) {
+                m_scrap_shop_buy_attempted_names.emplace_back(normalized_good_name(selection->good.text));
+                Task.set_task_base(
+                    std::string(ScrapShopBuyAction),
+                    "BlackFlow@Roguelike@AutomationCultivateDecision-Enter");
+                return true;
+            }
             record_run_event(
                 RunLogLevel::Info,
                 "store.secret.purchase.select",
@@ -657,17 +698,21 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
                 "pending",
                 json::object {
                     { "name", selection->good.text },
+                    { "purchase_id", m_pending_purchase_id },
+                    { "selection_verification", "stable_name_price_and_card" },
                     { "shelf", selection->page == ShelfPage::Top ? "top" : "bottom" },
-                    { "rect", json::array { selection->good.rect.x, selection->good.rect.y,
-                                             selection->good.rect.width, selection->good.rect.height } },
+                    { "rect",
+                      json::array { selection->good.rect.x,
+                                    selection->good.rect.y,
+                                    selection->good.rect.width,
+                                    selection->good.rect.height } },
                 },
                 "BlackFlowAutomationStore",
-                nullptr,
-                true);
-            ctrler()->click(selection->good.rect);
+                selection->image);
             m_pending_purchase = ShelfSlot { selection->good.rect, selection->page };
             m_pending_purchase_name = std::string(normalized_good_name(selection->good.text));
             m_pending_purchase_ingots_before = selection->ingots_before;
+            m_pending_purchase_price = selection->price;
             m_pending_purchase_confirmed = false;
             Task.set_task_base(std::string(ScrapShopBuyAction), std::string(ScrapShopBuyConfirmEntry));
             Log.info(
@@ -694,8 +739,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             m_scrap_shop_buy_attempted_names.emplace_back(std::move(*m_pending_purchase_name));
             m_pending_purchase_name.reset();
         }
-        m_pending_purchase_ingots_before.reset();
-        m_pending_purchase_confirmed = false;
+        clear_pending_purchase();
         return true;
     }
     if (work == PendingWork::ScrapShopSellDecision) {
@@ -1171,7 +1215,7 @@ bool BlackFlowAutomationStoreTaskPlugin::select_shop_good(std::optional<StoreSel
         }
         m_shop_shelf_page = target.page;
     }
-    // 购买只会把原卡片置灰，不会移除或补位；在刷新前直接复用首次扫描坐标。
+    // 缓存只用于选择目标；实际点击前仍须在稳定的当前画面中重新定位。
     selected = StoreSelection { target.good, target.page, wallet };
     return true;
 }
@@ -1219,13 +1263,7 @@ bool BlackFlowAutomationStoreTaskPlugin::select_scrap_shop_good(std::optional<St
 
     const auto preferred = select_preferred_affordable_good(ScrapShopBuyPriority, offers, wallet);
     if (preferred.has_value()) {
-        StoreSelection relocated { goods[*preferred], ShelfPage::Top, wallet };
-        if (!relocate_selection(relocated, ScrapShopBuyGoodsTask)) {
-            Log.warn(
-                "BlackFlow automation 秘境行商商品重新定位失败，沿用扫描坐标",
-                normalized_good_name(relocated.good.text));
-        }
-        selected = std::move(relocated);
+        selected = StoreSelection { goods[*preferred], ShelfPage::Top, wallet };
     }
     return true;
 }
@@ -1235,37 +1273,117 @@ bool BlackFlowAutomationStoreTaskPlugin::relocate_selection(
     std::string_view recognition_task)
 {
     const std::string target_name(normalized_good_name(selection.good.text));
-    constexpr int RetryTimes = 3;
-    constexpr int RetryInterval = 250;
-
-    for (int retry = 0; retry < RetryTimes; ++retry) {
-        if (retry > 0) {
-            sleep(RetryInterval);
+    const auto kind =
+        recognition_task == ScrapShopBuyGoodsTask ? AutomationStoreKind::Secret : AutomationStoreKind::Eerie;
+    const auto wallet_task = kind == AutomationStoreKind::Eerie ? ShopWalletTask : ScrapShopWalletTask;
+    std::optional<TextRect> previous;
+    std::optional<int> previous_price, previous_wallet;
+    cv::Mat previous_image;
+    int stable_frames = 0;
+    for (int retry = 0; retry < 8; ++retry) {
+        if (retry > 0 && !sleep(150)) {
+            return false;
         }
-        const auto current_goods = recognize(ctrler()->get_image(), std::string(recognition_task));
-        const auto closest = std::ranges::min_element(current_goods, {}, [&](const TextRect& candidate) {
-            if (normalized_good_name(candidate.text) != target_name) {
-                return std::numeric_limits<long long>::max();
+        const cv::Mat image = ctrler()->get_image();
+        const auto goods = purchase_wallet_page(image, kind) ? recognize(image, std::string(recognition_task))
+                                                             : std::vector<TextRect> {};
+        std::vector<TextRect> matching;
+        for (const auto& good : goods) {
+            if (normalized_good_name(good.text) == target_name) {
+                matching.push_back(good);
             }
-            const long long dx = static_cast<long long>(candidate.rect.x) - selection.good.rect.x;
-            const long long dy = static_cast<long long>(candidate.rect.y) - selection.good.rect.y;
-            return dx * dx + dy * dy;
-        });
-        if (closest != current_goods.end() && normalized_good_name(closest->text) == target_name) {
-            if (!same_shelf_slot(selection.good.rect, closest->rect)) {
-                Log.info(
-                    "BlackFlow automation 商品点击坐标已按当前货架重定位",
-                    target_name,
-                    "旧坐标",
-                    selection.good.rect,
-                    "新坐标",
-                    closest->rect);
-            }
-            selection.good = *closest;
+        }
+        // Ambiguous duplicate names cannot establish which card would be bought.
+        if (matching.size() != 1) {
+            previous.reset();
+            stable_frames = 0;
+            continue;
+        }
+        const auto& good = matching.front();
+        const auto price = read_good_price(image, good.rect);
+        const auto wallet = read_optional_number(image, std::string(wallet_task));
+        const cv::Rect card = store_card_evidence_roi(good.rect.x, good.rect.y, image);
+        const bool same = previous.has_value() && std::abs(previous->rect.x - good.rect.x) <= 4 &&
+                          std::abs(previous->rect.y - good.rect.y) <= 4 && price == previous_price &&
+                          wallet == previous_wallet && evidence_frames_match(previous_image, image, card);
+        stable_frames = same ? stable_frames + 1 : 1;
+        previous = good;
+        previous_price = price;
+        previous_wallet = wallet;
+        previous_image = image;
+        if (stable_frames >= 3 && price.has_value() && wallet.has_value() && *price > 0 && *price <= *wallet &&
+            shop_good_is_buyable(image, good.rect) == true) {
+            selection.good = good;
+            selection.price = price;
+            selection.ingots_before = wallet;
+            selection.image = std::make_shared<cv::Mat>(image.clone());
             return true;
         }
     }
     return false;
+}
+
+bool BlackFlowAutomationStoreTaskPlugin::click_verified_selection(StoreSelection& selection)
+{
+    if (selection.image == nullptr) {
+        return false;
+    }
+    const cv::Mat current = ctrler()->get_image();
+    const auto& rect = selection.good.rect;
+    const auto price = merchant_price_roi(rect);
+    const cv::Rect price_roi =
+        cv::Rect(price.x, price.y, price.width, price.height) & cv::Rect(0, 0, current.cols, current.rows);
+    // A changed voucher title/price can occupy too few pixels to move the
+    // whole-card mean. Check both text anchors separately as well.
+    if (!evidence_frames_match(*selection.image, current, store_card_evidence_roi(rect.x, rect.y, current)) ||
+        !evidence_frames_match(*selection.image, current, cv::Rect(rect.x, rect.y, rect.width, rect.height), 1.0) ||
+        !evidence_frames_match(*selection.image, current, price_roi, 1.0)) {
+        return false;
+    }
+    // No logging, extra OCR or screenshot acquisition between this check and click.
+    if (!ctrler()->click(rect)) {
+        return false;
+    }
+    selection.image = std::make_shared<cv::Mat>(current.clone());
+    m_pending_purchase_id =
+        "BF-P" + std::to_string(m_session->run_revision()) + "-" + std::to_string(++m_purchase_sequence);
+    return true;
+}
+
+bool BlackFlowAutomationStoreTaskPlugin::purchase_wallet_page(const cv::Mat& image, AutomationStoreKind kind) const
+{
+    if (image.empty()) {
+        return false;
+    }
+    const auto matches = [&](std::string_view task) {
+        Matcher matcher(image);
+        matcher.set_task_info(std::string(task));
+        return matcher.analyze().has_value();
+    };
+    return matches("BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed") &&
+           !matches("BlackFlow@Roguelike@ChooseOperFlag") &&
+           !matches(kind == AutomationStoreKind::Eerie ? ShopBuyConfirmTask : ScrapShopBuyConfirmTask);
+}
+
+bool BlackFlowAutomationStoreTaskPlugin::purchased_good_sold_out(const cv::Mat& image, AutomationStoreKind kind) const
+{
+    const auto goods =
+        recognize(image, std::string(kind == AutomationStoreKind::Eerie ? ShopGoodsBottomTask : ScrapShopBuyGoodsTask));
+    const auto found = std::ranges::find_if(goods, [&](const TextRect& good) {
+        return normalized_good_name(good.text) == *m_pending_purchase_name;
+    });
+    if (found == goods.end() || !m_pending_purchase.has_value() ||
+        !same_shelf_slot(found->rect, m_pending_purchase->rect) ||
+        std::ranges::count_if(goods, [&](const TextRect& good) {
+            return normalized_good_name(good.text) == *m_pending_purchase_name;
+        }) != 1) {
+        // Absence on a partial/possibly scrolled shelf cannot prove a purchase.
+        return false;
+    }
+    OCRer sold_out(image);
+    sold_out.set_task_info("BlackFlow@Roguelike@AutomationStoreSoldOut");
+    sold_out.set_roi(Rect { found->rect.x, found->rect.y + 30, 180, 140 });
+    return sold_out.analyze().has_value();
 }
 
 bool BlackFlowAutomationStoreTaskPlugin::run_goods_swipe(std::string_view task)

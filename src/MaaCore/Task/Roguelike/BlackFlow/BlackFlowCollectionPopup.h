@@ -97,15 +97,19 @@ enum class NodeGetDropScreen
     Select,
 };
 
+[[nodiscard]] inline constexpr bool node_recruitment_choice_task(std::string_view task) noexcept
+{
+    return task == "BlackFlow@Roguelike@GetDropSelectRecruit";
+}
+
 [[nodiscard]] inline std::optional<NodeGetDropScreen> node_get_drop_screen(std::string_view task) noexcept
 {
     if (task == "BlackFlow@Roguelike@GetDrop" ||
         task == "BlackFlow@Roguelike@GetDropConfirmed") {
         return NodeGetDropScreen::Drop;
     }
-    if (task == "BlackFlow@Roguelike@GetDropSelect" ||
-        task == "BlackFlow@Roguelike@GetDropSelectReward" ||
-        task == "BlackFlow@Roguelike@GetDropTrophyReward" ||
+    if (node_recruitment_choice_task(task) || task == "BlackFlow@Roguelike@GetDropSelect" ||
+        task == "BlackFlow@Roguelike@GetDropSelectReward" || task == "BlackFlow@Roguelike@GetDropTrophyReward" ||
         task == "BlackFlow@Roguelike@GetDropSelectConfirmed" ||
         task == "BlackFlow@Roguelike@GetDropSelectRewardConfirmed" ||
         task == "BlackFlow@Roguelike@GetDropTrophyRewardConfirmed") {
@@ -143,7 +147,8 @@ enum class NodeGetDropScreen
     if (!node_get_drop_screen(task).has_value()) {
         return false;
     }
-    return combat_page || task == "BlackFlow@Roguelike@GetDropSelectReward";
+    return combat_page || node_recruitment_choice_task(task) || task == "BlackFlow@Roguelike@GetDropSelectReward" ||
+           task == "BlackFlow@Roguelike@GetDropSelectRewardConfirmed";
 }
 
 struct DropOptionSelection

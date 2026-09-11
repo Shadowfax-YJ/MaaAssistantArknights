@@ -555,6 +555,15 @@
         "Doc": "滑到货架底部后同时识别第二、三排，两排都使用下半段坐标购买。",
         "roi": [395, 159, 857, 401]
     },
+    "BlackFlow@Roguelike@AutomationStoreSoldOut": {
+        "algorithm": "OcrDetect",
+        "text": ["售罄"],
+        "fullMatch": true
+    },
+    "BlackFlow@Roguelike@AutomationCultivateDecision-Enter": {
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@AutomationCultivateDecision"]
+    },
     "BlackFlow@Roguelike@AutomationShopCaptureAnchors": {
         "algorithm": "OcrDetect",
         "Doc": "仅用于商店长截图对齐；识别商品区全部文字，不继承购买白名单。",
@@ -722,7 +731,9 @@
         "exceededNext": ["BlackFlow@Roguelike@AutomationShopLeave-Enter"]
     },
     "BlackFlow@Roguelike@AutomationShopToggleToSell-Enter": {
+        "Doc": "每轮切页重新分配重试次数，避免前一商店或前一局耗尽后持续跳过出售与刷新；内部重试不回到本入口。",
         "algorithm": "JustReturn",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopToggleToSell*3"],
         "next": ["BlackFlow@Roguelike@AutomationShopToggleToSell"]
     },
     "BlackFlow@Roguelike@AutomationCultivateAtMost": {
@@ -1012,7 +1023,9 @@
         "exceededNext": ["BlackFlow@Roguelike@AutomationCultivateLeave-Enter"]
     },
     "BlackFlow@Roguelike@AutomationCultivateToggleToSell-Enter": {
+        "Doc": "每轮切页重新分配重试次数，避免前一商店或前一局耗尽后持续跳过出售与刷新；内部重试不回到本入口。",
         "algorithm": "JustReturn",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationCultivateToggleToSell*3"],
         "next": ["BlackFlow@Roguelike@AutomationCultivateToggleToSell"]
     },
     "BlackFlow@Roguelike@AutomationCultivateSellingReady": {
@@ -1904,6 +1917,8 @@
         ]
     },
     "BlackFlow@Roguelike@GetDropSelectRecruit": {
+        "Doc": "由节点证据插件保存实际选券页并复核同帧按钮后点击；不使用 ProcessTask 的旧命中框。",
+        "action": "DoNothing",
         "template": "BlackFlow@Roguelike@GetDropSelectRecruit.png"
     },
     "BlackFlow@Roguelike@GetDropTrophyReward": {

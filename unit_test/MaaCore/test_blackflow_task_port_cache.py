@@ -60,7 +60,11 @@ def main() -> int:
      void take_pending_pursuit(){}
     };
     struct FakeMapSource {void reset_run(){}};
-    struct FakePopups {std::vector<int> pending,pending_node_evidence;};
+    struct FakePopups {
+     std::vector<int> pending,pending_node_evidence;
+     struct {void reset(){}} recruitment_choices;
+     std::string prepared_choice_id;
+    };
     struct OCRer {
      cv::Mat panel;std::string task;
      struct Line {std::string text;};

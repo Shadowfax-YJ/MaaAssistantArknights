@@ -42,6 +42,8 @@ private:
         TextRect good;
         ShelfPage page = ShelfPage::Top;
         std::optional<int> ingots_before;
+        std::optional<int> price;
+        std::shared_ptr<cv::Mat> image;
     };
 
     struct CachedShopGood
@@ -91,6 +93,9 @@ private:
     [[nodiscard]] bool select_shop_good(std::optional<StoreSelection>& selected);
     [[nodiscard]] bool select_scrap_shop_good(std::optional<StoreSelection>& selected);
     [[nodiscard]] bool relocate_selection(StoreSelection& selection, std::string_view recognition_task);
+    [[nodiscard]] bool click_verified_selection(StoreSelection& selection);
+    [[nodiscard]] bool purchase_wallet_page(const cv::Mat& image, AutomationStoreKind kind) const;
+    [[nodiscard]] bool purchased_good_sold_out(const cv::Mat& image, AutomationStoreKind kind) const;
     [[nodiscard]] bool run_goods_swipe(std::string_view task);
     [[nodiscard]] std::vector<RunResources::MovementInstance> projected_entry_processing_items() const;
     void reset_shop_resume_task() const;
@@ -110,6 +115,9 @@ private:
     std::optional<ShelfSlot> m_pending_purchase;
     std::optional<std::string> m_pending_purchase_name;
     std::optional<int> m_pending_purchase_ingots_before;
+    std::optional<int> m_pending_purchase_price;
+    std::string m_pending_purchase_id;
+    std::uint64_t m_purchase_sequence = 0;
     bool m_pending_purchase_confirmed = false;
     std::optional<Rect> m_pending_sale;
     std::optional<std::string> m_pending_sale_name;

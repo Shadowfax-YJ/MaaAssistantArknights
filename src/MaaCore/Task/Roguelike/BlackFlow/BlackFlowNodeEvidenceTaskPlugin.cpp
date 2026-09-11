@@ -31,7 +31,7 @@ bool BlackFlowNodeEvidenceTaskPlugin::verify(AsstMsg msg, const json::value& det
     const std::string task = details.get("details", "task", std::string());
     const bool recruitment_page = msg == AsstMsg::SubTaskStart && node_recruitment_page_task(task);
     const bool get_drop_page = msg == AsstMsg::SubTaskStart &&
-                               node_get_drop_requires_stable_click(task);
+                               (node_get_drop_requires_stable_click(task) || node_recruitment_choice_task(task));
     // 追猎 Boss 的收藏品展示可能在任何兜底点击时消失。首次 ClickToDrops
     // 真正执行前先无条件保存当前画面，不能等点击完成，也不能只依赖按钮模板回调。
     const bool pursuit_loot_preclick = msg == AsstMsg::SubTaskStart &&

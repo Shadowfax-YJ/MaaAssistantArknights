@@ -322,6 +322,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             std::optional<Rect> selected_button,
             std::string* error) {
             const auto port = weak_port.lock();
+            if (port != nullptr && task == "BlackFlow@Roguelike@GetDropSelectRecruit") {
+                return port->select_recruitment_voucher(error);
+            }
             return port == nullptr ? true : port->capture_get_drop(task, selected_button, error);
         });
     m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowRunLogTaskPlugin>(

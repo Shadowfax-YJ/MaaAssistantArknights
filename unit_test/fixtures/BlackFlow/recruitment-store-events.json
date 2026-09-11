@@ -1,0 +1,174 @@
+[
+  {
+    "action": "node.get-drop.capture",
+    "task": "BlackFlow@Roguelike@GetDropSelectRecruit",
+    "phase": "before-click",
+    "details": {
+      "screen": "select",
+      "selection_kind": "recruitment_voucher",
+      "capture_kind": "selection_frame_before_click",
+      "recruitment_choice_id": "BF-V4-1",
+      "selected_name_status": "image_evidence_only",
+      "source_context": {
+        "run_revision": 4,
+        "map_generation": 1,
+        "page_revision": 5,
+        "floor": 1,
+        "transaction_id": "BF-T4-5",
+        "node": 42
+      },
+      "option_count": 2,
+      "detected_option_count": 2,
+      "selected_option_index_from_left": 2,
+      "selected_button_rect": [
+        810,
+        490,
+        140,
+        50
+      ],
+      "option_button_rects_from_left": [
+        [
+          330,
+          490,
+          140,
+          50
+        ],
+        [
+          810,
+          490,
+          140,
+          50
+        ]
+      ],
+      "recruitment_choice_attempt": 1
+    }
+  },
+  {
+    "action": "reward.recruitment.select",
+    "task": "BlackFlow@Roguelike@GetDropSelectRecruit",
+    "phase": "click-result",
+    "details": {
+      "recruitment_choice_id": "BF-V4-1",
+      "click_dispatched": true,
+      "reason": "",
+      "source_context": {
+        "run_revision": 4,
+        "map_generation": 1,
+        "page_revision": 5,
+        "floor": 1,
+        "transaction_id": "BF-T4-5",
+        "node": 42
+      },
+      "recruitment_choice_attempt": 1
+    }
+  },
+  {
+    "action": "node.recruitment.capture",
+    "phase": "entered",
+    "details": {
+      "recruitment_choice_id": "BF-V4-1",
+      "choice_resolution": "opened_after_selection",
+      "temporary_recruitment_visible": false,
+      "source_context": {
+        "run_revision": 4,
+        "map_generation": 1,
+        "page_revision": 5,
+        "floor": 1,
+        "transaction_id": "BF-T4-5",
+        "node": 42
+      },
+      "recruitment_choice_attempt": 1
+    }
+  },
+  {
+    "action": "node.store.purchase",
+    "phase": "purchase-verification",
+    "details": {
+      "store_kind": "eerie_merchant",
+      "purchase_id": "BF-P4-1",
+      "planned_item_name": "《炎国字汇》",
+      "actual_item_name": "《炎国字汇》",
+      "item_name": "《炎国字汇》",
+      "item_category": "collectible",
+      "purchase_status": "confirmed",
+      "purchase_succeeded": true,
+      "verification": "sold_out_and_exact_payment",
+      "wallet_page_verified": true,
+      "item_consumption_verified": true,
+      "expected_price": 12,
+      "ingots_before": 21,
+      "ingots_after": 9
+    }
+  },
+  {
+    "action": "node.store.purchase",
+    "phase": "purchase-verification",
+    "details": {
+      "store_kind": "eerie_merchant",
+      "purchase_id": "BF-P4-2",
+      "planned_item_name": "《炎国字汇》",
+      "actual_item_name": "",
+      "item_name": "",
+      "item_category": "unknown",
+      "purchase_status": "unknown",
+      "purchase_succeeded": false,
+      "verification": "wallet_page_unverified",
+      "wallet_page_verified": false,
+      "item_consumption_verified": false,
+      "expected_price": 12,
+      "ingots_before": 21
+    }
+  },
+  {
+    "action": "node.store.purchase",
+    "phase": "purchase-verification",
+    "details": {
+      "store_kind": "eerie_merchant",
+      "purchase_id": "BF-P4-3",
+      "planned_item_name": "《炎国字汇》",
+      "actual_item_name": "",
+      "item_name": "",
+      "item_category": "unknown",
+      "purchase_status": "mismatch",
+      "purchase_succeeded": false,
+      "verification": "payment_differs_from_observed_price",
+      "wallet_page_verified": true,
+      "item_consumption_verified": false,
+      "expected_price": 12,
+      "ingots_before": 21,
+      "ingots_after": 1
+    }
+  },
+  {
+    "action": "node.store.purchase",
+    "phase": "purchase-verification",
+    "details": {
+      "store_kind": "secret_merchant",
+      "purchase_id": "BF-P4-4",
+      "planned_item_name": "标准引擎",
+      "actual_item_name": "",
+      "item_name": "",
+      "item_category": "unknown",
+      "purchase_status": "failed",
+      "purchase_succeeded": false,
+      "verification": "wallet_unchanged",
+      "wallet_page_verified": true,
+      "item_consumption_verified": false,
+      "expected_price": 4,
+      "ingots_before": 21,
+      "ingots_after": 21
+    }
+  },
+  {
+    "action": "node.store.purchase",
+    "phase": "purchase-verification",
+    "details": {
+      "store_kind": "eerie_merchant",
+      "item_name": "《炎国字汇》",
+      "purchase_succeeded": true,
+      "verification": "ingot_delta",
+      "ingots_before": 21,
+      "ingots_after": 1
+    }
+  }
+]

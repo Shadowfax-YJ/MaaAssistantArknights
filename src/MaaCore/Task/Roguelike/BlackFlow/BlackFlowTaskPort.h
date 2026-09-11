@@ -412,23 +412,32 @@ public:
         return true;
     }
 
-    virtual bool capture_get_drop(std::string_view, std::optional<Rect> = std::nullopt, std::string* = nullptr)
+    virtual bool capture_get_drop(
+        std::string_view,
+        std::optional<Rect> = std::nullopt,
+        std::string* = nullptr,
+        const cv::Mat* = nullptr)
     {
         return true;
     }
+
+    virtual bool select_recruitment_voucher(std::string* = nullptr) { return false; }
 
     virtual bool
         capture_store_page(std::string_view, std::string_view, int, const cv::Mat* = nullptr, std::string* = nullptr)
     {
         return true;
     }
+
     virtual bool record_store_purchase(
         std::string_view,
         std::string_view,
         std::optional<int>,
         std::optional<int>,
         bool,
-        std::string* = nullptr)
+        std::string* = nullptr,
+        const json::object* = nullptr,
+        const cv::Mat* = nullptr)
     {
         return true;
     }
@@ -508,7 +517,9 @@ public:
     bool capture_get_drop(
         std::string_view task,
         std::optional<Rect> selected_button = std::nullopt,
-        std::string* error = nullptr) override;
+        std::string* error = nullptr,
+        const cv::Mat* selection_image = nullptr) override;
+    bool select_recruitment_voucher(std::string* error = nullptr) override;
     bool capture_store_page(
         std::string_view store_kind,
         std::string_view capture_phase,
@@ -521,7 +532,9 @@ public:
         std::optional<int> ingots_before,
         std::optional<int> ingots_after,
         bool collectible,
-        std::string* error = nullptr) override;
+        std::string* error = nullptr,
+        const json::object* purchase_evidence = nullptr,
+        const cv::Mat* receipt_image = nullptr) override;
     bool resolve_pending_collection_popups(std::string* error = nullptr) override;
     bool flush_pending_collection_popups(std::string* error = nullptr) override;
     bool persist_diagnostics(const DiagnosticArtifactRequest& request, std::string* error) override;

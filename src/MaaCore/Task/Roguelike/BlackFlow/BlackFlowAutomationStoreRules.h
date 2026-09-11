@@ -163,6 +163,39 @@ struct EerieStoreStitchLayout
     return ingots_before.has_value() && ingots_after.has_value() && *ingots_after < *ingots_before;
 }
 
+struct AutomationStorePurchaseVerification
+{
+    std::string_view status;
+    std::string_view reason;
+
+    [[nodiscard]] bool succeeded() const noexcept { return status == "confirmed"; }
+};
+
+[[nodiscard]] inline AutomationStorePurchaseVerification verify_store_purchase_evidence(
+    bool wallet_page_verified,
+    std::optional<int> before,
+    std::optional<int> after,
+    std::optional<int> price,
+    bool item_consumption_verified) noexcept
+{
+    if (!wallet_page_verified) {
+        return { "unknown", "wallet_page_unverified" };
+    }
+    if (!before.has_value() || !after.has_value() || !price.has_value()) {
+        return { "unknown", "price_or_wallet_unavailable" };
+    }
+    if (*before == *after) {
+        return { "failed", "wallet_unchanged" };
+    }
+    if (*before - *after != *price || *price <= 0) {
+        return { "mismatch", "payment_differs_from_observed_price" };
+    }
+    if (!item_consumption_verified) {
+        return { "unknown", "actual_item_unverified" };
+    }
+    return { "confirmed", "sold_out_and_exact_payment" };
+}
+
 struct AutomationStoreIdentity
 {
     std::uint64_t map_generation = 0;

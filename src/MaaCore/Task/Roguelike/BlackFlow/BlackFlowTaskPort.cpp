@@ -17,13 +17,15 @@
 
 #include <opencv2/core.hpp>
 
-#include "BlackFlowMovementRecognition.h"
+#include "BlackFlowAutomationStoreRules.h"
 #include "BlackFlowBattleRules.h"
 #include "BlackFlowBurnRules.h"
-#include "BlackFlowAutomationStoreRules.h"
-#include "BlackFlowInventoryRules.h"
 #include "BlackFlowCollectionPopup.h"
 #include "BlackFlowCollectionPopupTaskPlugin.h"
+#include "BlackFlowEvidenceFrame.h"
+#include "BlackFlowInventoryRules.h"
+#include "BlackFlowMovementRecognition.h"
+#include "BlackFlowRecruitmentEvidence.h"
 #include "BlackFlowSession.h"
 
 #include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
@@ -625,6 +627,29 @@ CollectionPopupOrigin collection_popup_origin(const BlackFlowSession& session)
     };
 }
 
+RecruitmentEvidenceScope recruitment_evidence_scope(const BlackFlowSession& session)
+{
+    const auto& page = session.page_context();
+    const auto state = session.run_log_state();
+    return {
+        session.run_revision(),
+        state.get("map_generation", std::uint64_t {}),
+        page.has_value() ? page->page_revision : 0,
+        page.has_value() ? page->floor : session.run().floor,
+        page.has_value() ? page->transaction_id : state.get("transaction_id", std::string {}),
+        page.has_value() ? page->node : InvalidNodeId,
+    };
+}
+
+json::object recruitment_evidence_context(const RecruitmentEvidenceScope& scope)
+{
+    return {
+        { "run_revision", scope.run_revision },     { "map_generation", scope.map_generation },
+        { "page_revision", scope.page_revision },   { "floor", scope.floor },
+        { "transaction_id", scope.transaction_id }, { "node", scope.node },
+    };
+}
+
 std::optional<CollectionPopupDestination> resolve_pending_collection_popup_destination(
     const BlackFlowSession& session, std::string_view task, const CollectionPopupOrigin& origin)
 {
@@ -1084,6 +1109,8 @@ public:
 
     std::vector<Pending> pending;
     std::vector<PendingNodeEvidence> pending_node_evidence;
+    RecruitmentChoiceLedger recruitment_choices;
+    std::string prepared_choice_id;
 };
 
 BlackFlowTaskPort::BlackFlowTaskPort(
@@ -1997,6 +2024,8 @@ void BlackFlowTaskPort::reset_run()
     if (m_collection_popup_state != nullptr) {
         m_collection_popup_state->pending.clear();
         m_collection_popup_state->pending_node_evidence.clear();
+        m_collection_popup_state->recruitment_choices.reset();
+        m_collection_popup_state->prepared_choice_id.clear();
     }
     if (m_map_source != nullptr) {
         m_map_source->reset_run();
@@ -2293,10 +2322,79 @@ bool BlackFlowTaskPort::capture_event_detail(
         error);
 }
 
+bool BlackFlowTaskPort::select_recruitment_voucher(std::string* error)
+{
+    constexpr std::string_view task = "BlackFlow@Roguelike@GetDropSelectRecruit";
+    if (m_task_context == nullptr) {
+        set_error(error, "recruitment choice has no capture context");
+        return false;
+    }
+    cv::Mat image;
+    int sampled_frames = 0;
+    double difference = -1;
+    if (!m_task_context->capture_stable_frame(image, sampled_frames, difference, error)) {
+        return false;
+    }
+    Matcher matcher(image);
+    matcher.set_task_info(std::string(task));
+    const auto hit = matcher.analyze();
+    if (!hit.has_value()) {
+        set_error(error, "stable recruitment choice no longer has a selection button");
+        return false;
+    }
+    const auto session = m_collection_popup_session.lock();
+    if (session != nullptr && m_collection_popup_state != nullptr) {
+        m_collection_popup_state->prepared_choice_id =
+            m_collection_popup_state->recruitment_choices.prepare(recruitment_evidence_scope(*session));
+    }
+    // The saved full page and selected rectangle come from the same frame.
+    // Deferred attribution retains this image, ID and source scope unchanged.
+    if (!capture_get_drop(task, hit->rect, error, &image)) {
+        return false;
+    }
+    const cv::Mat current = m_task_context->capture();
+    const cv::Rect choices(0, 100, image.cols, (std::min)(520, image.rows - 100));
+    const bool unchanged = evidence_frames_match(image, current, choices);
+    const bool clicked = unchanged && m_task_context->click(hit->rect);
+    if (clicked && m_collection_popup_state != nullptr) {
+        m_collection_popup_state->recruitment_choices.clicked();
+    }
+    if (session != nullptr && m_collection_popup_state != nullptr) {
+        const RunLogEvent event {
+            .level = RunLogLevel::Info,
+            .action = "reward.recruitment.select",
+            .phase = "click-result",
+            .outcome = clicked ? "attempted" : "skipped",
+            .task = std::string(task),
+            .transaction_id = recruitment_evidence_scope(*session).transaction_id,
+            .state = session->run_log_state(),
+            .details =
+                json::object {
+                    { "recruitment_choice_id", m_collection_popup_state->prepared_choice_id },
+                    { "recruitment_choice_attempt", m_collection_popup_state->recruitment_choices.attempt() },
+                    { "capture_stability",
+                      json::object { { "sampled_frames", sampled_frames }, { "mean_difference", difference } } },
+                    { "source_context", recruitment_evidence_context(recruitment_evidence_scope(*session)) },
+                    { "click_dispatched", clicked },
+                    { "reason",
+                      !unchanged ? "choice_changed_after_capture"
+                      : clicked  ? ""
+                                 : "click_failed" },
+                },
+        };
+        record_run_event(session->run_revision(), event, nullptr, false, nullptr);
+    }
+    if (!clicked) {
+        set_error(error, unchanged ? "recruitment choice click failed" : "recruitment choice changed before click");
+    }
+    return clicked;
+}
+
 bool BlackFlowTaskPort::capture_get_drop(
     std::string_view task,
     std::optional<Rect> selected_button,
-    std::string* error)
+    std::string* error,
+    const cv::Mat* selection_image)
 {
     const auto session = m_collection_popup_session.lock();
     if (session == nullptr || session->profile() != "automation_collection") {
@@ -2355,7 +2453,10 @@ bool BlackFlowTaskPort::capture_get_drop(
     cv::Mat captured;
     int sampled_frames = 0;
     double mean_difference = -1.0;
-    if (!m_task_context->capture_stable_frame(captured, sampled_frames, mean_difference, error)) {
+    if (selection_image != nullptr) {
+        captured = selection_image->clone();
+    }
+    else if (!m_task_context->capture_stable_frame(captured, sampled_frames, mean_difference, error)) {
         return false;
     }
     std::vector<Rect> option_buttons;
@@ -2398,6 +2499,30 @@ bool BlackFlowTaskPort::capture_get_drop(
               { "mean_difference", mean_difference },
         } },
     };
+    if (m_collection_popup_state != nullptr) {
+        auto& choices = m_collection_popup_state->recruitment_choices;
+        const auto scope = recruitment_evidence_scope(*session);
+        details["source_context"] = recruitment_evidence_context(scope);
+        if (node_recruitment_choice_task(task)) {
+            details["selection_kind"] = "recruitment_voucher";
+            details["recruitment_choice_id"] = m_collection_popup_state->prepared_choice_id;
+            details["recruitment_choice_attempt"] = choices.attempt();
+            details["capture_stability"] = json::object { { "source", "guarded_selection_frame" } };
+            details["selected_name_status"] = "image_evidence_only";
+            details["capture_kind"] = "selection_frame_before_click";
+        }
+        else if (recruitment_page) {
+            if (const auto id = choices.opened(scope); id.has_value()) {
+                details["recruitment_choice_id"] = *id;
+                details["recruitment_choice_attempt"] = choices.clicked_attempt();
+                details["choice_resolution"] = "opened_after_selection";
+            }
+        }
+        else {
+            // A new ordinary reward action supersedes any previous choice.
+            choices.clear_pending();
+        }
+    }
     if (!recruitment_page && *screen == NodeGetDropScreen::Select) {
         std::ranges::sort(option_buttons, {}, [](const Rect& rect) {
             return rect.x + rect.width / 2;
@@ -2549,7 +2674,9 @@ bool BlackFlowTaskPort::record_store_purchase(
     std::optional<int> ingots_before,
     std::optional<int> ingots_after,
     bool collectible,
-    std::string* error)
+    std::string* error,
+    const json::object* purchase_evidence,
+    const cv::Mat* receipt_image)
 {
     const auto session = m_collection_popup_session.lock();
     if (session == nullptr || session->profile() != "automation_collection") {
@@ -2565,6 +2692,14 @@ bool BlackFlowTaskPort::record_store_purchase(
         { "wallet_changed", wallet_verified && *ingots_after != *ingots_before },
         { "verification", wallet_verified ? "ingot_delta" : "ingot_ocr_unavailable" },
     };
+    if (purchase_evidence != nullptr) {
+        for (const auto& [key, value] : *purchase_evidence) {
+            details[key] = value;
+        }
+        if (item_name.empty()) {
+            details["item_category"] = "unknown";
+        }
+    }
     if (ingots_before.has_value()) {
         details["ingots_before"] = *ingots_before;
     }
@@ -2581,7 +2716,7 @@ bool BlackFlowTaskPort::record_store_purchase(
                 std::string(NodeStorePurchaseRunLogAction),
                 "BlackFlowAutomationStore",
                 "purchase-verification",
-                cv::Mat {},
+                receipt_image != nullptr ? receipt_image->clone() : cv::Mat {},
                 std::move(details),
                 collection_popup_origin(*session),
             });
@@ -2600,7 +2735,7 @@ bool BlackFlowTaskPort::record_store_purchase(
         NodeStorePurchaseRunLogAction,
         "BlackFlowAutomationStore",
         "purchase-verification",
-        cv::Mat {},
+        receipt_image != nullptr ? *receipt_image : cv::Mat {},
         resolved.directory,
         resolved.attribution,
         std::move(details),

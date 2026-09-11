@@ -1,4 +1,4 @@
-## v1.1.5
+## v1.1.6
 
 ### Highlights
 
@@ -36,6 +36,21 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.6 (2026-09-12)</b></summary>
+
+### 修复 | Fix
+
+* 修复商店沿用前一轮切页重试次数、可能未刷新就离开的问题。 @Shadowfax-YJ
+* 修复实际选券页漏采的问题，保存点击前画面及所选按钮，并关联后续招募界面，重试不重复计券。 @Shadowfax-YJ
+* 加强商品购买前的画面、名称和价格核验，货架移动或目标无法确认时重新扫描，避免使用失效坐标。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 完善购买回执，区分已确认购买、失败、证据不足及金额不一致；只在确认的商店页面读取钱包。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.5 (2026-09-12)</b></summary>
 
 ### 修复 | Fix

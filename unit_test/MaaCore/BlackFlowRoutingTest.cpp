@@ -19,6 +19,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowBattleRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowBurnRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowDeterministicPrediction.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowDiagnosticTimeline.h"
@@ -36,12 +37,12 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowPlanner.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowPlannerRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowPolicy.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRecruitmentEvidence.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRevealSemantics.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunArchive.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowBurnRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPort.h"
 #include "Task/Roguelike/RoguelikeBattleStageNameRules.h"
 #include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
@@ -998,7 +999,9 @@ TEST_CASE("BlackFlow eerie merchant settles refreshes and relocates a cached goo
     const std::string source {
         std::istreambuf_iterator<char>(source_file),
         std::istreambuf_iterator<char>() };
-    REQUIRE(source.find("if (!relocate_selection(*selection, recognition_task))") != std::string::npos);
+    REQUIRE(
+        source.find("!relocate_selection(*selection, recognition_task) || !click_verified_selection(*selection)") !=
+        std::string::npos);
     REQUIRE(source.find("ShopDecisionEntry") != std::string::npos);
     REQUIRE(source.find("queue_eerie_store_snapshot(\"initial\"") != std::string::npos);
     REQUIRE(source.find("queue_eerie_store_snapshot(\"after_refresh\"") != std::string::npos);
@@ -1028,7 +1031,7 @@ TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
         NodeGetDropScreen::Select);
     REQUIRE(node_get_drop_uses_custom_selector("BlackFlow@Roguelike@GetDropTrophyReward"));
     REQUIRE_FALSE(node_get_drop_uses_custom_selector("BlackFlow@Roguelike@GetDropSelectReward"));
-    REQUIRE_FALSE(node_get_drop_screen("BlackFlow@Roguelike@GetDropSelectRecruit").has_value());
+    REQUIRE(node_get_drop_screen("BlackFlow@Roguelike@GetDropSelectRecruit") == NodeGetDropScreen::Select);
     REQUIRE(node_recruitment_page_task("BlackFlow@Roguelike@ChooseOper"));
     REQUIRE(node_recruitment_page_task("BlackFlow@StartExplore@Roguelike@ChooseOper"));
     // ProcessTask callbacks expose the resolved task basename, not necessarily the
@@ -1053,7 +1056,8 @@ TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
     REQUIRE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDropTrophyReward", true));
     REQUIRE_FALSE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDropTrophyReward", false));
     REQUIRE_FALSE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDrop", false));
-    REQUIRE_FALSE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDropSelectRecruit", true));
+    REQUIRE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDropSelectRecruit", true));
+    REQUIRE(node_get_drop_should_capture("BlackFlow@Roguelike@GetDropSelectRecruit", false));
     REQUIRE_FALSE(
         node_get_drop_screen(
             "BlackFlow@Roguelike@GetDrop@(BlackFlow@Roguelike@CloseCollection)")
@@ -1150,6 +1154,70 @@ TEST_CASE("BlackFlow battle total kills uses the mode and latest observation as 
 
     aggregate.clear();
     REQUIRE_FALSE(aggregate.result().has_value());
+}
+
+TEST_CASE("BlackFlow recruitment choice IDs survive retries and stop at source boundaries")
+{
+    RecruitmentChoiceLedger ledger;
+    RecruitmentEvidenceScope scope { 4, 2, 7, 3, "BF-T4-9", 42 };
+    const std::string first = ledger.prepare(scope);
+    REQUIRE_FALSE(ledger.opened(scope).has_value());
+    REQUIRE(ledger.prepare(scope) == first);
+    ledger.clicked();
+    const auto clicked_attempt = ledger.attempt();
+    REQUIRE(ledger.prepare(scope) == first);
+    REQUIRE(ledger.attempt() > clicked_attempt);
+    REQUIRE(ledger.clicked_attempt() == clicked_attempt);
+    REQUIRE(ledger.opened(scope) == first);
+    REQUIRE(ledger.opened(scope) == first);
+    const std::string second = ledger.prepare(scope);
+    REQUIRE(second != first);
+    ledger.clicked();
+    for (int field = 0; field < 6; ++field) {
+        auto other = scope;
+        if (field == 0) {
+            ++other.run_revision;
+        }
+        if (field == 1) {
+            ++other.map_generation;
+        }
+        if (field == 2) {
+            ++other.page_revision;
+        }
+        if (field == 3) {
+            ++other.floor;
+        }
+        if (field == 4) {
+            other.transaction_id = "another-node-visit";
+        }
+        if (field == 5) {
+            ++other.node;
+        }
+        REQUIRE_FALSE(ledger.opened(other).has_value());
+    }
+    REQUIRE(ledger.opened(scope) == second);
+    ledger.clear_pending();
+    REQUIRE_FALSE(ledger.opened(scope).has_value());
+    REQUIRE(ledger.prepare(scope) != second);
+    ledger.clicked();
+    ledger.reset();
+    REQUIRE_FALSE(ledger.opened(scope).has_value());
+}
+
+TEST_CASE("BlackFlow purchase receipts require independent item and exact payment evidence")
+{
+    const auto confirmed = verify_store_purchase_evidence(true, 21, 9, 12, true);
+    REQUIRE(confirmed.succeeded());
+    REQUIRE(confirmed.reason == "sold_out_and_exact_payment");
+    const auto wrong_page = verify_store_purchase_evidence(false, 21, 1, 12, true);
+    REQUIRE(wrong_page.status == "unknown");
+    REQUIRE(wrong_page.reason == "wallet_page_unverified");
+    REQUIRE(verify_store_purchase_evidence(true, 21, 1, 12, true).status == "mismatch");
+    REQUIRE(verify_store_purchase_evidence(true, 21, 9, 12, false).status == "unknown");
+    REQUIRE(verify_store_purchase_evidence(true, 21, 21, 12, false).status == "failed");
+    REQUIRE(verify_store_purchase_evidence(true, 21, std::nullopt, 12, true).status == "unknown");
+    REQUIRE(verify_store_purchase_evidence(true, std::nullopt, 9, 12, true).status == "unknown");
+    REQUIRE(verify_store_purchase_evidence(true, 21, 9, std::nullopt, true).status == "unknown");
 }
 
 TEST_CASE("BlackFlow store purchase success requires a decreasing ingot balance")
@@ -3723,6 +3791,38 @@ TEST_CASE("BlackFlow store refresh ledger persists per shop in one map generatio
 
     ledger.clear();
     REQUIRE(ledger.refresh_count(eerie) == 0);
+}
+
+TEST_CASE("BlackFlow merchant sale retries reset at the next switch cycle and remain bounded within it")
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    for (const std::string merchant : { "Shop", "Cultivate" }) {
+        CAPTURE(merchant);
+        const std::string prefix = "BlackFlow@Roguelike@Automation" + merchant;
+        const std::string toggle = prefix + "ToggleToSell";
+        const auto& retry = tasks->at(toggle);
+        const auto& entry = tasks->at(toggle + "-Enter");
+        const int limit = retry.get("maxTimes", 2'147'483'647);
+        REQUIRE(limit == 3);
+        // MAA-002 carried 3 exhausted attempts from an earlier run into a shop
+        // with 70 ingots and no refreshes. Its next switch must get a fresh budget.
+        const auto resets = entry.get("reduceOtherTimes", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(resets, toggle + "*" + std::to_string(limit)) != resets.end());
+        REQUIRE(entry.get("next", std::vector<std::string> {}) == std::vector<std::string> { toggle });
+        // Retries stay inside this cycle; they must never revisit the reset entry.
+        REQUIRE(
+            retry.get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { prefix + "SellingReady", "#self" });
+        REQUIRE(
+            retry.get("exceededNext", std::vector<std::string> {}) ==
+            std::vector<std::string> { prefix + "Leave-Enter" });
+        REQUIRE(retry.get("reduceOtherTimes", std::vector<std::string> {}).empty());
+        REQUIRE(
+            tasks->at(prefix + "SellingReady").get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { prefix + "SellDecision" });
+    }
 }
 
 TEST_CASE("BlackFlow merchant price OCR prefers the rightmost numeric result")

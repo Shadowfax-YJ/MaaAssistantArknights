@@ -77,3 +77,37 @@ def test_additive_manifest_identity_and_future_raw_contract():
             verifier.verify_archive(signed())
     finally:
         fixture.doCleanups()
+
+
+def test_recruitment_and_purchase_evidence_are_additive_signed_contract_fields():
+    tests_spec = importlib.util.spec_from_file_location('evidence_archive_builder',
+        ROOT / 'tools/BlackFlowDataCollection/test_run_archives.py')
+    module = importlib.util.module_from_spec(tests_spec)
+    tests_spec.loader.exec_module(module)
+    fixture = module.RunArchiveTests('test_cpp_archive_and_signature_are_valid')
+    fixture.setUp()
+    try:
+        events = [json.loads(line) for line in fixture.files['run-fixture/run-events.jsonl'].splitlines()]
+        evidence = json.loads((ROOT / 'unit_test/fixtures/BlackFlow/recruitment-store-events.json').read_bytes())
+        events = events[:2] + evidence + events[-1:]
+        for sequence, event in enumerate(events, 1):
+            event.update(sequence=sequence, elapsed_ms=sequence, timestamp='2026-09-12T00:00:00Z',
+                         schema_version=1, level='INFO')
+        fixture.files['run-fixture/run-events.jsonl'] = b''.join(
+            json.dumps(event, ensure_ascii=False).encode() + b'\n' for event in events)
+        manifest = json.loads(fixture.files['run-fixture/manifest.json'])
+        manifest['capabilities'] = ['recruitment-choice-v1', 'store-purchase-evidence-v2']
+        data = json.dumps(manifest).encode()
+        fixture.files['run-fixture/manifest.json'] = data
+        index = json.loads(fixture.files['run-fixture/integrity.json'])
+        index['event_count'] = len(events)
+        for entry in index['files']:
+            if entry['path'] == 'manifest.json':
+                entry.update(size=len(data), sha512=hashlib.sha512(data).hexdigest())
+        fixture.files['run-fixture/integrity.json'] = json.dumps(index).encode()
+        result = verifier.verify_archive(fixture.resign(refresh_event_digest=True))
+        assert result['status'] == 'valid_local_signature'
+        assert result['event_count'] == 11
+        assert result['origin_attested'] is False
+    finally:
+        fixture.doCleanups()

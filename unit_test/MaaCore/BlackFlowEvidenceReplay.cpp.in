@@ -1,0 +1,253 @@
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+#include <opencv2/imgproc.hpp>
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRecruitmentEvidence.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+using namespace asst;
+using namespace asst::blackflow;
+
+void check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
+std::string_view normalized_good_name(std::string_view name) { return name; }
+constexpr std::string_view ScrapShopBuyGoodsTask = "secret";
+constexpr std::string_view ShopWalletTask = "wallet", ScrapShopWalletTask = "secret-wallet";
+struct Session {
+    RecruitmentEvidenceScope scope { 4, 1, 5, 1, "BF-T4-5", 42 };
+    std::uint64_t run_revision() const { return scope.run_revision; }
+    json::object run_log_state() const { return {}; }
+};
+
+struct Frame {
+    int y = 405, x = 431, price = 12, wallet = 21;
+    bool shop = true, present = true, duplicate = false;
+    bool title_changed = false, sold_out = false;
+    cv::Mat image;
+};
+struct Controller {
+    std::vector<Frame> frames;
+    int reads = 0;
+    std::vector<Rect> clicks;
+    bool click_ok = true;
+    void load(std::vector<Frame> input) {
+        frames = std::move(input); reads = 0; clicks.clear();
+        for (std::size_t i = 0; i < frames.size(); ++i) {
+            auto& f = frames[i];
+            f.image = cv::Mat(720, 1280, CV_8UC3, cv::Scalar(10, 10, 10));
+            if (f.present && f.shop) {
+                f.image(store_card_evidence_roi(f.x, f.y, f.image)).setTo(cv::Scalar(140, 80, 50));
+            }
+            if (f.title_changed) f.image(cv::Rect(f.x, f.y, 20, 10)).setTo(cv::Scalar(255, 255, 255));
+            f.image.at<cv::Vec3b>(0, 0)[0] = static_cast<unsigned char>(i);
+        }
+    }
+    cv::Mat get_image() { return frames.at((std::min)(reads++, int(frames.size()) - 1)).image; }
+    const Frame& state(const cv::Mat& image) const { return frames.at(image.at<cv::Vec3b>(0, 0)[0]); }
+    bool click(const Rect& rect) { if (click_ok) clicks.push_back(rect); return click_ok; }
+};
+struct ReceiptPort {
+    std::vector<json::object> receipts;
+    bool record_store_purchase(std::string_view, std::string_view name, std::optional<int>,
+                               std::optional<int>, bool, std::string*, const json::object* evidence, const cv::Mat* image) {
+        check(image != nullptr && !image->empty(), "receipt must preserve feedback screenshot");
+        auto value = *evidence; value["item_name"] = std::string(name);
+        receipts.push_back(std::move(value)); return true;
+    }
+};
+struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} } Log;
+struct BlackFlowAutomationStoreTaskPlugin {
+    struct StoreSelection {
+        TextRect good { Rect {431, 327, 102, 24}, 1.0, "book" };
+        std::optional<int> ingots_before, price;
+        std::shared_ptr<cv::Mat> image;
+    };
+    Controller controller;
+    std::shared_ptr<Session> m_session = std::make_shared<Session>();
+    std::string m_pending_purchase_id;
+    std::uint64_t m_purchase_sequence = 0;
+    ReceiptPort receipt_port;
+    ReceiptPort* m_port = &receipt_port;
+    std::optional<int> m_pending_purchase, m_pending_purchase_price, m_pending_purchase_ingots_before;
+    std::optional<std::string> m_pending_purchase_name;
+    bool m_pending_purchase_confirmed = false, m_scrap_shop_cultivation_requested = false;
+    std::vector<int> m_shop_purchased, m_shop_attempted, m_scrap_shop_purchased, m_scrap_shop_buy_attempted;
+    std::vector<std::string> m_shop_purchased_names, m_shop_attempted_names, m_scrap_shop_purchased_names, m_scrap_shop_buy_attempted_names;
+    int m_shop_collectibles_purchased_in_run = 0, wallet_reads = 0;
+    Controller* ctrler() { return &controller; }
+    bool sleep(int) { return true; }
+    bool purchase_wallet_page(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).shop; }
+    std::vector<TextRect> recognize(const cv::Mat& im, std::string) {
+        const auto& f = controller.state(im);
+        if (!f.present) return {};
+        std::vector<TextRect> result { TextRect {Rect { f.x, f.y, 102, 24 }, 1.0, "book"} };
+        if (f.duplicate) result.emplace_back(Rect { f.x + 210, f.y, 102, 24 }, 1.0, "book");
+        return result;
+    }
+    std::optional<int> read_good_price(const cv::Mat& im, Rect) { return controller.state(im).price; }
+    std::optional<bool> shop_good_is_buyable(const cv::Mat& im, Rect) { return !controller.state(im).sold_out; }
+    std::optional<int> read_optional_number(const cv::Mat& im, std::string) { ++wallet_reads; return controller.state(im).wallet; }
+    bool purchased_good_sold_out(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).sold_out; }
+    bool relocate_selection(StoreSelection&, std::string_view);
+    bool click_verified_selection(StoreSelection&);
+    void finalize_pending_purchase(AutomationStoreKind);
+    void clear_pending_purchase() noexcept;
+};
+/*RELOCATE*/
+/*CLICK*/
+/*FINALIZE*/
+/*CLEAR_PURCHASE*/
+
+void set_error(std::string* error, std::string text) { if (error) *error = std::move(text); }
+RecruitmentEvidenceScope recruitment_evidence_scope(const Session& s) { return s.scope; }
+json::object recruitment_evidence_context(const RecruitmentEvidenceScope& scope) {
+    return { {"run_revision", scope.run_revision}, {"map_generation", scope.map_generation},
+             {"page_revision", scope.page_revision}, {"floor", scope.floor},
+             {"transaction_id", scope.transaction_id}, {"node", scope.node} };
+}
+struct Matcher {
+    cv::Mat image;
+    Matcher(const cv::Mat& im) : image(im) {}
+    void set_task_info(std::string) {}
+    std::optional<TextRect> analyze() {
+        // Recognition I/O: the synthetic choice page contains this button.
+        return TextRect { Rect {810, 490, 140, 50}, 1.0, "select" };
+    }
+};
+struct PopupState { RecruitmentChoiceLedger recruitment_choices; std::string prepared_choice_id; };
+struct Context {
+    Controller controller;
+    bool stable = true;
+    bool capture_stable_frame(cv::Mat& image, int& frames, double& difference, std::string*) {
+        image = controller.get_image(); frames = 3; difference = 0; return stable;
+    }
+    cv::Mat capture() { return controller.get_image(); }
+    bool click(const Rect& rect) { return controller.click(rect); }
+};
+struct BlackFlowTaskPort {
+    std::shared_ptr<Session> owner = std::make_shared<Session>();
+    std::weak_ptr<Session> m_collection_popup_session = owner;
+    std::unique_ptr<PopupState> m_collection_popup_state = std::make_unique<PopupState>();
+    std::unique_ptr<Context> m_task_context = std::make_unique<Context>();
+    cv::Mat saved;
+    Rect selected;
+    std::string saved_id;
+    std::vector<RunLogEvent> events;
+    bool save_ok = true;
+    // Storage boundary: verifies that the production selector supplies its
+    // actual matched image and hit rectangle before dispatching any click.
+    bool capture_get_drop(std::string_view, std::optional<Rect> button, std::string*, const cv::Mat* image) {
+        check(m_task_context->controller.clicks.empty(), "capture must precede click");
+        check(image != nullptr && button.has_value(), "matched frame and rectangle are required");
+        saved = image->clone(); selected = *button;
+        saved_id = m_collection_popup_state->prepared_choice_id;
+        return save_ok;
+    }
+    bool record_run_event(std::uint64_t, const RunLogEvent& event, const cv::Mat*, bool, std::string*) {
+        events.push_back(event); return true;
+    }
+    bool select_recruitment_voucher(std::string*);
+};
+/*SELECT_VOUCHER*/
+
+int main() try {
+    int passed = 0;
+    auto store = [&](const char* name, std::vector<Frame> frames, bool expected, int y, std::string_view kind = "eerie") {
+        BlackFlowAutomationStoreTaskPlugin p;
+        p.controller.load(std::move(frames));
+        BlackFlowAutomationStoreTaskPlugin::StoreSelection selection;
+        const bool clicked = p.relocate_selection(selection, kind) && p.click_verified_selection(selection);
+        check(clicked == expected, name);
+        check(p.controller.clicks.size() == (expected ? 1U : 0U), name);
+        if (expected) {
+            check(p.controller.clicks[0].y == y, name);
+            check(selection.price == 12 && selection.ingots_before == 21, "selected price and wallet must use matched frame");
+            check(selection.image != nullptr, "selection evidence missing");
+        }
+        std::cout << "PASS " << name << '\n'; ++passed;
+    };
+    Frame normal, old; old.y = 327;
+    Frame gone = normal; gone.present = false;
+    Frame transition = normal; transition.shop = false;
+    Frame duplicate = normal; duplicate.duplicate = true;
+    Frame edge = normal; edge.x = 1110;
+    Frame renamed = normal; renamed.title_changed = true;
+    Frame sold = normal; sold.sold_out = true;
+    store("old frame then lower shelf settles", {old, normal, normal, normal, normal}, true, 405);
+    store("upper shelf settles", {normal, old, old, old, old}, true, 327);
+    store("refresh transition then stable goods", {old, transition, gone, normal, normal, normal, normal}, true, 405);
+    store("moving shelf times out", {old, normal, old, normal, old, normal, old, normal}, false, 0);
+    store("target disappeared", {gone}, false, 0);
+    store("already sold out cannot establish a new purchase", {sold}, false, 0);
+    store("duplicate names cannot select an identity", {duplicate}, false, 0);
+    store("last frame changes immediately before click", {old, old, old, normal}, false, 0);
+    store("title changes but artwork remains the same", {normal, normal, normal, renamed}, false, 0);
+    store("normal stable purchase", {normal}, true, 405);
+    store("right edge card remains selectable", {edge}, true, 405);
+    store("secret merchant stable purchase", {normal}, true, 405, "secret");
+    store("secret merchant has no stale-coordinate fallback", {old, old, old, normal}, false, 0, "secret");
+    for (int scenario = 0; scenario < 5; ++scenario) {
+        BlackFlowTaskPort port;
+        port.m_task_context->controller.load(scenario == 1 ? std::vector<Frame>{old, normal} : std::vector<Frame>{normal});
+        port.save_ok = scenario != 2;
+        port.m_task_context->stable = scenario != 3;
+        port.m_task_context->controller.click_ok = scenario != 4;
+        std::string error;
+        const bool clicked = port.select_recruitment_voucher(&error);
+        check(clicked == (scenario == 0), "choice dispatch result");
+        const auto opened = port.m_collection_popup_state->recruitment_choices.opened(port.owner->scope);
+        if (scenario == 0) {
+            check(opened == port.saved_id, "recruitment must link to selected voucher");
+            check(port.m_task_context->controller.clicks[0] == port.selected, "click must use captured selection rectangle");
+            check(port.events.back().details.at("click_dispatched").as_boolean(), "click evidence missing");
+            check(port.events.back().transaction_id == "BF-T4-5", "choice transaction missing");
+        }
+        else {
+            check(!opened.has_value(), "failed choice must never link to recruitment");
+            check(port.m_task_context->controller.clicks.empty(), "unsafe choice click dispatched");
+            const std::string id = port.saved_id;
+            port.save_ok = true; port.m_task_context->stable = true;
+            port.m_task_context->controller.click_ok = true;
+            port.m_task_context->controller.load({normal});
+            check(port.select_recruitment_voucher(&error), "choice retry must recover");
+            if (!id.empty()) check(port.saved_id == id, "choice retry must reuse voucher ID");
+        }
+        std::cout << "PASS recruitment sequence " << scenario << '\n'; ++passed;
+    }
+    check(!verify_store_purchase_evidence(false, 21, 1, 12, true).succeeded(), "wrong page cannot prove payment");
+    check(!verify_store_purchase_evidence(true, 21, 1, 12, true).succeeded(), "wrong delta cannot prove item");
+    check(!verify_store_purchase_evidence(true, 21, 9, 12, false).succeeded(), "planned name cannot prove item");
+    check(verify_store_purchase_evidence(true, 21, 9, 12, true).succeeded(), "independent item feedback with exact payment");
+    for (int scenario = 0; scenario < 6; ++scenario) {
+        BlackFlowAutomationStoreTaskPlugin p;
+        Frame feedback;
+        feedback.wallet = scenario == 2 ? 1 : scenario == 4 ? 21 : 9;
+        feedback.shop = scenario != 1;
+        feedback.sold_out = scenario != 3;
+        p.controller.load({feedback});
+        p.m_pending_purchase = 1;
+        p.m_pending_purchase_confirmed = true;
+        p.m_pending_purchase_ingots_before = 21;
+        p.m_pending_purchase_price = 12;
+        p.m_pending_purchase_name = scenario == 5 ? "种子" : "《炎国字汇》";
+        p.m_pending_purchase_id = "BF-P4-1";
+        const auto kind = scenario == 5 ? AutomationStoreKind::Secret : AutomationStoreKind::Eerie;
+        p.finalize_pending_purchase(kind);
+        p.finalize_pending_purchase(kind); // Leave callback / repeated decision must not count again.
+        check(p.receipt_port.receipts.size() == 1, "receipt duplicated by repeated finalization");
+        const auto& receipt = p.receipt_port.receipts.front();
+        const bool confirmed = scenario == 0 || scenario == 5;
+        check(receipt.at("purchase_succeeded").as_boolean() == confirmed, "receipt success disagrees with feedback");
+        check(receipt.at("item_name").as_string().empty() != confirmed, "planned name written as actual purchase");
+        check(!p.m_pending_purchase_name.has_value() && p.m_pending_purchase_id.empty(), "pending purchase not consumed");
+        if (scenario == 1) check(p.wallet_reads == 0, "wallet OCR must not run on a recruitment/unknown page");
+        if (scenario == 0) check(p.m_shop_collectibles_purchased_in_run == 1, "successful collectible counted more than once");
+        if (scenario == 5) check(p.m_scrap_shop_cultivation_requested, "confirmed seed must retain cultivation policy");
+        std::cout << "PASS receipt finalization " << scenario << '\n'; ++passed;
+    }
+    std::cout << passed << " controller sequences passed; receipt evidence checks passed\n";
+    return 0;
+}
+catch (const std::exception& error) { std::cerr << "FAIL " << error.what() << '\n'; return 1; }
