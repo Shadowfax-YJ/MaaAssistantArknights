@@ -1,4 +1,4 @@
-## v1.1.4
+## v1.1.5
 
 ### Highlights
 
@@ -36,6 +36,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.5 (2026-09-11)</b></summary>
+
+### 改进 | Improved
+
+* 每局记录稳定身份与采集范围，便于中心去重和兼容多采集版本；随安装包分发固定验证契约及样本。 @Shadowfax-YJ
+* 验证工具区分旧版未签名数据、未支持契约和缺失依赖，保留原始证据供后续处理。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.4 (2026-09-11)</b></summary>
 
 ### 修复 | Fix
