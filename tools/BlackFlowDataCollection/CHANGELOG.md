@@ -1,4 +1,4 @@
-## v1.1.4
+## v1.1.5
 
 ### Highlights
 
@@ -36,6 +36,21 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.5 (2026-09-12)</b></summary>
+
+### 修复 | Fix
+
+* 修复连续探索时沿用上一局树洞效果、导致地图重建失败的问题。 @Shadowfax-YJ
+* 修正“未亡者遗怨”标题识别，避免选择错误的树洞地图模板。 @Shadowfax-YJ
+* 修复离开树洞后可能反复识别楼层、无法继续探索的问题，完善返回外层地图和中断重试。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 完善采集日志的对局标识，便于区分、核对和整理不同对局的数据。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.4 (2026-09-11)</b></summary>
 
 ### 修复 | Fix

@@ -2,12 +2,52 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <regex>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <meojson/json.hpp>
+
+#include "Vision/Roguelike/BlackFlow/BlackFlowFloor.h"
+
+TEST_CASE("BlackFlow tree-hole title OCR keeps the observed green effect constrained to green templates")
+{
+    using namespace asst::blackflow::perception;
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const auto& task = tasks->at("BlackFlow@Roguelike@TreeHoleEffectTitle");
+    const auto replacements = task.get("ocrReplace", std::vector<std::vector<std::string>> {});
+    const auto normalize = [&](std::string title) {
+        for (const auto& replacement : replacements) {
+            REQUIRE(replacement.size() == 2);
+            const std::regex pattern(replacement[0]);
+            if (task.get("replaceFull", false)) {
+                if (std::regex_search(title, pattern)) {
+                    title = replacement[1];
+                }
+            }
+            else {
+                title = std::regex_replace(title, pattern, replacement[1]);
+            }
+        }
+        return title;
+    };
+
+    // Actual title from run 1058; the OCR typo previously disabled the color constraint.
+    const auto title = normalize("“朱亡者遗怨” ");
+    CHECK(title == "“未亡者遗怨” ");
+    const auto color = tree_hole_mist_color(title);
+    REQUIRE(color == "green");
+    CHECK(topology_matches_tree_hole_color(TreeHoleFloor, "green", color));
+    CHECK_FALSE(topology_matches_tree_hole_color(TreeHoleFloor, "red", color));
+    CHECK(normalize("“未亡者遗怨” ") == "“未亡者遗怨” ");
+    CHECK(normalize("“巨人摇篮” ") == "“巨人摇篮” ");
+    CHECK(normalize("未知的朱色标题") == "未知的朱色标题");
+    CHECK(tree_hole_mist_color(normalize("未知的朱色标题")).empty());
+}
 
 TEST_CASE("BlackFlow tree-hole templates preserve every screenshot corridor")
 {

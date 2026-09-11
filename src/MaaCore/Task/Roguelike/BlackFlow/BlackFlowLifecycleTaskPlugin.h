@@ -25,6 +25,7 @@ private:
         None,
         PrepareRecoveryRetry,
         RecordCurrentFloor,
+        RetryTreeHoleReturn,
         ResolveHuntedAction,
         BeginTreeHoleReturn,
         ResolveTerminalAction,

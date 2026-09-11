@@ -394,6 +394,7 @@ public:
     virtual bool take_pending_pursuit() { return false; }
     virtual void begin_tree_hole_return() {}
     virtual void finish_tree_hole_return() {}
+    virtual bool resume_pending_tree_hole_return(int, std::string*) { return true; }
     virtual bool queue_current_run_archive(std::string* = nullptr) { return true; }
 
     virtual void configure_diagnostics(const DiagnosticSettings&) {}
@@ -488,6 +489,7 @@ public:
     bool take_pending_pursuit() override;
     void begin_tree_hole_return() override { m_tree_return_pending = true; }
     void finish_tree_hole_return() override { m_tree_return_pending = false; }
+    bool resume_pending_tree_hole_return(int floor, std::string* error) override;
 
     void reset_run() override;
     bool queue_current_run_archive(std::string* error = nullptr) override;

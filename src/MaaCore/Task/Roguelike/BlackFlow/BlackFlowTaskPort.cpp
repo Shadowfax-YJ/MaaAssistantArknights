@@ -1988,6 +1988,9 @@ void BlackFlowTaskPort::reset_run()
     m_utopia_generation.reset();
     m_burn_utopia_inspected_generation.reset();
     m_utopia_observation = {};
+    m_tree_effect_generation.reset();
+    m_tree_effect.clear();
+    m_tree_effect_description.clear();
     m_last_stable_map_image.reset();
     m_battle_preview_map_reference.reset();
     m_pending_stable_map_image.reset();
@@ -2866,6 +2869,20 @@ bool BlackFlowTaskPort::has_pending_pursuit() const
 bool BlackFlowTaskPort::take_pending_pursuit()
 {
     return m_task_context->take_pending_pursuit();
+}
+
+bool BlackFlowTaskPort::resume_pending_tree_hole_return(int floor, std::string* error)
+{
+    if (!m_tree_return_pending) {
+        return true;
+    }
+    cv::Mat image;
+    if (!resume_exploration_after_tree_hole(floor, image, error)) {
+        return false;
+    }
+    m_tree_return_pending = false;
+    // 外层任务链仍可能关闭延迟弹窗；交回 Routing 后重新截图，不能缓存这张校验图。
+    return true;
 }
 
 bool BlackFlowTaskPort::resume_exploration_after_tree_hole(int floor, cv::Mat& image, std::string* error)

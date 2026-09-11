@@ -5032,6 +5032,41 @@ TEST_CASE("BlackFlow collection starts through abandonment instead of map routin
     }
 }
 
+TEST_CASE("BlackFlow floor title polling yields to pursuit and bounded map recovery")
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const std::string p = "BlackFlow@Roguelike@";
+    const auto& title = tasks->at(p + "NextLevel");
+    const int limit = title.get("maxTimes", 2147483647);
+    REQUIRE(limit > 0);
+    REQUIRE(limit <= 30);
+    // MAA-002: the title remains visible, while MapZoomOut stays below 0.9.
+    // Every pass is a successful recognition; only maxTimes can bound this loop.
+    int title_polls = 0;
+    std::string current = p + "NextLevel";
+    while (current == p + "NextLevel" && title_polls <= 100) {
+        if (title_polls++ >= limit) {
+            current = title.get("exceededNext", std::vector<std::string> {}).at(0);
+        }
+    }
+    REQUIRE(current == p + "RecoverMap-Enter");
+    REQUIRE(title_polls <= 31);
+    const auto next = title.get("next", std::vector<std::string> {});
+    REQUIRE(next.front() == p + "NodeSettlementPopups#next");
+    const auto popups = tasks->at(p + "NodeSettlementPopups").get("next", std::vector<std::string> {});
+    REQUIRE(std::ranges::find(popups, p + "HuntedConfirm") != popups.end());
+    for (const std::string entry : { "NextLevel-Enter", "MapPrepare-Ready" }) {
+        const auto resets = tasks->at(p + entry).get("reduceOtherTimes", std::vector<std::string> {});
+        REQUIRE(std::ranges::find(resets, p + "NextLevel*" + std::to_string(limit)) != resets.end());
+    }
+    REQUIRE(tasks->at(p + "TreeHoleReturnTitle").get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { p + "TreeHoleReturnResumeAction" });
+    REQUIRE(recovery_retry_task(p + "TreeHoleReturnResumeAction") == p + "TreeHoleReturnResumeRetry");
+    REQUIRE(tasks->at(p + "TreeHoleReturnResumeRetry").get("algorithm", std::string {}) == "JustReturn");
+}
+
 TEST_CASE("BlackFlow tree-hole return must continue from the menu before accepting the outer map")
 {
     const auto repository_root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();

@@ -2352,7 +2352,11 @@
         "templThreshold": 0.9,
         "roi": [24, 468, 62, 153],
         "next": ["BlackFlow@Roguelike@Routing"],
-        "reduceOtherTimes": ["BlackFlow@Roguelike@MapPrepare-ZoomOut*3", "BlackFlow@Roguelike@MovementInventoryClose*3"]
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@NextLevel*30",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut*3",
+            "BlackFlow@Roguelike@MovementInventoryClose*3"
+        ]
     },
     "BlackFlow@Roguelike@MapPrepare-ZoomOut": {
         "template": "BlackFlow@Roguelike@MapZoomOut.png",
@@ -3144,7 +3148,10 @@
         "fullMatch": true,
         "fuzzyMatch": true,
         "postDelay": 600,
+        "maxTimes": 30,
+        "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"],
         "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@NextLevelReturnCloseCollection)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@NextLevelUtopiaCloseCollectionContinue)",
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollectionContinue)",
@@ -3160,6 +3167,7 @@
     },
     "BlackFlow@Roguelike@NextLevel-Enter": {
         "algorithm": "JustReturn",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@NextLevel*30"],
         "next": [
             "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@MapPrepare-FloorEnterZoom",
@@ -4519,6 +4527,7 @@
             48
         ],
         "text": [],
+        "ocrReplace": [["朱亡者遗怨", "未亡者遗怨"]],
         "withoutDet": false
     },
     "BlackFlow@Roguelike@TreeHoleEffectDescription": {
@@ -4592,6 +4601,7 @@
     },
     "BlackFlow@Roguelike@TreeHoleReturnTitle": {
         "baseTask": "BlackFlow@Roguelike@NextLevel",
+        "maxTimes": 2147483647,
         "text": [
             "玻利瓦尔肤层",
             "甜美的伤口",
@@ -4600,8 +4610,17 @@
             "卡德霍之颅"
         ],
         "next": [
-            "BlackFlow@Roguelike@NextLevel-Enter"
+            "BlackFlow@Roguelike@TreeHoleReturnResumeAction"
         ]
+    },
+    "BlackFlow@Roguelike@TreeHoleReturnResumeAction": {
+        "Doc": "外层标题的生命周期回调先执行回主菜单继续探索，再按实际结果设置本动作；恢复失败等待后重试完整返回流程，追猎仍交给公共路由。",
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@TreeHoleReturnResumeRetry": {
+        "Doc": "恢复可能停在主菜单或楼层封面，由生命周期插件按已确认的外层归属重试，不依赖地图标题或缩放按钮。",
+        "algorithm": "JustReturn",
+        "next": ["BlackFlow@Roguelike@TreeHoleReturnResumeAction"]
     },
     "BlackFlow@Roguelike@TreeHoleResumeMenuWait": {
         "Doc": "出洞后必须先返回肉鸽主菜单并点击继续探索，不能因为已经看到地图就提前完成。",

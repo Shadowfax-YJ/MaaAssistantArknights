@@ -1,10 +1,11 @@
-黑流树海采集版 v1.1.4
+黑流树海采集版 v1.1.5
 
 ### 本次更新
 
-* 修复刷等级策略在开局奖励和放弃招募确认时卡住的问题。
-* 刷等级快速飞三层策略到达第三层后，会检查实托邦并保存截图，再按原流程重开。
-* 每局采集日志都会记录所选难度，便于整理和核对数据。
+* 修复连续探索时沿用上一局树洞效果、导致地图重建失败的问题。
+* 修正“未亡者遗怨”标题识别，避免选择错误的树洞地图模板。
+* 修复离开树洞后可能反复识别楼层、无法继续探索的问题，完善返回外层地图和中断重试。
+* 完善采集日志的对局标识，便于区分、核对和整理不同对局的数据。
 
 ### 升级
 
@@ -14,8 +15,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.4/MAA-BlackFlow-Data-Collection-v1.1.4-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.4/MAA-BlackFlow-Data-Collection-v1.1.4-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.5/MAA-BlackFlow-Data-Collection-v1.1.5-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.5/MAA-BlackFlow-Data-Collection-v1.1.5-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。
