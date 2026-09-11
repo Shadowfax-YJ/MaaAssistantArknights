@@ -123,6 +123,8 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/DependencySetup_依赖库安�
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'BlackFlowDataCollection/gui.new.json') -Destination (Join-Path $staging 'resource/blackflow-gui-defaults.json')
 New-Item -ItemType Directory -Path (Join-Path $staging 'tools') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'VerifyBlackFlowRunArchive.py') -Destination (Join-Path $staging 'tools/VerifyBlackFlowRunArchive.py')
+& python (Join-Path $PSScriptRoot 'BuildBlackFlowContract.py') --output (Join-Path $staging 'tools/blackflow-contract-v1')
+if ($LASTEXITCODE -ne 0) { throw "BlackFlow contract bundle export failed: $LASTEXITCODE" }
 $identity = @{ schema_version = 1; channel = 'blackflow-data-collection'; version = $Version } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $staging 'blackflow-update.json'), $identity, [Text.UTF8Encoding]::new($false))
 & dotnet run --project (Join-Path $repoRoot 'unit_test/MaaUpdate/MaaUpdate.Tests.csproj') -c Release -- --validate-installation-root $staging

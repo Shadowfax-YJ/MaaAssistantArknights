@@ -1,7 +1,8 @@
 """Verify an automatically generated BlackFlow ZIP without extracting it.
 
 Exit 0: valid LOCAL signature and content; 2: unsigned/old/manually repacked;
-1: invalid or damaged. A local signature does not attest an official client.
+1: invalid or damaged; 3: unsupported contract; 4: runtime dependency unavailable.
+A local signature does not attest an official client.
 Requires cryptography (pip install cryptography).
 """
 from __future__ import annotations
@@ -17,6 +18,10 @@ import zipfile
 DOMAIN = b"MAA-BLACKFLOW-ARCHIVE-v1\n"
 MAX_TOTAL_BYTES = 16 * 1024**3
 MAX_INDEX_BYTES = 8 * 1024**2
+
+
+class UnsupportedContract(ValueError):
+    pass
 
 
 def unique_object(pairs):
@@ -56,8 +61,9 @@ def verify_archive(path: Path) -> dict:
         if envelope.get("format") != "maa-blackflow-auto-archive":
             return {"status": "unsigned_or_repacked", "origin_attested": False,
                     "message": "ZIP 没有可识别的采集程序签名。"}
-        require(envelope.get("schema_version") == 1 and envelope.get("algorithm") == "Ed25519"
-                and envelope.get("origin_attested") is False, "Unsupported archive signature format")
+        if envelope.get("schema_version") != 1 or envelope.get("algorithm") != "Ed25519":
+            raise UnsupportedContract("Unsupported archive signature format")
+        require(envelope.get("origin_attested") is False, "Invalid archive attestation")
         for field, size in (("public_key", 64), ("signature", 128), ("archive_sha512", 128)):
             require(isinstance(envelope.get(field), str) and re.fullmatch(r"[0-9a-f]{" + str(size) + "}", envelope[field]),
                     "Invalid signature field: " + field)
@@ -102,6 +108,8 @@ def verify_archive(path: Path) -> dict:
         require(len(indexes) == 1 and indexes[0].file_size <= MAX_INDEX_BYTES, "Missing or oversized integrity manifest")
         index_entry = indexes[0]
         index = parse(archive.read(index_entry))
+        if index.get("schema_version") != 1:
+            raise UnsupportedContract("Unsupported integrity schema")
         root = PurePosixPath(index_entry.filename).parts[0]
         require(root.startswith("run-") and index.get("run_directory") == root, "Run directory mismatch")
         require(index.get("schema_version") == 1 and index.get("format") == "maa-blackflow-local-integrity"
@@ -136,6 +144,13 @@ def verify_archive(path: Path) -> dict:
             require(name in expected, "Required run file is missing: " + name)
         require(expected["manifest.json"]["size"] <= MAX_INDEX_BYTES, "Collector manifest is too large")
         collector = parse(archive.read(root + "/manifest.json"))
+        if collector.get("schema_version", 1) != 1 or collector.get("contract_version", 1) != 1:
+            raise UnsupportedContract("Unsupported raw event contract")
+        if "contract_id" in collector:
+            require(collector['contract_id'] == 'maa.blackflow.raw', "Invalid collector contract identity")
+            require(isinstance(collector.get('run_uuid'), str) and re.fullmatch(
+                r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',
+                collector['run_uuid']), "Invalid run UUID")
         require(collector.get("collector_version") == index.get("collector_version"), "Collector version mismatch")
         count = 0
         previous_elapsed = -1
@@ -145,6 +160,8 @@ def verify_archive(path: Path) -> dict:
             while line := stream.readline(MAX_INDEX_BYTES + 1):
                 require(len(line) <= MAX_INDEX_BYTES and line.endswith(b"\n"), "Oversized or incomplete event line")
                 event = parse(line)
+                if event.get("schema_version") != 1:
+                    raise UnsupportedContract("Unsupported event schema")
                 count += 1
                 require(event.get("schema_version") == 1 and event.get("sequence") == count, "Event sequence gap")
                 elapsed = event.get("elapsed_ms")
@@ -176,6 +193,12 @@ def main():
     try:
         result = verify_archive(args.archive)
         code = 0 if result["status"] == "valid_local_signature" else 2
+    except UnsupportedContract as error:
+        result = {"status": "unsupported", "origin_attested": False, "message": str(error)}
+        code = 3
+    except ImportError as error:
+        result = {"status": "dependency_unavailable", "origin_attested": False, "message": str(error)}
+        code = 4
     except Exception as error:
         result = {"status": "invalid", "origin_attested": False, "message": str(error)}
         code = 1

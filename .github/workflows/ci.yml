@@ -844,6 +844,7 @@ jobs:
           ln -s /Applications "$staging/Applications"
           mkdir -p "$staging/tools"
           cp tools/VerifyBlackFlowRunArchive.py "$staging/tools/"
+          python3 tools/BuildBlackFlowContract.py --output "$staging/tools/blackflow-contract-v1"
           cat > "$staging/NOTICE.txt" <<'NOTICE'
           黑流树海数据收集专用 MAA ${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}
 

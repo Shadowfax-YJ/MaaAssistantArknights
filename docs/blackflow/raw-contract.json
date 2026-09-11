@@ -1,0 +1,21 @@
+{
+  "contract_id": "maa.blackflow.raw",
+  "contract_version": 1,
+  "event_schema_version": 1,
+  "archive_schema_version": 1,
+  "integrity_schema_version": 1,
+  "image_layout_version": 1,
+  "identity": "run_uuid when present; legacy identity is evidence-derived",
+  "profile_source": "event.state.profile",
+  "coverage": "observed-events-only",
+  "required_signed_actions": ["run.started", "run.start_confirmed", "run.ended"],
+  "utopia_inspection": {
+    "action": "utopia.inspection",
+    "floor_source": "event.floor, then event.state.floor; never state.page.floor",
+    "outcomes": ["present", "absent"],
+    "ideology": "details.ideology",
+    "policy": "details.policy"
+  },
+  "origin_attested": false,
+  "unknown_versions": "unsupported; retain evidence and wait for an adapter"
+}

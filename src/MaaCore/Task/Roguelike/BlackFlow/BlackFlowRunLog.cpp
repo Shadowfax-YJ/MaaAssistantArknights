@@ -6,6 +6,7 @@
 #include <ctime>
 #include <iomanip>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <thread>
 
@@ -21,6 +22,26 @@ namespace asst::blackflow
 {
 namespace
 {
+std::string new_run_uuid()
+{
+    std::random_device random;
+    unsigned char bytes[16];
+    for (auto& byte : bytes) {
+        byte = static_cast<unsigned char>(random());
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    std::ostringstream result;
+    result << std::hex << std::setfill('0');
+    for (int index = 0; index < 16; ++index) {
+        if (index == 4 || index == 6 || index == 8 || index == 10) {
+            result << '-';
+        }
+        result << std::setw(2) << static_cast<unsigned int>(bytes[index]);
+    }
+    return result.str();
+}
+
 void set_error(std::string* error, std::string message)
 {
     if (error != nullptr) {
@@ -205,6 +226,15 @@ bool BlackFlowRunLog::ensure_started(
         const json::object manifest {
             { "schema_version", BlackFlowRunLogSchemaVersion },
             { "logger", "blackflow.run" },
+            { "contract_id", "maa.blackflow.raw" },
+            { "contract_version", 1 },
+            { "archive_schema_version", 1 },
+            { "run_uuid", new_run_uuid() },
+            { "collection_profile_source", "event.state.profile" },
+            { "coverage", "observed-events-only" },
+            { "image_layout_version", 1 },
+            { "resource_identity", "not-recorded" },
+            { "capabilities", json::array { "ordered-events", "image-evidence", "utopia-inspection-v1" } },
             { "collector_version", MAA_VERSION },
             { "run_revision", run_revision },
             { "started_at", utc_timestamp(now) },
