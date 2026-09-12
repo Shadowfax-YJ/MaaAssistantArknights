@@ -1,11 +1,8 @@
-黑流树海采集版 v1.1.6
+黑流树海采集版 v1.1.7
 
 ### 本次更新
 
-* 修复商店沿用前一轮切页重试次数、可能未刷新就离开的问题。
-* 修复实际选券页漏采的问题，保存点击前画面及所选按钮，并关联后续招募界面，重试不重复计券。
-* 加强商品购买前的画面、名称和价格核验，货架移动或目标无法确认时重新扫描，避免使用失效坐标。
-* 完善购买回执，区分已确认购买、失败、证据不足及金额不一致；只在确认的商店页面读取钱包。
+* 修复离开树洞并继续探索后，重复缩放地图导致楼层标题识别失败、任务停止的问题。
 
 ### 升级
 
@@ -15,8 +12,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.6/MAA-BlackFlow-Data-Collection-v1.1.6-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.6/MAA-BlackFlow-Data-Collection-v1.1.6-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.7/MAA-BlackFlow-Data-Collection-v1.1.7-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.7/MAA-BlackFlow-Data-Collection-v1.1.7-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

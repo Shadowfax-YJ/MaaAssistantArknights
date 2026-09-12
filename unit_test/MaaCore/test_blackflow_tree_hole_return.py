@@ -1,10 +1,13 @@
-"""Replay the floor-title callback from MAA-002's 2026-09-11 return stall.
+"""Replay the floor-title callback and its continuation after a tree-hole return.
 
 Compile the production callback branch, mocking controller/session I/O only.
 The recorded map button scored 0.879787 (<0.9), so map routing never runs.
 The return must visit the menu from the title callback, before that gate.
+Then follow the real resource tasks: the 2026-09-12 failures came from zooming
+the already prepared map back in and waiting for a title obscured by node text.
 """
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +15,53 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+PREFIX = "BlackFlow@Roguelike@"
+
+
+def replay_map_handoff(tasks, entry, zoomed_out):
+    """Supply map-button recognition; take actions/successors from production JSON.
+
+    No popup is present. Floor-title OCR is deliberately unavailable, as in the
+    reported failures: the return callback already confirmed the outer floor.
+    """
+    def resolve(name):
+        task = tasks.get(name, {})
+        result = resolve(task["baseTask"]) if "baseTask" in task else {}
+        return result | task
+
+    def expand(names):
+        for name in names:
+            if name.endswith("#next"):
+                yield from expand(resolve(name[:-5]).get("next", []))
+            else:
+                yield name
+
+    def matches(name):
+        task = resolve(name)
+        if task.get("algorithm") == "JustReturn":
+            return True
+        button = PREFIX + ("MapZoomIn.png" if zoomed_out else "MapZoomOut.png")
+        templates = task.get("template", [])
+        if isinstance(templates, str):
+            templates = [templates]
+        return button in templates
+
+    path, zoom_in_clicks, zoom_out_clicks = [], 0, 0
+    candidates = [entry]
+    for _ in range(20):
+        name = next((name for name in expand(candidates) if matches(name)), None)
+        if name is None:
+            return False, path, zoom_in_clicks, zoom_out_clicks
+        path.append(name)
+        if name == PREFIX + "Routing":
+            return True, path, zoom_in_clicks, zoom_out_clicks
+        task = resolve(name)
+        if task.get("action") == "ClickSelf":
+            zoom_in_clicks += int(zoomed_out)
+            zoom_out_clicks += int(not zoomed_out)
+            zoomed_out = not zoomed_out
+        candidates = task.get("next", [])
+    return False, path, zoom_in_clicks, zoom_out_clicks
 
 
 def block(source, marker):
@@ -51,7 +101,7 @@ struct Tasks {
 } Task;
 struct Logger {template<class... T> void info(T&&...){} template<class... T> void error(T&&...){} } Log;
 struct Session {
-    int floor=6,outer_ap=3;bool failed=false;
+    int floor=6,outer_ap=3,outer_floor=3;bool failed=false;
     std::optional<int> current_floor(){return floor;}
     void clear_current_floor(){floor=0;}
     void fail(std::string,std::string,FailureDisposition){failed=true;}
@@ -61,7 +111,7 @@ struct Port {
     Session* session;bool succeeds=true,pursuit=false,pending=true;int calls=0;
     bool resume_pending_tree_hole_return(int floor,std::string*){
         if(!pending)return true;
-        if(session->floor!=3||floor!=3||session->outer_ap!=3)return false;
+        if(session->floor!=session->outer_floor||floor!=session->outer_floor||session->outer_ap!=3)return false;
         ++calls;if(succeeds)pending=false;return succeeds;
     }
     bool take_pending_pursuit(){return pursuit;}
@@ -69,8 +119,9 @@ struct Port {
 };
 struct Details {
     std::string trigger;
+    std::string floor_name;
     std::string get(const char*,const char*,const char*,const char*)const{
-        return trigger==p+"TreeHoleReturnResumeRetry"?"":"F3";
+        return trigger==p+"TreeHoleReturnResumeRetry"?"":floor_name;
     }
     std::string get(const char*,const char*,const char*)const{return trigger;}
 };
@@ -116,23 +167,29 @@ struct BlackFlowTaskPort {
 ''' + resume + '\n' + continue_exploration + r'''
 int main(){
     int failures=0;
+    for(const int outer_floor:{3,4}){
     for(const std::string mode:{"return","ordinary-floor","pursuit","retry","retry-from-menu"}){
         Session session;Port port{&session};Lifecycle lifecycle{&session,&port};
-        if(mode=="retry-from-menu")session.floor=3;
+        session.outer_floor=outer_floor;
+        if(mode=="retry-from-menu")session.floor=outer_floor;
         port.succeeds=mode!="pursuit"&&mode!="retry";port.pursuit=mode=="pursuit";
         Task.bases.clear();
-        const Details event{p+(mode=="ordinary-floor"?"NextLevel":mode=="retry-from-menu"?"TreeHoleReturnResumeRetry":"TreeHoleReturnTitle")};
+        const Details event{p+(mode=="ordinary-floor"?"NextLevel":mode=="retry-from-menu"?"TreeHoleReturnResumeRetry":"TreeHoleReturnTitle"),"F"+std::to_string(outer_floor)};
         const bool accepted=lifecycle.verify(event);
         if(accepted)lifecycle.run(event);
         const int expected=mode=="ordinary-floor"?0:1;
-        bool ok=accepted&&port.calls==expected&&session.floor==3&&session.outer_ap==3;
-        if(mode!="ordinary-floor"){
-            const auto expected_route=p+(mode=="pursuit"?"HuntedWait":mode=="retry"?"RecoveryFailed":"NextLevel-Enter");
+        bool ok=accepted&&port.calls==expected&&session.floor==outer_floor&&session.outer_ap==3;
+        if(mode=="pursuit"||mode=="retry"){
+            const auto expected_route=p+(mode=="pursuit"?"HuntedWait":"RecoveryFailed");
             ok=ok&&Task.bases[p+"TreeHoleReturnResumeAction"]==expected_route;
         }
-        std::cout<<(ok?"PASS ":"FAIL ")<<mode<<" menu_calls="<<port.calls
+        std::cout<<(ok?"PASS ":"FAIL ")<<mode<<" floor="<<outer_floor<<" menu_calls="<<port.calls
                  <<" route="<<Task.bases[p+"TreeHoleReturnResumeAction"]<<"\n";
+        if(mode=="return"||mode=="retry-from-menu"){
+            std::cout<<"HANDOFF "<<mode<<" floor="<<outer_floor<<" "<<Task.bases[p+"TreeHoleReturnResumeAction"]<<"\n";
+        }
         failures+=!ok;
+    }
     }
     for(const std::string mode:{"success-once","timeout","wrong-floor","late-pursuit"}){
         Context context;BlackFlowTaskPort port{&context};std::string error;
@@ -161,7 +218,24 @@ int main(){
         exe = cpp.with_suffix(".exe")
         cpp.write_text(harness, encoding="utf-8")
         subprocess.run([compiler, "-std=c++20", str(cpp), "-o", str(exe)], check=True)
-        return subprocess.run([str(exe)]).returncode
+        result = subprocess.run([str(exe)], capture_output=True, text=True, check=False)
+        print(result.stdout, end="")
+        print(result.stderr, end="")
+        failures = int(result.returncode != 0)
+        tasks = json.loads((ROOT / "resource/tasks/Roguelike/BlackFlow.json").read_text(encoding="utf-8"))
+        handoffs = [line.split() for line in result.stdout.splitlines() if line.startswith("HANDOFF ")]
+        if len(handoffs) != 4:
+            print("FAIL: missing successful return/retry handoffs for floors 3 and 4")
+            failures += 1
+        for _, mode, floor, entry in handoffs:
+            for zoomed_out in (True, False):
+                routed, path, zoom_in, zoom_out = replay_map_handoff(tasks, entry, zoomed_out)
+                ok = routed and zoom_in == 0 and zoom_out == int(not zoomed_out)
+                print(f"{'PASS' if ok else 'FAIL'} {mode} {floor} prepared_map={zoomed_out} "
+                      f"reaches_routing={routed} zoom_in={zoom_in} zoom_out={zoom_out} "
+                      f"path={' -> '.join(path)}")
+                failures += int(not ok)
+        return int(failures != 0)
 
 
 if __name__ == "__main__":

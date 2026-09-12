@@ -1,4 +1,4 @@
-## v1.1.6
+## v1.1.7
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.7 (2026-09-12)</b></summary>
+
+### 修复 | Fix
+
+* 修复离开树洞并继续探索后，重复缩放地图导致楼层标题识别失败、任务停止的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.6 (2026-09-12)</b></summary>
 
 ### 修复 | Fix

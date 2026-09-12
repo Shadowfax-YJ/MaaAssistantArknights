@@ -421,7 +421,9 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             const bool resumed = m_port->resume_pending_tree_hole_return(floor, &error);
             std::string successor(RecoveryFailedTask);
             if (resumed) {
-                successor = "BlackFlow@Roguelike@NextLevel-Enter";
+                // 返回流程已缩小地图并核对外层标题；新楼层入口会再次切换比例尺，
+                // 把地图放大后让节点文字混入标题。直接恢复普通地图处理并保留弹窗守卫。
+                successor = "BlackFlow@Roguelike@MapPrepare";
             }
             else if (m_port->take_pending_pursuit()) {
                 successor = "BlackFlow@Roguelike@HuntedWait";
