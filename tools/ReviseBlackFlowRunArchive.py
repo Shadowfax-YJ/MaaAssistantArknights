@@ -87,6 +87,20 @@ def correct_landing(value, correction, floor=None, generation=None, transaction=
         return result
     if sequence is not None and sequence < correction['start_sequence']:
         return result
+    # A false page can bind to a different, still-unvisited semantic candidate.
+    # Restore only the reviewed contamination states; retain later OCR/real visits.
+    for restore in correction.get('restore_nodes', []):
+        if value.get('id') != restore['node'] or not any(
+                all(value.get(key) == expected for key, expected in match.items()) for match in restore['when']):
+            continue
+        for key, restored in restore['fields'].items():
+            if key in value:
+                result[key] = restored
+        result['identity_source'] = 'archive_revision'
+        result['node_type_correction'] = {'method': 'archive-map-return-1', 'raw_type': value.get('type', value.get('node_type')),
+            'raw_name': value.get('name', value.get('node_name')), 'transaction_id': correction['transaction_id'],
+            'reason': 'restore_unvisited_node_after_false_page_binding'}
+        return result
     map_node = (value.get('id') == correction['node'] and value.get('identity_source') in ('entered_page', 'event_name'))
     page = transaction == correction['transaction_id'] and (container in ('page', 'attribution') or 'node' in value)
     warning = transaction == correction['transaction_id'] and value.get('actual_landing') == correction['node']

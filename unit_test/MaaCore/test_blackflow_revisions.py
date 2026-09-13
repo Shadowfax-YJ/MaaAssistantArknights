@@ -139,3 +139,15 @@ def test_map_return_correction_preserves_other_transactions_maps_and_decisions()
     assert fixed['nodes'][0]['name'] == '曲折密道' and fixed['nodes'][0]['observed_contents'] == []
     assert fixed['nodes'][1] == note['nodes'][1]
     assert correct_landing(fixed, correction) == fixed
+
+    correction['restore_nodes'] = [{'node': 99, 'when': [
+        {'identity_source': 'event_name', 'node_name': '线人', 'progress': 'completed'},
+        {'identity_source': 'node_resolution_becomes_empty', 'node_type': 'empty'}],
+        'fields': {'node_name': '不期而遇', 'node_type': 'incident', 'progress': 'active', 'blocks_vision': True}}]
+    wrong = {'floor': 4, 'map_generation': 6, 'map_nodes': [
+        {'id': 99, 'node_type': 'empty', 'node_name': '林间空地', 'progress': 'completed',
+         'identity_source': 'node_resolution_becomes_empty', 'blocks_vision': False}]}
+    recovered = correct_landing(wrong, correction)['map_nodes'][0]
+    assert recovered['node_type'] == 'incident' and recovered['progress'] == 'active' and recovered['blocks_vision']
+    wrong['map_nodes'][0]['identity_source'] = 'ocr'
+    assert correct_landing(wrong, correction) == wrong
