@@ -106,6 +106,7 @@ void OCRerConfig::_set_task_info(OcrTaskInfo task_info)
     set_required(std::move(task_info.text));
     m_params.full_match = task_info.full_match;
     m_params.fuzzy_match = task_info.fuzzy_match;
+    m_params.fuzzy_match_min_length = task_info.fuzzy_match_min_length;
     set_replace(task_info.replace_map, task_info.replace_full);
     m_params.use_char_model = task_info.is_ascii;
     m_params.without_det = task_info.without_det;

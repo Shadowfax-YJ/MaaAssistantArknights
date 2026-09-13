@@ -1,4 +1,4 @@
-## v1.1.7
+## v1.1.8
 
 ### Highlights
 
@@ -36,6 +36,18 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.8 (2026-09-14)</b></summary>
+
+### 修复 | Fix
+
+* 修复离开树洞后楼层标题受遮挡时反复等待、无法继续探索的问题，并保留返回途中奖励弹窗的正确楼层归属。 @Shadowfax-YJ
+* 修复把地图文字误认成事件、污染实际落点与探索笔记的问题；“线人”“黑诞”等短事件名不再接受单字模糊匹配。 @Shadowfax-YJ
+* 修复单挑部署卡在朝向选择，以及追猎、事件转战斗等场景的延迟超载弹窗导致任务停滞的问题。 @Shadowfax-YJ
+* 修复未揭示的战斗节点被记为普通作战的问题；证据不足时保留未知类型和已识别的关卡名。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.7 (2026-09-12)</b></summary>
 
 ### 修复 | Fix

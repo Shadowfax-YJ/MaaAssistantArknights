@@ -137,7 +137,9 @@ bool OCRer::filter_and_replace_by_required_(Result& res) const
         for (const auto& candidate : m_params.required) {
             candidates.emplace_back(candidate.second);
         }
-        const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(equ_text, candidates);
+        utils::FuzzyTextMatchSettings settings;
+        settings.minimum_fuzzy_candidate_length = m_params.fuzzy_match_min_length;
+        const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(equ_text, candidates, settings);
         if (!match.accepted) {
             Log.debug(
                 "OCR fuzzy match rejected",

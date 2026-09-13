@@ -26,6 +26,7 @@ struct FuzzyTextMatchSettings
     double minimum_similarity = 0.75;
     double minimum_margin = 0.12;
     std::size_t maximum_edit_distance = 2;
+    std::size_t minimum_fuzzy_candidate_length = 0;
 };
 
 namespace detail
@@ -188,7 +189,8 @@ inline FuzzyTextMatch fuzzy_match_ocr_text(
         best_length > 1 ? 1.0 - 1.0 / static_cast<double>(best_length) : 1.0;
     const double required_similarity = std::min(settings.minimum_similarity, one_edit_similarity);
     output.accepted = output.exact ||
-                      (best_length > 1 && output.edit_distance <= edit_limit &&
+                      (best_length > 1 && best_length >= settings.minimum_fuzzy_candidate_length &&
+                       output.edit_distance <= edit_limit &&
                        output.similarity >= required_similarity &&
                        output.similarity - output.runner_up_similarity >= settings.minimum_margin);
     return output;

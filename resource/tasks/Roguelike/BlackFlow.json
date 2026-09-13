@@ -1591,6 +1591,7 @@
     },
     "BlackFlow@Roguelike@EnteredPageClassification": {
         "algorithm": "OcrDetect",
+        "fuzzyMatchMinLength": 3,
         "roi": [0, 420, 500, 115],
         "text": [
             "险路尽头",
@@ -3681,6 +3682,7 @@
     },
     "BlackFlow@Roguelike@StageEncounterOcr": {
         "baseTask": "Roguelike@StageEncounterOcr",
+        "fuzzyMatchMinLength": 3,
         "roi": [126, 454, 222, 70],
         "text": [
             "未涉足之树",
@@ -4604,12 +4606,13 @@
         "next": []
     },
     "BlackFlow@Roguelike@TreeHoleReturnEnter": {
+        "Doc": "确认离开后使用保存的外层归属启动完整返回；外层未知时由生命周期插件回退到标题识别。",
         "algorithm": "JustReturn",
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@TreeHoleReturnWait*80"
         ],
         "next": [
-            "BlackFlow@Roguelike@TreeHoleReturnWait"
+            "BlackFlow@Roguelike@TreeHoleReturnResumeRetry"
         ]
     },
     "BlackFlow@Roguelike@TreeHoleReturnWait": {
@@ -4643,11 +4646,11 @@
         ]
     },
     "BlackFlow@Roguelike@TreeHoleReturnResumeAction": {
-        "Doc": "外层标题的生命周期回调先执行回主菜单继续探索，再按实际结果设置本动作；恢复失败等待后重试完整返回流程，追猎仍交给公共路由。",
+        "Doc": "首次返回、标题确认或重试的生命周期回调执行回主菜单继续探索，再按实际结果设置本动作；失败后重试完整返回，追猎交给公共路由。",
         "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
     },
     "BlackFlow@Roguelike@TreeHoleReturnResumeRetry": {
-        "Doc": "恢复可能停在主菜单或楼层封面，由生命周期插件按已确认的外层归属重试，不依赖地图标题或缩放按钮。",
+        "Doc": "首次返回与失败重试均按保存的外层归属执行完整恢复，不以首次标题或缩放按钮识别成功为前提。",
         "algorithm": "JustReturn",
         "next": ["BlackFlow@Roguelike@TreeHoleReturnResumeAction"]
     },

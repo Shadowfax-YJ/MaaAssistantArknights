@@ -1,8 +1,11 @@
-黑流树海采集版 v1.1.7
+黑流树海采集版 v1.1.8
 
 ### 本次更新
 
-* 修复离开树洞并继续探索后，重复缩放地图导致楼层标题识别失败、任务停止的问题。
+* 修复离开树洞后楼层标题受遮挡时反复等待、无法继续探索的问题，并保留返回途中奖励弹窗的正确楼层归属。
+* 修复把地图文字误认成事件、污染实际落点与探索笔记的问题；“线人”“黑诞”等短事件名不再接受单字模糊匹配。
+* 修复单挑部署卡在朝向选择，以及追猎、事件转战斗等场景的延迟超载弹窗导致任务停滞的问题。
+* 修复未揭示的战斗节点被记为普通作战的问题；证据不足时保留未知类型和已识别的关卡名。
 
 ### 升级
 
@@ -12,8 +15,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.7/MAA-BlackFlow-Data-Collection-v1.1.7-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.7/MAA-BlackFlow-Data-Collection-v1.1.7-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.8/MAA-BlackFlow-Data-Collection-v1.1.8-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.8/MAA-BlackFlow-Data-Collection-v1.1.8-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

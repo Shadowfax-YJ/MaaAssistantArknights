@@ -5139,6 +5139,30 @@ TEST_CASE("BlackFlow every node settlement checks shared exit popups before page
     }
 }
 
+TEST_CASE("BlackFlow page OCR rejects single-character and misspelled short event titles")
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    for (const auto& name : { "BlackFlow@Roguelike@EnteredPageClassification", "BlackFlow@Roguelike@StageEncounterOcr" }) {
+        const auto& task = tasks->at(name);
+        const auto candidates = task.get("text", std::vector<std::string> {});
+        asst::utils::FuzzyTextMatchSettings settings;
+        settings.minimum_fuzzy_candidate_length = task.get("fuzzyMatchMinLength", 0u);
+        CAPTURE(name);
+        for (const auto& captured : { "人", "仙人", "黑键", "黑" }) {
+            CAPTURE(captured);
+            REQUIRE_FALSE(fuzzy_match_ocr_text(captured, candidates, settings).accepted);
+        }
+        for (const auto& captured : { "线人", "黑诞", "临时介所" }) {
+            CAPTURE(captured);
+            REQUIRE(fuzzy_match_ocr_text(captured, candidates, settings).accepted);
+        }
+    }
+    // 商品仍允许独立配置的短名纠错，页面规则不能更改其默认行为。
+    REQUIRE(fuzzy_match_ocr_text("种了", std::vector<std::string> { "种子", "清水" }).accepted);
+}
+
 TEST_CASE("BlackFlow collection starts through abandonment instead of map routing")
 {
     REQUIRE(initial_collection_task(false) == "BlackFlow@Roguelike@Begin");
@@ -5190,6 +5214,7 @@ TEST_CASE("BlackFlow floor title polling yields to pursuit and bounded map recov
     REQUIRE(tasks->at(p + "TreeHoleReturnTitle").get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { p + "TreeHoleReturnResumeAction" });
     REQUIRE(recovery_retry_task(p + "TreeHoleReturnResumeAction") == p + "TreeHoleReturnResumeRetry");
+    REQUIRE(recovery_retry_task(p + "TreeHoleReturnWait") == p + "TreeHoleReturnResumeRetry");
     REQUIRE(tasks->at(p + "TreeHoleReturnResumeRetry").get("algorithm", std::string {}) == "JustReturn");
 }
 

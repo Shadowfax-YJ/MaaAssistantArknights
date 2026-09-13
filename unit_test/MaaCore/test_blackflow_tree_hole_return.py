@@ -2,7 +2,8 @@
 
 Compile the production callback branch, mocking controller/session I/O only.
 The recorded map button scored 0.879787 (<0.9), so map routing never runs.
-The return must visit the menu from the title callback, before that gate.
+The return must visit the menu before that gate, including when the first
+floor title is obscured (MAA-001, 2026-09-14, 17 ineffective wait retries).
 Then follow the real resource tasks: the 2026-09-12 failures came from zooming
 the already prepared map back in and waiting for a title obscured by node text.
 """
@@ -82,6 +83,7 @@ def main():
     port_source = (ROOT / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowTaskPort.cpp").read_text(encoding="utf-8")
     resume = block(port_source, "bool BlackFlowTaskPort::resume_pending_tree_hole_return(")
     continue_exploration = block(port_source, "bool BlackFlowTaskPort::resume_exploration_after_tree_hole(")
+    return_popup = block(port_source, "if (tree_hole_outer_floor >= 1 && tree_hole_outer_floor <= 5 &&")
     harness = r'''
 #include <algorithm>
 #include <iostream>
@@ -90,6 +92,7 @@ def main():
 #include <optional>
 #include <string>
 #include <vector>
+#include "meojson/json.hpp"
 const std::string p="BlackFlow@Roguelike@";
 const std::string RecoveryFailedTask=p+"RecoveryFailed";
 enum class FailureDisposition {RestartRun};
@@ -101,8 +104,9 @@ struct Tasks {
 } Task;
 struct Logger {template<class... T> void info(T&&...){} template<class... T> void error(T&&...){} } Log;
 struct Session {
-    int floor=6,outer_ap=3,outer_floor=3;bool failed=false;
+    int floor=6,outer_ap=3,saved_outer_floor=3;bool failed=false;
     std::optional<int> current_floor(){return floor;}
+    int outer_floor(){return saved_outer_floor;}
     void clear_current_floor(){floor=0;}
     void fail(std::string,std::string,FailureDisposition){failed=true;}
     bool set_current_floor(int n,std::string*){floor=n;return true;}
@@ -111,7 +115,7 @@ struct Port {
     Session* session;bool succeeds=true,pursuit=false,pending=true;int calls=0;
     bool resume_pending_tree_hole_return(int floor,std::string*){
         if(!pending)return true;
-        if(session->floor!=session->outer_floor||floor!=session->outer_floor||session->outer_ap!=3)return false;
+        if(floor!=session->saved_outer_floor||session->outer_ap!=3)return false;
         ++calls;if(succeeds)pending=false;return succeeds;
     }
     bool take_pending_pursuit(){return pursuit;}
@@ -165,31 +169,47 @@ struct BlackFlowTaskPort {
     bool resume_exploration_after_tree_hole(int,cv::Mat&,std::string*);
 };
 ''' + resume + '\n' + continue_exploration + r'''
-int main(){
+enum class CollectionPopupSource {FloorEntry};
+struct CollectionPopupDestination {std::string directory;json::object attribution;};
+std::string collection_popup_source_directory(CollectionPopupSource,int floor){return "floor-"+std::to_string(floor);}
+std::optional<CollectionPopupDestination> return_popup_destination(std::string_view task,int tree_hole_outer_floor){
+    const int floor=6;
+''' + return_popup + r'''
+    return std::nullopt;
+}
+int main(int argc,char** argv){
     int failures=0;
-    for(const int outer_floor:{3,4}){
-    for(const std::string mode:{"return","ordinary-floor","pursuit","retry","retry-from-menu"}){
+    for(const int outer_floor:{3,4,5}){
+    for(const std::string mode:{"return","ordinary-floor","pursuit","retry","retry-from-menu","first-without-title"}){
         Session session;Port port{&session};Lifecycle lifecycle{&session,&port};
-        session.outer_floor=outer_floor;
+        session.saved_outer_floor=outer_floor;
         if(mode=="retry-from-menu")session.floor=outer_floor;
         port.succeeds=mode!="pursuit"&&mode!="retry";port.pursuit=mode=="pursuit";
         Task.bases.clear();
-        const Details event{p+(mode=="ordinary-floor"?"NextLevel":mode=="retry-from-menu"?"TreeHoleReturnResumeRetry":"TreeHoleReturnTitle"),"F"+std::to_string(outer_floor)};
+        const Details event{mode=="first-without-title"?argv[1]:p+(mode=="ordinary-floor"?"NextLevel":mode=="retry-from-menu"?"TreeHoleReturnResumeRetry":"TreeHoleReturnTitle"),"F"+std::to_string(outer_floor)};
         const bool accepted=lifecycle.verify(event);
         if(accepted)lifecycle.run(event);
         const int expected=mode=="ordinary-floor"?0:1;
-        bool ok=accepted&&port.calls==expected&&session.floor==outer_floor&&session.outer_ap==3;
+        bool ok=accepted&&port.calls==expected&&session.floor==(mode=="retry"?6:outer_floor)&&session.outer_ap==3;
         if(mode=="pursuit"||mode=="retry"){
             const auto expected_route=p+(mode=="pursuit"?"HuntedWait":"RecoveryFailed");
             ok=ok&&Task.bases[p+"TreeHoleReturnResumeAction"]==expected_route;
         }
         std::cout<<(ok?"PASS ":"FAIL ")<<mode<<" floor="<<outer_floor<<" menu_calls="<<port.calls
                  <<" route="<<Task.bases[p+"TreeHoleReturnResumeAction"]<<"\n";
-        if(mode=="return"||mode=="retry-from-menu"){
+        if(ok&&(mode=="return"||mode=="retry-from-menu"||mode=="first-without-title")){
             std::cout<<"HANDOFF "<<mode<<" floor="<<outer_floor<<" "<<Task.bases[p+"TreeHoleReturnResumeAction"]<<"\n";
         }
         failures+=!ok;
     }
+    }
+    {
+        Session session;session.saved_outer_floor=0;Port port{&session};Lifecycle lifecycle{&session,&port};
+        Task.bases.clear();const Details event{p+"TreeHoleReturnResumeRetry",""};
+        const bool accepted=lifecycle.verify(event);if(accepted)lifecycle.run(event);
+        const bool ok=accepted&&!session.failed&&session.floor==6&&port.calls==0&&
+            Task.bases[p+"TreeHoleReturnResumeAction"]==p+"TreeHoleReturnWait";
+        std::cout<<(ok?"PASS ":"FAIL ")<<"unknown-outer-floor\n";failures+=!ok;
     }
     for(const std::string mode:{"success-once","timeout","wrong-floor","late-pursuit"}){
         Context context;BlackFlowTaskPort port{&context};std::string error;
@@ -207,6 +227,23 @@ int main(){
         std::cout<<(ok?"PASS ":"FAIL ")<<mode<<" menus="<<context.menus<<"\n";
         failures+=!ok;
     }
+    for(int i=2;i<argc;++i){
+        for(const int floor:{3,4,5}){
+            const auto destination=return_popup_destination(argv[i],floor);
+            const bool ok=destination&&destination->directory=="floor-"+std::to_string(floor)&&
+                destination->attribution.get("floor",0)==floor&&
+                destination->attribution.get("source",std::string())=="floor_entry";
+            std::cout<<(ok?"PASS ":"FAIL ")<<"return-popup floor="<<floor<<" task="<<argv[i]<<"\n";
+            failures+=!ok;
+        }
+    }
+    for(const auto& [task,floor]:std::vector<std::pair<std::string,int>>{
+        {p+"TreeHoleResumeMapWait@(BlackFlow@Roguelike@CloseCollection)",0},
+        {p+"TreeHoleResumeMapWait@(BlackFlow@Roguelike@CloseCollection)",6},
+        {p+"StageEncounterReward@(BlackFlow@Roguelike@CloseCollection)",3}}){
+        const bool ok=!return_popup_destination(task,floor);
+        std::cout<<(ok?"PASS ":"FAIL ")<<"popup preserves unrelated/unknown context\n";failures+=!ok;
+    }
     return failures?1:0;
 }
 '''
@@ -217,15 +254,20 @@ int main(){
         cpp = Path(directory) / "replay.cpp"
         exe = cpp.with_suffix(".exe")
         cpp.write_text(harness, encoding="utf-8")
-        subprocess.run([compiler, "-std=c++20", str(cpp), "-o", str(exe)], check=True)
-        result = subprocess.run([str(exe)], capture_output=True, text=True, check=False)
+        subprocess.run([compiler, "-std=c++20", "-I", str(ROOT / "src/MaaUtils/include"),
+                        str(cpp), "-o", str(exe)], check=True)
+        tasks = json.loads((ROOT / "resource/tasks/Roguelike/BlackFlow.json").read_text(encoding="utf-8"))
+        first_entry = tasks[PREFIX + "TreeHoleReturnEnter"]["next"][0]
+        popup_tasks = [task for wait in ("TreeHoleResumeMapWait", "TreeHoleReturnWait")
+                       for task in tasks[PREFIX + wait]["next"] if "CloseCollection" in task]
+        result = subprocess.run([str(exe), first_entry, *popup_tasks], capture_output=True, text=True, check=False)
         print(result.stdout, end="")
         print(result.stderr, end="")
         failures = int(result.returncode != 0)
         tasks = json.loads((ROOT / "resource/tasks/Roguelike/BlackFlow.json").read_text(encoding="utf-8"))
         handoffs = [line.split() for line in result.stdout.splitlines() if line.startswith("HANDOFF ")]
-        if len(handoffs) != 4:
-            print("FAIL: missing successful return/retry handoffs for floors 3 and 4")
+        if len(handoffs) != 9:
+            print("FAIL: missing successful first-return/title/retry handoffs for floors 3, 4 and 5")
             failures += 1
         for _, mode, floor, entry in handoffs:
             for zoomed_out in (True, False):

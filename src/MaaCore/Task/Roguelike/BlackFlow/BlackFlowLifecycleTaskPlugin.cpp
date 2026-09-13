@@ -373,9 +373,16 @@ bool BlackFlowLifecycleTaskPlugin::_run()
         std::string area_name = details.get("details", "result", "text", "");
         const auto task = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel");
         if (work == PendingWork::RetryTreeHoleReturn) {
-            // 上次恢复可能停在主菜单或楼层封面；沿用已确认的外层归属重试完整恢复，
-            // 不再要求这些页面也能识别出地图标题。恢复函数仍会校验最终返回的楼层。
-            const int floor = m_session->current_floor().value_or(0);
+            // 确认离开时仍处于树洞上下文，current_floor 是 6。使用进入树洞前保存的外层，
+            // 不以放大地图上可能混入节点文字的标题作为恢复启动条件。
+            const int floor = m_session->outer_floor();
+            if (floor < 1 || floor > 5) {
+                // 中途接管可能没有外层记录，此时等待真实标题，不猜测楼层或提交状态。
+                Task.set_task_base(
+                    "BlackFlow@Roguelike@TreeHoleReturnResumeAction", "BlackFlow@Roguelike@TreeHoleReturnWait");
+                report_outputs();
+                return true;
+            }
             area_name = task != nullptr && floor >= 1 && floor <= 5 ? task->text.at(floor - 1) : std::string {};
         }
         if (task == nullptr || area_name.empty()) {
@@ -402,6 +409,19 @@ bool BlackFlowLifecycleTaskPlugin::_run()
         }
         const int floor = static_cast<int>(std::distance(floor_names.begin(), matched)) + 1;
         std::string error;
+        std::string tree_hole_successor;
+        if (tree_hole_return && m_port != nullptr) {
+            const bool resumed = m_port->resume_pending_tree_hole_return(floor, &error);
+            const bool pursuit = !resumed && m_port->take_pending_pursuit();
+            if (!resumed && !pursuit) {
+                // 返回或楼层校验失败时保留树洞/外层上下文，重试完整恢复而非假定已经回图。
+                Task.set_task_base("BlackFlow@Roguelike@TreeHoleReturnResumeAction", std::string(RecoveryFailedTask));
+                Log.info("BlackFlow tree-hole return requires recovery", "error", error);
+                report_outputs();
+                return true;
+            }
+            tree_hole_successor = pursuit ? "BlackFlow@Roguelike@HuntedWait" : "BlackFlow@Roguelike@MapPrepare";
+        }
         if (!m_session->set_current_floor(floor, &error)) {
             m_session->fail("floor_recognition_failed", error, FailureDisposition::RestartRun);
             Log.error("BlackFlow NextLevel floor recognition failed", area_name, error);
@@ -415,23 +435,9 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             work == PendingWork::RetryTreeHoleReturn ? "BlackFlow tree-hole return retries on the saved floor"
                                                     : "BlackFlow current floor recognized",
             "floor", floor, "area", area_name);
-        if (tree_hole_return && m_port != nullptr) {
-            // 出洞后的缩放按钮可能暂时无法匹配；回主菜单不能依赖先通过地图识别。
-            // 先恢复外层归属，再复用完整的 Continue/封面/弹窗处理和返回楼层校验。
-            const bool resumed = m_port->resume_pending_tree_hole_return(floor, &error);
-            std::string successor(RecoveryFailedTask);
-            if (resumed) {
-                // 返回流程已缩小地图并核对外层标题；新楼层入口会再次切换比例尺，
-                // 把地图放大后让节点文字混入标题。直接恢复普通地图处理并保留弹窗守卫。
-                successor = "BlackFlow@Roguelike@MapPrepare";
-            }
-            else if (m_port->take_pending_pursuit()) {
-                successor = "BlackFlow@Roguelike@HuntedWait";
-            }
-            Task.set_task_base("BlackFlow@Roguelike@TreeHoleReturnResumeAction", successor);
-            if (!resumed) {
-                Log.info("BlackFlow tree-hole return requires recovery", "next", successor, "error", error);
-            }
+        if (!tree_hole_successor.empty()) {
+            // 返回流程已恢复比例尺；直接回普通地图处理，避免再次放大。
+            Task.set_task_base("BlackFlow@Roguelike@TreeHoleReturnResumeAction", tree_hole_successor);
         }
         report_outputs();
         return true;

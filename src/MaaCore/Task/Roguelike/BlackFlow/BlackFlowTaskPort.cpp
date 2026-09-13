@@ -419,6 +419,22 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(
 {
     int floor = collection_popup_floor(session);
     const int tree_hole_outer_floor = session.in_tree_hole() ? session.outer_floor() : 0;
+    if (tree_hole_outer_floor >= 1 && tree_hole_outer_floor <= 5 &&
+        (task.starts_with("BlackFlow@Roguelike@TreeHoleResumeMapWait@") ||
+         task.starts_with("BlackFlow@Roguelike@TreeHoleReturnWait@"))) {
+        // 离开已确认，但恢复完成前 Session 仍保留树洞状态。返回途中弹窗属于保存的外层，
+        // 不能沿用树洞节点，也不能为了截图归属提前提交恢复成功。
+        return CollectionPopupDestination {
+            collection_popup_source_directory(CollectionPopupSource::FloorEntry, tree_hole_outer_floor),
+            json::object {
+                { "kind", "source" },
+                { "source", "floor_entry" },
+                { "evidence", "tree_hole_return_precedes_floor_commit" },
+                { "floor", tree_hole_outer_floor },
+                { "previous_floor", floor },
+            },
+        };
+    }
     const CollectionPopupSource source = collection_popup_source(task);
     if (source != CollectionPopupSource::None) {
         // 归队/乌托邦弹窗可能先于 NextLevel 提交楼层。优先采用截图中的标题，
@@ -3278,7 +3294,7 @@ bool BlackFlowTaskPort::classify_entered_page(
             observation.combat_operator_selection_open = true;
             observation.matched_texts.emplace_back("干员选择确认按钮");
         }
-        if (observation.classification_conflict || observation.inventory_overloaded) {
+        if (observation.inventory_overloaded) {
             return EnteredPageProbe::Classified;
         }
         if (observation.combat_operator_selection_open) {
@@ -3291,7 +3307,7 @@ bool BlackFlowTaskPort::classify_entered_page(
             observation.map_visible = true;
             return EnteredPageProbe::Classified;
         }
-        if (observation.classified_type.has_value()) {
+        if (observation.classification_conflict || observation.classified_type.has_value()) {
             return EnteredPageProbe::Classified;
         }
         // 固定页面按上游的左下角人物名窄 ROI 分类；普通事件仍复用自己的标题 ROI，
