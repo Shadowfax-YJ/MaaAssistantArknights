@@ -1,6 +1,7 @@
 """Verify an automatically generated BlackFlow ZIP without extracting it.
 
-Exit 0: valid LOCAL signature and content; 2: unsigned/old/manually repacked;
+Exit 0: valid LOCAL signature or explicitly labelled curated revision integrity;
+2: unsigned/old/manually repacked;
 1: invalid or damaged; 3: unsupported contract; 4: runtime dependency unavailable.
 A local signature does not attest an official client.
 Requires cryptography (pip install cryptography).
@@ -49,6 +50,70 @@ def safe_name(name):
     return path
 
 
+def verify_curated_archive(archive, envelope):
+    """Administrative derivative integrity; never a collector signature."""
+    if envelope.get('schema_version') != 1:
+        raise UnsupportedContract('Unsupported curated archive schema')
+    require(envelope.get('origin_attested') is False, 'Invalid curated attestation')
+    manifest = envelope.get('manifest', '')
+    parts = safe_name(manifest).parts
+    require(len(parts) == 2 and parts[0].startswith('run-') and parts[1] == 'archive-revision.json',
+            'Invalid revision manifest path')
+    require(archive.getinfo(manifest).file_size <= MAX_INDEX_BYTES, 'Revision manifest too large')
+    data = archive.read(manifest)
+    require(hashlib.sha256(data).hexdigest() == envelope.get('manifest_sha256'), 'Revision manifest digest mismatch')
+    document = parse(data)
+    if document.get('schema_version') != 1:
+        raise UnsupportedContract('Unsupported curated manifest schema')
+    require(document.get('format') == 'maa-blackflow-curated-archive' and document.get('origin_attested') is False,
+            'Invalid revision identity')
+    require(isinstance(document.get('previous_sha256'), str) and
+            re.fullmatch(r'[a-f0-9]{64}', document['previous_sha256']) and document.get('author') and document.get('reason')
+            and document.get('revision_id') and document.get('changes') and document.get('corrections'),
+            'Missing revision provenance')
+    require(isinstance(document.get('files'), list), 'Missing revision file index')
+    expected = {}
+    for item in document['files']:
+        name = item['path']; safe_name(name)
+        require(name.startswith(parts[0] + '/') and name != manifest and name not in expected
+                and type(item.get('size')) is int and 0 <= item['size'] <= MAX_TOTAL_BYTES
+                and isinstance(item.get('sha256'), str) and re.fullmatch(r'[a-f0-9]{64}', item['sha256']),
+                'Invalid revision file entry')
+        expected[name] = item
+    entries = archive.infolist()
+    require(len(entries) <= 65535 and sum(e.file_size for e in entries) <= MAX_TOTAL_BYTES,
+            'Curated archive exceeds verification limits')
+    seen = set()
+    for entry in entries:
+        safe_name(entry.filename)
+        require(entry.filename.casefold() not in seen and not entry.is_dir() and not entry.flag_bits & 1
+                and (entry.external_attr >> 16) & 0o170000 != 0o120000, 'Unsafe curated member')
+        seen.add(entry.filename.casefold())
+        if entry.filename == manifest:
+            continue
+        require(entry.filename in expected, 'Unindexed curated member')
+        item = expected[entry.filename]
+        require(entry.file_size == item['size'], 'Curated member size mismatch')
+        digest, count = hashlib.sha256(), 0
+        with archive.open(entry) as stream:
+            while chunk := stream.read(1024 * 1024):
+                count += len(chunk)
+                require(count <= item['size'], 'Curated member exceeds declared size')
+                digest.update(chunk)
+        require(count == item['size'] and digest.hexdigest() == item['sha256'], 'Curated member hash mismatch')
+    require({e.filename for e in entries} == set(expected) | {manifest}, 'Missing curated member')
+    require(parts[0] + '/run-events.jsonl' in expected and parts[0] + '/manifest.json' in expected,
+            'Missing curated run data')
+    require(expected[parts[0] + '/manifest.json']['size'] <= MAX_INDEX_BYTES, 'Collector manifest too large')
+    collector = parse(archive.read(parts[0] + '/manifest.json'))
+    if collector.get('schema_version', 1) != 1 or collector.get('contract_version', 1) != 1:
+        raise UnsupportedContract('Unsupported curated raw contract')
+    return {'status': 'valid_curated_revision', 'origin_attested': False, 'collector_signature_valid': False,
+            'run_directory': parts[0], 'revision_id': document['revision_id'],
+            'previous_sha256': document['previous_sha256'], 'changed_members': len(document['changes']),
+            'message': '人工修订包：成员摘要有效；采集原件和原签名保留于修订回收记录。'}
+
+
 def verify_archive(path: Path) -> dict:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -58,6 +123,8 @@ def verify_archive(path: Path) -> dict:
                     "message": "未找到程序签名：可能是手工打包、重新压缩或旧版生成的 ZIP。"}
         envelope = parse(archive.comment)
         require(isinstance(envelope, dict), "Invalid archive signature envelope")
+        if envelope.get('format') == 'maa-blackflow-curated-archive':
+            return verify_curated_archive(archive, envelope)
         if envelope.get("format") != "maa-blackflow-auto-archive":
             return {"status": "unsigned_or_repacked", "origin_attested": False,
                     "message": "ZIP 没有可识别的采集程序签名。"}
@@ -192,7 +259,7 @@ def main():
     args = parser.parse_args()
     try:
         result = verify_archive(args.archive)
-        code = 0 if result["status"] == "valid_local_signature" else 2
+        code = 0 if result["status"] in ("valid_local_signature", "valid_curated_revision") else 2
     except UnsupportedContract as error:
         result = {"status": "unsupported", "origin_attested": False, "message": str(error)}
         code = 3

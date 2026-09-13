@@ -4,6 +4,13 @@
   "event_schema_version": 1,
   "archive_schema_version": 1,
   "integrity_schema_version": 1,
+  "curated_archive": {
+    "format": "maa-blackflow-curated-archive",
+    "schema_version": 1,
+    "validation_status": "valid_curated_revision",
+    "collector_signature_valid": false,
+    "provenance": "previous archive SHA256, reviewed evidence and changed-member hashes; original retained in revision recycle directory"
+  },
   "image_layout_version": 1,
   "identity": "run_uuid when present; legacy identity is evidence-derived",
   "profile_source": "event.state.profile",
