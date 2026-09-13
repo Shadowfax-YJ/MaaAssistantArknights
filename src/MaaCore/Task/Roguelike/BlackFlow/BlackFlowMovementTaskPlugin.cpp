@@ -200,9 +200,17 @@ bool BlackFlowMovementTaskPlugin::cleanup_direct_depart_overload(std::string_vie
         return true;
     }
 
-    const bool hunted = source_task == HuntedDepartTask;
-    const bool encounter_battle = source_task == StageEncounterBattleDepartTask;
-    const bool battle_reenter = source_task == StageEnterBattleAgainTask;
+    // 弹窗可能晚于出发点击，在被动观察或过渡等待中出现；这些来源恢复到同一个出发流程。
+    const auto from_departure = [&](std::string_view departure) {
+        if (!source_task.starts_with(departure)) {
+            return false;
+        }
+        const auto suffix = source_task.substr(departure.size());
+        return suffix.empty() || suffix == "Observe" || suffix == "TransitionWait";
+    };
+    const bool hunted = from_departure(HuntedDepartTask);
+    const bool encounter_battle = from_departure(StageEncounterBattleDepartTask);
+    const bool battle_reenter = from_departure(StageEnterBattleAgainTask);
     if (!hunted && !encounter_battle && !battle_reenter) {
         m_session->fail(
             "direct_depart_inventory_cleanup_failed",

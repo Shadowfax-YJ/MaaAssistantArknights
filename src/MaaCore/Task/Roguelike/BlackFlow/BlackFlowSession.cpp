@@ -2713,6 +2713,10 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
         resolved.identity_revealed = true;
         resolved.identity_state = NodeIdentityState::Classified;
     }
+    else if (!context.resident_occupied_node.has_value() && resolved.type == NodeType::HideBattle) {
+        resolved.identity_revealed = false;
+        resolved.identity_state = NodeIdentityState::Hidden;
+    }
     if (!context.resident_occupied_node.has_value()) {
         resolved.identity_source = context.identity_from_event_name ? "event_name" : "entered_page";
     }
@@ -2752,7 +2756,7 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
     }
     if (becomes_empty) {
         resolved.progress = NodeProgress::Completed;
-        if (context.resident_occupied_node.has_value() && !resolved.identity_revealed) {
+        if (!resolved.identity_revealed) {
             resolved.identity_unrecoverable = true;
             m_run.revealed_nodes.erase(context.node);
         }
@@ -3219,7 +3223,8 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
         m_page_context->node = observation.current_node;
     }
     if (m_page_context.has_value() && !m_page_context->resident_occupied_node.has_value() &&
-        m_page_context->node_type == NodeType::BattleNormal && observation.floor == m_page_context->floor) {
+        (m_page_context->node_type == NodeType::BattleNormal || m_page_context->node_type == NodeType::HideBattle) &&
+        observation.floor == m_page_context->floor) {
         if (const Node* occupied = map_before_move.find_node(m_page_context->node);
             occupied != nullptr && node_has_roaming_resident_marker(*occupied)) {
             m_page_context->resident_occupied_node = *occupied;
@@ -4368,11 +4373,12 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
         proposal.controllable && target != nullptr && event_effect.resolved_type.has_value() &&
         event_node_type_is_known(target->type) && target->type != *event_effect.resolved_type;
     const bool resident_battle = target != nullptr && node_has_roaming_resident_marker(*target) &&
-                                 entered_page.classified_type == NodeType::BattleNormal;
+                                 (entered_page.classified_type == NodeType::BattleNormal ||
+                                  entered_page.classified_type == NodeType::HideBattle);
     const bool entered_identity_conflict =
         entered_page.classification_conflict ||
         (proposal.controllable && target != nullptr && target->identity_revealed && !resident_battle &&
-         entered_page.classified_type.has_value() &&
+         entered_page.classified_type.has_value() && entered_page.classified_type != NodeType::HideBattle &&
          target->type != *entered_page.classified_type);
     if (entered_identity_conflict || event_identity_conflict) {
         json::object evidence {

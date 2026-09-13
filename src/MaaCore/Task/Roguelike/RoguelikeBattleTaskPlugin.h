@@ -74,6 +74,7 @@ protected:
     bool do_best_deploy(bool wait_for_confirmation = false);
     bool calc_stage_info();
     bool run_preparation_phase();
+    std::optional<bool> confirm_preparation_deployment(const DeployPlanInfo& deploy_plan);
     bool register_virtual_auto_skill_devices();
     void stop_planned_skills();
 

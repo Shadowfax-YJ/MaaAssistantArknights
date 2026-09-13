@@ -2488,6 +2488,32 @@ TEST_CASE("BlackFlow move confirmation handles the leave-region confirmation dia
     REQUIRE(MoveConfirmationStatus::NeedsDismiss != MoveConfirmationStatus::Failed);
 }
 
+TEST_CASE("BlackFlow generic combat entry preserves unknown or independently confirmed subtype")
+{
+    EnteredPageObservation combat;
+    combat.classified_type = NodeType::HideBattle;
+    MovePreview hidden;
+    hidden.displayed_type = NodeType::HideBattle;
+    hidden.displayed_name = "未知的凶戾";
+    hidden.identity_revealed = false;
+
+    const auto unresolved = resolve_page_identity(NodeType::HideBattle, "未知的凶戾", &hidden, combat);
+    CHECK(unresolved.type == NodeType::HideBattle);
+    CHECK(unresolved.name == "未知的凶戾");
+    CHECK(resolve_page_identity(NodeType::HideInvisible, "未知的诡秘", nullptr, combat).type == NodeType::HideBattle);
+    for (const auto type : { NodeType::BattleNormal, NodeType::BattleElite, NodeType::BattleSavage, NodeType::BattleBoss }) {
+        CHECK(resolve_page_identity(type, "已确认关卡", &hidden, combat).type == type);
+        MovePreview revealed = hidden;
+        revealed.displayed_type = type;
+        revealed.displayed_name = "已确认关卡";
+        revealed.identity_revealed = true;
+        const auto resolved = resolve_page_identity(NodeType::HideBattle, "未知的凶戾", &revealed, combat);
+        CHECK(resolved.type == type);
+        CHECK(resolved.name == "已确认关卡");
+    }
+    CHECK_FALSE(classify_page_content_effect("StageInfo", "灌水贤者").resolved_type.has_value());
+}
+
 TEST_CASE("BlackFlow revealed controllable moves do not require entered-page identity classification")
 {
     MoveCandidate known_target;

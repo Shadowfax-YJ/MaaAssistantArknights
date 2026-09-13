@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -87,6 +88,24 @@ private:
     preparation_combat_actions_ready(bool has_preparation_camera_animation, std::size_t elapsed_ms) noexcept
 {
     return !has_preparation_camera_animation || elapsed_ms >= PreparationCombatSettleDelayMs;
+}
+
+// 输入由准备阶段计数任务去除括号、空白；不将 OCR 缺字或其他页面数字推断为已部署。
+[[nodiscard]] inline std::optional<std::pair<int, int>> parse_preparation_deployment_count(std::string_view text)
+{
+    const auto slash = text.find('/');
+    if (slash == std::string_view::npos || slash == 0 || slash + 1 == text.size()) {
+        return std::nullopt;
+    }
+    int deployed = 0;
+    int total = 0;
+    const auto first = std::from_chars(text.data(), text.data() + slash, deployed);
+    const auto second = std::from_chars(text.data() + slash + 1, text.data() + text.size(), total);
+    if (first.ec != std::errc {} || first.ptr != text.data() + slash || second.ec != std::errc {} ||
+        second.ptr != text.data() + text.size() || deployed < 0 || total <= 0 || deployed > total) {
+        return std::nullopt;
+    }
+    return std::pair { deployed, total };
 }
 
 // 拖拽后先取消选中，再用部署栏卡片状态确认结果。未取消选中时，失败的拖拽也会

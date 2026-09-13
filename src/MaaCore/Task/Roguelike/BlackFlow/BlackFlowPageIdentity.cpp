@@ -96,6 +96,21 @@ PageIdentityResolution resolve_page_identity(
     if (entered_page.classification_conflict) {
         return result;
     }
+    if (entered_page.classified_type == NodeType::HideBattle) {
+        // 快捷编队是通用战斗证据，不能覆盖已揭示的具体战斗身份。
+        if (preview != nullptr && preview->identity_revealed &&
+            is_combat_node_type(preview->displayed_type) && preview->displayed_type != NodeType::HideBattle) {
+            result.type = preview->displayed_type;
+            if (!preview->displayed_name.empty()) {
+                result.name = preview->displayed_name;
+            }
+            return result;
+        }
+        if (is_combat_node_type(map_type) && !map_identity_unresolved) {
+            return result;
+        }
+        return { NodeType::HideBattle, "未知的凶戾" };
+    }
     if (entered_page.classified_type.has_value()) {
         result.type = *entered_page.classified_type;
         if (entered_page.event_name.has_value()) {

@@ -400,6 +400,11 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
             break;
         }
 
+        // 准备阶段以界面计数确认上一次部署；下一次选择前再刷新卡片，避免共斗复用已部署干员。
+        if (!update_deployment(false)) {
+            sleep(200);
+            continue;
+        }
         const size_t deployed_count = m_used_tiles.size();
         if (!do_best_deploy(true)) {
             Log.error("Unable to complete the next battle preparation deployment", m_stage_name);
@@ -491,6 +496,118 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
         m_battle_camera_shift.first,
         m_battle_camera_shift.second);
     return true;
+}
+
+std::optional<bool> asst::RoguelikeBattleTaskPlugin::confirm_preparation_deployment(const DeployPlanInfo& deploy_plan)
+{
+    std::unordered_set<Point> target_locations;
+    for (const auto& [group, plans] : m_preparation_deploy_plan) {
+        for (const auto& plan : plans) {
+            target_locations.insert(plan.location);
+        }
+    }
+    // deploy_oper 已乐观登记这一次部署；只有游戏计数增加且方向选择关闭才可确认。
+    const int expected = static_cast<int>(m_used_tiles.size());
+    const int total = static_cast<int>(target_locations.size());
+    const auto tile = m_side_tile_info.find(deploy_plan.placed);
+    if (expected <= 0 || expected > total || tile == m_side_tile_info.end()) {
+        return std::nullopt;
+    }
+    const Point origin = tile->second.pos;
+    const auto [width, height] = ctrler()->get_scale_size();
+    if (origin.x < 0 || origin.y < 0 || origin.x >= width || origin.y >= height) {
+        return std::nullopt;
+    }
+    Point direction;
+    switch (deploy_plan.direction) {
+    case DeployDirection::Right:
+        direction = Point::right();
+        break;
+    case DeployDirection::Down:
+        direction = Point::down();
+        break;
+    case DeployDirection::Left:
+        direction = Point::left();
+        break;
+    case DeployDirection::Up:
+        direction = Point::up();
+        break;
+    default:
+        break;
+    }
+    const auto swipe_task = Task.get("BattleSwipeOper");
+    const int distance = static_cast<int>(swipe_task->special_params.at(0) * height / 720.0);
+    Point end = origin + direction * distance;
+    end.x = std::clamp(end.x, 0, width - 1);
+    end.y = std::clamp(end.y, 0, height - 1);
+
+    int swipes = 0;
+    int cancellations = 0;
+    int cooldown = 0;
+    int deployed_frames = 0;
+    int undeployed_frames = 0;
+    const auto start = std::chrono::steady_clock::now();
+    const std::string prefix = m_config->get_theme() + "@Roguelike@BattlePreparation";
+    for (int sample = 0;
+         sample < 20 && !need_exit() && std::chrono::steady_clock::now() - start < std::chrono::seconds(8);
+         ++sample) {
+        const auto image = ctrler()->get_image();
+        OCRer preparation(image);
+        preparation.set_task_info(prefix + "Start");
+        OCRer counter(image);
+        counter.set_task_info(prefix + "DeployCount");
+        std::optional<std::pair<int, int>> count;
+        if (preparation.analyze() && counter.analyze() && counter.get_result().size() == 1) {
+            count = blackflow::parse_preparation_deployment_count(counter.get_result().front().text);
+        }
+        if (!count || count->second != total || (count->first != expected && count->first != expected - 1)) {
+            deployed_frames = undeployed_frames = 0;
+        }
+        else {
+            OCRer cancel(image);
+            cancel.set_task_info(prefix + "DeployCancel");
+            if (cancel.analyze()) {
+                deployed_frames = undeployed_frames = 0;
+                if (cooldown == 0 && count->first == expected - 1 && cancel.get_result().size() == 1) {
+                    if (swipes < 2 && deploy_plan.direction != DeployDirection::None) {
+                        // 方向选择界面没有普通战斗标志，也不接受点击屏幕顶部取消。
+                        // 重新发出朝向手势时不使用普通战斗的暂停/恢复点击。
+                        Log.info("Retry battle preparation direction", deploy_plan.oper_name, deploy_plan.placed);
+                        if (!ctrler()->swipe(origin, end, swipe_task->post_delay)) {
+                            return std::nullopt;
+                        }
+                        ++swipes;
+                    }
+                    else if (cancellations < 2) {
+                        Log.info("Cancel pending battle preparation deployment", deploy_plan.oper_name);
+                        if (!ctrler()->click(cancel.get_result().front().rect)) {
+                            return std::nullopt;
+                        }
+                        ++cancellations;
+                    }
+                    cooldown = 3;
+                }
+            }
+            else if (count->first == expected) {
+                undeployed_frames = 0;
+                if (++deployed_frames >= 2) {
+                    return true;
+                }
+            }
+            else {
+                deployed_frames = 0;
+                if (++undeployed_frames >= 3) {
+                    // 方向选择已关闭，计数仍未增加；取消普通卡片选中后回滚乐观记录并重试。
+                    return asst::BattleHelper::cancel_oper_selection() ? std::optional<bool>(false) : std::nullopt;
+                }
+            }
+        }
+        if (!sleep(200)) {
+            break;
+        }
+        cooldown = std::max(0, cooldown - 1);
+    }
+    return std::nullopt;
 }
 
 bool asst::RoguelikeBattleTaskPlugin::register_virtual_auto_skill_devices()
@@ -752,40 +869,32 @@ bool asst::RoguelikeBattleTaskPlugin::do_best_deploy(bool wait_for_confirmation)
 
             // BattleHelper 会在发出拖拽后先乐观登记场上状态。失败的拖拽仍会让卡片
             // 保持选中并暂时不可用，因此必须先取消选中，再重新观察部署栏。
-            bool selection_cleared = asst::BattleHelper::cancel_oper_selection();
+            bool selection_cleared = false;
             bool deployment_observed = false;
             bool card_visible = false;
             bool card_cooling = false;
             bool card_available = false;
-            const auto confirmation_start = std::chrono::steady_clock::now();
-            const auto confirmed = blackflow::wait_for_deployment_confirmation(
-                [&]() -> std::optional<bool> {
-                    if (!selection_cleared && wait_for_confirmation) {
-                        selection_cleared = asst::BattleHelper::cancel_oper_selection();
-                    }
-                    deployment_observed = update_deployment(false);
-                    if (!selection_cleared || !deployment_observed) {
-                        // Failed recognition leaves m_cur_deployment_opers unchanged. Those old
-                        // cards cannot tell us whether the gesture just sent succeeded.
-                        return std::nullopt;
-                    }
+            std::optional<bool> confirmed;
+            if (wait_for_confirmation) {
+                confirmed = confirm_preparation_deployment(deploy_plan);
+            }
+            else {
+                selection_cleared = asst::BattleHelper::cancel_oper_selection();
+                deployment_observed = update_deployment(false);
+                if (selection_cleared && deployment_observed) {
                     const auto visible_oper = std::ranges::find_if(m_cur_deployment_opers, [&](const auto& oper) {
                         return oper.role == deploy_plan.role && oper.name == deploy_plan.oper_name;
                     });
                     card_visible = visible_oper != m_cur_deployment_opers.end();
                     card_cooling = card_visible && visible_oper->cooling;
                     card_available = card_visible && visible_oper->available;
-                    return blackflow::deployment_attempt_confirmed(
+                    confirmed = blackflow::deployment_attempt_confirmed(
                         selection_cleared,
                         card_visible,
                         card_cooling,
                         card_available);
-                },
-                [&]() {
-                    return wait_for_confirmation && !need_exit() &&
-                           std::chrono::steady_clock::now() - confirmation_start < std::chrono::seconds(5) &&
-                           sleep(200);
-                });
+                }
+            }
             if (!confirmed.has_value() && wait_for_confirmation) {
                 Log.error(
                     "Battle preparation deployment could not be observed; leaving its result unknown",

@@ -3728,6 +3728,20 @@
         "Doc": "事件点击失败或转场未完成时仍由事件结果分发器判断页面；若仍是原事件页则重新识别并续办，禁止错误打开退出探索确认。",
         "baseTask": "BlackFlow@Roguelike@StageEncounterReward"
     },
+    "BlackFlow@Roguelike@BattlePreparationDeployCount": {
+        "Doc": "单挑准备阶段顶部部署计数；仅在开始战斗按钮阳性时读取，不能把缺失的卡片当作部署成功。",
+        "algorithm": "OcrDetect",
+        "roi": [550, 70, 180, 60],
+        "ocrReplace": [["[()（）\\s]", ""]]
+    },
+    "BlackFlow@Roguelike@BattlePreparationDeployCancel": {
+        "Doc": "准备阶段拖出干员后、确认朝向前的红色取消按钮；按识别位置点击，不能用屏幕顶部点击替代。",
+        "algorithm": "OcrDetect",
+        "roi": [250, 100, 800, 430],
+        "text": ["点击取消"],
+        "fullMatch": true,
+        "fuzzyMatch": false
+    },
     "BlackFlow@Roguelike@BattlePreparationStart": {
         "Doc": "狭路相逢准备阶段部署完成后，全屏识别并点击开始战斗；不依赖截图分辨率或固定像素坐标。",
         "algorithm": "OcrDetect",

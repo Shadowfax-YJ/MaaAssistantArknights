@@ -3252,7 +3252,9 @@ bool BlackFlowTaskPort::classify_entered_page(
         if (matches_template(candidate, EnteredPageClassificationCombatTask)) {
             observation = {};
             observation.matched_texts.emplace_back("快捷编队主界面");
-            observation.classified_type = NodeType::BattleNormal;
+            // 快捷编队只证明已经进入战斗，不能区分普通、紧急或居民据点。
+            // 保留未知战斗身份；预览或地图已确认的具体类型由身份解析器保留。
+            observation.classified_type = NodeType::HideBattle;
             return EnteredPageProbe::Classified;
         }
         const bool operator_confirm_visible =
@@ -3281,6 +3283,13 @@ bool BlackFlowTaskPort::classify_entered_page(
         }
         if (observation.combat_operator_selection_open) {
             return EnteredPageProbe::CombatOperatorSelection;
+        }
+        // 地图上的节点名可能落入人物名/事件标题 ROI。地图缩放控件确认回图后，
+        // 不能把这些文字派发成新事件。到达提示可能盖住行动力，不能因此退回事件 OCR。
+        if (matches_template(candidate, MapReadyTask)) {
+            observation = {};
+            observation.map_visible = true;
+            return EnteredPageProbe::Classified;
         }
         if (observation.classified_type.has_value()) {
             return EnteredPageProbe::Classified;
