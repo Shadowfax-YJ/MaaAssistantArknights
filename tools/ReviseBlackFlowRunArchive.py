@@ -14,6 +14,7 @@ import uuid
 import zipfile
 
 from VerifyBlackFlowRunArchive import verify_archive, safe_name
+import BlackFlowReviewedIdentity as reviewed_identity
 
 
 def encode(value):
@@ -129,6 +130,8 @@ def correct_landing(value, correction, floor=None, generation=None, transaction=
 
 
 def correct_identity(value, correction, floor=None, transaction=None, bound_node=None):
+    if correction.get('kind') in reviewed_identity.KINDS:
+        return reviewed_identity.correct(value, correction)
     if correction.get('kind') == 'combat_subtype':
         return correct_combat(value, correction)
     if correction.get('kind') == 'landing_identity':
@@ -228,6 +231,8 @@ def revise(source, output, plan):
         for c in plan['corrections']:
             if not c.get('evidence') or not c.get('transaction_id') or c.get('floor') not in range(1, 7):
                 raise ValueError('Correction needs transaction, floor and reviewed evidence')
+            if c.get('kind') in reviewed_identity.KINDS:
+                reviewed_identity.validate(c)
             if c.get('kind') == 'combat_subtype' and (not c.get('generations') or not c.get('start_sequence')
                     or c.get('from', {}).get('type') != 'battle_normal'
                     or c.get('to', {}).get('type') not in ('hide_battle', 'battle_elite', 'battle_savage', 'battle_boss')):
@@ -271,6 +276,8 @@ def revise(source, output, plan):
                 'origin_attested': False, 'previous_sha256': before, 'previous_size': source.stat().st_size,
                 'original_validation': validation, 'original_zip_comment_hex': original.comment.hex(),
                 'corrections': plan['corrections'], 'changes': changes, 'files': inventory}
+            if plan.get('approval'):
+                document['approval'] = plan['approval']
             data = encode(document); manifest = root + '/archive-revision.json'
             target.writestr(manifest, data)
             target.comment = encode({'format': document['format'], 'schema_version': 1,
@@ -285,6 +292,8 @@ def revise(source, output, plan):
         'previous_sha256': before, 'sha256': digest, 'size': package.stat().st_size,
         'content_path': '.sync-revisions/objects/' + digest,
         'recycle_path': '.sync-recycle/' + before + '/' + plan['path'], 'changes': changes}
+    if plan.get('approval'):
+        record['approval'] = plan['approval']
     record_path = output / (revision_id + '.json'); record_path.write_bytes(encode(record))
     return {'package': str(package), 'record': str(record_path), 'revision': record}
 

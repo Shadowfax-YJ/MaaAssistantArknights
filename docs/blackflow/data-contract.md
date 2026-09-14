@@ -221,3 +221,23 @@ schema 1 支持既有字段和目录，无需更新固定 bundle 或宿主协议
 analysis 的处理与流水线 61 项回归通过，包含三/四/五层树洞返回的新日志时序、四层追忆/未知归属及旧插件请求兼容；
 更新发布测试 33 项中 25 项通过、8 项环境条件测试跳过，客户端 21 项更新检查通过。
 这些是生产代码回放与构建证据，尚无新版实机完整对局证据；运行中的采集实例未被替换或重启。
+
+## 经审核的探索笔记与中心战斗修订（2026-09-14）
+
+用户明确批准固定清单 BF-001～BF-251，并确认其中 12 处是一层理想源中心战斗。
+战后清除理想源不撤销此前非希望沃土中心规则的紧急作战推断；修订保留
+`identity_from_prediction=true`、`identity_source=ideal_source_emergency_prediction` 和
+`prediction_rule=non_hopeful_ideal_source_is_emergency_battle`，不声称视觉已揭示。
+BF-042 与 BF-240 涉及同节点，以最新确认的中心规则合并；已发布修订保留在版本链中。
+
+`ReviseBlackFlowRunArchive.py` 支持 `notebook_identity` 和 `ideal_source_combat` 两类受限修订。
+计划必须指定审核编号、批准记录、run revision、楼层、物理地图代、节点、起止日志序号和原图哈希。
+无日志序号的地图快照通过诊断 artifact ID 绑定原始序号，缺少映射时不补写。
+笔记修订恢复事件身份、居民占据前关卡情报或已揭示可信状态；中心战斗同时修正同事务页面和结算类型。
+实际战斗载荷、当前空地、移动、完成状态、历史候选评分和原图保留。回放 JS、路由数据、快照与日志一致。
+
+修订 manifest 和通用云盘 revision record 可附带 `approval` 信息，保存批准记录 SHA-256 与审核编号；
+既有 schema 1 消费者忽略未知可选字段。独立完整性验证器继续验证全部文件与清单，
+`valid_curated_revision` 不表示原采集签名，也不替代语义审核。原始及上一修订保留到专用回收路径。
+analysis adapter 1.1.5 输出 `inferred_subtype`，避免将中心规则推断计作截图已确认；
+旧签名、无签包和旧修订包继续兼容。本次修改历史修订工具及消费者，不声称已修复对应 MAA 运行时问题。
