@@ -1,4 +1,4 @@
-## v1.1.8
+## v1.1.9
 
 ### Highlights
 
@@ -36,6 +36,18 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.9 (2026-09-14)</b></summary>
+
+### 修复 | Fix
+
+* 修复树洞内直接耗尽行动力后遗漏离开确认、反复等待的问题，保留返回外层地图的恢复能力。 @Shadowfax-YJ
+* 修复探索笔记中已确认的节点身份被后续规则预测覆盖的问题。 @Shadowfax-YJ
+* 修复流窜居民战斗结算后原节点关卡名丢失的问题，分别保留原关卡与实际居民战斗。 @Shadowfax-YJ
+* 修复一层理想源中心战斗结束后紧急作战推断依据丢失的问题；仍明确区分规则推断与实际探明。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.8 (2026-09-14)</b></summary>
 
 ### 修复 | Fix
