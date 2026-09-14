@@ -1,0 +1,85 @@
+{
+  "description": "Synthetic session replay through production queue_node_resolution and finalize_entered_node; event envelope supplies ordered fixture metadata. Not a game capture.",
+  "events": [
+    {
+      "schema_version": 1,
+      "sequence": 1,
+      "timestamp": "2026-09-14T00:00:01Z",
+      "action": "telemetry.BlackFlowNodeResolution",
+      "phase": "observed",
+      "outcome": "recorded",
+      "floor": 2,
+      "map_generation": 1,
+      "transaction_id": "fixture-T1",
+      "state": {
+        "floor": 2,
+        "profile": "automation_collection"
+      },
+      "details": {
+        "battle": {
+          "stage_name": "强买强卖",
+          "total_kills": 17
+        },
+        "battle_total_kills": 17,
+        "becomes_empty": false,
+        "decision_id": "",
+        "entry_kind": "roaming_resident_battle",
+        "event_name": "虫虫游戏厅",
+        "floor": 2,
+        "identity_from_prediction": false,
+        "identity_revealed": true,
+        "identity_source": "move_preview_stage_name",
+        "node": 562949953421312,
+        "node_type": "battle_normal",
+        "observation_id": "",
+        "observed_contents": [],
+        "page_revision": 1,
+        "prediction_rule": "",
+        "progress": "completed",
+        "repeatable": false,
+        "run_revision": 1,
+        "transaction_id": "fixture-T1"
+      }
+    },
+    {
+      "schema_version": 1,
+      "sequence": 2,
+      "timestamp": "2026-09-14T00:00:02Z",
+      "action": "telemetry.BlackFlowNodeResolution",
+      "phase": "observed",
+      "outcome": "recorded",
+      "floor": 1,
+      "map_generation": 1,
+      "transaction_id": "fixture-T2",
+      "state": {
+        "floor": 1,
+        "profile": "automation_collection"
+      },
+      "details": {
+        "battle": {
+          "stage_name": "灌水贤者",
+          "total_kills": 17
+        },
+        "battle_total_kills": 17,
+        "becomes_empty": false,
+        "decision_id": "",
+        "entry_kind": "map_node",
+        "event_name": "灌水贤者",
+        "floor": 1,
+        "identity_from_prediction": true,
+        "identity_revealed": false,
+        "identity_source": "ideal_source_emergency_prediction",
+        "node": 281474976710656,
+        "node_type": "battle_elite",
+        "observation_id": "",
+        "observed_contents": [],
+        "page_revision": 2,
+        "prediction_rule": "non_hopeful_ideal_source_is_emergency_battle",
+        "progress": "completed",
+        "repeatable": false,
+        "run_revision": 1,
+        "transaction_id": "fixture-T2"
+      }
+    }
+  ]
+}

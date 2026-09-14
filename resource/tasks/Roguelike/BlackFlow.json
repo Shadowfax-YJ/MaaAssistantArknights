@@ -4655,17 +4655,23 @@
         "next": ["BlackFlow@Roguelike@TreeHoleReturnResumeAction"]
     },
     "BlackFlow@Roguelike@TreeHoleResumeMenuWait": {
-        "Doc": "出洞后必须先返回肉鸽主菜单并点击继续探索，不能因为已经看到地图就提前完成。",
+        "Doc": "首次直接耗尽和失败重试都可能仍在离开确认页。先确认离开，再返回肉鸽主菜单并继续探索；不能因看到地图就提前完成。",
         "algorithm": "JustReturn",
         "postDelay": 400,
         "maxTimes": 80,
         "next": [
+            "BlackFlow@Roguelike@TreeHoleResumeLeaveConfirm",
             "BlackFlow@Roguelike@TreeHoleResumeHunted",
             "BlackFlow@Roguelike@TreeHoleResumeContinue",
             "BlackFlow@Roguelike@TreeHoleResumeExit",
             "#self"
         ],
         "exceededNext": []
+    },
+    "BlackFlow@Roguelike@TreeHoleResumeLeaveConfirm": {
+        "Doc": "完整返回内部的离开确认：继续当前恢复流程，不再递归启动生命周期返回回调。",
+        "baseTask": "BlackFlow@Roguelike@TreeHoleLeaveConfirm",
+        "next": ["BlackFlow@Roguelike@TreeHoleResumeMenuWait"]
     },
     "BlackFlow@Roguelike@TreeHoleResumeExit": {
         "baseTask": "BlackFlow@Roguelike@ExitThenAbandon",

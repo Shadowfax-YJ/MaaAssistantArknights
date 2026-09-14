@@ -354,6 +354,7 @@ private:
         bool reconcile_move,
         std::string* error);
     bool reconcile_committed_move(const BlackFlowPerceptionSnapshot& snapshot, std::string* error);
+    [[nodiscard]] Node resolve_entered_node_identity(const PageExecutionContext& context) const;
     void finalize_entered_node(const PageExecutionContext& context, bool page_completed);
     void finalize_linked_encounter_landing(const LinkedEncounterReturnResolution& resolution);
     void append_map_visualization(json::object& details) const;

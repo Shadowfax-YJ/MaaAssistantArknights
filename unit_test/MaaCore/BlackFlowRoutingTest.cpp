@@ -7205,6 +7205,47 @@ TEST_CASE("BlackFlow exploration notebook preserves a recognized boss stage acro
     REQUIRE(battle_stage_name(generic).empty());
 }
 
+TEST_CASE("BlackFlow notebook facts survive weaker predictions without freezing later evidence")
+{
+    for (const auto type : { NodeType::Duel, NodeType::Incident, NodeType::BattleElite }) {
+        NormalizedMap notebook;
+        ObservedNode known;
+        known.position = { 0, 0 };
+        known.type = type;
+        known.name = type == NodeType::Duel ? "掠夺成性" : type == NodeType::Incident ? "桑尼的邀请" : "紧急作战";
+        known.progress = NodeProgress::Completed;
+        known.identity_revealed = true;
+        known.identity_from_prediction = false;
+        known.identity_source = "event_name";
+        MapObservationBatch batch;
+        batch.floor = 1;
+        batch.nodes = { known };
+        REQUIRE(notebook.merge(batch, MapMergePurpose::ExplorationNotebook));
+        ObservedNode weak = known;
+        weak.type = NodeType::BattleElite;
+        weak.name = "紧急作战";
+        weak.identity_revealed = false;
+        weak.identity_from_prediction = true;
+        weak.identity_source = "ideal_source_emergency_prediction";
+        weak.prediction_rule = "non_hopeful_ideal_source_is_emergency_battle";
+        batch.nodes = { weak };
+        REQUIRE(notebook.merge(batch, MapMergePurpose::ExplorationNotebook));
+        const Node* actual = notebook.snapshot().find_node(1, known.position);
+        REQUIRE(actual != nullptr);
+        CHECK(actual->type == type);
+        CHECK(actual->name == *known.name);
+        CHECK(actual->identity_revealed);
+        CHECK_FALSE(actual->identity_from_prediction);
+        CHECK(actual->prediction_rule.empty());
+
+        // A newer observed title remains authoritative; this is not a write-once notebook.
+        known.name = "已核对的新名称";
+        batch.nodes = { known };
+        REQUIRE(notebook.merge(batch, MapMergePurpose::ExplorationNotebook));
+        CHECK(notebook.snapshot().find_node(1, known.position)->name == *known.name);
+    }
+}
+
 TEST_CASE("BlackFlow exploration notebook preserves resolved event identity after a real empty observation")
 {
     NormalizedMap notebook;

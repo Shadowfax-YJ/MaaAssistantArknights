@@ -496,6 +496,13 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, MapMergePurpose purp
             current->type != NodeType::Unknown && current->type != NodeType::Empty && observed.type.has_value() &&
             (*observed.type == NodeType::Unknown || *observed.type == NodeType::Empty ||
              (topology_empty_fallback && current->type != NodeType::Empty));
+        // 预测描述尚未探明时的原始身份，不能把笔记中已经确认的事件或战斗重新降级。
+        // 当前地图仍消费本帧观测；之后新的现场身份也仍可更新笔记。
+        const bool preserve_observed_identity =
+            purpose == MapMergePurpose::ExplorationNotebook && current != nullptr &&
+            current->identity_revealed && !current->identity_from_prediction &&
+            current->type != NodeType::Unknown && current->type != NodeType::Empty &&
+            observed.identity_from_prediction.value_or(false);
         // 战斗情报探查或战斗插件得到的是具体关卡名；后续地图 OCR/模板只能再次看到泛型
         // “作战/紧急作战/险路恶敌”。探索笔记不得让同类型的弱观测降级覆盖具体关卡名。
         const bool preserve_battle_stage_name =
@@ -533,7 +540,8 @@ bool NormalizedMap::merge(const MapObservationBatch& batch, MapMergePurpose purp
             current->identity_source == "move_preview_ocr" && observed.identity_source.has_value() &&
             (*observed.identity_source == "map_template_fixed_identity" || hidden_preview_empty_fallback);
         const bool preserve_identity =
-            preserve_door_identity || preserve_reliable_identity || current_has_active_observed_identity ||
+            preserve_door_identity || preserve_reliable_identity || preserve_observed_identity ||
+            current_has_active_observed_identity ||
             preserve_completed_empty || preserve_preview_identity || preserve_battle_stage_name ||
             (purpose == MapMergePurpose::ExplorationNotebook && current != nullptr &&
              current->identity_unrecoverable);

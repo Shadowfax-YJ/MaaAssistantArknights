@@ -9,6 +9,7 @@ the already prepared map back in and waiting for a title obscured by node text.
 """
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,60 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = "BlackFlow@Roguelike@"
+
+
+def replay_leave_and_continue(tasks, entry, page, click_succeeds=True):
+    """Feed visible pages into the real resource graph, including its runtime alias.
+
+    The lifecycle callback is replayed separately below. Its production port starts
+    MenuWait; here only recognition and controller feedback are supplied.
+    """
+    routing = (ROOT / 'src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowRoutingTaskPlugin.cpp').read_text('utf-8')
+    destination = re.search(r'm_session->in_tree_hole\(\)\s*\?\s*"([^"]+)"', routing).group(1)
+    tasks = tasks | {PREFIX + 'DirectExhaustDestination': {'baseTask': destination}}
+
+    def resolve(name):
+        task = tasks.get(name, {})
+        base = resolve(task['baseTask']) if 'baseTask' in task else {}
+        return base | task
+
+    def matches(name):
+        task = resolve(name)
+        if task.get('algorithm') == 'JustReturn':
+            return True
+        if task.get('text') == ['离开黑潭']:
+            return page == 'leave'
+        return name == PREFIX + {'outer': 'TreeHoleResumeExit', 'menu': 'TreeHoleResumeContinue',
+                                 'map': 'TreeHoleResumeMapReady', 'hunted': 'TreeHoleResumeHunted'}.get(page, '')
+
+    expected_menu_visits = int(page != 'menu')
+    path, counts, candidates = [], {}, [entry]
+    menu_visits = continues = confirmations = 0
+    for _ in range(300):
+        name = next((n for n in candidates if matches(n)), None)
+        if name is None:
+            break
+        path.append(name)
+        task = resolve(name)
+        counts[name] = counts.get(name, 0) + 1
+        if counts[name] > task.get('maxTimes', 2**31-1):
+            candidates = task.get('exceededNext', [])
+            continue
+        if name == PREFIX + 'TreeHoleReturnResumeRetry':
+            candidates = [PREFIX + 'TreeHoleResumeMenuWait']
+            continue
+        if task.get('text') == ['离开黑潭'] and task.get('action') == 'ClickRect':
+            confirmations += 1
+            if click_succeeds:
+                page = 'outer'
+        elif name == PREFIX + 'TreeHoleResumeExit':
+            page = 'menu'; menu_visits += 1
+        elif name == PREFIX + 'TreeHoleResumeContinue':
+            page = 'map'; continues += 1
+        elif name == PREFIX + 'TreeHoleResumeMapReady':
+            return menu_visits == expected_menu_visits and continues == 1, confirmations, path
+        candidates = [name if n == '#self' else n for n in task.get('next', [])]
+    return False, confirmations, path
 
 
 def replay_map_handoff(tasks, entry, zoomed_out):
@@ -265,6 +320,17 @@ int main(int argc,char** argv){
         print(result.stderr, end="")
         failures = int(result.returncode != 0)
         tasks = json.loads((ROOT / "resource/tasks/Roguelike/BlackFlow.json").read_text(encoding="utf-8"))
+        for entry, page in [('DirectExhaustDestination', 'leave'), ('TreeHoleLeaveConfirm', 'leave'),
+                            ('TreeHoleReturnResumeRetry', 'leave'), ('TreeHoleReturnResumeRetry', 'outer'),
+                            ('TreeHoleReturnResumeRetry', 'menu')]:
+            succeeded, confirmations, path = replay_leave_and_continue(tasks, PREFIX + entry, page)
+            ok = succeeded and confirmations == int(page == 'leave')
+            print(f"{'PASS' if ok else 'FAIL'} {entry} page={page} confirmations={confirmations}")
+            failures += int(not ok)
+        for page, clickable in [('leave', False), ('unknown', True)]:
+            succeeded, _, _ = replay_leave_and_continue(tasks, PREFIX + 'TreeHoleReturnResumeRetry', page, clickable)
+            print(f"{'PASS' if not succeeded else 'FAIL'} unresolved {page} never reports a completed return")
+            failures += int(succeeded)
         handoffs = [line.split() for line in result.stdout.splitlines() if line.startswith("HANDOFF ")]
         if len(handoffs) != 9:
             print("FAIL: missing successful first-return/title/retry handoffs for floors 3, 4 and 5")

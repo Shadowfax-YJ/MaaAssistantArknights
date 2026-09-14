@@ -2672,17 +2672,8 @@ void BlackFlowSession::finalize_linked_encounter_landing(const LinkedEncounterRe
         });
 }
 
-void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context, bool page_completed)
+Node BlackFlowSession::resolve_entered_node_identity(const PageExecutionContext& context) const
 {
-    if (!context.has_landing || context.node == InvalidNodeId) {
-        // 安眠一隅没有落点；小八界跨层时也无法再从新层起点反推出旧层落点。
-        // 两种情况都只保留页面事件，不得把身份写到激活位置或 InvalidNodeId。
-        if (page_completed && !context.resolution_reported) {
-            queue_node_resolution(context);
-        }
-        return;
-    }
-
     Node resolved;
     if (const Node* stored = m_map.snapshot().find_node(context.node);
         stored != nullptr && stored->floor == context.floor) {
@@ -2727,7 +2718,6 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
         resolved.detected_by_vision = true;
     }
 
-    bool becomes_empty = false;
     if (context.result.has_value()) {
         const NodeStateUpdate& update = *context.result;
         if (!context.resident_occupied_node.has_value() && update.actual_type.has_value()) {
@@ -2742,6 +2732,75 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
             resolved.identity_state =
                 *update.identity_revealed ? NodeIdentityState::Classified : NodeIdentityState::Hidden;
         }
+    }
+
+    const Node* noted = context.floor == m_exploration_notebook.floor()
+                            ? m_exploration_notebook.snapshot().find_node(context.node)
+                            : nullptr;
+    if (context.resident_occupied_node.has_value() && noted != nullptr && noted->type == resolved.type &&
+        !battle_stage_name(*noted).empty() && is_generic_battle_name(resolved.type, resolved.name)) {
+        // 随机落点回图后可能只补到地图泛称；笔记中的原关卡情报和实际居民战斗分别保存。
+        resolved.name = noted->name;
+        resolved.identity_source = noted->identity_source;
+        resolved.identity_state = noted->identity_state;
+        resolved.identity_revealed = noted->identity_revealed;
+        resolved.identity_from_prediction = noted->identity_from_prediction;
+        resolved.identity_from_topology = noted->identity_from_topology;
+        resolved.prediction_rule = noted->prediction_rule;
+    }
+    const bool noted_center_prediction = noted != nullptr && noted->type == NodeType::BattleElite &&
+        noted->identity_from_prediction &&
+        noted->prediction_rule == "non_hopeful_ideal_source_is_emergency_battle";
+    const bool current_center = !m_utopia_ideology.empty() && utopia_effect_expires_after_node_completion(
+        true, m_utopia_ideology, m_ideal_source, m_map.floor(), m_ideal_source_generation,
+        context.node, context.map_generation);
+    const bool observed_identity = noted != nullptr && noted->identity_revealed && !noted->identity_from_prediction;
+    if (observed_identity && noted->type == resolved.type && !context.identity_from_event_name &&
+        resolved.identity_from_prediction) {
+        // 当前地图可再次使用规则预测；它不能降低笔记里已有的独立揭示证据。
+        resolved.identity_revealed = true;
+        resolved.identity_state = noted->identity_state;
+        resolved.identity_from_prediction = false;
+        resolved.identity_from_topology = noted->identity_from_topology;
+        resolved.identity_source = noted->identity_source;
+        resolved.prediction_rule.clear();
+    }
+    if (context.floor == 1 && !context.resident_occupied_node.has_value() && !context.identity_from_event_name &&
+        (resolved.type == NodeType::HideBattle || resolved.type == NodeType::BattleElite) &&
+        !observed_identity && (noted_center_prediction || current_center)) {
+        // 通用战斗页、关卡名和中心结算都不提供独立的子类视觉证据。
+        // 理想源消失后仍保留入场前的中心规则；它不计入已探明身份。
+        resolved.type = NodeType::BattleElite;
+        resolved.traversal = default_traversal_for(resolved.type);
+        if (resolved.name.empty() || resolved.name == "未知的凶戾") {
+            resolved.name = context.battle.has_value() && !context.battle->stage_name.empty()
+                                ? context.battle->stage_name : "紧急作战";
+        }
+        resolved.identity_revealed = false;
+        resolved.identity_state = NodeIdentityState::Hidden;
+        resolved.identity_from_prediction = true;
+        resolved.identity_from_topology = false;
+        resolved.identity_source = "ideal_source_emergency_prediction";
+        resolved.prediction_rule = "non_hopeful_ideal_source_is_emergency_battle";
+    }
+    return resolved;
+}
+
+void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context, bool page_completed)
+{
+    if (!context.has_landing || context.node == InvalidNodeId) {
+        // 安眠一隅没有落点；小八界跨层时也无法再从新层起点反推出旧层落点。
+        // 两种情况都只保留页面事件，不得把身份写到激活位置或 InvalidNodeId。
+        if (page_completed && !context.resolution_reported) {
+            queue_node_resolution(context);
+        }
+        return;
+    }
+
+    Node resolved = resolve_entered_node_identity(context);
+    bool becomes_empty = false;
+    if (context.result.has_value()) {
+        const NodeStateUpdate& update = *context.result;
         if (page_completed) {
             if (update.repeatable.has_value()) {
                 resolved.traversal.repeatable = *update.repeatable;
@@ -4643,17 +4702,13 @@ bool BlackFlowSession::apply_node_signal(
 
 void BlackFlowSession::queue_node_resolution(const PageExecutionContext& context)
 {
-    NodeType resolved_type = context.resident_occupied_node.has_value()
-                                 ? context.resident_occupied_node->type
-                                 : context.node_type;
+    const Node resolved = resolve_entered_node_identity(context);
+    const NodeType resolved_type = resolved.type;
     NodeProgress progress = NodeProgress::Completed;
     bool repeatable = false;
     bool becomes_empty = false;
     if (context.result.has_value()) {
         const NodeStateUpdate& result = *context.result;
-        if (!context.resident_occupied_node.has_value()) {
-            resolved_type = result.actual_type.value_or(resolved_type);
-        }
         progress = result.progress.value_or(progress);
         repeatable = result.repeatable.value_or(false);
         becomes_empty = result.becomes_empty.value_or(false);
@@ -4672,9 +4727,11 @@ void BlackFlowSession::queue_node_resolution(const PageExecutionContext& context
         { "page_revision", context.page_revision },
         { "floor", context.floor },
         { "node", context.node },
-        { "event_name", context.resident_occupied_node.has_value()
-                            ? context.resident_occupied_node->name
-                            : context.node_name },
+        { "event_name", resolved.name },
+        { "identity_revealed", resolved.identity_revealed },
+        { "identity_from_prediction", resolved.identity_from_prediction },
+        { "identity_source", resolved.identity_source },
+        { "prediction_rule", resolved.prediction_rule },
         { "entry_kind", context.resident_occupied_node.has_value() ? "roaming_resident_battle" : "map_node" },
         { "observed_contents", json::array(std::move(observed_contents)) },
         { "node_type", std::string(to_string(resolved_type)) },
