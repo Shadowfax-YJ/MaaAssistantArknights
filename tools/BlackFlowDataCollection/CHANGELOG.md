@@ -1,4 +1,4 @@
-## v1.1.9
+## v1.1.10
 
 ### Highlights
 
@@ -36,6 +36,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.10 (2026-09-16)</b></summary>
+
+### 修复 | Fix
+
+* 修复树洞内已成功切换徒步，却误判切换失败并放弃探索的问题。 @Shadowfax-YJ
+* 修复奖励界面无响应时持续反复点击的问题。连续领取无进展后会等待一分钟重试；仍未恢复时停止任务并保留当前探索。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.9 (2026-09-14)</b></summary>
 
 ### 修复 | Fix
