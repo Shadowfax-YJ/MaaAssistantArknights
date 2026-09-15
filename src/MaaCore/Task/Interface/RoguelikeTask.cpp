@@ -317,6 +317,10 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             return port == nullptr ? true : port->capture_collection_popup(task, error);
         });
     m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowNodeEvidenceTaskPlugin>(
+        m_config_ptr,
+        m_control_ptr,
+        m_blackflow_session_ptr,
+        m_blackflow_port_ptr,
         [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
             std::string_view task,
             std::optional<Rect> selected_button,

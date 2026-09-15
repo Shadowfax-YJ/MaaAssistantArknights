@@ -620,10 +620,6 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
             return SelectionOutcome::Selected;
         }
     }
-    if (!ensure_panel_open(error)) {
-        return SelectionOutcome::Failed;
-    }
-
     std::vector<std::pair<int, PanelFrame>> observed_frames;
     int reset_swipes = 0;
     int forward_swipes = 0;
@@ -631,6 +627,9 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
     bool complete_scan_seen = false;
     std::optional<int> preferred_remaining = m_session->minimum_movement_instance_charges(target);
     for (int selection_attempt = 0; selection_attempt < MaxSelectionVerificationAttempts; ++selection_attempt) {
+        if (need_exit() || !ensure_panel_open(error)) {
+            return SelectionOutcome::Failed;
+        }
         // 每次重试都重新做一次完整定位。移动列表会在滑动结束后继续回弹，装载卡片也会自动居中；
         // 因此任何一次失败后的旧页码和旧坐标都不再可信。
         int scan_page = 0;
@@ -971,6 +970,27 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
             return close_panel(error) ? SelectionOutcome::Selected : SelectionOutcome::Failed;
         }
 
+        // 顶部徒步卡片的“装载中”可能被固定标题遮挡，OCR 缺失不能证明切换失败。
+        // 徒步没有同类实例歧义，关闭面板后可用地图上的独立图标作阳性复核。
+        if (target == MovementKind::Walk) {
+            if (!close_panel(error)) {
+                return SelectionOutcome::Failed;
+            }
+            if (verify_walking_on_map()) {
+                if (!report_target_observation(target, *stable_item, attempt_forward_swipes, target, error)) {
+                    return SelectionOutcome::Failed;
+                }
+                record_panel_evidence(
+                    target,
+                    observed_frames,
+                    reset_swipes,
+                    forward_swipes,
+                    "关闭面板后确认徒步图标",
+                    {});
+                return SelectionOutcome::Selected;
+            }
+        }
+
         const MovementSpec* loaded_spec = verification.loaded_movement.has_value()
                                               ? find_movement_spec(*verification.loaded_movement)
                                               : nullptr;
@@ -1021,6 +1041,49 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
         complete_scan_seen);
     close_panel(nullptr);
     return SelectionOutcome::Failed;
+}
+
+bool BlackFlowMovementTaskPlugin::verify_walking_on_map()
+{
+    int confirmed_frames = 0;
+    for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
+        const cv::Mat image = ctrler()->get_image();
+        const auto loaded =
+            !image.empty() && !title_visible(image) ? recognize_loaded_movement_with_evidence(image) : std::nullopt;
+        confirmed_frames = loaded.has_value() && loaded->movement == MovementKind::Walk ? confirmed_frames + 1 : 0;
+        if (confirmed_frames >= 2) {
+            m_session->record_processing_item_evidence(
+                json::object {
+                    { "evidence_type", "loaded_icon" },
+                    { "target", "walk" },
+                    { "target_name", "徒步跋涉" },
+                    { "outcome", "关闭面板后连续确认徒步图标" },
+                    { "scan_complete", false },
+                    { "items",
+                      json::array { json::object {
+                          { "movement", "walk" },
+                          { "name", "徒步跋涉" },
+                          { "loaded", true },
+                          { "name_score", loaded->score },
+                          { "evidence_image_role", "loaded-icon" },
+                          { "name_rect",
+                            json::object {
+                                { "x", loaded->rect.x },
+                                { "y", loaded->rect.y },
+                                { "width", loaded->rect.width },
+                                { "height", loaded->rect.height },
+                            } },
+                      } } },
+                },
+                { DiagnosticArtifactRequest::EvidenceImage { "loaded-icon",
+                                                             std::make_shared<cv::Mat>(image.clone()) } });
+            return true;
+        }
+        if (!sleep(250)) {
+            break;
+        }
+    }
+    return false;
 }
 
 bool BlackFlowMovementTaskPlugin::ensure_panel_open(std::string* error)

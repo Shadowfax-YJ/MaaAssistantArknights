@@ -5104,7 +5104,7 @@ TEST_CASE("BlackFlow every node settlement checks shared exit popups before page
     // otherwise never reach the final node-completed/map dispatcher behind a popup.
     for (const std::string suffix : {
              "StageEncounterReward", "CloseEvent", "CloseEventAfterEncounter", "ClickToDrops",
-             "DropsFlag_default", "DropsFlag_mode1", "GetDrops", "GetDropWait", "GetDropConfirmed",
+             "DropsFlag_default", "DropsFlag_mode1", "GetDrops", "GetDropWait", "GetDropConfirmedContinue",
              "GetDropCompletedWait", "GetDropCompletedConfirmed", "GetDropLeaveWait", "GetDropSelectWait",
              "GetDropSelectConfirmed", "GetDropTrophyRewardWait", "GetDropTrophyRewardConfirmed",
              "GetDropSelectRewardWait", "GetDropSelectRewardConfirmed", "StageTraderLeaveConfirmCompleted",
@@ -10462,7 +10462,11 @@ TEST_CASE("BlackFlow drop page classification recovers from a transient recruitm
     const std::string safe_failure = "BlackFlow@Roguelike@RecoveryFailed";
 
     const auto get_drop_successors =
-        tasks->at("BlackFlow@Roguelike@GetDropConfirmed").get("next", std::vector<std::string> {});
+        tasks->at("BlackFlow@Roguelike@GetDropConfirmedContinue").get("next", std::vector<std::string> {});
+    REQUIRE(tasks->at("BlackFlow@Roguelike@GetDropConfirmed").get("next", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@GetDropConfirmedAction" });
+    REQUIRE(tasks->at("BlackFlow@Roguelike@GetDropConfirmedAction").get("baseTask", std::string()) == safe_failure);
+    REQUIRE(recovery_retry_task("BlackFlow@Roguelike@GetDropConfirmedAction") == "BlackFlow@Roguelike@DropsFlag");
     const auto choose_from_drop = std::ranges::find(get_drop_successors, choose_oper);
     const auto drop_flag =
         std::ranges::find(get_drop_successors, "BlackFlow@Roguelike@DropsFlag");

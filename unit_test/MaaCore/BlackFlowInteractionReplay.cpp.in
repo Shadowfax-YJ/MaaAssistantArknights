@@ -1,0 +1,181 @@
+#include <algorithm>
+#include <functional>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <vector>
+#include <opencv2/imgcodecs.hpp>
+#include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+using namespace asst;
+using namespace asst::blackflow;
+void check(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
+struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} } Log;
+struct { std::string next; void set_task_base(std::string, std::string base) { next = std::move(base); } } Task;
+struct DiagnosticArtifactRequest { struct EvidenceImage { std::string role; std::shared_ptr<cv::Mat> image; }; };
+struct MovementPanelObservation { MovementKind target; bool target_found = false; };
+enum class FailureDisposition { StopTask };
+struct Session {
+    struct Run { RunResources resources; } value;
+    bool failed = false;
+    MovementKind active = MovementKind::M03;
+    std::string transaction = "BF-T8-23";
+    Run& run() { return value; }
+    int run_revision() const { return 8; }
+    json::object run_log_state() const { return { {"transaction_id", transaction}, {"page", json::object{{"page_revision",23}}} }; }
+    void fail(std::string, std::string, FailureDisposition) { failed = true; }
+    bool apply_movement_panel_observation(MovementPanelObservation, MovementKind m, std::string*) { active = m; return true; }
+    std::optional<int> minimum_movement_instance_charges(MovementKind) { return std::nullopt; }
+    void record_processing_item_evidence(json::object, std::vector<DiagnosticArtifactRequest::EvidenceImage>) {}
+};
+struct Controller {
+    bool panel = false, movement_mode = false, click_ok = true, movement_changes = true, cancelled = false;
+    int clicks = 0, reads = 0, stage = 0;
+    MovementKind loaded = MovementKind::M03;
+    std::vector<cv::Mat> frames;
+    std::vector<MovementKind> map_icons;
+    int icon_reads = 0;
+    bool click(const Rect&) {
+        ++clicks;
+        if (movement_mode && movement_changes && click_ok) loaded = MovementKind::Walk;
+        if (!movement_mode && click_ok) stage = 1;
+        return click_ok;
+    }
+    cv::Mat get_image() {
+        ++reads;
+        if (!movement_mode) return frames.at(std::min(stage, int(frames.size())-1)).clone();
+        cv::Mat image(720,1280,CV_8UC3,cv::Scalar());
+        auto icon = !panel && !map_icons.empty() ? map_icons.at(std::min(icon_reads++, int(map_icons.size())-1)) : loaded;
+        image.at<cv::Vec3b>(0,0)[0] = static_cast<unsigned char>(icon);
+        image.at<cv::Vec3b>(0,0)[1] = panel;
+        return image;
+    }
+};
+namespace asst::blackflow {
+std::optional<LoadedMovementRecognition> recognize_loaded_movement_with_evidence(const cv::Mat& image) {
+    if (image.empty() || image.at<cv::Vec3b>(0,0)[1]) return std::nullopt;
+    auto kind = static_cast<MovementKind>(image.at<cv::Vec3b>(0,0)[0]);
+    if (kind == MovementKind::M12) return std::nullopt; // Inject a recognition miss, never equate absence with walking.
+    return LoadedMovementRecognition {kind, Rect{1176,100,64,44},0.98};
+}
+}
+void set_error(std::string* error, std::string text) { if (error) *error = std::move(text); }
+int vertical_center(const Rect& r) { return r.y+r.height/2; }
+constexpr int MaxSelectionVerificationAttempts=3, MaxSelectionStabilityAttempts=6, SelectionSettleDelay=500, SelectionStabilityProbeDelay=150;
+constexpr std::string_view SwipePanelTask="swipe", SwipePanelToStartTask="reset";
+struct BlackFlowMovementTaskPlugin {
+    enum class SelectionOutcome { Selected, Unavailable, Failed };
+    struct PanelItem { MovementKind movement; Rect name_rect; double name_score; std::optional<int> remaining_uses; bool loaded; };
+    struct PanelNameHit { MovementKind movement; Rect name_rect; double name_score; };
+    struct PanelFrame { std::vector<PanelItem> items; std::vector<PanelNameHit> name_hits; std::optional<MovementKind> loaded_movement; std::shared_ptr<cv::Mat> image; };
+    Controller controller;
+    std::shared_ptr<Session> m_session=std::make_shared<Session>();
+    bool close_ok=true, expose_loaded_text=false;
+    int closes=0;
+    BlackFlowMovementTaskPlugin() { controller.movement_mode=true; }
+    Controller* ctrler() { return &controller; }
+    bool need_exit() const { return controller.cancelled; }
+    bool sleep(int) { return !need_exit(); }
+    bool ensure_panel_open(std::string*) { controller.panel=true; return true; }
+    bool close_panel(std::string*) { ++closes; if(close_ok)controller.panel=false;return close_ok; }
+    bool title_visible(const cv::Mat& image) const { return image.at<cv::Vec3b>(0,0)[1]; }
+    bool run_fixed_task(std::string_view) { return true; }
+    bool scan_current_frame(PanelFrame& f,std::string*) {
+        // Actual BF-A3-286 frames 4-10: walking name y=191; its loaded marker is outside the OCR ROI.
+        check(controller.panel,"must reopen the panel before rescanning");
+        f.items={{MovementKind::Walk,{1154,191,72,20},0.9975,std::nullopt,expose_loaded_text&&controller.loaded==MovementKind::Walk},
+                 {MovementKind::M03,{1156,330,68,20},0.9999,3,false},
+                 {MovementKind::M03,{1156,470,68,20},0.9999,2,controller.loaded==MovementKind::M03}};
+        for(auto& i:f.items)f.name_hits.push_back({i.movement,i.name_rect,i.name_score});
+        if(controller.loaded==MovementKind::M03||expose_loaded_text)f.loaded_movement=controller.loaded;
+        f.image=std::make_shared<cv::Mat>(controller.get_image());return true;
+    }
+    void record_panel_evidence(MovementKind,const std::vector<std::pair<int,PanelFrame>>&,int,int,std::string_view,std::string_view,bool=false) {}
+    bool report_target_observation(MovementKind,const PanelItem&,int,MovementKind active,std::string*) { m_session->active=active;return true; }
+    template<class... T> void record_run_event(T&&...) {}
+    SelectionOutcome select_movement(MovementKind,std::string*);
+    bool verify_walking_on_map();
+};
+/*SELECT*/
+/*WALK*/
+struct Matcher {
+    cv::Mat image;
+    explicit Matcher(const cv::Mat& value):image(value){}
+    void set_task_info(std::string_view){}
+    struct Hit { Rect rect{87,520,145,45}; };
+    std::optional<Hit> analyze() { return image.empty()?std::nullopt:std::optional<Hit>(Hit{}); }
+};
+struct BlackFlowNodeEvidenceTaskPlugin {
+    std::function<bool(std::string_view,std::optional<Rect>,std::string*)> m_capture=[](auto,auto,auto){return true;};
+    std::string m_pending_task="BlackFlow@Roguelike@GetDropConfirmed",m_reward_scope;
+    int m_stalled_reward_rounds=0,captures=0;
+    Controller controller;
+    std::shared_ptr<Session> m_session=std::make_shared<Session>();
+    std::vector<std::string> outcomes;
+    std::vector<json::value> events;
+    bool cancel_on_sleep=false;
+    BlackFlowNodeEvidenceTaskPlugin(){m_capture=[this](auto,auto,auto){++captures;return true;};}
+    Controller* ctrler(){return &controller;}
+    bool need_exit()const{return controller.cancelled;}
+    bool sleep(int){if(cancel_on_sleep)controller.cancelled=true;return !need_exit();}
+    void report_outputs(){}
+    void record_run_event(RunLogLevel level,std::string action,std::string phase,std::string outcome,json::object details,std::string task){
+        outcomes.push_back(outcome);
+        events.emplace_back(json::object{{"action",action},{"phase",phase},{"outcome",outcome},{"details",details},
+            {"task",task},{"level",level==RunLogLevel::Warning?"WARN":"INFO"},
+            {"state",m_session->run_log_state()},{"floor",4},{"map_generation",6}});
+    }
+    bool _run();
+    void click_drop_with_progress_check();
+    void run(){m_pending_task="BlackFlow@Roguelike@GetDropConfirmed";_run();}
+};
+/*REWARD*/
+/*GUARD*/
+int main(int argc,char** argv) {
+    int failed=0,passed=0;
+    auto test=[&](const char* name,auto body){try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    test("walking clipped loaded marker",[]{BlackFlowMovementTaskPlugin p;std::string error;
+        check(p.select_movement(MovementKind::Walk,&error)==BlackFlowMovementTaskPlugin::SelectionOutcome::Selected,"already selected walking was rejected");
+        check(p.controller.clicks==1&&p.m_session->active==MovementKind::Walk,"must accept positive map icon after one click");});
+    test("walking click has no effect",[]{BlackFlowMovementTaskPlugin p;p.controller.movement_changes=false;std::string e;
+        check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Failed,"engine must not be accepted as walking");});
+    test("walking unknown icon",[]{BlackFlowMovementTaskPlugin p;p.controller.map_icons={MovementKind::M12};std::string e;
+        check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Failed,"missing icon must not prove walking");});
+    test("walking transient icon",[]{BlackFlowMovementTaskPlugin p;p.controller.map_icons={MovementKind::M03,MovementKind::Walk,MovementKind::M03};std::string e;
+        check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Failed,"one stale walking frame must not prove success");});
+    test("walking panel cannot close",[]{BlackFlowMovementTaskPlugin p;p.close_ok=false;std::string e;
+        check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Failed,"open panel must not be accepted as map");});
+    test("walking already loaded",[]{BlackFlowMovementTaskPlugin p;p.controller.loaded=MovementKind::Walk;std::string e;
+        check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Selected&&p.controller.clicks==0,"already loaded must not click");});
+    auto load=[&](const char* file){auto image=cv::imread(std::string(argv[1])+"/"+file);check(!image.empty(),"fixture missing");return image;};
+    if(argc<2)return 2;
+    auto stuck=load("stuck-before.jpg"),still=load("stuck-after.jpg"),before=load("claim-before.jpg"),after=load("claim-after.jpg");
+    std::vector<json::value> contract_events;
+    test("stuck reward enters recovery then stops",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,still};p.run();
+        check(Task.next=="BlackFlow@Roguelike@RecoveryFailed"&&p.controller.clicks==3,"unchanged reward must leave click loop after three attempts");
+        contract_events=p.events;
+        p.run();check(p.m_session->failed&&p.controller.clicks==6,"second failed round must stop and preserve exploration");
+        check(Task.next=="BlackFlow@Roguelike@StrategyTerminated-Enter","stop must reach lifecycle task by its own name");});
+    test("reward successfully removed",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={before,after};p.run();
+        contract_events.insert(contract_events.end(),p.events.begin(),p.events.end());
+        check(p.controller.clicks==1&&!p.m_session->failed&&p.outcomes==std::vector<std::string>{"page_changed"},"successful claim must leave after one click");});
+    test("touch dispatch fails",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,still};p.controller.click_ok=false;p.run();p.run();
+        check(p.m_session->failed&&p.controller.clicks==6,"touch errors must also be bounded");});
+    test("recovery resumes successfully",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,still};p.run();
+        p.controller.stage=0;p.controller.frames={before,after};p.run();check(!p.m_session->failed&&p.m_stalled_reward_rounds==0,"progress must clear recovery budget");});
+    test("new transaction has fresh recovery budget",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,still};p.run();
+        p.m_session->transaction="BF-T8-24";p.run();check(!p.m_session->failed&&p.m_stalled_reward_rounds==1,"old node failures must not leak to another node");});
+    test("cancelled wait does not click again",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,still};p.cancel_on_sleep=true;p.run();
+        check(p.controller.clicks==1&&!p.m_session->failed,"user cancellation must interrupt retries");});
+    test("capture fails before click",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck};p.m_capture=[](auto,auto,auto){return false;};p.run();p.run();
+        check(p.controller.clicks==0&&p.m_session->failed,"missing stable evidence must never dispatch stale clicks or loop forever");});
+    if(argc>2&&!failed){
+        int sequence=0;
+        for(auto& event:contract_events){event["schema_version"]=1;event["sequence"]=++sequence;event["elapsed_ms"]=sequence;event["timestamp"]="2026-09-15T00:00:00Z";}
+        std::ofstream(argv[2])<<json::array(contract_events).to_string();
+    }
+    std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
+}

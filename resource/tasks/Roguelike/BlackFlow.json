@@ -1812,6 +1812,13 @@
         "baseTask": "BlackFlow@Roguelike@GetDrop",
         "template": "BlackFlow@Roguelike@GetDrop.png",
         "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@GetDropConfirmedAction"]
+    },
+    "BlackFlow@Roguelike@GetDropConfirmedAction": {
+        "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
+    },
+    "BlackFlow@Roguelike@GetDropConfirmedContinue": {
+        "algorithm": "JustReturn",
         "next": [
             "BlackFlow@Roguelike@NodeSettlementPopups#next",
             "BlackFlow@Roguelike@GetDropConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",

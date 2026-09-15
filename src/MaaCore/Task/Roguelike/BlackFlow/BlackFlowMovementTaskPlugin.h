@@ -114,6 +114,7 @@ private:
         analyze_inventory_frame(const cv::Mat& image, InventoryFrame& frame, int minimum_name_x, std::string* error) const;
 
     SelectionOutcome select_movement(MovementKind target, std::string* error);
+    bool verify_walking_on_map();
     bool ensure_panel_open(std::string* error);
     bool close_panel(std::string* error);
     bool title_visible(const cv::Mat& image) const;
