@@ -13,7 +13,7 @@ namespace asst::blackflow
 [[nodiscard]] constexpr std::string_view recovery_retry_task(std::string_view failed_task) noexcept
 {
     if (failed_task == "BlackFlow@Roguelike@GetDropConfirmedAction") {
-        return "BlackFlow@Roguelike@DropsFlag";
+        return "BlackFlow@Roguelike@GetDropConfirmedContinue";
     }
     if (failed_task == "BlackFlow@Roguelike@TreeHoleReturnResumeAction" ||
         failed_task == "BlackFlow@Roguelike@TreeHoleReturnWait") {

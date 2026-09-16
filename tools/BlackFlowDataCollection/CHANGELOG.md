@@ -1,4 +1,4 @@
-## v1.1.10
+## v1.1.11
 
 ### Highlights
 
@@ -36,6 +36,17 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.11 (2026-09-16)</b></summary>
+
+### 修复 | Fix
+
+* 修复领奖后已进入招募界面，仍错误等待并停止任务的问题。 @Shadowfax-YJ
+* 修复三层追猎结束后进入四层无法继续探索，以及恢复时反复缩放地图的问题。 @Shadowfax-YJ
+* 修复切换移动方式后，面板关闭稍有延迟就被误判失败并放弃探索的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.10 (2026-09-16)</b></summary>
 
 ### 修复 | Fix

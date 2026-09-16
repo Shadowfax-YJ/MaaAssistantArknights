@@ -113,6 +113,18 @@ void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check()
     for (int attempt = 1; attempt <= 3 && !need_exit(); ++attempt) {
         std::string error;
         if (!m_capture(m_pending_task, std::nullopt, &error)) {
+            // 证据捕获也会因领奖后离开奖励页而失败。先看当前页，不能把成功转场
+            // 当作下一次领取失败；空截图仍是未知状态，保留有界恢复。
+            const cv::Mat current = ctrler()->get_image();
+            if (!current.empty()) {
+                Matcher current_matcher(current);
+                current_matcher.set_task_info(m_pending_task);
+                if (!current_matcher.analyze().has_value()) {
+                    Log.info("BlackFlow reward page changed; resuming page classification");
+                    m_stalled_reward_rounds = 0;
+                    return;
+                }
+            }
             Log.warn("BlackFlow reward evidence unavailable", error);
             continue;
         }
@@ -181,7 +193,7 @@ void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check()
         Task.set_task_base(std::string(Action), "BlackFlow@Roguelike@StrategyTerminated-Enter");
         return;
     }
-    Log.warn("BlackFlow reward did not change after three attempts; scheduling recovery");
+    Log.warn("BlackFlow reward unavailable or unchanged after bounded rechecks; scheduling recovery");
     Task.set_task_base(std::string(Action), "BlackFlow@Roguelike@RecoveryFailed");
 }
 } // namespace asst::blackflow

@@ -109,5 +109,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 3
           name: BlackFlow-update-feed
           path: release/feed/*

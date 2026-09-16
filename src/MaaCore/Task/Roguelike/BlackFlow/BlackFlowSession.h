@@ -255,6 +255,15 @@ public:
     void mark_floor_three_pursuit_battle_pending() noexcept
     {
         m_floor_three_pursuit_battle_pending = true;
+        // 空地/密道没有节点页面。追猎接管时保留具体移动，跨层后仍能结算它；
+        // 不用全局布尔值授权后续任何一次跨层。
+        m_adapted_pursuit_transaction_sequence =
+            m_profile == "automation_collection" && m_current_floor.value_or(m_run.floor) == 3 &&
+                    m_transaction.has_value() &&
+                    (m_transaction->stage() == MoveTransactionStage::Committed ||
+                     m_transaction->stage() == MoveTransactionStage::PageResolved)
+                ? m_transaction_sequence
+                : 0;
         m_collection_popup_pursuit_floor = m_current_floor.value_or(m_run.floor);
         m_collection_popup_pursuit_stage_name.clear();
         m_collection_popup_pursuit_total_kills.reset();
@@ -420,6 +429,7 @@ private:
     std::unordered_set<MovementKind> m_temporarily_unavailable_movements;
     std::unordered_set<NodeId> m_battle_intel_probed;
     bool m_floor_three_pursuit_battle_pending = false;
+    std::uint64_t m_adapted_pursuit_transaction_sequence = 0;
     // 关卡名识别后 pending 会被消费，但追猎战的掉落弹窗仍需一直归属于“追猎”抽象节点，
     // 直到 NextLevel 明确进入下一层。
     std::optional<int> m_collection_popup_pursuit_floor;

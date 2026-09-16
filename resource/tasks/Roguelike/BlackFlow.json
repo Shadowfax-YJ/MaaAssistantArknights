@@ -3197,6 +3197,21 @@
             "BlackFlow@Roguelike@NextLevel"
         ]
     },
+    "BlackFlow@Roguelike@RecheckFloor-Enter": {
+        "Doc": "建图恢复只重读楼层，不重放新楼层的强制缩放；已缩小的地图保持原样。",
+        "algorithm": "JustReturn",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@NextLevel*30", "BlackFlow@Roguelike@RecheckFloor-ZoomOut*3"],
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@NextLevel",
+            "BlackFlow@Roguelike@RecheckFloor-ZoomOut"
+        ]
+    },
+    "BlackFlow@Roguelike@RecheckFloor-ZoomOut": {
+        "baseTask": "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+        "template": "BlackFlow@Roguelike@MapZoomOut.png",
+        "next": ["BlackFlow@Roguelike@NextLevel"]
+    },
     "BlackFlow@Roguelike@NodeCompletionAction": {
         "Doc": [
             "以 Action 结尾的都是占位任务：自己不做识别，由 C++ 调 set_task_base 改写 baseTask，以此决定下一步走到哪里。",

@@ -10466,7 +10466,7 @@ TEST_CASE("BlackFlow drop page classification recovers from a transient recruitm
     REQUIRE(tasks->at("BlackFlow@Roguelike@GetDropConfirmed").get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@GetDropConfirmedAction" });
     REQUIRE(tasks->at("BlackFlow@Roguelike@GetDropConfirmedAction").get("baseTask", std::string()) == safe_failure);
-    REQUIRE(recovery_retry_task("BlackFlow@Roguelike@GetDropConfirmedAction") == "BlackFlow@Roguelike@DropsFlag");
+    REQUIRE(recovery_retry_task("BlackFlow@Roguelike@GetDropConfirmedAction") == "BlackFlow@Roguelike@GetDropConfirmedContinue");
     const auto choose_from_drop = std::ranges::find(get_drop_successors, choose_oper);
     const auto drop_flag =
         std::ranges::find(get_drop_successors, "BlackFlow@Roguelike@DropsFlag");

@@ -38,6 +38,9 @@ struct Controller {
     std::vector<cv::Mat> frames;
     std::vector<MovementKind> map_icons;
     int icon_reads = 0;
+    bool closing = false;
+    std::vector<int> close_frames;
+    int close_reads = 0;
     bool click(const Rect&) {
         ++clicks;
         if (movement_mode && movement_changes && click_ok) loaded = MovementKind::Walk;
@@ -47,10 +50,14 @@ struct Controller {
     cv::Mat get_image() {
         ++reads;
         if (!movement_mode) return frames.at(std::min(stage, int(frames.size())-1)).clone();
+        int close_state = panel ? 1 : 0;
+        if (closing && !close_frames.empty()) close_state = close_frames.at(std::min(close_reads++, int(close_frames.size())-1));
+        if (close_state == 2) return {};
         cv::Mat image(720,1280,CV_8UC3,cv::Scalar());
         auto icon = !panel && !map_icons.empty() ? map_icons.at(std::min(icon_reads++, int(map_icons.size())-1)) : loaded;
         image.at<cv::Vec3b>(0,0)[0] = static_cast<unsigned char>(icon);
-        image.at<cv::Vec3b>(0,0)[1] = panel;
+        image.at<cv::Vec3b>(0,0)[1] = close_state == 1;
+        image.at<cv::Vec3b>(0,0)[2] = close_state != 3;
         return image;
     }
 };
@@ -66,6 +73,22 @@ void set_error(std::string* error, std::string text) { if (error) *error = std::
 int vertical_center(const Rect& r) { return r.y+r.height/2; }
 constexpr int MaxSelectionVerificationAttempts=3, MaxSelectionStabilityAttempts=6, SelectionSettleDelay=500, SelectionStabilityProbeDelay=150;
 constexpr std::string_view SwipePanelTask="swipe", SwipePanelToStartTask="reset";
+constexpr std::string_view ClosePanelTask="close";
+constexpr int MaxOpenAttempts=3;
+struct Matcher {
+    cv::Mat image;
+    std::string task;
+    inline static std::function<bool(const cv::Mat&)> reward_matches;
+    explicit Matcher(const cv::Mat& value):image(value){}
+    void set_task_info(std::string_view value){task=value;}
+    struct Hit { Rect rect{87,520,145,45}; };
+    std::optional<Hit> analyze() {
+        if (image.empty()) return std::nullopt;
+        if (task.find("MapPrepare")!=std::string::npos && !image.at<cv::Vec3b>(0,0)[2]) return std::nullopt;
+        if (task.find("GetDrop")!=std::string::npos && reward_matches && !reward_matches(image)) return std::nullopt;
+        return Hit{};
+    }
+};
 struct BlackFlowMovementTaskPlugin {
     enum class SelectionOutcome { Selected, Unavailable, Failed };
     struct PanelItem { MovementKind movement; Rect name_rect; double name_score; std::optional<int> remaining_uses; bool loaded; };
@@ -80,9 +103,12 @@ struct BlackFlowMovementTaskPlugin {
     bool need_exit() const { return controller.cancelled; }
     bool sleep(int) { return !need_exit(); }
     bool ensure_panel_open(std::string*) { controller.panel=true; return true; }
-    bool close_panel(std::string*) { ++closes; if(close_ok)controller.panel=false;return close_ok; }
-    bool title_visible(const cv::Mat& image) const { return image.at<cv::Vec3b>(0,0)[1]; }
-    bool run_fixed_task(std::string_view) { return true; }
+    bool close_panel(std::string*);
+    bool title_visible(const cv::Mat& image) const { return !image.empty()&&image.at<cv::Vec3b>(0,0)[1]; }
+    bool run_fixed_task(std::string_view task) {
+        if(task==ClosePanelTask) { ++closes; controller.closing=true; if(close_ok)controller.panel=false; }
+        return true;
+    }
     bool scan_current_frame(PanelFrame& f,std::string*) {
         // Actual BF-A3-286 frames 4-10: walking name y=191; its loaded marker is outside the OCR ROI.
         check(controller.panel,"must reopen the panel before rescanning");
@@ -101,13 +127,7 @@ struct BlackFlowMovementTaskPlugin {
 };
 /*SELECT*/
 /*WALK*/
-struct Matcher {
-    cv::Mat image;
-    explicit Matcher(const cv::Mat& value):image(value){}
-    void set_task_info(std::string_view){}
-    struct Hit { Rect rect{87,520,145,45}; };
-    std::optional<Hit> analyze() { return image.empty()?std::nullopt:std::optional<Hit>(Hit{}); }
-};
+/*CLOSE*/
 struct BlackFlowNodeEvidenceTaskPlugin {
     std::function<bool(std::string_view,std::optional<Rect>,std::string*)> m_capture=[](auto,auto,auto){return true;};
     std::string m_pending_task="BlackFlow@Roguelike@GetDropConfirmed",m_reward_scope;
@@ -136,7 +156,7 @@ struct BlackFlowNodeEvidenceTaskPlugin {
 /*GUARD*/
 int main(int argc,char** argv) {
     int failed=0,passed=0;
-    auto test=[&](const char* name,auto body){try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
     test("walking clipped loaded marker",[]{BlackFlowMovementTaskPlugin p;std::string error;
         check(p.select_movement(MovementKind::Walk,&error)==BlackFlowMovementTaskPlugin::SelectionOutcome::Selected,"already selected walking was rejected");
         check(p.controller.clicks==1&&p.m_session->active==MovementKind::Walk,"must accept positive map icon after one click");});
@@ -150,6 +170,15 @@ int main(int argc,char** argv) {
         check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Failed,"open panel must not be accepted as map");});
     test("walking already loaded",[]{BlackFlowMovementTaskPlugin p;p.controller.loaded=MovementKind::Walk;std::string e;
         check(p.select_movement(MovementKind::Walk,&e)==BlackFlowMovementTaskPlugin::SelectionOutcome::Selected&&p.controller.clicks==0,"already loaded must not click");});
+    test("late panel close must be rechecked before failure",[]{BlackFlowMovementTaskPlugin p;p.controller.panel=true;
+        p.controller.close_frames=std::vector<int>(12,1);p.controller.close_frames.push_back(0);std::string e;
+        check(p.close_panel(&e),"panel closed during final settling was rejected");check(p.closes<=3,"close clicks exceeded budget");});
+    test("empty capture is not a closed panel",[]{BlackFlowMovementTaskPlugin p;p.controller.panel=true;p.controller.close_frames={2};std::string e;
+        check(!p.close_panel(&e),"empty image accepted as map");});
+    test("unknown page is not a closed panel",[]{BlackFlowMovementTaskPlugin p;p.controller.panel=true;p.controller.close_frames={3};std::string e;
+        check(!p.close_panel(&e),"missing title alone accepted as map");});
+    test("one transient map frame is not enough",[]{BlackFlowMovementTaskPlugin p;p.controller.panel=true;p.controller.close_frames={0,1};std::string e;
+        check(!p.close_panel(&e),"one map frame accepted before panel returns");});
     auto load=[&](const char* file){auto image=cv::imread(std::string(argv[1])+"/"+file);check(!image.empty(),"fixture missing");return image;};
     if(argc<2)return 2;
     auto stuck=load("stuck-before.jpg"),still=load("stuck-after.jpg"),before=load("claim-before.jpg"),after=load("claim-after.jpg");
@@ -172,6 +201,20 @@ int main(int argc,char** argv) {
         check(p.controller.clicks==1&&!p.m_session->failed,"user cancellation must interrupt retries");});
     test("capture fails before click",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck};p.m_capture=[](auto,auto,auto){return false;};p.run();p.run();
         check(p.controller.clicks==0&&p.m_session->failed,"missing stable evidence must never dispatch stale clicks or loop forever");});
+    test("reward capture rejects a page that already entered recruitment",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,after};
+        // Recorded boundary: first evidence capture succeeds; the subsequent one rejects the old GetDrop page.
+        // Deliberately keep the four progress probes unchanged, then transition at the next capture boundary.
+        p.controller.click_ok=false;
+        p.m_capture=[&](auto,auto,auto){if(++p.captures==1)return true;p.controller.stage=1;return false;};
+        Matcher::reward_matches=[&](const cv::Mat& image){return cv::norm(image,after,cv::NORM_INF)!=0;};
+        p.run();check(Task.next=="BlackFlow@Roguelike@GetDropConfirmedContinue"&&!p.m_session->failed,"successful transition entered recovery");
+        check(p.controller.clicks==1,"already-open recruitment received another click");});
+    test("page already changed before first capture",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={after};
+        p.m_capture=[](auto,auto,auto){return false;};Matcher::reward_matches=[](auto&){return false;};p.run();
+        check(p.controller.clicks==0&&Task.next=="BlackFlow@Roguelike@GetDropConfirmedContinue","pre-click transition must hand back to page dispatcher");});
+    test("reward disappears during animated progress probes",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,after};
+        Matcher::reward_matches=[&](const cv::Mat& image){return cv::norm(image,after,cv::NORM_INF)!=0;};p.run();
+        check(p.controller.clicks==1&&p.outcomes==std::vector<std::string>{"page_changed"},"destination page must count as transition");});
     if(argc>2&&!failed){
         int sequence=0;
         for(auto& event:contract_events){event["schema_version"]=1;event["sequence"]=++sequence;event["elapsed_ms"]=sequence;event["timestamp"]="2026-09-15T00:00:00Z";}

@@ -437,6 +437,7 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
     m_temporarily_unavailable_movements.clear();
     m_battle_intel_probed.clear();
     m_floor_three_pursuit_battle_pending = false;
+    m_adapted_pursuit_transaction_sequence = 0;
     m_collection_popup_pursuit_floor.reset();
     m_collection_popup_pursuit_stage_name.clear();
     m_collection_popup_pursuit_total_kills.reset();
@@ -3098,16 +3099,19 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
         m_profile == "automation_collection" && run_before_move.floor == 3 && observation.floor == 4 &&
         m_current_floor.has_value() && *m_current_floor == observation.floor &&
         (stage == MoveTransactionStage::Committed || stage == MoveTransactionStage::PageResolved) &&
-        m_page_context.has_value() && !is_exit_node_type(m_page_context->node_type);
+        ((m_page_context.has_value() && !is_exit_node_type(m_page_context->node_type)) ||
+         (!m_page_context.has_value() && stage == MoveTransactionStage::PageResolved &&
+          m_adapted_pursuit_transaction_sequence != 0 &&
+          m_adapted_pursuit_transaction_sequence == m_transaction_sequence));
     if (observation.advanced_via_adapted_pursuit) {
         Log.info(
             "BlackFlow reconciles floor three move through adapted pursuit",
             "transaction stage",
             static_cast<int>(stage),
             "page stage",
-            static_cast<int>(m_page_context->stage),
+            m_page_context.has_value() ? static_cast<int>(m_page_context->stage) : 0,
             "target type",
-            to_string(m_page_context->node_type));
+            m_page_context.has_value() ? to_string(m_page_context->node_type) : std::string_view("no_page"));
     }
     observation.advanced_via_resolved_page =
         stage == MoveTransactionStage::PageResolved && observation.floor == run_before_move.floor + 1 &&
@@ -3358,6 +3362,7 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
     m_transaction.reset();
     m_page_context.reset();
     m_transaction_id.clear();
+    m_adapted_pursuit_transaction_sequence = 0;
     m_verified_move_arc.reset();
     m_pending_candidate.reset();
     m_pending_probe_target.reset();
@@ -4536,6 +4541,7 @@ void BlackFlowSession::cancel_transaction()
     }
     m_verified_move_arc.reset();
     m_transaction_id.clear();
+    m_adapted_pursuit_transaction_sequence = 0;
     m_pending_move_node_attributions.clear();
 }
 

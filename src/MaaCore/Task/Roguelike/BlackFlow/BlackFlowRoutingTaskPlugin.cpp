@@ -103,7 +103,7 @@ bool BlackFlowRoutingTaskPlugin::_run()
             // 放弃整局前再 OCR 一次顶部楼层名。这里只是探测：保留当前楼层，让 set_current_floor
             // 用实际层号决定是否换代；若仍在同层，不得伪造新地图代或追忆四层。
             m_floor_recovery_attempted = true;
-            Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@NextLevel-Enter");
+            Task.set_task_base("BlackFlow@Roguelike@RoutingAction", "BlackFlow@Roguelike@RecheckFloor-Enter");
         }
         else {
             m_page_recovery_attempted = false;

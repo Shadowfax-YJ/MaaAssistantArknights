@@ -17,3 +17,11 @@ Use `-SourceRef blackflow-v1.1.9 -OutputDirectory build/blackflow-interaction-be
 to run the old implementation against the same cases. Old code rejects walking and
 keeps attempting unchanged rewards. The generated `reward-click-events.json` contains
 synthetic controller feedback; timestamps and ordering are supplied by the test harness.
+
+2026-09-16: this replay also extracts the actual `close_panel` method. It rejects empty,
+unknown and one-frame map observations and accepts a delayed close during final settling.
+Reward tests inject failure of the old-page capture after a successful page transition,
+while unchanged rewards and unavailable evidence retain their bounded retries.
+Run `-SourceRef f7dfb68170c92787babcfe7fb08dc71fe6d6140c` to reproduce the v1.1.10 failures.
+Actual recruitment/map/panel recognition and the Session lifecycle are covered by the
+companion `run_blackflow_transition_replay.ps1` and `blackflow-transitions` fixtures.

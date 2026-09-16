@@ -1,9 +1,10 @@
-黑流树海采集版 v1.1.10
+黑流树海采集版 v1.1.11
 
 ### 本次更新
 
-* 修复树洞内已成功切换徒步，却误判切换失败并放弃探索的问题。
-* 修复奖励界面无响应时持续反复点击的问题。连续领取无进展后会等待一分钟重试；仍未恢复时停止任务并保留当前探索。
+* 修复领奖后已进入招募界面，仍错误等待并停止任务的问题。
+* 修复三层追猎结束后进入四层无法继续探索，以及恢复时反复缩放地图的问题。
+* 修复切换移动方式后，面板关闭稍有延迟就被误判失败并放弃探索的问题。
 
 ### 升级
 
@@ -13,8 +14,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.10/MAA-BlackFlow-Data-Collection-v1.1.10-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.10/MAA-BlackFlow-Data-Collection-v1.1.10-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.11/MAA-BlackFlow-Data-Collection-v1.1.11-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.11/MAA-BlackFlow-Data-Collection-v1.1.11-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

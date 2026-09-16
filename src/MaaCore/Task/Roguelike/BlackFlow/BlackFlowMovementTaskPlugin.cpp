@@ -16,6 +16,7 @@
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
+#include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
 
 namespace asst::blackflow
@@ -170,6 +171,9 @@ bool BlackFlowMovementTaskPlugin::_run()
     const MovementSpec* target_spec = find_movement_spec(target);
     std::string error;
     const SelectionOutcome outcome = select_movement(target, &error);
+    if (need_exit()) {
+        return true;
+    }
     if (outcome == SelectionOutcome::Selected) {
         Task.set_task_base(std::string(SelectionAction), "BlackFlow@Roguelike@RoutingResume-Enter");
         Log.info("BlackFlow movement selected", target_spec == nullptr ? std::string_view("unknown") : target_spec->id);
@@ -1105,29 +1109,58 @@ bool BlackFlowMovementTaskPlugin::ensure_panel_open(std::string* error)
 
 bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
 {
-    if (!title_visible(ctrler()->get_image())) {
+    bool panel_visible = false;
+    int confirmed_map_frames = 0;
+    const auto closed_on_map = [&]() {
+        const cv::Mat image = ctrler()->get_image();
+        panel_visible = !image.empty() && title_visible(image);
+        if (image.empty() || panel_visible) {
+            confirmed_map_frames = 0;
+            return false;
+        }
+        Matcher map_matcher(image);
+        map_matcher.set_task_info("BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+        confirmed_map_frames = map_matcher.analyze().has_value() ? confirmed_map_frames + 1 : 0;
+        return confirmed_map_frames >= 2;
+    };
+    if (closed_on_map()) {
         return true;
     }
-    for (int attempt = 0; attempt < MaxOpenAttempts; ++attempt) {
-        if (!run_fixed_task(ClosePanelTask)) {
+    for (int attempt = 0; attempt < MaxOpenAttempts && !need_exit(); ++attempt) {
+        // 只在面板标题阳性时补点；未知或正在关闭的页面只观察，避免穿透点击地图。
+        if (panel_visible && !run_fixed_task(ClosePanelTask)) {
             continue;
         }
-        // 关闭动画和截图可能晚于点击完成。先等待本次点击生效，再决定是否重试。
         for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
-            if (!title_visible(ctrler()->get_image())) {
+            if (!sleep(250)) {
+                return false;
+            }
+            if (closed_on_map()) {
                 return true;
             }
-            sleep(250);
         }
     }
-    set_error(error, "movement panel title remained visible after the close action");
+    // 最后一次点击也可能延迟生效。最终等待后必须重新取图，且连续看到地图才确认关闭。
+    for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
+        if (!sleep(250)) {
+            return false;
+        }
+        if (closed_on_map()) {
+            return true;
+        }
+    }
+    if (need_exit()) {
+        return false;
+    }
+    const std::string failure = panel_visible ? "movement panel title remained visible after the close action"
+                                             : "movement panel close did not reach a confirmed map";
+    set_error(error, failure);
     record_run_event(
         RunLogLevel::Warning,
         "movement.panel-close",
         "failed",
         "error",
-        json::object { { "attempts", MaxOpenAttempts },
-                       { "error", "movement panel title remained visible after the close action" } },
+        json::object { { "attempts", MaxOpenAttempts }, { "error", failure } },
         "BlackFlowMovement",
         nullptr,
         true);

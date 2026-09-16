@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.10
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.11
 
 on:
   push:
@@ -123,6 +123,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: startsWith(github.ref, 'refs/tags/v')
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: changelog
           path: CHANGELOG.md
 
@@ -160,8 +161,20 @@ jobs:
         run: dotnet run --project unit_test/MaaUpdate/MaaUpdate.Tests.csproj -c Release
       - name: Build and verify collection package
         run: ./tools/BuildBlackFlowWindowsPackage.ps1 -Version '${{ needs.meta.outputs.tag }}' -OutputDirectory release
+      - name: Test BlackFlow interaction transitions
+        run: ./unit_test/MaaCore/run_blackflow_interaction_replay.ps1
+      - name: Test BlackFlow Session and captured page transitions
+        run: ./unit_test/MaaCore/run_blackflow_transition_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
+      - name: Test BlackFlow routing and archive regressions
+        run: |
+          cmake -S unit_test -B build/blackflow-release-tests -A x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/blackflow-release-tests --config Release --target maa-black-flow-routing-test --parallel $env:NUMBER_OF_PROCESSORS
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build/blackflow-release-tests -C Release --output-on-failure -R '^blackflow-routing::'
       - uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAA-BlackFlow-win-x64
           path: release/*.zip
           compression-level: 0
@@ -233,6 +246,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: BlackFlow-update-feed
           path: release/feed/*
 
@@ -308,6 +322,7 @@ jobs:
       - name: Upload MaaCore runtime for downstream jobs
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAARuntime-win-${{ matrix.arch }}
           path: |
             install/
@@ -370,6 +385,7 @@ jobs:
       - name: Upload PDB files
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAAComponent-DebugSymbol-win-${{ matrix.arch }}
           path: install/MAAComponent-DebugSymbol-${{ needs.meta.outputs.tag }}-win-${{ matrix.arch }}.zip
           compression-level: 0
@@ -404,6 +420,7 @@ jobs:
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAA-win-${{ matrix.arch }}
           path: install/MAA-*.zip
           compression-level: 0
@@ -466,6 +483,7 @@ jobs:
       - name: Upload MaaCore runtime for downstream jobs
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAARuntime-linux-${{ matrix.arch }}
           path: install/
 
@@ -528,6 +546,7 @@ jobs:
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAA-linux-${{ matrix.arch }}
           path: |
             release/*.AppImage
@@ -604,6 +623,7 @@ jobs:
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAAComponent-android-${{ matrix.arch }}
           path: MAAComponent-*.tar.gz
           compression-level: 0
@@ -668,12 +688,14 @@ jobs:
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAACore-macos-${{ matrix.arch }}
           path: "install/*.dylib"
 
       - name: Upload MaaCore runtime for downstream jobs
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAARuntime-macos-${{ matrix.arch }}
           path: install/
 
@@ -752,6 +774,7 @@ jobs:
       - name: Upload MAA runtime to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAA-macos-runtime-universal
           path: runtime/MAA-${{ needs.meta.outputs.tag }}-macos-runtime-universal.zip
           compression-level: 0
@@ -912,6 +935,7 @@ jobs:
       - name: Upload MAA to GitHub
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAA-macos-universal
           path: ${{ (startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.build_scope, 'blackflow-')) && 'release/*' || 'src/MaaMacGui/MAA.xcarchive/**' }}
 
@@ -994,6 +1018,7 @@ jobs:
         if: failure() && matrix.name != 'macos-x64'
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAAUnified-TestResults-${{ matrix.name }}
           path: TestResults/${{ matrix.name }}/*.trx
           if-no-files-found: ignore
@@ -1046,6 +1071,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
+          retention-days: ${{ startsWith(inputs.build_scope, 'blackflow-') && 3 || 7 }}
           name: MAAUnified-${{ matrix.name }}
           path: release/*
 
