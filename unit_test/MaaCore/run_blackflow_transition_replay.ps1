@@ -17,8 +17,29 @@ $includes = @('src\MaaCore','src\MaaUtils\include','include','3rdparty\include',
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # Link the built production objects, including Session and recognizers, rather than a mock implementation.
 $objs = Get-ChildItem -LiteralPath (Join-Path $core 'src\MaaCore\MaaCore.dir\RelWithDebInfo') -Filter '*.obj' | ForEach-Object { '"'+$_.FullName+'"' }
-$libs = @('opencv_world4','fastdeploy_ppocr','onnxruntime','zlib','boost_system-vc143-mt-x64-1_86','boost_regex-vc143-mt-x64-1_86') | ForEach-Object { '"'+$dep+'\lib\'+$_.ToString()+'.lib"' }
-$argsFile = @('/NOLOGO','/INCREMENTAL:NO','/SUBSYSTEM:CONSOLE',('/OUT:"'+$out+'\replay.exe"'),('"'+$out+'\replay.obj"'),('"'+$core+'\lib\RelWithDebInfo\MaaUtils.lib"'),('"'+$core+'\lib\RelWithDebInfo\maa-monocypher.lib"')) + $objs + $libs + @('ws2_32.lib','dxgi.lib','kernel32.lib','user32.lib','gdi32.lib','winspool.lib','shell32.lib','ole32.lib','oleaut32.lib','uuid.lib','comdlg32.lib','advapi32.lib')
+# Reuse CMake's resolved link dependencies. MaaDeps library names differ between
+# toolchains and versions (and newer Boost may not have a separate system library).
+$projectPath = Join-Path $core 'src\MaaCore\MaaCore.vcxproj'
+[xml]$projectXml = Get-Content -LiteralPath $projectPath -Raw
+$linkGroups = @($projectXml.Project.ItemDefinitionGroup | Where-Object { $_.Condition -like '*RelWithDebInfo|x64*' })
+if ($linkGroups.Count -ne 1 -or !$linkGroups[0].Link.AdditionalDependencies) {
+    throw 'Cannot locate the production RelWithDebInfo x64 link dependencies.'
+}
+$libs = foreach ($library in ([string]$linkGroups[0].Link.AdditionalDependencies).Split(';')) {
+    if (!$library -or $library -eq '%(AdditionalDependencies)') { continue }
+    if ($library.Contains('$(') -or $library.Contains('%(')) {
+        throw "Unresolved MSBuild expression in production link dependency: $library"
+    }
+    $resolvedLibrary = $library
+    if ($library.Contains('\') -or $library.Contains('/')) {
+        if (![IO.Path]::IsPathRooted($library)) {
+            $resolvedLibrary = Join-Path (Split-Path $projectPath -Parent) $library
+        }
+        $resolvedLibrary = (Resolve-Path -LiteralPath $resolvedLibrary).Path
+    }
+    '"'+$resolvedLibrary+'"'
+}
+$argsFile = @('/NOLOGO','/INCREMENTAL:NO','/SUBSYSTEM:CONSOLE',('/OUT:"'+$out+'\replay.exe"'),('"'+$out+'\replay.obj"')) + $objs + $libs
 $argsFile | Set-Content -LiteralPath (Join-Path $out 'replay.rsp') -Encoding utf8
 & link.exe ('@'+$out+'\replay.rsp')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
