@@ -44,6 +44,10 @@ Windows and macOS now support a dedicated collection update channel that preserv
 * 修复三层追猎结束后进入四层无法继续探索，以及恢复时反复缩放地图的问题。 @Shadowfax-YJ
 * 修复切换移动方式后，面板关闭稍有延迟就被误判失败并放弃探索的问题。 @Shadowfax-YJ
 
+### 已知问题 | Known issues
+
+* 收起零件箱后仍可能长时间等待，本版尚未修复。遇到时请停止任务并保留该局日志。
+
 </details>
 
 <details>
