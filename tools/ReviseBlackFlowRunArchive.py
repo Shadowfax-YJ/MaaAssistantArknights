@@ -1,4 +1,4 @@
-"""Materialize an explicitly reviewed node correction; never overwrite the source.
+"""Materialize explicitly reviewed historical corrections; never overwrite the source.
 
 The derivative has its own integrity profile. The collector's original signature
 is retained as provenance, never reused to claim the edited bytes were collected.
@@ -15,6 +15,7 @@ import zipfile
 
 from VerifyBlackFlowRunArchive import verify_archive, safe_name
 import BlackFlowReviewedIdentity as reviewed_identity
+import BlackFlowReviewedMapSection as reviewed_section
 
 
 def encode(value):
@@ -166,6 +167,8 @@ def correct_identity(value, correction, floor=None, transaction=None, bound_node
 
 
 def transform(name, data, corrections):
+    if len(corrections) == 1 and corrections[0].get('kind') == reviewed_section.KIND:
+        return reviewed_section.transform(name, data, corrections[0])
     def apply(value):
         for correction in corrections:
             value = correct_identity(value, correction)
@@ -229,7 +232,14 @@ def revise(source, output, plan):
         root = next(iter(roots))
         seen = set()
         for c in plan['corrections']:
-            if not c.get('evidence') or not c.get('transaction_id') or c.get('floor') not in range(1, 7):
+            if c.get('kind') == reviewed_section.KIND:
+                reviewed_section.validate(c)
+                approval = plan.get('approval', {})
+                if (approval.get('authority') != 'explicit_user_message'
+                        or approval.get('approval_id') != c['approval_id']
+                        or not set(c['review_ids']).issubset(approval.get('approved_review_ids', []))):
+                    raise ValueError('Map section repair requires the corresponding explicit approval record')
+            elif not c.get('evidence') or not c.get('transaction_id') or c.get('floor') not in range(1, 7):
                 raise ValueError('Correction needs transaction, floor and reviewed evidence')
             if c.get('kind') in reviewed_identity.KINDS:
                 reviewed_identity.validate(c)
@@ -271,6 +281,9 @@ def revise(source, output, plan):
                 inventory.append({'path': name, 'sha256': sha(revised), 'size': len(revised)})
             if not applied or not all(applied):
                 raise ValueError('Every reviewed correction must change matching source data')
+            for index, c in enumerate(plan['corrections']):
+                if c.get('kind') == reviewed_section.KIND and applied[index] != len(c['members']):
+                    raise ValueError('Not every reviewed map section member was corrected')
             document = {'format': 'maa-blackflow-curated-archive', 'schema_version': 1,
                 'revision_id': revision_id, 'created_at': created, 'author': plan['author'], 'reason': plan['reason'],
                 'origin_attested': False, 'previous_sha256': before, 'previous_size': source.stat().st_size,
