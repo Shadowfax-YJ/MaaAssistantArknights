@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <limits>
 #include <string_view>
@@ -1426,17 +1427,34 @@ bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()
         return false;
     }
     const int expected_wallet = *m_shop_refresh_wallet_before - automation_store_refresh_price(m_shop_refresh_count);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     int consecutive_receipts = 0;
-    for (int sample = 0; sample < 12 && !need_exit(); ++sample) {
+    int unsettled_samples = 0;
+    while (unsettled_samples < 12 && !need_exit() && std::chrono::steady_clock::now() < deadline) {
         const cv::Mat image = ctrler()->get_image();
-        Matcher confirm(image);
-        confirm.set_task_info(std::string(ShopRefreshConfirmTask));
-        const bool receipt = !image.empty() && !confirm.analyze().has_value() &&
-                             purchase_wallet_page(image, AutomationStoreKind::Eerie) &&
-                             read_optional_number(image, std::string(ShopWalletTask)) == expected_wallet;
-        consecutive_receipts = receipt ? consecutive_receipts + 1 : 0;
-        if (consecutive_receipts == 2) {
-            return true;
+        bool submitting = false;
+        if (!image.empty()) {
+            OCRer loading(image);
+            loading.set_task_info("LoadingText");
+            submitting = loading.analyze().has_value();
+        }
+        if (submitting) {
+            // 付款请求尚未返回时货架和钱包仍可能是旧值。只等待，不重复付款；
+            // 等待提示闪烁不消耗正常页面的结算预算，也不能重置总时限。
+            consecutive_receipts = 0;
+            unsettled_samples = 0;
+        }
+        else {
+            ++unsettled_samples;
+            Matcher confirm(image);
+            confirm.set_task_info(std::string(ShopRefreshConfirmTask));
+            const bool receipt = !image.empty() && !confirm.analyze().has_value() &&
+                                 purchase_wallet_page(image, AutomationStoreKind::Eerie) &&
+                                 read_optional_number(image, std::string(ShopWalletTask)) == expected_wallet;
+            consecutive_receipts = receipt ? consecutive_receipts + 1 : 0;
+            if (consecutive_receipts == 2) {
+                return true;
+            }
         }
         if (!sleep(250)) {
             return false;

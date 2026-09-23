@@ -1,4 +1,4 @@
-## v1.1.13
+## v1.1.14
 
 ### Highlights
 
@@ -36,6 +36,19 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.14 (2026-09-23)</b></summary>
+
+### 修复 | Fix
+
+* 修复诡意行商刷新时因网络响应较慢而提前停止任务的问题。现在会等待网络响应并核对刷新结果，持续超时则保存现场后停止。 @Shadowfax-YJ
+
+### 已知问题 | Known issues
+
+* 收起零件箱后仍可能长时间等待，本版尚未修复。遇到时请停止任务并保留该局日志。
+
+</details>
+
+<details>
 <summary><b>v1.1.13 (2026-09-23)</b></summary>
 
 ### 修复 | Fix

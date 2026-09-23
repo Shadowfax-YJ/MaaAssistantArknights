@@ -16,4 +16,6 @@ if start not in src: start='    if (work == PendingWork::ShopRefreshCompleted) {
 branches=src[src.index(start):src.index('    if (work == PendingWork::ShopLeave) {')]
 signature='bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()'
 receipt=extract(src,signature) if signature in src else ''
+# Replace only clock I/O so deadline tests run deterministically without real sleeps.
+receipt=receipt.replace('std::chrono::steady_clock::now()', 'ReplayClock::now()')
 a.output.write_text(template.replace('/*DISPATCH*/',branches).replace('/*RECEIPT*/',receipt),encoding='utf-8')

@@ -257,6 +257,32 @@ int main(int argc, char** argv)
         require(amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "25"; }),
                 "captured wallet is not read as 25");
     });
+    test("captured 002 pending refresh is recognized as network loading", [&] {
+        const auto image = MAA_NS::imread(
+            std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-recovery/shop-refresh-network-pending.jpg");
+        require(!image.empty(), "pending refresh fixture is missing");
+        OCRer loading(image);
+        loading.set_task_info("LoadingText");
+        require(loading.analyze().has_value(), "captured network wait was not recognized");
+        Matcher shop(image);
+        shop.set_task_info("BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed");
+        require(shop.analyze().has_value(), "fixture no longer reproduces a visible shop under network loading");
+        OCRer wallet(image);
+        wallet.set_task_info("BlackFlow@Roguelike@StageTraderInvest-Wallet");
+        wallet.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
+        wallet.set_use_char_model(true);
+        const auto amounts = wallet.analyze();
+        require(amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "31"; }),
+                "captured pending wallet is not read as 31");
+    });
+    test("captured ordinary shop does not trigger network loading wait", [&] {
+        const auto image = MAA_NS::imread(
+            std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-recovery/shop-refresh-not-open.jpg");
+        require(!image.empty(), "shop fixture is missing");
+        OCRer loading(image);
+        loading.set_task_info("LoadingText");
+        require(!loading.analyze().has_value(), "ordinary shelf was mistaken for network loading");
+    });
     test("initial core failure is recorded as an incomplete run", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         plugin.initial_core_recruitment_failed();

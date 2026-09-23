@@ -1,4 +1,6 @@
 #include <functional>
+#include <chrono>
+#include <stdexcept>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -10,25 +12,38 @@ using namespace asst;
 using namespace asst::blackflow;
 struct {void set_task_base(std::string, std::string){}} Task;
 constexpr std::string_view ShopRefreshConfirmTask="confirm", ShopWalletTask="wallet", ShopLeaveEntry="leave";
+// Only clock, vision and controller I/O are injected; the callback and polling logic are production code.
+struct ReplayClock {
+    inline static std::chrono::milliseconds elapsed{0};
+    static std::chrono::steady_clock::time_point now(){return std::chrono::steady_clock::time_point(elapsed);}
+};
+struct OCRer {
+    cv::Mat image;
+    explicit OCRer(const cv::Mat& i):image(i){}
+    void set_task_info(std::string task){if(task!="LoadingText")throw std::runtime_error("unexpected OCR task");}
+    std::optional<int> analyze(){return !image.empty() && image.at<cv::Vec3b>(0,0)[2] ? std::optional<int>(1):std::nullopt;}
+};
 struct Matcher {
     cv::Mat image;
     explicit Matcher(const cv::Mat& i):image(i){}
     void set_task_info(std::string){}
     std::optional<int> analyze(){return !image.empty() && image.at<cv::Vec3b>(0,0)[0]==2 ? std::optional<int>(1):std::nullopt;}
 };
-cv::Mat frame(int state, int wallet=25) { return cv::Mat(1,1,CV_8UC3,cv::Scalar(state,wallet,0)).clone(); }
+cv::Mat frame(int state, int wallet=25, bool loading=false) { return cv::Mat(1,1,CV_8UC3,cv::Scalar(state,wallet,loading)).clone(); }
 struct Controller {
     std::vector<cv::Mat> frames; int reads=0;
-    cv::Mat get_image(){return frames.at(std::min(reads++,int(frames.size())-1));}
+    cv::Mat get_image(){if(reads>240)throw std::runtime_error("polling is unbounded");return frames.at(std::min(reads++,int(frames.size())-1));}
 };
 namespace asst::blackflow {
 class BlackFlowAutomationStoreTaskPlugin {
 public:
+    BlackFlowAutomationStoreTaskPlugin(){ReplayClock::elapsed=std::chrono::milliseconds(0);}
     enum class PendingWork {ShopRefreshOpening,ShopRefreshFailed,ShopRefreshCompleted};
     Controller controller;
     std::optional<int> m_shop_refresh_wallet_before=25;
     int m_shop_refresh_count=0, snapshots=0;
     bool stopped=false, cancel=false;
+    int cancel_after_reads=0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     AutomationStoreRefreshLedger m_refresh_ledger;
     std::vector<int> m_shop_purchased,m_shop_attempted,m_shop_attempted_names,m_shop_sell_attempted,m_shop_goods;
@@ -36,7 +51,7 @@ public:
     enum class ShelfPage{Top}; ShelfPage m_shop_shelf_page=ShelfPage::Top;
     Controller* ctrler(){return &controller;}
     bool need_exit(){return cancel;}
-    bool sleep(int){return !cancel;}
+    bool sleep(int milliseconds){ReplayClock::elapsed+=std::chrono::milliseconds(milliseconds);if(cancel_after_reads && controller.reads>=cancel_after_reads)cancel=true;return !cancel;}
     bool purchase_wallet_page(const cv::Mat& i, AutomationStoreKind) const {return !i.empty() && i.at<cv::Vec3b>(0,0)[0]==1;}
     std::optional<int> read_optional_number(const cv::Mat& i,std::string) const {return i.empty() || i.at<cv::Vec3b>(0,0)[1]==255 ? std::nullopt:std::optional<int>(i.at<cv::Vec3b>(0,0)[1]);}
     void clear_pending_purchase(){}
@@ -52,14 +67,14 @@ public:
 /*RECEIPT*/
 }
 int main(){
-    int failed=0;
+    int failed=0, total=0;
     auto test=[&](const char* name,std::vector<cv::Mat> frames,bool success,bool baseline=true){
         BlackFlowAutomationStoreTaskPlugin p;
         p.controller.frames=std::move(frames);
         if(!baseline)p.m_shop_refresh_wallet_before.reset();
         p.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
         bool ok=p.m_shop_refresh_count==int(success) && p.snapshots==int(success) && p.stopped==!success;
-        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok;
+        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok; ++total;
     };
     test("paid refresh advances exactly once",{frame(1,21)},true);
     test("unchanged shelf is not a refresh",{frame(1,25)},false);
@@ -70,13 +85,25 @@ int main(){
     test("missing baseline does not count",{frame(1,21)},false,false);
     test("wrong debit does not count",{frame(1,20)},false);
     test("empty frames do not count",{cv::Mat()},false);
+    auto pending=std::vector<cv::Mat>(24,frame(1,25,true));
+    auto settled=pending;
+    settled.insert(settled.end(),{frame(1,21),frame(1,21)});
+    test("002 network wait longer than the old receipt budget then settles",settled,true);
+    test("network overlay blocks even an apparently paid receipt",{frame(1,21,true)},false);
+    test("network overlay resets consecutive paid receipts",{frame(1,21),frame(1,21,true),frame(1,25)},false);
+    pending.push_back(frame(1,25));
+    test("network disappears without a debit does not advance",pending,false);
+    auto unstable=std::vector<cv::Mat>{frame(1,25,true),cv::Mat(),frame(0),frame(1,25)};
+    for(int i=0;i<5;++i)unstable.insert(unstable.end(),{frame(1,25,true),cv::Mat(),frame(0),frame(1,25)});
+    unstable.insert(unstable.end(),{frame(1,21),frame(1,21)});
+    test("intermittent loading and missing frames settle within deadline",unstable,true);
     auto opening=[&](const char* name,std::vector<cv::Mat> frames,bool success){
         BlackFlowAutomationStoreTaskPlugin p;
         p.m_shop_refresh_wallet_before.reset();
         p.controller.frames=std::move(frames);
         p.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshOpening);
         bool ok=p.stopped==!success && p.m_shop_refresh_wallet_before.has_value()==success;
-        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok;
+        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok; ++total;
     };
     opening("refresh opening tolerates delayed purchase tab",{cv::Mat(),frame(0),frame(1),frame(1)},true);
     opening("refresh opening requires a readable wallet",{frame(1,255)},false);
@@ -84,7 +111,23 @@ int main(){
     cancelled.cancel=true;
     cancelled.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
     bool ok=!cancelled.stopped && cancelled.m_shop_refresh_count==0 && cancelled.snapshots==0;
-    std::cout<<(ok?"PASS ":"FAIL ")<<"user cancellation is not a refresh failure"<<std::endl; failed+=!ok;
-    std::cout<<12-failed<<" passed, "<<failed<<" failed"<<std::endl;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"user cancellation is not a refresh failure"<<std::endl; failed+=!ok; ++total;
+    BlackFlowAutomationStoreTaskPlugin timeout;
+    timeout.controller.frames={frame(1,25,true)};
+    timeout.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=timeout.stopped && timeout.m_shop_refresh_count==0 && timeout.snapshots==0 && ReplayClock::elapsed.count()==30000;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"persistent network wait stops at the total deadline"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin intermittent;
+    for(int i=0;i<30;++i){intermittent.controller.frames.insert(intermittent.controller.frames.end(),10,frame(1,25));intermittent.controller.frames.push_back(frame(1,25,true));}
+    intermittent.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=intermittent.stopped && ReplayClock::elapsed.count()==30000 && intermittent.snapshots==0;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"intermittent loading cannot reset the total deadline"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin cancel_wait;
+    cancel_wait.controller.frames={frame(1,25,true)};
+    cancel_wait.cancel_after_reads=6;
+    cancel_wait.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=!cancel_wait.stopped && cancel_wait.m_shop_refresh_count==0 && cancel_wait.snapshots==0 && cancel_wait.controller.reads==6;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"cancellation during network wait has no success or failure side effects"<<std::endl;failed+=!ok;++total;
+    std::cout<<total-failed<<" passed, "<<failed<<" failed"<<std::endl;
     return failed?1:0;
 }

@@ -1,9 +1,8 @@
-黑流树海采集版 v1.1.13
+黑流树海采集版 v1.1.14
 
 ### 本次更新
 
-* 修复设置的难度与游戏实际难度不一致时仍继续探索的问题。现在每局开局前都会核对实际难度，无法确认时有限重试并停止，保留现场截图。
-* 采集日志分别记录设定难度与实际识别结果，便于核对对局数据。
+* 修复诡意行商刷新时因网络响应较慢而提前停止任务的问题。现在会等待网络响应并核对刷新结果，持续超时则保存现场后停止。
 
 ### 已知问题
 
@@ -17,8 +16,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.13/MAA-BlackFlow-Data-Collection-v1.1.13-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.13/MAA-BlackFlow-Data-Collection-v1.1.13-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.14/MAA-BlackFlow-Data-Collection-v1.1.14-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.14/MAA-BlackFlow-Data-Collection-v1.1.14-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。
