@@ -27,7 +27,7 @@ inline constexpr std::array<std::string_view, 5> AutomationCollectionPreferredSt
     "襁褓骏鹰",
 };
 
-// 开局界面实际可能出现的完整标题词表。自动化收集只用 OCR 识别这十个标题，
+// 开局界面实际可能出现的完整标题词表。自动化收集只用 OCR 识别这些标题，
 // 不再用奖励卡片模板兜底；模板在动画、缩放和局部遮挡下比标题 OCR 更不稳定。
 inline constexpr std::array<std::string_view, 11> AutomationCollectionStartRewardTitles = {
     "襁褓金乌",
@@ -73,17 +73,29 @@ struct AutomationCollectionStartRewardSelection
     return Point { prompt_rect.x + prompt_rect.width / 2, 595 };
 }
 
+[[nodiscard]] inline std::optional<std::string>
+normalize_automation_collection_start_reward_title(std::string_view title)
+{
+    std::vector<std::string> candidates;
+    candidates.reserve(AutomationCollectionStartRewardTitles.size());
+    for (const std::string_view candidate_title : AutomationCollectionStartRewardTitles) {
+        candidates.emplace_back(candidate_title);
+    }
+
+    const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(title, candidates);
+    // 四字奖励标题允许两个 OCR 字误，但仍要求候选唯一领先。真实样本
+    // “强裸骏鹰”因此可归一为“襁褓骏鹰”，而不会把模糊结果静默猜成相邻奖励。
+    const bool accepted = match.exact ||
+                          (match.edit_distance <= 2 && match.similarity >= 0.5 &&
+                           match.similarity - match.runner_up_similarity >= 0.12);
+    return accepted ? std::optional<std::string>(match.canonical) : std::nullopt;
+}
+
 [[nodiscard]] inline std::optional<AutomationCollectionStartRewardSelection>
 select_automation_collection_start_reward(
     const std::vector<std::string>& detected_titles,
     const std::vector<std::string_view>& ordinary_priority)
 {
-    std::vector<std::string> candidates;
-    candidates.reserve(AutomationCollectionStartRewardTitles.size());
-    for (const std::string_view title : AutomationCollectionStartRewardTitles) {
-        candidates.emplace_back(title);
-    }
-
     struct RecognizedTitle
     {
         std::size_t detected_index = 0;
@@ -91,14 +103,8 @@ select_automation_collection_start_reward(
     };
     std::vector<RecognizedTitle> recognized;
     for (std::size_t index = 0; index < detected_titles.size(); ++index) {
-        const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(detected_titles[index], candidates);
-        // 四字奖励标题允许两个 OCR 字误，但仍要求候选唯一领先。真实样本
-        // “强裸骏鹰”因此可归一为“襁褓骏鹰”，而不会把模糊结果静默猜成相邻奖励。
-        const bool accepted = match.exact ||
-                              (match.edit_distance <= 2 && match.similarity >= 0.5 &&
-                               match.similarity - match.runner_up_similarity >= 0.12);
-        if (accepted) {
-            recognized.emplace_back(RecognizedTitle { index, match.canonical });
+        if (const auto canonical = normalize_automation_collection_start_reward_title(detected_titles[index])) {
+            recognized.emplace_back(RecognizedTitle { index, *canonical });
         }
     }
 
@@ -130,5 +136,35 @@ select_automation_collection_start_reward(
         }
     }
     return std::nullopt;
+}
+
+// 保留 OCR 原始顺序和全部框；未能唯一归一的文字仍保留，但不冒充已识别奖励。
+[[nodiscard]] inline json::object automation_collection_start_reward_candidates_details(
+    const std::vector<TextRect>& detected,
+    const std::optional<AutomationCollectionStartRewardSelection>& selected)
+{
+    json::array candidates;
+    for (std::size_t index = 0; index < detected.size(); ++index) {
+        auto candidate = detected[index].to_json();
+        candidate["detected_index"] = index;
+        const auto canonical = normalize_automation_collection_start_reward_title(detected[index].text);
+        candidate["canonical"] = canonical.has_value() ? json::value(*canonical) : json::value(nullptr);
+        candidates.emplace_back(std::move(candidate));
+    }
+    json::object details {
+        { "recognition_scope", "visible_title_roi" },
+        { "recognition_status", detected.empty() ? "no_titles" : "titles_detected" },
+        { "candidate_count", detected.size() },
+        { "candidates", std::move(candidates) },
+        { "planned_selection", nullptr },
+    };
+    if (selected.has_value() && selected->detected_index < detected.size()) {
+        details["planned_selection"] = json::object {
+            { "detected_index", selected->detected_index },
+            { "name", selected->canonical },
+            { "preferred", selected->preferred },
+        };
+    }
+    return details;
 }
 } // namespace asst::blackflow

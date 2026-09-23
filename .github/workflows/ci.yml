@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.11
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.12
 
 on:
   push:
@@ -165,6 +165,12 @@ jobs:
         run: ./unit_test/MaaCore/run_blackflow_interaction_replay.ps1
       - name: Test BlackFlow Session and captured page transitions
         run: ./unit_test/MaaCore/run_blackflow_transition_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
+      - name: Test BlackFlow initial core recruitment guard
+        run: ./unit_test/MaaCore/run_blackflow_recruit_guard_replay.ps1
+      - name: Test BlackFlow shop refresh verification
+        run: ./unit_test/MaaCore/run_blackflow_store_refresh_replay.ps1
+      - name: Test BlackFlow bounded recovery and captured shop page
+        run: ./unit_test/MaaCore/run_blackflow_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow routing and archive regressions
         run: |
           cmake -S unit_test -B build/blackflow-release-tests -A x64

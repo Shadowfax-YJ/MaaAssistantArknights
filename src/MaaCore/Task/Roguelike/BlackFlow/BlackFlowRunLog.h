@@ -128,6 +128,11 @@ enum class RunLogImageCaptureMode
     if (!capture_requested) {
         return RunLogImageCaptureMode::Omit;
     }
+    // 恢复失败的现场本身可能处于动画或异常页面，不能因为不稳定而丢掉唯一证据。
+    if (phase == "failed" && (action == "recovery.tree_hole_return" || action == "recovery.initial_core_recruitment" ||
+                              action == "recovery.store_refresh")) {
+        return RunLogImageCaptureMode::ImmediateSnapshot;
+    }
     // started 表示操作前决策证据，必须立即抓取；操作后画面则必须等动画稳定。
     return phase == "started" ? RunLogImageCaptureMode::ImmediateSnapshot : RunLogImageCaptureMode::StableSnapshot;
 }

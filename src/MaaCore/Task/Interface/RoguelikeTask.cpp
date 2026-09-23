@@ -87,9 +87,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     auto battle_plugin =
         m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr);
     battle_plugin->set_retry_times(0).set_ignore_error(true);
-    m_roguelike_task_ptr->register_plugin<RoguelikeRecruitTaskPlugin>(m_config_ptr, m_control_ptr)
-        ->set_retry_times(2)
-        .set_ignore_error(true);
+    auto recruit_plugin =
+        m_roguelike_task_ptr->register_plugin<RoguelikeRecruitTaskPlugin>(m_config_ptr, m_control_ptr);
+    recruit_plugin->set_retry_times(2).set_ignore_error(true);
 
     m_roguelike_task_ptr->register_plugin<RoguelikeSkillSelectionTaskPlugin>(m_config_ptr, m_control_ptr)
         ->set_retry_times(2)
@@ -173,6 +173,30 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view reward) {
             if (const auto session = weak_session.lock(); session != nullptr) {
                 session->set_start_reward(std::string(reward));
+            }
+        });
+    m_custom_ptr->set_blackflow_start_reward_evidence_observer(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
+            std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
+            const auto session = weak_session.lock();
+            const auto port = weak_port.lock();
+            if (session == nullptr || port == nullptr || session->profile() != "automation_collection") {
+                return;
+            }
+            const bool selected = kind == "selected";
+            const blackflow::RunLogEvent event {
+                .level = blackflow::RunLogLevel::Info,
+                .action = "start.reward." + std::string(kind),
+                .phase = selected ? "completed" : "observed",
+                .outcome = selected ? "confirmed" : details.get("recognition_status", std::string()),
+                .task = "RoguelikeCustomStartTaskPlugin",
+                .state = session->run_log_state(),
+                .details = std::move(details),
+            };
+            std::string error;
+            if (!port->record_run_event(session->run_revision(), event, std::move(image), false, &error)) {
+                Log.warn("BlackFlow start reward evidence could not be saved", error);
             }
         });
     encounter_plugin->set_blackflow_encounter_context_provider(
@@ -336,11 +360,17 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr);
-    m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowLifecycleTaskPlugin>(
+    auto lifecycle_plugin = m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowLifecycleTaskPlugin>(
         m_config_ptr,
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr);
+    recruit_plugin->set_initial_core_failure_observer(
+        [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(lifecycle_plugin)] {
+            if (const auto lifecycle = weak_lifecycle.lock()) {
+                lifecycle->initial_core_recruitment_failed();
+            }
+        });
     m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowRoutingTaskPlugin>(
         m_config_ptr,
         m_control_ptr,

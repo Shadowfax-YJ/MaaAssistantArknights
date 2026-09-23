@@ -44,6 +44,11 @@ public:
     {
         m_blackflow_start_reward_observer = std::move(observer);
     }
+    void set_blackflow_start_reward_evidence_observer(
+        std::function<void(std::string_view, json::object, std::shared_ptr<cv::Mat>)> observer)
+    {
+        m_blackflow_start_reward_evidence_observer = std::move(observer);
+    }
 
 protected:
     virtual bool _run() override;
@@ -70,5 +75,7 @@ private:
     std::string m_collectible_mode_squad;
     bool m_automation_collection_core_char_voucher_selected = false;
     std::function<void(std::string_view)> m_blackflow_start_reward_observer;
+    std::function<void(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::uint64_t m_start_reward_observation_index = 0;
 };
 }

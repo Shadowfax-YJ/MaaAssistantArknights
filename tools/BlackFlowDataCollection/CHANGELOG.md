@@ -1,4 +1,4 @@
-## v1.1.11
+## v1.1.12
 
 ### Highlights
 
@@ -36,6 +36,25 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.12 (2026-09-23)</b></summary>
+
+### 修复 | Fix
+
+* 修复开局核心干员招募失败后仍继续探索、导致后续战斗无法准备的问题。无法按所选来源招募核心时停止任务，请检查助战及好友限制设置。 @Shadowfax-YJ
+* 修复诡意行商刷新弹窗未打开时卡住的问题；刷新失败后有限重试，确认刷新成功后才继续采集商品。 @Shadowfax-YJ
+* 修复离开树洞失败后持续反复重试的问题；连续三次恢复失败后停止任务，并保存现场截图。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 开局奖励现在记录全部识别到的候选和对应截图，并单独记录最终确认选择的奖励。 @Shadowfax-YJ
+
+### 已知问题 | Known issues
+
+* 收起零件箱后仍可能长时间等待，本版尚未修复。遇到时请停止任务并保留该局日志。
+
+</details>
+
+<details>
 <summary><b>v1.1.11 (2026-09-16)</b></summary>
 
 ### 修复 | Fix

@@ -25,3 +25,16 @@ while unchanged rewards and unavailable evidence retain their bounded retries.
 Run `-SourceRef f7dfb68170c92787babcfe7fb08dc71fe6d6140c` to reproduce the v1.1.10 failures.
 Actual recruitment/map/panel recognition and the Session lifecycle are covered by the
 companion `run_blackflow_transition_replay.ps1` and `blackflow-transitions` fixtures.
+
+2026-09-23: start-reward tests extract the automation-collection branch of
+`RoguelikeCustomStartTaskPlugin::hijack_reward`. Synthetic OCR results (including
+the previously observed typo `强裸骏鹰`) and device responses verify that all raw
+candidates and the same OCR frame are emitted before a click, failed confirmations
+never emit a selected reward, and repeated selections have separate observation IDs.
+No extra OCR, change of reward priority or additional UI click is allowed.
+`-SourceRef 337696dcd4` before the candidate-logging change reproduces six missing-evidence
+failures while the existing interaction tests and observer-free gameplay pass.
+The generated `start-reward-events.json` is copied to `unit_test/fixtures/BlackFlow/`
+for signed-archive and analysis compatibility tests. Coordinates, scores, ordering,
+timestamps and device frames in these new cases are synthetic test inputs, not a
+new game recording. The cross-run cases are combined only for contract validation.

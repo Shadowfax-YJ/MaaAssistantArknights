@@ -1,0 +1,32 @@
+[
+  {
+    "schema_version": 1,
+    "level": "ERROR",
+    "action": "recovery.initial_core_recruitment",
+    "phase": "failed",
+    "outcome": "stop_task",
+    "task": "BlackFlowLifecycle",
+    "state": {"floor": 0},
+    "details": {"core_char": "凯尔希·思衡托", "use_support": true, "use_nonfriend_support": false}
+  },
+  {
+    "schema_version": 1,
+    "level": "WARN",
+    "action": "recovery.store_refresh",
+    "phase": "failed",
+    "outcome": "skipped",
+    "task": "BlackFlowAutomationStore",
+    "state": {"floor": 4},
+    "details": {"reason": "refresh dialog did not open after bounded retries", "refresh_index": 0}
+  },
+  {
+    "schema_version": 1,
+    "level": "ERROR",
+    "action": "recovery.tree_hole_return",
+    "phase": "failed",
+    "outcome": "stop_task",
+    "task": "BlackFlowLifecycle",
+    "state": {"floor": 6},
+    "details": {"attempt": 3, "max_attempts": 3, "outer_floor": 5, "error": "injected return failure"}
+  }
+]

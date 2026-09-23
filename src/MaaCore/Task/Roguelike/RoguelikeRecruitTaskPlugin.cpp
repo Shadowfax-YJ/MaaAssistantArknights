@@ -162,6 +162,18 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
                 m_starts_complete = true;
                 return true;
             }
+            // 固定作战方案依赖核心干员。助战列表已经完成有限次刷新，失败后不能
+            // 落入普通招募并带着缺核心的队伍开始采集，也不能对未知招募页盲目弃局。
+            Log.error(
+                "BlackFlow initial core recruitment failed; stopping before exploration",
+                m_config->get_core_char());
+            if (m_initial_core_failure_observer) {
+                m_initial_core_failure_observer();
+            }
+            if (m_task_ptr != nullptr) {
+                m_task_ptr->set_enable(false);
+            }
+            return true;
         }
         else if (m_config->get_use_support()) { // 是否使用助战干员开局
             if (recruit_support_char()) {
@@ -943,7 +955,13 @@ bool asst::RoguelikeRecruitTaskPlugin::recruit_support_char(const std::string& n
     sleep(500);
 
     // 确认选择
-    ProcessTask(*this, { "Roguelike@RecruitSupportConfirm" }).set_retry_times(20).run();
+    const bool confirmed = ProcessTask(*this, { "Roguelike@RecruitSupportConfirm" }).set_retry_times(20).run();
+    if (!confirmed && m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection) {
+        // select_oper 会先记入候选；确认失败不能把这条乐观记录当作已入队。
+        m_config->status().opers.erase(name);
+        return false;
+    }
     return true;
 }
 

@@ -3040,22 +3040,33 @@ bool BlackFlowTaskPort::resume_exploration_after_tree_hole(int floor, cv::Mat& i
 {
     Log.info("BlackFlow tree-hole return: exit to the menu and continue the saved exploration", floor);
     if (!m_task_context->execute({ "BlackFlow@Roguelike@TreeHoleResumeMenuWait" }, error)) {
+        set_error(
+            error,
+            "tree-hole menu recovery failed at " + m_task_context->last_task() + ": " +
+                (error != nullptr ? *error : std::string {}));
         return false;
     }
     if (m_task_context->last_task() != "BlackFlow@Roguelike@TreeHoleResumeMapReady") {
-        set_error(error, "tree-hole menu return did not complete Continue and return to the map");
+        set_error(
+            error,
+            "tree-hole menu return ended at " + m_task_context->last_task() +
+                " without completing Continue and returning to the map");
         return false;
     }
     m_pending_stable_map_image.reset();
     m_last_stable_map_image.reset();
     m_battle_preview_map_reference.reset();
     if (!m_task_context->capture_stable_map(image, error)) {
+        set_error(error, "tree-hole map stabilization failed: " + (error != nullptr ? *error : std::string {}));
         return false;
     }
     const auto names = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel")->text;
     const auto title = recognize_text(image, "BlackFlow@Roguelike@NextLevel");
     if (floor < 1 || floor > 5 || !title.has_value() || *title != names.at(floor - 1)) {
-        set_error(error, "continuing after the tree hole did not show the saved outer floor");
+        set_error(
+            error,
+            "tree-hole floor verification failed: expected floor " + std::to_string(floor) +
+                ", observed title: " + title.value_or("<unrecognized>"));
         return false;
     }
     Log.info("BlackFlow tree-hole return: continued exploration on the original floor", floor);

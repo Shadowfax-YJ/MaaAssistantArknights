@@ -133,6 +133,8 @@ def block(source, marker):
 def main():
     source = (ROOT / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowLifecycleTaskPlugin.cpp").read_text(encoding="utf-8")
     callback = block(source, "if (work == PendingWork::RecordCurrentFloor")
+    return_failure = block(source, "void BlackFlowLifecycleTaskPlugin::tree_hole_return_failed(").replace(
+        "BlackFlowLifecycleTaskPlugin::", "")
     verify = block(source, "if (msg == AsstMsg::SubTaskCompleted &&")
     verify_retry = block(source, 'if (msg == AsstMsg::SubTaskStart && task == "BlackFlow@Roguelike@TreeHoleReturnResumeRetry")')
     port_source = (ROOT / "src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowTaskPort.cpp").read_text(encoding="utf-8")
@@ -150,14 +152,16 @@ def main():
 #include "meojson/json.hpp"
 const std::string p="BlackFlow@Roguelike@";
 const std::string RecoveryFailedTask=p+"RecoveryFailed";
-enum class FailureDisposition {RestartRun};
+enum class FailureDisposition {RestartRun,StopTask};
+enum class RunLogLevel {Warning,Error};
+constexpr int MaxTreeHoleReturnFailures=3;
 struct OcrTaskInfo {std::vector<std::string> text={"F1","F2","F3","F4","F5","TH"};};
 struct Tasks {
     std::map<std::string,std::string> bases;
     template<class T> auto get(std::string) {return std::make_shared<OcrTaskInfo>();}
     bool set_task_base(std::string name,std::string base) {bases[name]=base;return true;}
 } Task;
-struct Logger {template<class... T> void info(T&&...){} template<class... T> void error(T&&...){} } Log;
+struct Logger {template<class... T> void info(T&&...){} template<class... T> void error(T&&...){} template<class... T> void warn(T&&...){} } Log;
 struct Session {
     int floor=6,outer_ap=3,saved_outer_floor=3;bool failed=false;
     std::optional<int> current_floor(){return floor;}
@@ -189,8 +193,11 @@ enum class AsstMsg {SubTaskCompleted,SubTaskStart};
 struct Lifecycle {
     Session* m_session;Port* m_port;
     PendingWork m_pending;Details m_pending_details;
+    int m_tree_hole_return_failures=0;
     std::string m_terminal_trigger,m_terminal_pre_task;
     void report_outputs(){}
+    template<class... T> void record_run_event(T&&...){}
+''' + return_failure + r'''
     bool verify(const Details& details){
         const auto msg=details.trigger==p+"TreeHoleReturnResumeRetry"?AsstMsg::SubTaskStart:AsstMsg::SubTaskCompleted;
         const std::string task=details.trigger;
@@ -263,7 +270,7 @@ int main(int argc,char** argv){
         Task.bases.clear();const Details event{p+"TreeHoleReturnResumeRetry",""};
         const bool accepted=lifecycle.verify(event);if(accepted)lifecycle.run(event);
         const bool ok=accepted&&!session.failed&&session.floor==6&&port.calls==0&&
-            Task.bases[p+"TreeHoleReturnResumeAction"]==p+"TreeHoleReturnWait";
+            Task.bases[p+"TreeHoleReturnResumeAction"]==p+"RecoveryFailed";
         std::cout<<(ok?"PASS ":"FAIL ")<<"unknown-outer-floor\n";failures+=!ok;
     }
     for(const std::string mode:{"success-once","timeout","wrong-floor","late-pursuit"}){

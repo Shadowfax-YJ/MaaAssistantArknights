@@ -1,4 +1,7 @@
 #pragma once
+
+#include <functional>
+
 #include "AbstractRoguelikeTaskPlugin.h"
 #include "Common/AsstBattleDef.h"
 #include "Config/Roguelike/RoguelikeRecruitConfig.h"
@@ -23,6 +26,11 @@ public:
 
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
     virtual bool load_params(const json::value& params) override;
+
+    void set_initial_core_failure_observer(std::function<void()> observer)
+    {
+        m_initial_core_failure_observer = std::move(observer);
+    }
 
 protected:
     virtual bool _run() override;
@@ -64,5 +72,6 @@ private:
     bool m_starts_complete = false; // 开局干员是否已经招募，阵容中必须有开局干员，没有前仅招募start干员或预备干员
     bool m_team_complete = false;   // 阵容是否完备，阵容完备前，仅招募key干员或预备干员
     std::string m_start_roles;      // 开局职业组，只存在于任务参数里，RoguelikeConfig 拿不到
+    std::function<void()> m_initial_core_failure_observer;
 };
 }

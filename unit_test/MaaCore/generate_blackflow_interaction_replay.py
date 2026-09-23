@@ -33,4 +33,8 @@ if __name__ == '__main__':
         source = subprocess.check_output(['git', 'show', f'{args.source_ref}:{path.as_posix()}'], cwd=repo).decode('utf-8') if args.source_ref else (repo / path).read_text('utf-8')
         body = extract(source, signature) if signature in source else ''
         result = result.replace('/*' + marker + '*/', body)
+    path = Path('src/MaaCore/Task/Roguelike/RoguelikeCustomStartTaskPlugin.cpp')
+    source = subprocess.check_output(['git', 'show', f'{args.source_ref}:{path.as_posix()}'], cwd=repo).decode('utf-8') if args.source_ref else (repo / path).read_text('utf-8')
+    reward_method = extract(source, 'bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()')
+    result = result.replace('/*START_REWARD*/', extract(reward_method, 'if (automation_collection)'))
     args.output.write_text(result, encoding='utf-8')

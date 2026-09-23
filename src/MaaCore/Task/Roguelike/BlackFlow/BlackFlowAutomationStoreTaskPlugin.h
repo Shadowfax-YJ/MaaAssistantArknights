@@ -64,6 +64,8 @@ private:
         ShopSellDecision,
         ShopSellConfirmed,
         ShopSellMissed,
+        ShopRefreshOpening,
+        ShopRefreshFailed,
         ShopRefreshCompleted,
         ShopLeave,
         ScrapShopEnter,
@@ -102,6 +104,8 @@ private:
     [[nodiscard]] AutomationStoreIdentity current_store_identity(AutomationStoreKind kind) const noexcept;
     void clear_pending_purchase() noexcept;
     void finalize_pending_purchase(AutomationStoreKind kind);
+    [[nodiscard]] bool verify_shop_refresh_receipt();
+    void stop_unverified_shop_refresh(std::string reason);
     void capture_store_snapshot(AutomationStoreKind kind, std::string_view phase, int refresh_index) const;
     void queue_eerie_store_snapshot(std::string phase, int refresh_index);
     void capture_pending_eerie_store_snapshot(
@@ -130,6 +134,7 @@ private:
     std::vector<CachedShopGood> m_shop_goods;
     std::vector<RunResources::MovementInstance> m_shop_entry_processing_items;
     int m_shop_refresh_count = 0;
+    std::optional<int> m_shop_refresh_wallet_before;
     std::size_t m_shop_collectibles_purchased_in_run = 0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     bool m_shop_sold_in_cycle = false;

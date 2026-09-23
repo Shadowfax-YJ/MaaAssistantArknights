@@ -51,6 +51,9 @@ constexpr std::string_view ShopSellMissedTask = "BlackFlow@Roguelike@AutomationS
 constexpr std::string_view ShopToggleToSellEntry = "BlackFlow@Roguelike@AutomationShopToggleToSell-Enter";
 constexpr std::string_view ShopToggleToBuyEntry = "BlackFlow@Roguelike@AutomationShopToggleToBuy-Enter";
 constexpr std::string_view ShopRefreshPrepare = "BlackFlow@Roguelike@AutomationShopRefreshPrepare";
+constexpr std::string_view ShopRefreshTask = "BlackFlow@Roguelike@AutomationShopRefresh";
+constexpr std::string_view ShopRefreshConfirmTask = "BlackFlow@Roguelike@AutomationShopRefreshConfirm";
+constexpr std::string_view ShopRefreshFailedTask = "BlackFlow@Roguelike@AutomationShopRefreshFailed";
 constexpr std::string_view ShopRefreshCompletedTask = "BlackFlow@Roguelike@AutomationShopRefreshCompleted";
 constexpr std::string_view ShopLeaveEntry = "BlackFlow@Roguelike@AutomationShopLeave-Enter";
 constexpr std::string_view ShopResumeAction = "BlackFlow@Roguelike@AutomationShopResumeAction";
@@ -115,6 +118,12 @@ bool BlackFlowAutomationStoreTaskPlugin::verify(AsstMsg msg, const json::value& 
         }
         else if (task == ShopSellMissedTask) {
             m_pending = PendingWork::ShopSellMissed;
+        }
+        else if (task == ShopRefreshTask) {
+            m_pending = PendingWork::ShopRefreshOpening;
+        }
+        else if (task == ShopRefreshFailedTask) {
+            m_pending = PendingWork::ShopRefreshFailed;
         }
         else if (task == ShopRefreshCompletedTask) {
             m_pending = PendingWork::ShopRefreshCompleted;
@@ -191,6 +200,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_shop_goods.clear();
     m_shop_entry_processing_items.clear();
     m_shop_refresh_count = 0;
+    m_shop_refresh_wallet_before.reset();
     m_shop_collectibles_purchased_in_run = 0;
     m_active_shop_identity.reset();
     m_shop_sold_in_cycle = false;
@@ -443,6 +453,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
     m_pending = PendingWork::None;
 
     if (work == PendingWork::ShopEnter) {
+        m_shop_refresh_wallet_before.reset();
         clear_pending_purchase();
         m_pending_sale.reset();
         m_pending_sale_name.reset();
@@ -623,7 +634,66 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_pending_sale_name.reset();
         return true;
     }
+    if (work == PendingWork::ShopRefreshOpening) {
+        if (!m_shop_refresh_wallet_before.has_value()) {
+            std::optional<int> previous;
+            for (int sample = 0; sample < 8 && !need_exit(); ++sample) {
+                const cv::Mat image = ctrler()->get_image();
+                const auto wallet = purchase_wallet_page(image, AutomationStoreKind::Eerie)
+                                        ? read_optional_number(image, std::string(ShopWalletTask))
+                                        : std::nullopt;
+                if (wallet.has_value() && wallet == previous) {
+                    m_shop_refresh_wallet_before = wallet;
+                    break;
+                }
+                previous = wallet;
+                if (!sleep(250)) {
+                    return true;
+                }
+            }
+            if (!m_shop_refresh_wallet_before.has_value() && !need_exit()) {
+                stop_unverified_shop_refresh("refresh wallet could not be read before opening the dialog");
+            }
+        }
+        return true;
+    }
+    if (work == PendingWork::ShopRefreshFailed) {
+        const cv::Mat image = ctrler()->get_image();
+        Matcher confirm(image);
+        confirm.set_task_info(std::string(ShopRefreshConfirmTask));
+        const bool unchanged = !image.empty() && !confirm.analyze().has_value() &&
+                               purchase_wallet_page(image, AutomationStoreKind::Eerie) &&
+                               m_shop_refresh_wallet_before.has_value() &&
+                               read_optional_number(image, std::string(ShopWalletTask)) == m_shop_refresh_wallet_before;
+        Task.set_task_base(
+            "BlackFlow@Roguelike@AutomationShopRefreshFailureAction",
+            unchanged ? std::string(ShopLeaveEntry) : "BlackFlow@Roguelike@StrategyTerminated-Enter");
+        if (unchanged) {
+            // 没有执行过付款确认、仍是原商店时可以离店；不虚增刷新次数或生成 after_refresh。
+            record_run_event(
+                RunLogLevel::Warning,
+                "recovery.store_refresh",
+                "failed",
+                "skipped",
+                json::object { { "reason", "refresh dialog did not open after bounded retries" },
+                               { "refresh_index", m_shop_refresh_count } },
+                "BlackFlowAutomationStore",
+                std::make_shared<cv::Mat>(image));
+            m_shop_refresh_wallet_before.reset();
+        }
+        else {
+            stop_unverified_shop_refresh("refresh dialog did not open and the current shop state is uncertain");
+        }
+        return true;
+    }
     if (work == PendingWork::ShopRefreshCompleted) {
+        if (!verify_shop_refresh_receipt()) {
+            if (!need_exit()) {
+                stop_unverified_shop_refresh("refresh payment or return to the shop could not be verified");
+            }
+            return true;
+        }
+        m_shop_refresh_wallet_before.reset();
         m_shop_refresh_count = m_active_shop_identity.has_value()
                                    ? m_refresh_ledger.record_refresh(*m_active_shop_identity)
                                    : std::min(m_shop_refresh_count + 1, AutomationStoreMaxRefreshTimes);
@@ -1348,6 +1418,50 @@ bool BlackFlowAutomationStoreTaskPlugin::click_verified_selection(StoreSelection
     m_pending_purchase_id =
         "BF-P" + std::to_string(m_session->run_revision()) + "-" + std::to_string(++m_purchase_sequence);
     return true;
+}
+
+bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()
+{
+    if (!m_shop_refresh_wallet_before.has_value()) {
+        return false;
+    }
+    const int expected_wallet = *m_shop_refresh_wallet_before - automation_store_refresh_price(m_shop_refresh_count);
+    int consecutive_receipts = 0;
+    for (int sample = 0; sample < 12 && !need_exit(); ++sample) {
+        const cv::Mat image = ctrler()->get_image();
+        Matcher confirm(image);
+        confirm.set_task_info(std::string(ShopRefreshConfirmTask));
+        const bool receipt = !image.empty() && !confirm.analyze().has_value() &&
+                             purchase_wallet_page(image, AutomationStoreKind::Eerie) &&
+                             read_optional_number(image, std::string(ShopWalletTask)) == expected_wallet;
+        consecutive_receipts = receipt ? consecutive_receipts + 1 : 0;
+        if (consecutive_receipts == 2) {
+            return true;
+        }
+        if (!sleep(250)) {
+            return false;
+        }
+    }
+    return false;
+}
+
+void BlackFlowAutomationStoreTaskPlugin::stop_unverified_shop_refresh(std::string reason)
+{
+    Log.error("BlackFlow shop refresh verification failed", reason);
+    record_run_event(
+        RunLogLevel::Error,
+        "recovery.store_refresh",
+        "failed",
+        "stop_task",
+        json::object { { "reason", reason }, { "refresh_index", m_shop_refresh_count } },
+        "BlackFlowAutomationStore",
+        nullptr,
+        true);
+    m_session->fail("store_refresh_unverified", std::move(reason), FailureDisposition::StopTask);
+    report_outputs();
+    if (m_task_ptr != nullptr) {
+        m_task_ptr->set_enable(false);
+    }
 }
 
 bool BlackFlowAutomationStoreTaskPlugin::purchase_wallet_page(const cv::Mat& image, AutomationStoreKind kind) const

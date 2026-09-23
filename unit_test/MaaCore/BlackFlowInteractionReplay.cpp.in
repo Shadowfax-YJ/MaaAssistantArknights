@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <vector>
 #include <opencv2/imgcodecs.hpp>
@@ -10,10 +11,11 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
 using namespace asst;
 using namespace asst::blackflow;
 void check(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
-struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} } Log;
+struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} template<class... T> void error(T&&...) {} } Log;
 struct { std::string next; void set_task_base(std::string, std::string base) { next = std::move(base); } } Task;
 struct DiagnosticArtifactRequest { struct EvidenceImage { std::string role; std::shared_ptr<cv::Mat> image; }; };
 struct MovementPanelObservation { MovementKind target; bool target_found = false; };
@@ -154,6 +156,70 @@ struct BlackFlowNodeEvidenceTaskPlugin {
 };
 /*REWARD*/
 /*GUARD*/
+namespace start_reward_replay {
+// Only device/OCR I/O is injected; run() contains the extracted production start-reward branch.
+struct Controller {
+    int stage=0, clicks=0;
+    bool confirm_ok=true;
+    Rect clicked;
+    cv::Mat get_image() { return cv::Mat(720,1280,CV_8UC3,cv::Scalar(stage,0,0)); }
+    bool click(const Rect& rect) { ++clicks; clicked=rect; stage=1; return true; }
+    bool click(const Point&) { ++clicks; if(confirm_ok)stage=2; return true; }
+};
+struct OCRer {
+    inline static std::optional<std::vector<TextRect>> titles;
+    inline static bool show_prompt=true;
+    inline static int title_reads=0;
+    cv::Mat image;
+    std::string task;
+    explicit OCRer(const cv::Mat& value):image(value){}
+    void set_task_info(std::string_view value){task=value;}
+    void set_required(std::vector<std::string>){}
+    void set_fuzzy_match(bool){}
+    std::optional<std::vector<TextRect>> analyze() {
+        if(task.ends_with("PreferredStartReward")){++title_reads;return titles;}
+        if(show_prompt&&image.at<cv::Vec3b>(0,0)[0]==1)
+            return std::vector<TextRect>{{{400,544,140,28},0.99,"你确定要这么做"}};
+        return std::nullopt;
+    }
+};
+struct Plugin {
+    Controller controller;
+    std::uint64_t m_start_reward_observation_index=0;
+    std::function<void(std::string_view)> m_blackflow_start_reward_observer;
+    std::function<void(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::vector<std::string> confirmed;
+    std::vector<json::value> events;
+    Plugin() {
+        OCRer::show_prompt=true;OCRer::title_reads=0;
+        OCRer::titles=std::vector<TextRect>{
+            {{120,400,140,28},0.99,"调查预付款"}, {{380,400,140,28},0.83,"强裸骏鹰"},
+            {{640,400,140,28},0.92,"空间租货"}, {{900,400,140,28},0.97,"林间代步"},
+            {{1130,420,20,20},0.5,"???"}};
+        m_blackflow_start_reward_observer=[this](std::string_view name){confirmed.emplace_back(name);};
+        m_blackflow_start_reward_evidence_observer=[this](std::string_view kind,json::object details,std::shared_ptr<cv::Mat> image){
+            const bool selected=kind=="selected";
+            if(selected){check(!image&&controller.stage==2,"selection must be confirmed before recording");}
+            else{
+                check(controller.clicks==0,"candidate evidence must be saved before clicking");
+                check(image&&!image->empty()&&image->at<cv::Vec3b>(0,0)[0]==0,"must preserve the actual OCR frame");
+            }
+            events.emplace_back(json::object{{"action","start.reward."+std::string(kind)},
+                {"phase",selected?"completed":"observed"},
+                {"outcome",selected?"confirmed":details.get("recognition_status",std::string())},
+                {"details",std::move(details)},{"level","INFO"},
+                {"task","RoguelikeCustomStartTaskPlugin"},{"state",json::object{}},{"floor",0},{"map_generation",0}});
+        };
+    }
+    Controller* ctrler(){return &controller;}
+    bool sleep(int){return true;}
+    bool run() {
+        const bool automation_collection=true;
+        /*START_REWARD*/
+        return false;
+    }
+};
+}
 int main(int argc,char** argv) {
     int failed=0,passed=0;
     auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
@@ -215,10 +281,66 @@ int main(int argc,char** argv) {
     test("reward disappears during animated progress probes",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,after};
         Matcher::reward_matches=[&](const cv::Mat& image){return cv::norm(image,after,cv::NORM_INF)!=0;};p.run();
         check(p.controller.clicks==1&&p.outcomes==std::vector<std::string>{"page_changed"},"destination page must count as transition");});
+    std::vector<json::value> start_reward_events;
+    test("start reward retains every raw OCR candidate and the confirmed selection",[&]{start_reward_replay::Plugin p;
+        check(p.run(),"normal reward confirmation failed");check(p.events.size()==2,"candidate and selection events missing");
+        const auto& details=p.events[0].at("details");const auto& candidates=details.at("candidates").as_array();
+        check(details.get("candidate_count",0)==5&&candidates.size()==5,"unselected or unknown OCR candidates were dropped");
+        const auto& raw=*start_reward_replay::OCRer::titles;
+        for(std::size_t i=0;i<raw.size();++i){
+            check(candidates[i].get("detected_index",-1)==int(i),"OCR order was lost");
+            check(candidates[i].get("text",std::string())==raw[i].text,"raw text changed");
+            check(candidates[i].get("score",0.0)==raw[i].score,"OCR confidence changed");
+            check(candidates[i].at("rect").to_string()==raw[i].to_json().at("rect").to_string(),"OCR rectangle changed");
+        }
+        check(candidates[1].get("canonical",std::string())=="襁褓骏鹰","fuzzy normalization was lost");
+        check(candidates[2].get("canonical",std::string())=="空间租赁","unselected fuzzy candidate was lost");
+        check(candidates[4].at("canonical").is_null(),"unknown text was invented as a reward");
+        check(details.at("planned_selection").get("detected_index",-1)==1,"planned selection differs from click");
+        check(p.controller.clicked==raw[1].rect&&p.controller.clicks==2,"existing click behavior changed");
+        check(p.confirmed==std::vector<std::string>{"襁褓骏鹰"},"confirmed reward changed");
+        check(p.events[1].at("details").get("selected_index",-1)==1,"selected candidate index missing");
+        check(p.events[1].at("details").get("observation_index",0)==details.get("observation_index",-1),"selection not linked to candidates");
+        check(start_reward_replay::OCRer::title_reads==1,"logging must not trigger another OCR");
+        start_reward_events=p.events;});
+    test("failed confirmation keeps candidates without claiming a reward",[&]{start_reward_replay::Plugin p;p.controller.confirm_ok=false;
+        check(!p.run(),"failed confirmation reported success");
+        check(p.events.size()==1&&p.confirmed.empty(),"failed confirmation must record candidates only");
+        check(p.controller.clicks==3,"confirmation retry budget changed");
+        start_reward_events.insert(start_reward_events.end(),p.events.begin(),p.events.end());});
+    test("missing confirmation prompt does not claim a reward",[]{start_reward_replay::Plugin p;start_reward_replay::OCRer::show_prompt=false;
+        check(!p.run()&&p.events.size()==1&&p.confirmed.empty(),"missing prompt must keep only candidates");
+        check(p.controller.clicks==1,"missing prompt dispatched another click");});
+    test("OCR failure records an empty observation",[&]{start_reward_replay::Plugin p;start_reward_replay::OCRer::titles=std::nullopt;
+        check(!p.run()&&p.events.size()==1&&p.controller.clicks==0,"OCR failure evidence missing or clicked blindly");
+        const auto& d=p.events[0].at("details");
+        check(d.get("recognition_status",std::string())=="no_titles"&&d.get("candidate_count",-1)==0,"empty OCR must not imply absent rewards");
+        check(d.at("planned_selection").is_null(),"empty OCR invented a selection");
+        start_reward_events.insert(start_reward_events.end(),p.events.begin(),p.events.end());});
+    test("unrecognized text is retained without a selection",[&]{start_reward_replay::Plugin p;
+        start_reward_replay::OCRer::titles=std::vector<TextRect>{{{300,400,80,28},0.5,"???"}};
+        check(!p.run()&&p.events.size()==1&&p.controller.clicks==0,"unrecognized titles must retain evidence without clicking");
+        const auto& d=p.events[0].at("details");
+        check(d.at("candidates").as_array().size()==1&&d.at("planned_selection").is_null(),"unknown OCR result was dropped");
+        start_reward_events.insert(start_reward_events.end(),p.events.begin(),p.events.end());});
+    test("repeat selection uses a new observation index",[]{start_reward_replay::Plugin p;
+        check(p.run(),"first reward selection failed");p.controller.stage=0;p.controller.clicks=0;
+        start_reward_replay::OCRer::titles=std::vector<TextRect>{{{300,400,140,28},0.99,"调查预付款"}};
+        check(p.run()&&p.events.size()==4,"second reward selection lost its candidate or confirmation");
+        check(p.events[2].at("details").get("observation_index",0)==2&&p.events[3].at("details").get("observation_index",0)==2,"observations cannot be paired");
+        check(p.events[2].at("details").get("candidate_count",0)==1,"second page inherited old candidates");
+        check(p.confirmed==std::vector<std::string>{"襁褓骏鹰","调查预付款"},"multiple confirmed rewards changed");});
+    test("start reward selection works without an evidence observer",[]{start_reward_replay::Plugin p;p.m_blackflow_start_reward_evidence_observer={};
+        check(p.run()&&p.controller.clicks==2&&p.confirmed.size()==1,"optional logger changed gameplay");});
     if(argc>2&&!failed){
         int sequence=0;
         for(auto& event:contract_events){event["schema_version"]=1;event["sequence"]=++sequence;event["elapsed_ms"]=sequence;event["timestamp"]="2026-09-15T00:00:00Z";}
         std::ofstream(argv[2])<<json::array(contract_events).to_string();
+    }
+    if(argc>3&&!failed){
+        int sequence=0;
+        for(auto& event:start_reward_events){event["schema_version"]=1;event["sequence"]=++sequence;event["elapsed_ms"]=sequence;event["timestamp"]="2026-09-23T00:00:00Z";}
+        std::ofstream(argv[3])<<json::array(start_reward_events).to_string();
     }
     std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
 }

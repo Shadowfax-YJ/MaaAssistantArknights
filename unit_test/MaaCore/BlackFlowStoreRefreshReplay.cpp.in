@@ -1,0 +1,90 @@
+#include <functional>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <vector>
+#include <opencv2/core.hpp>
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
+using namespace asst;
+using namespace asst::blackflow;
+struct {void set_task_base(std::string, std::string){}} Task;
+constexpr std::string_view ShopRefreshConfirmTask="confirm", ShopWalletTask="wallet", ShopLeaveEntry="leave";
+struct Matcher {
+    cv::Mat image;
+    explicit Matcher(const cv::Mat& i):image(i){}
+    void set_task_info(std::string){}
+    std::optional<int> analyze(){return !image.empty() && image.at<cv::Vec3b>(0,0)[0]==2 ? std::optional<int>(1):std::nullopt;}
+};
+cv::Mat frame(int state, int wallet=25) { return cv::Mat(1,1,CV_8UC3,cv::Scalar(state,wallet,0)).clone(); }
+struct Controller {
+    std::vector<cv::Mat> frames; int reads=0;
+    cv::Mat get_image(){return frames.at(std::min(reads++,int(frames.size())-1));}
+};
+namespace asst::blackflow {
+class BlackFlowAutomationStoreTaskPlugin {
+public:
+    enum class PendingWork {ShopRefreshOpening,ShopRefreshFailed,ShopRefreshCompleted};
+    Controller controller;
+    std::optional<int> m_shop_refresh_wallet_before=25;
+    int m_shop_refresh_count=0, snapshots=0;
+    bool stopped=false, cancel=false;
+    std::optional<AutomationStoreIdentity> m_active_shop_identity;
+    AutomationStoreRefreshLedger m_refresh_ledger;
+    std::vector<int> m_shop_purchased,m_shop_attempted,m_shop_attempted_names,m_shop_sell_attempted,m_shop_goods;
+    bool m_shop_sold_in_cycle=false;
+    enum class ShelfPage{Top}; ShelfPage m_shop_shelf_page=ShelfPage::Top;
+    Controller* ctrler(){return &controller;}
+    bool need_exit(){return cancel;}
+    bool sleep(int){return !cancel;}
+    bool purchase_wallet_page(const cv::Mat& i, AutomationStoreKind) const {return !i.empty() && i.at<cv::Vec3b>(0,0)[0]==1;}
+    std::optional<int> read_optional_number(const cv::Mat& i,std::string) const {return i.empty() || i.at<cv::Vec3b>(0,0)[1]==255 ? std::nullopt:std::optional<int>(i.at<cv::Vec3b>(0,0)[1]);}
+    void clear_pending_purchase(){}
+    void queue_eerie_store_snapshot(std::string,int){++snapshots;}
+    template<class... T> void record_run_event(T&&...){}
+    void stop_unverified_shop_refresh(std::string){stopped=true;}
+    bool verify_shop_refresh_receipt();
+    bool run(PendingWork work){
+/*DISPATCH*/
+        return true;
+    }
+};
+/*RECEIPT*/
+}
+int main(){
+    int failed=0;
+    auto test=[&](const char* name,std::vector<cv::Mat> frames,bool success,bool baseline=true){
+        BlackFlowAutomationStoreTaskPlugin p;
+        p.controller.frames=std::move(frames);
+        if(!baseline)p.m_shop_refresh_wallet_before.reset();
+        p.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+        bool ok=p.m_shop_refresh_count==int(success) && p.snapshots==int(success) && p.stopped==!success;
+        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok;
+    };
+    test("paid refresh advances exactly once",{frame(1,21)},true);
+    test("unchanged shelf is not a refresh",{frame(1,25)},false);
+    test("confirmation still visible is not a receipt",{frame(2,21)},false);
+    test("delayed wallet and page settle",{frame(2,25),cv::Mat(),frame(1,25),frame(1,21),frame(1,21)},true);
+    test("one bad OCR sample does not count",{frame(1,21),frame(1,25)},false);
+    test("missing OCR does not count",{frame(1,255)},false);
+    test("missing baseline does not count",{frame(1,21)},false,false);
+    test("wrong debit does not count",{frame(1,20)},false);
+    test("empty frames do not count",{cv::Mat()},false);
+    auto opening=[&](const char* name,std::vector<cv::Mat> frames,bool success){
+        BlackFlowAutomationStoreTaskPlugin p;
+        p.m_shop_refresh_wallet_before.reset();
+        p.controller.frames=std::move(frames);
+        p.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshOpening);
+        bool ok=p.stopped==!success && p.m_shop_refresh_wallet_before.has_value()==success;
+        std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok;
+    };
+    opening("refresh opening tolerates delayed purchase tab",{cv::Mat(),frame(0),frame(1),frame(1)},true);
+    opening("refresh opening requires a readable wallet",{frame(1,255)},false);
+    BlackFlowAutomationStoreTaskPlugin cancelled;
+    cancelled.cancel=true;
+    cancelled.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    bool ok=!cancelled.stopped && cancelled.m_shop_refresh_count==0 && cancelled.snapshots==0;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"user cancellation is not a refresh failure"<<std::endl; failed+=!ok;
+    std::cout<<12-failed<<" passed, "<<failed<<" failed"<<std::endl;
+    return failed?1:0;
+}

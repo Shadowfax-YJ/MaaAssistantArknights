@@ -112,6 +112,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::load_params(const json::value& params
     m_config->set_use_support(params.get("use_support", false));
     m_config->set_use_nonfriend_support(params.get("use_nonfriend_support", false));
     m_automation_collection_core_char_voucher_selected = false;
+    m_start_reward_observation_index = 0;
 
     if (auto select_list = params.find<json::object>("collectible_mode_start_list"); select_list) {
         RoguelikeStartSelect list;
@@ -179,6 +180,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()
 void asst::RoguelikeCustomStartTaskPlugin::reset_in_run_variables()
 {
     m_automation_collection_core_char_voucher_selected = false;
+    m_start_reward_observation_index = 0;
 }
 
 bool asst::RoguelikeCustomStartTaskPlugin::hijack_squad()
@@ -241,7 +243,19 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
         analyzer.set_required({});
         analyzer.set_fuzzy_match(false);
         const auto detected = analyzer.analyze();
+        const auto observation_index = ++m_start_reward_observation_index;
+        const auto record_candidates = [&](const auto& selection) {
+            auto details = blackflow::automation_collection_start_reward_candidates_details(
+                detected.value_or(std::vector<TextRect> {}), selection);
+            details["observation_index"] = observation_index;
+            Log.info("BlackFlow start reward candidates", details.to_string());
+            if (m_blackflow_start_reward_evidence_observer) {
+                m_blackflow_start_reward_evidence_observer(
+                    "candidates", std::move(details), std::make_shared<cv::Mat>(image));
+            }
+        };
         if (!detected.has_value()) {
+            record_candidates(std::optional<blackflow::AutomationCollectionStartRewardSelection> {});
             Log.error("BlackFlow automation collection could not OCR any start reward title");
             return false;
         }
@@ -252,6 +266,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             titles.emplace_back(result.text);
         }
         const auto selected = blackflow::select_automation_collection_start_reward(titles, ordinary_priority);
+        record_candidates(selected);
         if (!selected.has_value() || selected->detected_index >= detected->size()) {
             Log.error("BlackFlow automation collection could not fuzzy-match any allowed start reward", titles);
             return false;
@@ -304,6 +319,17 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
                 if (!prompt.has_value() || prompt->empty()) {
                     if (m_blackflow_start_reward_observer) {
                         m_blackflow_start_reward_observer(selected->canonical);
+                    }
+                    if (m_blackflow_start_reward_evidence_observer) {
+                        m_blackflow_start_reward_evidence_observer(
+                            "selected",
+                            json::object {
+                                { "observation_index", observation_index },
+                                { "selected_index", selected->detected_index },
+                                { "selected_name", selected->canonical },
+                                { "preferred", selected->preferred },
+                            },
+                            nullptr);
                     }
                     return true;
                 }

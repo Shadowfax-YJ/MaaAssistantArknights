@@ -595,7 +595,11 @@
         "template": "Roguelike@StageTraderRefresh.png",
         "roi": [230, 73, 212, 141],
         "action": "ClickSelf",
-        "next": ["BlackFlow@Roguelike@AutomationShopRefreshConfirm"]
+        "postDelay": 800,
+        "maxTimes": 3,
+        "next": ["BlackFlow@Roguelike@AutomationShopRefreshConfirm", "#self"],
+        "exceededNext": ["BlackFlow@Roguelike@AutomationShopRefreshFailed"],
+        "onErrorNext": ["BlackFlow@Roguelike@AutomationShopRefreshFailed"]
     },
     "BlackFlow@Roguelike@AutomationShopRefresh-Enter": {
         "algorithm": "JustReturn",
@@ -615,17 +619,24 @@
             "Roguelike@StageTraderRefreshConfirm.png"
         ],
         "postDelay": 1200,
-        "next": [
-            "#self",
-            "BlackFlow@Roguelike@AutomationShopRefreshCompleted"
-        ]
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopRefresh*3"],
+        "next": ["BlackFlow@Roguelike@AutomationShopRefreshCompleted"]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefreshFailed": {
+        "algorithm": "JustReturn",
+        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopRefresh*3"],
+        "next": ["BlackFlow@Roguelike@AutomationShopRefreshFailureAction"]
+    },
+    "BlackFlow@Roguelike@AutomationShopRefreshFailureAction": {
+        "baseTask": "BlackFlow@Roguelike@StrategyTerminated-Enter"
     },
     "BlackFlow@Roguelike@AutomationShopRefreshPrepare": {
         "algorithm": "JustReturn",
         "action": "ClickRect",
         "specificRect": [986, 123, 214, 25],
         "postDelay": 300,
-        "next": ["BlackFlow@Roguelike@AutomationShopRefresh"]
+        "next": ["BlackFlow@Roguelike@AutomationShopRefresh"],
+        "onErrorNext": ["BlackFlow@Roguelike@AutomationShopRefreshFailed"]
     },
     "BlackFlow@Roguelike@AutomationShopResumeReady": {
         "Doc": "购买招募券后必须等入队演出结束并实际返回诡意行商，不能用 JustReturn 抢在 RecruitSkip 前恢复购物。",

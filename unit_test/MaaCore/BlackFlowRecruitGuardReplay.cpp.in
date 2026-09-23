@@ -1,0 +1,35 @@
+#include <functional>
+#include <iostream>
+#include <string>
+struct {template<class... T> void error(T&&...) {}} Log;
+struct Config {bool support=true; bool get_use_support(){return support;} std::string get_core_char(){return "core";}};
+struct Parent {bool enabled=true; void set_enable(bool b){enabled=b;}};
+struct Recruit {
+    Config config; Parent parent;
+    Config* m_config=&config; Parent* m_task_ptr=&parent;
+    bool m_initail_recruit=true, m_starts_complete=false, result=false, fallback=false;
+    int m_recruit_count=2, support_calls=0, own_calls=0;
+    std::function<void()> m_initial_core_failure_observer;
+    bool recruit_support_char(){++support_calls;return result;}
+    bool recruit_own_char(){++own_calls;return result;}
+    bool run(bool automation_collection=true) {
+/*DISPATCH*/
+        fallback=true;
+        return true;
+    }
+};
+int main(){
+    int failed=0;
+    for(bool support:{false,true}) for(bool success:{false,true}) {
+        Recruit r; r.config.support=support; r.result=success;
+        bool reported=false; r.m_initial_core_failure_observer=[&]{reported=true;};
+        r.run();
+        bool ok=!r.fallback && r.m_starts_complete==success && r.parent.enabled==success && reported==!success;
+        std::cout<<(ok?"PASS ":"FAIL ")<<(support?"support ":"own ")<<(success?"success":"failure stops before generic recruitment")<<std::endl;
+        failed+=!ok;
+    }
+    Recruit ordinary; ordinary.m_recruit_count=1; ordinary.run(false);
+    bool ok=ordinary.fallback && ordinary.parent.enabled;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"other modes retain their fallback"<<std::endl;
+    return failed+!ok?1:0;
+}

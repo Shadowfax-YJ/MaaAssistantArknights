@@ -19,6 +19,7 @@ constexpr std::string_view RecoverMapFailedTask = "BlackFlow@Roguelike@RecoverMa
 constexpr std::string_view RecoveryRetryWaitTask = "BlackFlow@Roguelike@RecoveryRetryWait";
 constexpr std::string_view RecoveryRetryActionTask = "BlackFlow@Roguelike@RecoveryRetryAction";
 constexpr std::string_view StrategyTerminatedTask = "BlackFlow@Roguelike@StrategyTerminated";
+constexpr int MaxTreeHoleReturnFailures = 3;
 
 bool is_retryable_recovery_target(std::string_view task)
 {
@@ -68,6 +69,7 @@ bool BlackFlowLifecycleTaskPlugin::load_params(const json::value& params)
         return false;
     }
     m_start_explore_seen = false;
+    m_tree_hole_return_failures = 0;
 
     std::string profile = params.get("blackflow_strategy", std::string {});
     if (profile.empty()) {
@@ -219,7 +221,9 @@ bool BlackFlowLifecycleTaskPlugin::verify(AsstMsg msg, const json::value& detail
 
 void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
 {
-    const bool run_has_progress = m_session != nullptr &&
+    m_tree_hole_return_failures = 0;
+    const bool run_has_progress =
+        m_session != nullptr &&
         (m_session->current_floor().has_value() || m_session->run().floor > 0 || m_session->result().has_value());
     const StartExploreRunDisposition disposition =
         start_explore_run_disposition(m_start_explore_seen, run_has_progress);
@@ -244,6 +248,7 @@ void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
 
 void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
 {
+    m_tree_hole_return_failures = 0;
     m_pending = PendingWork::None;
     m_pending_details = {};
     m_recovery_retry_target.clear();
@@ -302,6 +307,59 @@ void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
     }
 }
 
+void BlackFlowLifecycleTaskPlugin::initial_core_recruitment_failed()
+{
+    if (m_session == nullptr || m_session->profile() != "automation_collection") {
+        return;
+    }
+    m_session->fail(
+        "initial_core_recruitment_failed",
+        "initial core operator was not recruited from the configured source",
+        FailureDisposition::StopTask);
+    record_run_event(
+        RunLogLevel::Error,
+        "recovery.initial_core_recruitment",
+        "failed",
+        "stop_task",
+        json::object {
+            { "core_char", m_config->get_core_char() },
+            { "use_support", m_config->get_use_support() },
+            { "use_nonfriend_support", m_config->get_use_nonfriend_support() },
+        },
+        "BlackFlowLifecycle",
+        nullptr,
+        true);
+    report_outputs();
+}
+
+void BlackFlowLifecycleTaskPlugin::tree_hole_return_failed(std::string error)
+{
+    ++m_tree_hole_return_failures;
+    const bool exhausted = m_tree_hole_return_failures >= MaxTreeHoleReturnFailures;
+    record_run_event(
+        exhausted ? RunLogLevel::Error : RunLogLevel::Warning,
+        "recovery.tree_hole_return",
+        "failed",
+        exhausted ? "stop_task" : "retry",
+        json::object {
+            { "attempt", m_tree_hole_return_failures },
+            { "max_attempts", MaxTreeHoleReturnFailures },
+            { "outer_floor", m_session->outer_floor() },
+            { "error", error },
+        },
+        "BlackFlowLifecycle",
+        nullptr,
+        true);
+    if (exhausted) {
+        m_session->fail("tree_hole_return_exhausted", error, FailureDisposition::StopTask);
+    }
+    Task.set_task_base(
+        "BlackFlow@Roguelike@TreeHoleReturnResumeAction",
+        exhausted ? "BlackFlow@Roguelike@StrategyTerminated-Enter" : std::string(RecoveryFailedTask));
+    Log.warn("BlackFlow tree-hole return failed", "attempt", m_tree_hole_return_failures, "error", error);
+    report_outputs();
+}
+
 bool BlackFlowLifecycleTaskPlugin::_run()
 {
     const PendingWork work = m_pending;
@@ -316,6 +374,7 @@ bool BlackFlowLifecycleTaskPlugin::_run()
     m_terminal_pre_task.clear();
 
     if (work == PendingWork::BeginTreeHoleReturn) {
+        m_tree_hole_return_failures = 0;
         // 停在离开弹窗时重启 MAA 也要回主菜单，不能依赖本进程曾经识别过树洞地图。
         if (m_port != nullptr) {
             m_port->begin_tree_hole_return();
@@ -377,10 +436,8 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             // 不以放大地图上可能混入节点文字的标题作为恢复启动条件。
             const int floor = m_session->outer_floor();
             if (floor < 1 || floor > 5) {
-                // 中途接管可能没有外层记录，此时等待真实标题，不猜测楼层或提交状态。
-                Task.set_task_base(
-                    "BlackFlow@Roguelike@TreeHoleReturnResumeAction", "BlackFlow@Roguelike@TreeHoleReturnWait");
-                report_outputs();
+                // 缺少外层记录也使用有限恢复预算，不猜测楼层或提交状态。
+                tree_hole_return_failed("saved outer floor is unavailable");
                 return true;
             }
             area_name = task != nullptr && floor >= 1 && floor <= 5 ? task->text.at(floor - 1) : std::string {};
@@ -415,9 +472,7 @@ bool BlackFlowLifecycleTaskPlugin::_run()
             const bool pursuit = !resumed && m_port->take_pending_pursuit();
             if (!resumed && !pursuit) {
                 // 返回或楼层校验失败时保留树洞/外层上下文，重试完整恢复而非假定已经回图。
-                Task.set_task_base("BlackFlow@Roguelike@TreeHoleReturnResumeAction", std::string(RecoveryFailedTask));
-                Log.info("BlackFlow tree-hole return requires recovery", "error", error);
-                report_outputs();
+                tree_hole_return_failed(error);
                 return true;
             }
             tree_hole_successor = pursuit ? "BlackFlow@Roguelike@HuntedWait" : "BlackFlow@Roguelike@MapPrepare";
@@ -436,6 +491,7 @@ bool BlackFlowLifecycleTaskPlugin::_run()
                                                     : "BlackFlow current floor recognized",
             "floor", floor, "area", area_name);
         if (!tree_hole_successor.empty()) {
+            m_tree_hole_return_failures = 0;
             // 返回流程已恢复比例尺；直接回普通地图处理，避免再次放大。
             Task.set_task_base("BlackFlow@Roguelike@TreeHoleReturnResumeAction", tree_hole_successor);
         }
