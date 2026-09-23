@@ -9,7 +9,7 @@
 - `events.json`: **synthetic** evidence emitted by the production lifecycle method in
   `BlackFlowRecoveryReplay.cpp`. Covers target 6 with verified 6, observed 5 and unknown.
   Sequence/timestamp metadata is supplied by the contract test, not a real game.
-  SHA-256: `ae3fa900fb8548e8116ae45cac762188b5d6c1523ced11b82ff87c02e3e437e4`.
+  SHA-256: `4f3f1a0771c7be3a6a8eebeae69de4eb93e96a742cb7404daaf0d01366e7c43c`.
 
 The screenshots retain their original bytes. The native replay tests the production
 home recognizer against both; its evidence output must match the shared fixture.
