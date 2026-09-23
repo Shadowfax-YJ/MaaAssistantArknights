@@ -101,7 +101,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
 
     m_roguelike_task_ptr->register_plugin<RoguelikeLastRewardTaskPlugin>(m_config_ptr, m_control_ptr);
 
-    m_roguelike_task_ptr->register_plugin<RoguelikeDifficultySelectionTaskPlugin>(m_config_ptr, m_control_ptr);
+    auto difficulty_plugin =
+        m_roguelike_task_ptr->register_plugin<RoguelikeDifficultySelectionTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeStrategyChangeTaskPlugin>(m_config_ptr, m_control_ptr);
 
     m_roguelike_task_ptr->register_plugin<RoguelikeIterateMonthlySquadPlugin>(m_config_ptr, m_control_ptr)
@@ -365,6 +366,12 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr);
+    difficulty_plugin->set_difficulty_observer(
+        [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(
+             lifecycle_plugin)](int target, int observed, bool verified, const cv::Mat& image) {
+            const auto lifecycle = weak_lifecycle.lock();
+            return lifecycle != nullptr && lifecycle->record_difficulty_verification(target, observed, verified, image);
+        });
     recruit_plugin->set_initial_core_failure_observer(
         [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(lifecycle_plugin)] {
             if (const auto lifecycle = weak_lifecycle.lock()) {

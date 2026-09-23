@@ -1,5 +1,40 @@
 # BlackFlow 采集契约与下游联动
 
+## 每局实际难度确认（2026-09-23，未发布）
+
+黑流自动采集每次开始探索前读取首页保密等级；修改难度后必须回到首页，连续两帧
+确认实际数字等于目标，才执行开始探索。重试最多三轮，数字选项自循环也限制次数；
+无法确认或证据写入失败时停止并保留现场，不沿用前一局缓存。其他模式保留既有选择流程。
+开局核心招募失败停止的 v1.1.12 保护继续有效，不更改所选招募来源或好友限制。
+
+`run.started`、`run.start_confirmed` 新增 `details.difficulty_verification=required`。
+原 `details.difficulty` 和 `state.selected_difficulty` 保留“配置目标”的兼容含义，
+不追溯改成 OCR 结果。新的 `run.difficulty_verified`（completed/confirmed）保存
+`target_difficulty`、`observed_difficulty`、`verified=true`、`source=home_badge`、
+`recognition_scope=home_difficulty_roi` 和 `recognition_status=number_detected`。
+失败写 `recovery.difficulty_selection`（failed/stop_task），`verified=false`；
+无法可靠读取时 observed 为 null、status 为 unknown，不用目标或上次读数补值。
+两类事件都保存此次识别原图，使用既有图片路径和完整性登记，不增加下游 OCR 任务。
+
+原始 schema、归档、签名和固定验证器 bundle 仍为 1；独立验证器允许这些新增字段。
+共享 `unit_test/MaaCore/fixtures/blackflow-difficulty/events.json` 来自生产方法回放，
+明确标注为合成样本。analysis adapter 1.1.6 保留 `difficulty_evidence`，准入规则
+collection-start-v4 对声明 required 的新局要求开局前实际难度确认，拒绝缺失、
+冲突、迟到和失败证据；同时保留目标与已验证读数。新采集器发布前须先部署此消费者。
+PtilopsisBot 与 quark-timed-sync 复用业务插件，无宿主协议变更；本次未部署或发布。
+
+旧格式按原准入规则兼容，缺失的实际难度不补造；未知 schema 继续拒绝。
+本次不修订旧包、不批量重算缓存、不迁移人工审核、不改冻结报告。新增输入按自身摘要
+和新方法处理；真实图片 OCR 缓存不失效。N6 专题只纳入符合准入的 N6，停止、未验证
+或其他难度不增加其分子分母；用户自行选择其他难度仍按真实值保存。
+
+验证入口：`run_blackflow_difficulty_replay.ps1`、`run_blackflow_recovery_replay.ps1`、
+`test_blackflow_difficulty_contract.py`，以及 analysis 的 `test_difficulty_verification.py`
+和 `test_collection_policy.py`。覆盖原始首页 5/6 截图、确认失败、过渡帧、跨局缓存、
+低置信度、证据写入失败和新旧契约；尚无新版实机完整对局验证。
+本地 Core 编译、352 项 C++ 用例、17 项难度回放、12 项原生识别/恢复回放、
+5 项招募保护、27 项交互回放和 89 项契约/消费者检查全部通过。
+
 ## 开局奖励候选证据（v1.1.12，2026-09-23）
 
 自动采集在每次开局奖励标题 OCR 后、点击前新增 `start.reward.candidates` 事件，

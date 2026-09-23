@@ -1,0 +1,152 @@
+// Injected I/O models missed confirms/transition frames; it does not claim to reconstruct unseen screenshots.
+#include <algorithm>
+#include <climits>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <vector>
+#define LogTraceFunction ((void)0)
+struct { template<class... T> void info(T...) {} template<class... T> void error(T...) {}
+         template<class... T> void warn(T...) {} } Log;
+namespace cv { struct Mat { int applied=5, selected=6; bool panel=false, home=true; }; }
+namespace json { struct value {
+    std::string get(const char*, const std::string&) const { return "ProcessTask"; }
+    std::string get(const char*, const char*, const char*) const { return "BlackFlow@Roguelike@StartExplore"; }
+}; }
+namespace asst {
+enum class AsstMsg { SubTaskStart };
+enum class RoguelikeMode { Collectible, BlackFlowAutomationCollection, Exp };
+namespace RoguelikeTheme { const std::string BlackFlow="BlackFlow"; }
+struct RoguelikeConfig {
+    std::string theme="BlackFlow";
+    RoguelikeMode mode=RoguelikeMode::BlackFlowAutomationCollection;
+    int target=6;
+    static bool is_valid_theme(const std::string&) { return true; }
+    const std::string& get_theme() const { return theme; }
+    RoguelikeMode get_mode() const { return mode; }
+    bool get_run_for_collectible() const { return false; }
+    int get_difficulty() const { return target; }
+};
+struct Controller {
+    cv::Mat frame;
+    int reads=0, transient_target_reads=0;
+    cv::Mat get_image() {
+        ++reads; auto copy=frame;
+        if (transient_target_reads-- > 0 && !copy.panel) copy.applied=6;
+        return copy;
+    }
+    void click(int) {}
+} controller;
+struct Parent { bool enabled=true; void set_enable(bool value) { enabled=value; } };
+struct OcrTaskInfo { std::vector<std::string> text; } task_info;
+struct TaskData { template<class T> T* get(const std::string&) { return &task_info; } } Task;
+struct Result { std::string text; int rect=0; double score=1; };
+int confirms=0, missed_confirms=0, forced_applied=-1, task_calls=0;
+bool confirm_result=true, enter_result=true, selection_result=true, stopped=false;
+bool unreadable_home=false, record_result=true;
+double home_score=1;
+struct OCRer {
+    cv::Mat image; std::string task; std::vector<Result> result;
+    OCRer(cv::Mat frame):image(frame) {}
+    void set_task_info(std::string name) { task=std::move(name); }
+    bool analyze() {
+        if (task.ends_with("Confirm")) return image.panel;
+        if (task.ends_with("DifficultyOnHome")) {
+            if (unreadable_home) return false;
+            result={{std::to_string(image.applied),0,home_score}};
+        }
+        else { if (!image.panel) return false; result={{std::to_string(image.selected)}}; }
+        return true;
+    }
+    const auto& get_result() const { return result; }
+};
+struct Matcher {
+    cv::Mat image; std::string task; Matcher(cv::Mat frame):image(frame) {}
+    void set_task_info(std::string name) { task=std::move(name); }
+    bool analyze() { return task.ends_with("ChooseDifficulty")?image.panel:image.home; }
+    Result get_result() { return {}; }
+};
+namespace utils { bool chars_to_number(const std::string& s,int& n) { n=std::stoi(s); return true; } }
+class RoguelikeDifficultySelectionTaskPlugin {
+public:
+    RoguelikeConfig config; RoguelikeConfig* m_config=&config;
+    Parent parent; Parent* m_task_ptr=&parent;
+    int m_current_difficulty=-1; mutable bool m_has_changed=false; int m_collectible_difficulty=-1;
+    std::function<bool(int,int,bool,const cv::Mat&)> m_difficulty_observer;
+    Controller* ctrler() const { return &controller; }
+    bool sleep(int) { return !stopped; }
+    bool need_exit() const { return stopped; }
+    bool verify(AsstMsg,const json::value&) const;
+    bool _run(); int detect_current_difficulty() const; bool select_difficulty(int);
+    int detect_blackflow_home_difficulty(const cv::Mat&) const;
+    bool verify_blackflow_difficulty(int,int&,cv::Mat&);
+};
+struct ProcessTask {
+    std::string task;
+    ProcessTask(RoguelikeDifficultySelectionTaskPlugin&, std::initializer_list<std::string> names):task(*names.begin()) {}
+    ProcessTask& set_retry_times(int) { return *this; }
+    ProcessTask& set_times_limit(const std::string&, int) { return *this; }
+    bool run() {
+        ++task_calls;
+        if (task.ends_with("ChooseDifficultyEnter")) { if(enter_result) controller.frame.panel=true; return enter_result; }
+        if (task.ends_with("ChooseDifficultyConfirm")) {
+            ++confirms;
+            if (!confirm_result) return false;
+            if (missed_confirms-- > 0) return true;
+            controller.frame.applied=forced_applied<0?controller.frame.selected:forced_applied;
+            controller.frame.panel=false; return true;
+        }
+        if (task.ends_with("Specified")) {
+            if(selection_result) controller.frame.selected=std::stoi(task_info.text.back());
+            return selection_result;
+        }
+        if(task=="SwipeToTheUp") controller.frame.selected=0;
+        return true;
+    }
+};
+}
+/*METHODS*/
+
+int main() {
+    using namespace asst;
+    int failures=0;
+    auto test=[&](const char* name, auto setup, bool expected, bool next=true) {
+        controller={}; confirms=missed_confirms=task_calls=0; forced_applied=-1;
+        confirm_result=enter_result=selection_result=record_result=true;
+        stopped=unreadable_home=false;home_score=1;
+        RoguelikeDifficultySelectionTaskPlugin p; setup(p);
+        bool reported=false, verified=false; int target=-1,observed=-1;
+        p.m_difficulty_observer=[&](int t,int o,bool v,const cv::Mat& frame) {
+            reported=true;target=t;observed=o;verified=v;
+            if(o>=0 && o!=frame.applied) ++failures;
+            return record_result;
+        };
+        p._run();
+        bool ok=p.parent.enabled==expected && reported && (verified && record_result)==expected &&
+            target==p.config.target && (!expected || (observed==target && !controller.frame.panel)) &&
+            p.verify(AsstMsg::SubTaskStart,{})==next && confirms<=3;
+        std::cout<<(ok?"PASS ":"FAIL ")<<name<<"\n"; failures+=!ok;
+    };
+    test("already applied target",[](auto&){controller.frame.applied=6;},true);
+    test("apply target from 5",[](auto&){controller.frame.selected=5;},true);
+    test("observed 6 before confirm but applied 5 stops",[](auto&){forced_applied=5;},false);
+    test("failed confirm stops",[](auto&){confirm_result=false;},false);
+    test("missed first confirm is retried without outer start click",[](auto&){missed_confirms=1;},true);
+    test("panel remains open stops",[](auto&){missed_confirms=20;controller.frame.applied=6;controller.frame.panel=true;},false);
+    test("unreadable applied number stops",[](auto&){unreadable_home=true;},false);
+    test("low confidence applied number stops",[](auto&){home_score=0.5;},false);
+    test("single transition frame cannot approve target",[](auto&){controller.transient_target_reads=1;forced_applied=5;},false);
+    test("cached success does not skip changed next game",[](auto& p){p.m_has_changed=true;p.m_current_difficulty=6;forced_applied=5;},false);
+    test("user-selected difficulty 5 is preserved",[](auto& p){p.config.target=5;},true);
+    test("user-selected difficulty 0 is preserved",[](auto& p){p.config.target=0;},true);
+    test("failed enter stops",[](auto&){enter_result=false;},false);
+    test("failed selection stops",[](auto&){controller.frame.selected=5;selection_result=false;},false);
+    test("failed evidence persistence stops",[](auto&){record_result=false;},false);
+    test("cancellation stops",[](auto&){stopped=true;},false);
+    RoguelikeDifficultySelectionTaskPlugin ordinary; ordinary.config.mode=RoguelikeMode::Exp;ordinary.m_has_changed=true;
+    bool ok=!ordinary.verify(AsstMsg::SubTaskStart,{});
+    std::cout<<(ok?"PASS ":"FAIL ")<<"other modes retain their existing selection policy\n";
+    return failures+!ok?1:0;
+}

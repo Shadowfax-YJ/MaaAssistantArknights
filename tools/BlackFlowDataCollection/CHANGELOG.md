@@ -1,4 +1,4 @@
-## v1.1.12
+## v1.1.13
 
 ### Highlights
 
@@ -36,6 +36,23 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.13 (2026-09-23)</b></summary>
+
+### 修复 | Fix
+
+* 修复设置的难度与游戏实际难度不一致时仍继续探索的问题。每局开局前核对实际难度，无法确认时有限重试并停止，保留现场截图。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 采集日志分别记录设定难度与实际识别结果，便于核对对局数据。 @Shadowfax-YJ
+
+### 已知问题 | Known issues
+
+* 收起零件箱后仍可能长时间等待，本版尚未修复。遇到时请停止任务并保留该局日志。
+
+</details>
+
+<details>
 <summary><b>v1.1.12 (2026-09-23)</b></summary>
 
 ### 修复 | Fix

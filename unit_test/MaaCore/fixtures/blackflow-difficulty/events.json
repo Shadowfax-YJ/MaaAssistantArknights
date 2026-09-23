@@ -1,0 +1,59 @@
+[
+    {
+        "action": "run.difficulty_verified",
+        "details": {
+            "observed_difficulty": 6,
+            "recognition_scope": "home_difficulty_roi",
+            "recognition_status": "number_detected",
+            "source": "home_badge",
+            "target_difficulty": 6,
+            "verified": true
+        },
+        "floor": 0,
+        "outcome": "confirmed",
+        "phase": "completed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowDifficultySelection"
+    },
+    {
+        "action": "recovery.difficulty_selection",
+        "details": {
+            "observed_difficulty": 5,
+            "recognition_scope": "home_difficulty_roi",
+            "recognition_status": "number_detected",
+            "source": "home_badge",
+            "target_difficulty": 6,
+            "verified": false
+        },
+        "floor": 0,
+        "outcome": "stop_task",
+        "phase": "failed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowDifficultySelection"
+    },
+    {
+        "action": "recovery.difficulty_selection",
+        "details": {
+            "observed_difficulty": null,
+            "recognition_scope": "home_difficulty_roi",
+            "recognition_status": "unknown",
+            "source": "home_badge",
+            "target_difficulty": 6,
+            "verified": false
+        },
+        "floor": 0,
+        "outcome": "stop_task",
+        "phase": "failed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowDifficultySelection"
+    }
+]

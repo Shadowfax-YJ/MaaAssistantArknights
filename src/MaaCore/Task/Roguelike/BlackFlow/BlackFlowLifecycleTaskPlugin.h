@@ -14,6 +14,7 @@ public:
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
     virtual void reset_in_run_variables() override;
     void initial_core_recruitment_failed();
+    bool record_difficulty_verification(int target, int observed, bool verified, const cv::Mat& image);
 
 protected:
     virtual bool _run() override;

@@ -1,11 +1,9 @@
-黑流树海采集版 v1.1.12
+黑流树海采集版 v1.1.13
 
 ### 本次更新
 
-* 修复开局核心干员招募失败后仍继续探索、导致后续战斗无法准备的问题。无法按所选来源招募核心时停止任务，请检查助战及好友限制设置。
-* 修复诡意行商刷新弹窗未打开时卡住的问题；刷新失败后有限重试，确认刷新成功后才继续采集商品。
-* 修复离开树洞失败后持续反复重试的问题；连续三次恢复失败后停止任务，并保存现场截图。
-* 开局奖励现在记录全部识别到的候选和对应截图，并单独记录最终确认选择的奖励。
+* 修复设置的难度与游戏实际难度不一致时仍继续探索的问题。现在每局开局前都会核对实际难度，无法确认时有限重试并停止，保留现场截图。
+* 采集日志分别记录设定难度与实际识别结果，便于核对对局数据。
 
 ### 已知问题
 
@@ -19,8 +17,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.12/MAA-BlackFlow-Data-Collection-v1.1.12-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.12/MAA-BlackFlow-Data-Collection-v1.1.12-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.13/MAA-BlackFlow-Data-Collection-v1.1.13-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.13/MAA-BlackFlow-Data-Collection-v1.1.13-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

@@ -136,6 +136,7 @@ bool BlackFlowLifecycleTaskPlugin::load_params(const json::value& params)
         json::object {
             { "profile", selected_profile },
             { "difficulty", m_config->get_difficulty() },
+            { "difficulty_verification", "required" },
             { "diagnostics", diagnostics_text },
             { "image_limit", image_limit },
         },
@@ -242,6 +243,7 @@ void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
         json::object {
             { "source", "BlackFlow@Roguelike@StartExplore" },
             { "difficulty", m_config->get_difficulty() },
+            { "difficulty_verification", "required" },
         },
         "BlackFlowLifecycle");
 }
@@ -301,10 +303,42 @@ void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
                 json::object {
                     { "profile", m_session->profile() },
                     { "difficulty", m_config->get_difficulty() },
+                    { "difficulty_verification", "required" },
                 },
                 "BlackFlowLifecycle");
         }
     }
+}
+
+bool BlackFlowLifecycleTaskPlugin::record_difficulty_verification(
+    int target,
+    int observed,
+    bool verified,
+    const cv::Mat& image)
+{
+    const bool recorded = record_run_event(
+        verified ? RunLogLevel::Info : RunLogLevel::Error,
+        verified ? "run.difficulty_verified" : "recovery.difficulty_selection",
+        verified ? "completed" : "failed",
+        verified ? "confirmed" : "stop_task",
+        json::object {
+            { "target_difficulty", target },
+            { "observed_difficulty", observed >= 0 ? json::value(observed) : json::value(nullptr) },
+            { "source", "home_badge" },
+            { "recognition_scope", "home_difficulty_roi" },
+            { "recognition_status", observed >= 0 ? "number_detected" : "unknown" },
+            { "verified", verified },
+        },
+        "BlackFlowDifficultySelection",
+        std::make_shared<cv::Mat>(image));
+    if (!verified || !recorded) {
+        m_session->fail(
+            "difficulty_verification_failed",
+            "applied difficulty or its evidence could not be verified before exploration",
+            FailureDisposition::StopTask);
+        report_outputs();
+    }
+    return recorded;
 }
 
 void BlackFlowLifecycleTaskPlugin::initial_core_recruitment_failed()

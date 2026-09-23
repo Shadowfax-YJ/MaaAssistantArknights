@@ -9,9 +9,17 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPluginBase.h"
 #include <iostream>
 #include <stdexcept>
+#include <fstream>
+#include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 
 using namespace asst;
 using namespace asst::blackflow;
+
+struct DifficultyProbe : RoguelikeDifficultySelectionTaskPlugin
+{
+    using RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_home_difficulty;
+    using RoguelikeDifficultySelectionTaskPlugin::RoguelikeDifficultySelectionTaskPlugin;
+};
 
 void require(bool ok, const std::string& message)
 {
@@ -77,6 +85,7 @@ struct Port final : IBlackFlowTaskPort
     int attempts = 0;
     std::vector<RunLogEvent> events;
     std::vector<bool> captures;
+    std::vector<std::shared_ptr<cv::Mat>> images;
 
     bool refresh(const BlackFlowObservationRequest&, BlackFlowPerceptionSnapshot&, std::string*) override
     {
@@ -111,11 +120,12 @@ struct Port final : IBlackFlowTaskPort
         return succeeds;
     }
 
-    bool record_run_event(std::uint64_t, const RunLogEvent& event, std::shared_ptr<cv::Mat>, bool capture, std::string*)
+    bool record_run_event(std::uint64_t, const RunLogEvent& event, std::shared_ptr<cv::Mat> image, bool capture, std::string*)
         override
     {
         events.push_back(event);
         captures.push_back(capture);
+        images.push_back(std::move(image));
         return true;
     }
 };
@@ -253,6 +263,51 @@ int main(int argc, char** argv)
         require(session->terminated() && session->result()->next_action == "stop_task", "core failure was not terminal");
         require(session->result()->outcome == "initial_core_recruitment_failed", "incorrect result");
         require(port->events.back().action == "recovery.initial_core_recruitment", "failure log missing");
+    });
+    for (int difficulty : { 5, 6 }) {
+        test(("captured home badge " + std::to_string(difficulty)).c_str(), [&] {
+            const auto image = MAA_NS::imread(
+                std::filesystem::path(argv[1]) /
+                ("unit_test/MaaCore/fixtures/blackflow-difficulty/home-" + std::to_string(difficulty) + ".jpg"));
+            require(!image.empty(), "difficulty screenshot missing");
+            DifficultyProbe selection({}, nullptr, "Roguelike", config, nullptr);
+            require(selection.detect_blackflow_home_difficulty(image) == difficulty, "wrong applied difficulty");
+        });
+    }
+    json::array difficulty_events;
+    for (int observed : { 6, 5, -1 }) {
+        test(("difficulty evidence preserves observed " + std::to_string(observed)).c_str(), [&] {
+            require(
+                plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }),
+                "initialize");
+            require(
+                port->events.back().details.get("difficulty_verification", "") == "required",
+                "missing declaration");
+            const cv::Mat image(720, 1280, CV_8UC3, cv::Scalar(50, 60, 70));
+            require(plugin.record_difficulty_verification(6, observed, observed == 6, image), "recording failed");
+            const auto& event = port->events.back();
+            require(event.details.get("target_difficulty", -1) == 6, "target missing");
+            require(event.details.get("observed_difficulty", -1) == observed, "observed was replaced by target");
+            require(session->terminated() == (observed != 6), "verification failure did not stop collection");
+            require(port->images.back() && port->images.back()->data == image.data, "verification frame replaced");
+            difficulty_events.emplace_back(
+                json::object {
+                    { "schema_version", 1 },
+                    { "action", event.action },
+                    { "phase", event.phase },
+                    { "outcome", event.outcome },
+                    { "task", event.task },
+                    { "floor", 0 },
+                    { "state", json::object { { "floor", 0 } } },
+                    { "details", event.details },
+                });
+        });
+    }
+    std::ofstream("difficulty-events.json") << json::value(difficulty_events).format();
+    test("shared difficulty contract matches production events", [&] {
+        const auto expected =
+            json::open(std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-difficulty/events.json");
+        require(expected.has_value() && *expected == json::value(difficulty_events), "shared fixture drifted");
     });
     std::cout << passed << " passed, " << failed << " failed" << std::endl;
     return failed ? 1 : 0;

@@ -225,6 +225,13 @@
         "template": "BlackFlow@Roguelike@StartExplore.png",
         "roi": [958, 530, 322, 189]
     },
+    "BlackFlow@Roguelike@DifficultyOnHome": {
+        "baseTask": "NumberOcrReplace",
+        "roi": [1064, 477, 27, 27],
+        "withoutDet": true,
+        "ocrReplace": [],
+        "fullMatch": true
+    },
     "BlackFlow@Roguelike@ChooseOper": {
         "next": [
             "BlackFlow@Roguelike@RecruitTransitionLoading",

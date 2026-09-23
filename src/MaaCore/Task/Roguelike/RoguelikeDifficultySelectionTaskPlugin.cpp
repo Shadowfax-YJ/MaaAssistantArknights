@@ -63,6 +63,10 @@ bool asst::RoguelikeDifficultySelectionTaskPlugin::verify(AsstMsg msg, const jso
         m_has_changed = false;
     }
     if (task_view == "Roguelike@StartExplore") { // 烧水时候调来调去的干脆不走
+        if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+            m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection) {
+            return true; // Every collection run must verify the applied difficulty, never the cached selection.
+        }
         return m_config->get_mode() == RoguelikeMode::Collectible || !m_has_changed;
     }
     else {
@@ -73,6 +77,23 @@ bool asst::RoguelikeDifficultySelectionTaskPlugin::verify(AsstMsg msg, const jso
 bool asst::RoguelikeDifficultySelectionTaskPlugin::_run()
 {
     LogTraceFunction;
+
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection) {
+        const int target = m_config->get_difficulty();
+        int observed = -1;
+        cv::Mat image;
+        bool verified = verify_blackflow_difficulty(target, observed, image);
+        if (m_difficulty_observer) {
+            verified = m_difficulty_observer(target, observed, verified, image) && verified;
+        }
+        m_has_changed = verified;
+        if (!verified) {
+            Log.error("BlackFlow difficulty verification failed; stopping before exploration", target, observed);
+            m_task_ptr->set_enable(false);
+        }
+        return true;
+    }
 
     if (m_config->get_run_for_collectible()) {
         Log.info(__FUNCTION__, "| Running for collectible");
@@ -86,6 +107,102 @@ bool asst::RoguelikeDifficultySelectionTaskPlugin::_run()
 
     m_has_changed = true;
     return true;
+}
+
+int asst::RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_home_difficulty(const cv::Mat& image) const
+{
+    // The home button may remain visible behind the difficulty panel. Reject the panel first.
+    OCRer confirm(image);
+    confirm.set_task_info("BlackFlow@Roguelike@ChooseDifficultyConfirm");
+    Matcher panel(image);
+    panel.set_task_info("BlackFlow@Roguelike@ChooseDifficulty");
+    Matcher home(image);
+    home.set_task_info("BlackFlow@Roguelike@StartExplore");
+    if (panel.analyze() || confirm.analyze() || !home.analyze()) {
+        return -1;
+    }
+    OCRer number(image);
+    number.set_task_info("BlackFlow@Roguelike@DifficultyOnHome");
+    int result = -1;
+    if (!number.analyze() || number.get_result().size() != 1 || number.get_result().front().score < 0.9 ||
+        !utils::chars_to_number(number.get_result().front().text, result) || result < 0 || result > 20) {
+        return -1;
+    }
+    return result;
+}
+
+bool
+    asst::RoguelikeDifficultySelectionTaskPlugin::verify_blackflow_difficulty(int target, int& observed, cv::Mat& image)
+{
+    const auto observe_home = [&] {
+        image = ctrler()->get_image();
+        observed = detect_blackflow_home_difficulty(image);
+        return observed == target;
+    };
+    const auto verify_home = [&] {
+        return observe_home() && sleep(300) && observe_home();
+    };
+    const auto run_task = [&](const std::string& task) {
+        ProcessTask process(*this, { task });
+        process.set_retry_times(0);
+        // The shared selector has a self-loop; a missed click must not make it unbounded.
+        if (task == "BlackFlow@Roguelike@ChooseDifficulty_Specified") {
+            process.set_times_limit(task, 21);
+        }
+        return process.run();
+    };
+    // Collection has an explicit target, including a user-selected lower difficulty.
+    if (target < 0 || target > 20) {
+        image = ctrler()->get_image();
+        return false;
+    }
+    for (int attempt = 0; attempt < 3 && !need_exit(); ++attempt) {
+        if (verify_home()) {
+            return true;
+        }
+        OCRer panel(image);
+        panel.set_task_info("BlackFlow@Roguelike@ChooseDifficultyConfirm");
+        if (!panel.analyze() && !run_task("BlackFlow@Roguelike@ChooseDifficultyEnter")) {
+            continue;
+        }
+        // Do not let the outer StartExplore click run while this panel is still open.
+        const int current = detect_current_difficulty();
+        if (current < 0) {
+            continue;
+        }
+        if (current != target) {
+            if (target == 0) {
+                if (!run_task("SwipeToTheUp") || !run_task("SwipeToTheUp")) {
+                    continue;
+                }
+            }
+            else {
+                if (current < target && (!run_task("SwipeToTheDown") || !run_task("SwipeToTheDown"))) {
+                    continue;
+                }
+                std::vector<std::string> choices;
+                for (int i = 20; i >= target; --i) {
+                    choices.push_back(std::to_string(i));
+                }
+                Task.get<OcrTaskInfo>("BlackFlow@Roguelike@ChooseDifficulty_Specified")->text = choices;
+                if (!run_task("BlackFlow@Roguelike@ChooseDifficulty_Specified")) {
+                    continue;
+                }
+            }
+        }
+        if (detect_current_difficulty() != target || !sleep(300) || detect_current_difficulty() != target) {
+            continue;
+        }
+        if (!run_task("BlackFlow@Roguelike@ChooseDifficultyConfirm")) {
+            continue;
+        }
+        if (verify_home()) {
+            return true;
+        }
+    }
+    // Preserve the final frame, including an unknown result, rather than a stale pre-click value.
+    observe_home();
+    return false;
 }
 
 int asst::RoguelikeDifficultySelectionTaskPlugin::detect_current_difficulty() const
