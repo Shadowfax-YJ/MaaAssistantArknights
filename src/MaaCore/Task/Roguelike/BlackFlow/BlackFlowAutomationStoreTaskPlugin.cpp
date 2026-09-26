@@ -95,6 +95,58 @@ std::string_view normalized_good_name(std::string_view name) noexcept
 {
     return name == "“简易遥控器”" ? std::string_view("简易遥控器") : name;
 }
+
+std::optional<int> recognize_store_number(const cv::Mat& image, const Rect& roi, bool price = false)
+{
+    if (image.empty()) {
+        return std::nullopt;
+    }
+    // Detect the digit bounds before recognition. Stretching the entire wallet ROI
+    // misreads a lone 9 as 5; thresholding price text can erase most of a 2 or 4.
+    std::optional<int> word_candidate;
+    for (const bool char_model : { false, true }) {
+        OCRer analyzer(image);
+        analyzer.set_task_info("NumberOcrReplace");
+        analyzer.set_roi(roi);
+        analyzer.set_without_det(false);
+        analyzer.set_use_char_model(char_model);
+        const auto results = analyzer.analyze();
+        if (!results.has_value()) {
+            continue;
+        }
+        std::optional<int> number;
+        bool confident = false;
+        for (const auto& result : *results) {
+            std::string_view text = result.text;
+            bool currency_prefix = false;
+            if (price && (text.starts_with("▲") || text.starts_with("△"))) {
+                text.remove_prefix(std::string_view("▲").size());
+                currency_prefix = true;
+            }
+            int value = 0;
+            if (result.score < 0.6 || !utils::chars_to_number(text, value) || value < 0) {
+                continue;
+            }
+            if (number.has_value()) {
+                return std::nullopt;
+            }
+            number = value;
+            confident = result.score >= 0.9 && !currency_prefix;
+        }
+        if (number.has_value()) {
+            if (char_model && word_candidate.has_value()) {
+                return word_candidate == number ? number : std::nullopt;
+            }
+            if (confident) {
+                return number;
+            }
+            if (!char_model) {
+                word_candidate = number;
+            }
+        }
+    }
+    return std::nullopt;
+}
 } // namespace
 
 bool BlackFlowAutomationStoreTaskPlugin::verify(AsstMsg msg, const json::value& details) const
@@ -202,6 +254,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_shop_entry_processing_items.clear();
     m_shop_refresh_count = 0;
     m_shop_refresh_wallet_before.reset();
+    m_shop_refresh_diagnostics.clear();
     m_shop_collectibles_purchased_in_run = 0;
     m_active_shop_identity.reset();
     m_shop_sold_in_cycle = false;
@@ -258,6 +311,7 @@ void BlackFlowAutomationStoreTaskPlugin::clear_pending_purchase() noexcept
     m_pending_purchase_name.reset();
     m_pending_purchase_ingots_before.reset();
     m_pending_purchase_price.reset();
+    m_pending_purchase_image.reset();
     m_pending_purchase_id.clear();
     m_pending_purchase_confirmed = false;
 }
@@ -455,6 +509,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
 
     if (work == PendingWork::ShopEnter) {
         m_shop_refresh_wallet_before.reset();
+        m_shop_refresh_diagnostics.clear();
         clear_pending_purchase();
         m_pending_sale.reset();
         m_pending_sale_name.reset();
@@ -516,6 +571,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             m_pending_purchase_name = std::string(normalized_good_name(selection->good.text));
             m_pending_purchase_ingots_before = selection->ingots_before;
             m_pending_purchase_price = selection->price;
+            m_pending_purchase_image = selection->image;
             m_pending_purchase_confirmed = false;
             Task.set_task_base(
                 std::string(ShopPurchaseTransitionTask),
@@ -637,6 +693,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
     }
     if (work == PendingWork::ShopRefreshOpening) {
         if (!m_shop_refresh_wallet_before.has_value()) {
+            m_shop_refresh_diagnostics.clear();
             std::optional<int> previous;
             for (int sample = 0; sample < 8 && !need_exit(); ++sample) {
                 const cv::Mat image = ctrler()->get_image();
@@ -784,6 +841,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             m_pending_purchase_name = std::string(normalized_good_name(selection->good.text));
             m_pending_purchase_ingots_before = selection->ingots_before;
             m_pending_purchase_price = selection->price;
+            m_pending_purchase_image = selection->image;
             m_pending_purchase_confirmed = false;
             Task.set_task_base(std::string(ScrapShopBuyAction), std::string(ScrapShopBuyConfirmEntry));
             Log.info(
@@ -1002,21 +1060,7 @@ std::optional<int>
     if (task_info == nullptr) {
         return std::nullopt;
     }
-    OCRer analyzer(image);
-    analyzer.set_task_info(task_info);
-    analyzer.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
-    analyzer.set_use_char_model(true);
-    const auto results = analyzer.analyze();
-    if (!results.has_value()) {
-        return std::nullopt;
-    }
-    for (const TextRect& result : *results) {
-        int value = 0;
-        if (utils::chars_to_number(result.text, value) && value >= 0) {
-            return value;
-        }
-    }
-    return std::nullopt;
+    return recognize_store_number(image, task_info->roi);
 }
 
 bool BlackFlowAutomationStoreTaskPlugin::same_shelf_slot(const Rect& lhs, const Rect& rhs) const noexcept
@@ -1103,36 +1147,9 @@ std::optional<int>
         return std::nullopt;
     }
 
-    // 售价数字是低饱和度的亮白字；先去掉青绿色货币图标、商品光效和暗色卡片纹理，
-    // 再让数字 OCR 处理。这样左侧图标不会再生成 114 一类伪数字。
-    cv::Mat hsv;
-    cv::Mat price_mask;
-    cv::Mat filtered;
-    cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
-    cv::inRange(
-        hsv,
-        cv::Scalar(0, 0, PriceTextMinimumValue),
-        cv::Scalar(179, PriceTextMaximumSaturation, 255),
-        price_mask);
-    cv::cvtColor(price_mask, filtered, cv::COLOR_GRAY2BGR);
-
-    OCRer analyzer(filtered);
-    analyzer.set_task_info("NumberOcrReplace");
-    // 名称下方卡片的右侧才是售价。旧 ROI 从名称左侧开始，货币图标和卡片纹理
-    // 曾被误识别为 114，导致实际报价 2 的雾滚草越过最低售价保护。
-    analyzer.set_roi(merchant_price_roi(name_rect));
-    analyzer.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
-    analyzer.set_use_char_model(true);
-    const auto results = analyzer.analyze();
-    if (!results.has_value()) {
-        return std::nullopt;
-    }
-    std::vector<std::pair<int, std::string_view>> candidates;
-    candidates.reserve(results->size());
-    for (const TextRect& result : *results) {
-        candidates.emplace_back(result.rect.x, result.text);
-    }
-    return rightmost_numeric_price(candidates);
+    // Preserve the full number even when a long name shifts its OCR anchor.
+    // A detected currency prefix needs agreement between the two OCR models.
+    return recognize_store_number(image, merchant_price_roi(name_rect), true);
 }
 
 bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods()
@@ -1423,10 +1440,15 @@ bool BlackFlowAutomationStoreTaskPlugin::click_verified_selection(StoreSelection
 
 bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()
 {
+    m_shop_refresh_diagnostics.clear();
     if (!m_shop_refresh_wallet_before.has_value()) {
         return false;
     }
     const int expected_wallet = *m_shop_refresh_wallet_before - automation_store_refresh_price(m_shop_refresh_count);
+    m_shop_refresh_diagnostics = {
+        { "wallet_before", *m_shop_refresh_wallet_before },
+        { "expected_wallet", expected_wallet },
+    };
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     int consecutive_receipts = 0;
     int unsettled_samples = 0;
@@ -1445,17 +1467,25 @@ bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()
             unsettled_samples = 0;
         }
         else {
-            ++unsettled_samples;
             Matcher confirm(image);
             confirm.set_task_info(std::string(ShopRefreshConfirmTask));
-            const bool receipt = !image.empty() && !confirm.analyze().has_value() &&
-                                 purchase_wallet_page(image, AutomationStoreKind::Eerie) &&
-                                 read_optional_number(image, std::string(ShopWalletTask)) == expected_wallet;
+            const bool shop_visible = !image.empty() && !confirm.analyze().has_value() &&
+                                      purchase_wallet_page(image, AutomationStoreKind::Eerie);
+            const auto wallet = shop_visible ? read_optional_number(image, std::string(ShopWalletTask)) : std::nullopt;
+            // Unreadable/transitional frames use the absolute deadline, not the
+            // settled-shop budget. Keep the short limit for a readable unpaid shop.
+            unsettled_samples += wallet.has_value();
+            m_shop_refresh_diagnostics["last_wallet"] =
+                wallet.has_value() ? json::value(*wallet) : json::value(nullptr);
+            m_shop_refresh_diagnostics["shop_visible"] = shop_visible;
+            const bool receipt = wallet == expected_wallet;
             consecutive_receipts = receipt ? consecutive_receipts + 1 : 0;
             if (consecutive_receipts == 2) {
                 return true;
             }
         }
+        m_shop_refresh_diagnostics["network_pending"] = submitting;
+        m_shop_refresh_diagnostics["unsettled_samples"] = unsettled_samples;
         if (!sleep(250)) {
             return false;
         }
@@ -1471,7 +1501,9 @@ void BlackFlowAutomationStoreTaskPlugin::stop_unverified_shop_refresh(std::strin
         "recovery.store_refresh",
         "failed",
         "stop_task",
-        json::object { { "reason", reason }, { "refresh_index", m_shop_refresh_count } },
+        json::object { { "reason", reason },
+                       { "refresh_index", m_shop_refresh_count },
+                       { "receipt", m_shop_refresh_diagnostics } },
         "BlackFlowAutomationStore",
         nullptr,
         true);
@@ -1499,23 +1531,53 @@ bool BlackFlowAutomationStoreTaskPlugin::purchase_wallet_page(const cv::Mat& ima
 
 bool BlackFlowAutomationStoreTaskPlugin::purchased_good_sold_out(const cv::Mat& image, AutomationStoreKind kind) const
 {
-    const auto goods =
-        recognize(image, std::string(kind == AutomationStoreKind::Eerie ? ShopGoodsBottomTask : ScrapShopBuyGoodsTask));
+    if (!m_pending_purchase.has_value() || !m_pending_purchase_name.has_value()) {
+        return false;
+    }
+    const auto goods_task =
+        std::string(kind == AutomationStoreKind::Eerie ? ShopGoodsBottomTask : ScrapShopBuyGoodsTask);
+    const auto goods = recognize(image, goods_task);
     const auto found = std::ranges::find_if(goods, [&](const TextRect& good) {
         return normalized_good_name(good.text) == *m_pending_purchase_name;
     });
-    if (found == goods.end() || !m_pending_purchase.has_value() ||
-        !same_shelf_slot(found->rect, m_pending_purchase->rect) ||
-        std::ranges::count_if(goods, [&](const TextRect& good) {
-            return normalized_good_name(good.text) == *m_pending_purchase_name;
-        }) != 1) {
-        // Absence on a partial/possibly scrolled shelf cannot prove a purchase.
+    if (found != goods.end() && (!same_shelf_slot(found->rect, m_pending_purchase->rect) ||
+                                 std::ranges::count_if(goods, [&](const TextRect& good) {
+                                     return normalized_good_name(good.text) == *m_pending_purchase_name;
+                                 }) != 1)) {
         return false;
     }
-    OCRer sold_out(image);
-    sold_out.set_task_info("BlackFlow@Roguelike@AutomationStoreSoldOut");
-    sold_out.set_roi(Rect { found->rect.x, found->rect.y + 30, 180, 140 });
-    return sold_out.analyze().has_value();
+    const auto sold_at = [&](const cv::Mat& frame, const Rect& name) {
+        OCRer sold_out(frame);
+        sold_out.set_task_info("BlackFlow@Roguelike@AutomationStoreSoldOut");
+        sold_out.set_roi(Rect { name.x, name.y + 30, 180, 140 });
+        return sold_out.analyze().has_value();
+    };
+    if (found != goods.end()) {
+        return sold_at(image, found->rect);
+    }
+    // Merchant animation can hide the dimmed title after purchase. A known,
+    // previously unsold slot becoming sold out still identifies the item, but
+    // only when other named cards prove the shelf has not moved or refreshed.
+    if (!m_pending_purchase_image || m_pending_purchase_image->empty() ||
+        sold_at(*m_pending_purchase_image, m_pending_purchase->rect) || !sold_at(image, m_pending_purchase->rect) ||
+        std::ranges::any_of(goods, [&](const TextRect& good) {
+            return same_shelf_slot(good.rect, m_pending_purchase->rect);
+        })) {
+        return false;
+    }
+    const auto before = recognize(*m_pending_purchase_image, goods_task);
+    int anchors = 0;
+    bool selected_verified = false;
+    for (const auto& good : before) {
+        if (same_shelf_slot(good.rect, m_pending_purchase->rect)) {
+            selected_verified = normalized_good_name(good.text) == *m_pending_purchase_name;
+            continue;
+        }
+        anchors += std::ranges::count_if(goods, [&](const TextRect& current) {
+                       return current.text == good.text && same_shelf_slot(current.rect, good.rect);
+                   }) == 1;
+    }
+    return selected_verified && anchors >= 2;
 }
 
 bool BlackFlowAutomationStoreTaskPlugin::run_goods_swipe(std::string_view task)

@@ -1,12 +1,10 @@
-黑流树海采集版 v1.1.14
+黑流树海采集版 v1.1.15
 
 ### 本次更新
 
-* 修复诡意行商刷新时因网络响应较慢而提前停止任务的问题。现在会等待网络响应并核对刷新结果，持续超时则保存现场后停止。
-
-### 已知问题
-
-* 收起零件箱后仍可能长时间等待，本版尚未修复。遇到时请停止任务并保留该局日志。
+* 修复商店余额和价格识别错误，导致刷新后误停或购买结果记录不准确的问题。
+* 修复商品名称被动画遮挡时，已购买商品可能漏记的问题。
+* 修复零件箱页面意外收起后误记为空库存、并长时间等待的问题，增加有限重试恢复。
 
 ### 升级
 
@@ -16,8 +14,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.14/MAA-BlackFlow-Data-Collection-v1.1.14-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.14/MAA-BlackFlow-Data-Collection-v1.1.14-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.15/MAA-BlackFlow-Data-Collection-v1.1.15-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.15/MAA-BlackFlow-Data-Collection-v1.1.15-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

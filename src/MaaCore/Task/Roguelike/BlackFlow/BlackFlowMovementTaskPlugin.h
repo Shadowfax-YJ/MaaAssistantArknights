@@ -26,6 +26,7 @@ protected:
     virtual bool _run() override;
 
 private:
+    friend struct BlackFlowMovementReplayAccess;
     enum class PendingWork
     {
         None,
@@ -105,6 +106,7 @@ private:
         bool scan_complete = false;
         bool stopped_at_ordered_boundary = false;
         bool has_clipped_movement = false;
+        bool page_lost = false;
     };
 
     bool observe_inventory();
@@ -144,5 +146,6 @@ private:
 
     mutable PendingWork m_pending = PendingWork::None;
     mutable std::string m_direct_depart_source;
+    int m_inventory_observation_retries = 0;
 };
 } // namespace asst::blackflow

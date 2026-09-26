@@ -220,9 +220,51 @@ struct Plugin {
     }
 };
 }
+namespace inventory_replay {
+constexpr std::string_view InventoryObservationAction="observe-action", InventoryCloseTask="close", InventoryCheckTask="reopen";
+struct Session {
+    int inventory=5, commits=0;
+    bool failed=false;
+    bool apply_movement_inventory_observation(const std::vector<RunResources::MovementInstance>& items,std::string*) {inventory=int(items.size());++commits;return true;}
+    void mark_map_preserved_after_inventory(){}
+    void fail(std::string,std::string,FailureDisposition){failed=true;}
+};
+struct Port {
+    bool cleanup_ok=true, cleanup=false;
+    bool cleanup_open_inventory_if_overloaded(bool& performed,std::string*){performed=cleanup;return cleanup_ok;}
+};
+struct BlackFlowMovementTaskPlugin {
+    struct InventoryFrame {
+        bool page_lost=false;
+        std::vector<RunResources::MovementInstance> movement_instances;
+        std::optional<MovementKind> loaded_movement;
+    };
+    std::shared_ptr<Session> m_session=std::make_shared<Session>();
+    std::shared_ptr<Port> m_port=std::make_shared<Port>();
+    int m_inventory_observation_retries=0;
+    bool page_lost=true, cancelled=false;
+    bool need_exit(){return cancelled;}
+    bool scan_inventory_frame(InventoryFrame& frame,std::string*){frame.page_lost=page_lost;return !page_lost;}
+    void record_run_event(RunLogLevel,std::string,std::string,std::string,json::object,std::string,std::shared_ptr<cv::Mat> = nullptr,bool = false){}
+    void record_inventory_evidence(const InventoryFrame&,std::string_view,std::string_view){}
+    void report_outputs(){}
+    bool observe_inventory();
+};
+/*INVENTORY_OBSERVE*/
+}
+
 int main(int argc,char** argv) {
     int failed=0,passed=0;
     auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    test("lost inventory page does not erase previous resources",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
+        p.observe_inventory();check(!p.m_session->failed&&p.m_session->inventory==5&&p.m_session->commits==0&&Task.next=="reopen","map scan committed or failed instead of reopening");});
+    test("inventory observation recovery is bounded",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
+        p.observe_inventory();p.observe_inventory();check(!p.m_session->failed,"inventory retry budget exhausted too early");
+        p.observe_inventory();check(p.m_session->failed&&p.m_session->commits==0,"lost-page retry loop was unbounded");});
+    test("successful empty inventory commits and resets retry budget",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
+        p.observe_inventory();p.page_lost=false;p.observe_inventory();check(!p.m_session->failed&&p.m_session->inventory==0&&p.m_session->commits==1&&p.m_inventory_observation_retries==0&&Task.next=="close","valid empty box not committed");});
+    test("inventory cleanup reopens without committing stale items",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
+        p.m_port->cleanup=true;p.observe_inventory();check(!p.m_session->failed&&p.m_session->commits==0&&Task.next=="reopen","cleanup did not reopen");});
     test("walking clipped loaded marker",[]{BlackFlowMovementTaskPlugin p;std::string error;
         check(p.select_movement(MovementKind::Walk,&error)==BlackFlowMovementTaskPlugin::SelectionOutcome::Selected,"already selected walking was rejected");
         check(p.controller.clicks==1&&p.m_session->active==MovementKind::Walk,"must accept positive map icon after one click");});

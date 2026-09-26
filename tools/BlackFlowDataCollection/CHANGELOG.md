@@ -1,4 +1,4 @@
-## v1.1.14
+## v1.1.15
 
 ### Highlights
 
@@ -36,6 +36,17 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.15 (2026-09-26)</b></summary>
+
+### 修复 | Fix
+
+* 修复商店余额和价格识别错误，导致刷新后误停或购买结果记录不准确的问题。 @Shadowfax-YJ
+* 修复商品名称被动画遮挡时，已购买商品可能漏记的问题。 @Shadowfax-YJ
+* 修复零件箱页面意外收起后误记为空库存、并长时间等待的问题，增加有限重试恢复。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.14 (2026-09-23)</b></summary>
 
 ### 修复 | Fix

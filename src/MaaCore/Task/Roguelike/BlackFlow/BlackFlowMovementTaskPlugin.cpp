@@ -141,6 +141,7 @@ void BlackFlowMovementTaskPlugin::reset_in_run_variables()
 {
     m_pending = PendingWork::None;
     m_direct_depart_source.clear();
+    m_inventory_observation_retries = 0;
 }
 
 bool BlackFlowMovementTaskPlugin::_run()
@@ -336,6 +337,13 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
     if (!scan_inventory_frame(frame, &error) ||
         !m_session->apply_movement_inventory_observation(frame.movement_instances, &error)) {
         record_inventory_evidence(frame, "识别或状态更新失败", error);
+        if (frame.page_lost && ++m_inventory_observation_retries <= 2 && !need_exit()) {
+            // No inventory observation has been committed. Reopen and rescan from
+            // the first page; never replace the last good inventory with map OCR.
+            Task.set_task_base(std::string(InventoryObservationAction), std::string(InventoryCheckTask));
+            Log.warn("BlackFlow inventory page lost; reopening for observation", m_inventory_observation_retries);
+            return true;
+        }
         m_session->fail(
             "movement_inventory_observation_failed",
             error.empty() ? "movement inventory OCR failed" : error,
@@ -345,6 +353,7 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
         return true;
     }
     record_inventory_evidence(frame, "识别完成", {});
+    m_inventory_observation_retries = 0;
     m_session->mark_map_preserved_after_inventory();
 
     const MovementSpec* loaded =
@@ -372,6 +381,13 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
 
     for (; scan_page <= MaximumScanSwipes; ++scan_page) {
         if (scan_page > 0) {
+            const cv::Mat before_swipe = ctrler()->get_image();
+            if (!movement_inventory_page_visible(before_swipe)) {
+                frame.page_lost = true;
+                frame.images.emplace_back(scan_page, std::make_shared<cv::Mat>(before_swipe.clone()));
+                set_error(error, "inventory page disappeared before scrolling");
+                return false;
+            }
             if (!run_fixed_task(InventorySwipeTask)) {
                 set_error(error, "movement inventory could not advance to the next column");
                 return false;
@@ -379,6 +395,22 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         }
 
         cv::Mat image = ctrler()->get_image();
+        // Check before both the end-of-list comparison and OCR. A static map is
+        // not an empty inventory, and a swipe on it would move the map instead.
+        bool page_visible = movement_inventory_page_visible(image);
+        for (int attempt = 0; !page_visible && attempt < 4 && !need_exit(); ++attempt) {
+            if (!sleep(250)) {
+                return false;
+            }
+            image = ctrler()->get_image();
+            page_visible = movement_inventory_page_visible(image);
+        }
+        if (!page_visible) {
+            frame.page_lost = true;
+            frame.images.emplace_back(scan_page, std::make_shared<cv::Mat>(image.clone()));
+            set_error(error, "inventory page disappeared during observation");
+            return false;
+        }
         if (previous.has_value() && previous->size() == image.size() && previous->type() == image.type()) {
             const cv::Mat previous_cards = inventory_card_region(*previous);
             const cv::Mat current_cards = inventory_card_region(image);
@@ -422,6 +454,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         // 出错页也保存，避免证据只剩上一张成功截图。
         frame.images.emplace_back(scan_page, std::make_shared<cv::Mat>(image.clone()));
         if (outcome == InventoryAnalysisOutcome::Failed) {
+            frame.page_lost = !movement_inventory_page_visible(image);
             set_error(error, latest_error.empty() ? "movement inventory OCR failed" : latest_error);
             return false;
         }
@@ -475,8 +508,8 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
     int minimum_name_x,
     std::string* error) const
 {
-    if (image.empty()) {
-        set_error(error, "movement inventory screenshot is empty");
+    if (!movement_inventory_page_visible(image)) {
+        set_error(error, "movement inventory page is not visible");
         return InventoryAnalysisOutcome::Failed;
     }
 

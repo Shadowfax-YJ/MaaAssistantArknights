@@ -26,6 +26,7 @@ if __name__ == '__main__':
         ('SELECT', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::SelectionOutcome\n'),
         ('WALK', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::verify_walking_on_map('),
         ('CLOSE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::close_panel('),
+        ('INVENTORY_OBSERVE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::observe_inventory('),
         ('REWARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'bool BlackFlowNodeEvidenceTaskPlugin::_run('),
         ('GUARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check('),
     ):

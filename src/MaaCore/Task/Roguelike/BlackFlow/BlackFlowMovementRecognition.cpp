@@ -9,9 +9,25 @@
 #include <opencv2/core.hpp>
 
 #include "Vision/Matcher.h"
+#include "Vision/OCRer.h"
 
 namespace asst::blackflow
 {
+bool movement_inventory_page_visible(const cv::Mat& image)
+{
+    if (image.empty()) {
+        return false;
+    }
+    Matcher opened(image);
+    opened.set_task_info("BlackFlow@Roguelike@MovementInventoryOpened");
+    if (!opened.analyze().has_value()) {
+        return false;
+    }
+    OCRer contents(image);
+    contents.set_task_info("BlackFlow@Roguelike@MovementInventoryContents");
+    return contents.analyze().has_value();
+}
+
 std::optional<std::pair<int, std::vector<MovementInventoryStarSlot>>>
     recognize_movement_inventory_remaining_uses(
         const cv::Mat& image,

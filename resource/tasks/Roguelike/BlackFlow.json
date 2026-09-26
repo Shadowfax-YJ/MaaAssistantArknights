@@ -2621,7 +2621,18 @@
     },
     "BlackFlow@Roguelike@MovementInventoryClose-Enter": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@MovementInventoryClose"]
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryClose",
+            "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
+            "BlackFlow@Roguelike@MapPrepare-Ready",
+            "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryContents": {
+        "algorithm": "OcrDetect",
+        "roi": [40, 350, 250, 90],
+        "text": ["零件箱容量"]
     },
     "BlackFlow@Roguelike@MovementInventoryItems": {
         "Doc": "按类型扫描零件箱：识别加工品；一旦在新扫描区域看到自然物、概念体或待收集零件空格，就证明加工品区已经结束。",

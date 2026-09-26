@@ -71,6 +71,7 @@ struct BlackFlowAutomationStoreTaskPlugin {
     ReceiptPort receipt_port;
     ReceiptPort* m_port = &receipt_port;
     std::optional<int> m_pending_purchase, m_pending_purchase_price, m_pending_purchase_ingots_before;
+    std::shared_ptr<cv::Mat> m_pending_purchase_image;
     std::optional<std::string> m_pending_purchase_name;
     bool m_pending_purchase_confirmed = false, m_scrap_shop_cultivation_requested = false;
     std::vector<int> m_shop_purchased, m_shop_attempted, m_scrap_shop_purchased, m_scrap_shop_buy_attempted;

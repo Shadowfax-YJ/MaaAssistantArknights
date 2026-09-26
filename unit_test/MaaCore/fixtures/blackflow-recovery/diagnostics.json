@@ -28,5 +28,26 @@
     "task": "BlackFlowLifecycle",
     "state": {"floor": 6},
     "details": {"attempt": 3, "max_attempts": 3, "outer_floor": 5, "error": "injected return failure"}
+  },
+  {
+    "schema_version": 1,
+    "level": "ERROR",
+    "action": "recovery.store_refresh",
+    "phase": "failed",
+    "outcome": "stop_task",
+    "task": "BlackFlowAutomationStore",
+    "state": {"floor": 3},
+    "details": {
+      "reason": "refresh payment or return to the shop could not be verified",
+      "refresh_index": 0,
+      "receipt": {
+        "wallet_before": 13,
+        "expected_wallet": 9,
+        "last_wallet": null,
+        "shop_visible": true,
+        "network_pending": false,
+        "unsettled_samples": 0
+      }
+    }
   }
 ]

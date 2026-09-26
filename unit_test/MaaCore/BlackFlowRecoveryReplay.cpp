@@ -130,6 +130,8 @@ struct Port final : IBlackFlowTaskPort
     }
 };
 
+#include "BlackFlowMerchantInventoryReplay.h"
+
 int main(int argc, char** argv)
 {
     if (argc != 2) {
@@ -335,6 +337,7 @@ int main(int argc, char** argv)
             json::open(std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-difficulty/events.json");
         require(expected.has_value() && *expected == json::value(difficulty_events), "shared fixture drifted");
     });
+    merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
     std::cout << passed << " passed, " << failed << " failed" << std::endl;
     return failed ? 1 : 0;
 }

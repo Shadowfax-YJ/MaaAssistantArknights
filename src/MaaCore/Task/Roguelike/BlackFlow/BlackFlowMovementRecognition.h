@@ -18,6 +18,9 @@ class Mat;
 
 namespace asst::blackflow
 {
+// A collapse icon alone may be caught during the closing animation.
+[[nodiscard]] bool movement_inventory_page_visible(const cv::Mat& image);
+
 enum class MovementPanelScanAction
 {
     ResetTowardStart,

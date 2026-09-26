@@ -25,6 +25,7 @@ protected:
     virtual bool _run() override;
 
 private:
+    friend struct BlackFlowStoreReplayAccess;
     enum class ShelfPage
     {
         Top,
@@ -120,6 +121,7 @@ private:
     std::optional<std::string> m_pending_purchase_name;
     std::optional<int> m_pending_purchase_ingots_before;
     std::optional<int> m_pending_purchase_price;
+    std::shared_ptr<cv::Mat> m_pending_purchase_image;
     std::string m_pending_purchase_id;
     std::uint64_t m_purchase_sequence = 0;
     bool m_pending_purchase_confirmed = false;
@@ -135,6 +137,7 @@ private:
     std::vector<RunResources::MovementInstance> m_shop_entry_processing_items;
     int m_shop_refresh_count = 0;
     std::optional<int> m_shop_refresh_wallet_before;
+    json::object m_shop_refresh_diagnostics;
     std::size_t m_shop_collectibles_purchased_in_run = 0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     bool m_shop_sold_in_cycle = false;
