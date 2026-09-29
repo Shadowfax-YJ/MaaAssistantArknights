@@ -66,6 +66,9 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
         require(!image.empty(), name);
         return image;
     };
+    const auto refresh_dialog =
+        MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20260930/refresh-confirm-wallet-16.jpg");
+    require(!refresh_dialog.empty(), "captured refresh dialog missing");
     const std::string refresh_confirm = "BlackFlow@Roguelike@AutomationShopRefreshConfirm";
     auto confirm_visible = [&](const cv::Mat& image) {
         Matcher matcher(image);
@@ -87,25 +90,38 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
         const auto result = analyzer.analyze();
         require(result && result->task_ptr->name == refresh->name, "shelf routed to payment confirmation");
     });
-    test("shared green confirmation dialog remains recognizable", [&] {
-        // This is an actual inventory-full prompt with the same confirmation row,
-        // not a fabricated recording of a refresh dialog.
-        require(confirm_visible(refresh_frame("shared-confirm-dialog.jpg")), "real confirmation row rejected");
+    test("captured refresh confirmation is recognized before payment", [&] {
+        require(confirm_visible(refresh_dialog), "captured refresh confirmation rejected");
+        require(!BlackFlowStoreReplayAccess::wallet_page(store, refresh_dialog), "unpaid dialog accepted as a shelf");
+    });
+    test("opened refresh dialog routes to confirmation through the production pipeline", [&] {
+        PipelineAnalyzer analyzer(refresh_dialog);
+        analyzer.set_tasks(Task.get("BlackFlow@Roguelike@AutomationShopRefresh")->next);
+        const auto result = analyzer.analyze();
+        require(result && result->task_ptr->name == refresh_confirm, "opened dialog did not route to confirmation");
+    });
+    test("inventory-full confirmation is not a refresh confirmation", [&] {
+        require(!confirm_visible(refresh_frame("shared-confirm-dialog.jpg")), "inventory prompt accepted for refresh");
     });
     test("compressed confirmation dialog remains recognizable", [&] {
         std::vector<uchar> jpeg;
-        require(
-            cv::imencode(".jpg", refresh_frame("shared-confirm-dialog.jpg"), jpeg, { cv::IMWRITE_JPEG_QUALITY, 45 }),
-            "JPEG encoding failed");
+        require(cv::imencode(".jpg", refresh_dialog, jpeg, { cv::IMWRITE_JPEG_QUALITY, 45 }), "JPEG encoding failed");
         require(confirm_visible(cv::imdecode(jpeg, cv::IMREAD_COLOR)), "compressed confirmation rejected");
     });
+    test("refresh confirmation tolerates moderate brightness variation", [&] {
+        for (const double gain : { 0.8, 1.15 }) {
+            cv::Mat image;
+            refresh_dialog.convertTo(image, -1, gain);
+            require(confirm_visible(image), "brightness variation rejected refresh confirmation");
+        }
+    });
     test("confirmation row without its cancel button is rejected", [&] {
-        auto image = refresh_frame("shared-confirm-dialog.jpg");
+        auto image = refresh_dialog.clone();
         image(cv::Rect(285, 455, 130, 61)).setTo(cv::Scalar(60, 60, 60));
         require(!confirm_visible(image), "missing cancel button accepted");
     });
     test("confirmation row without its confirm button is rejected", [&] {
-        auto image = refresh_frame("shared-confirm-dialog.jpg");
+        auto image = refresh_dialog.clone();
         image(cv::Rect(928, 455, 133, 61)).setTo(cv::Scalar(95, 158, 112));
         require(!confirm_visible(image), "missing confirm button accepted");
     });
@@ -119,8 +135,7 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
     });
     test("confirmation row outside its expected position is rejected", [&] {
         auto image = refresh_frame("refresh-paid-wallet-18.jpg");
-        const auto dialog = refresh_frame("shared-confirm-dialog.jpg");
-        dialog(cv::Rect(278, 454, 792, 66)).copyTo(image(cv::Rect(338, 454, 792, 66)));
+        refresh_dialog(cv::Rect(278, 454, 792, 66)).copyTo(image(cv::Rect(338, 454, 792, 66)));
         require(!confirm_visible(image), "shifted confirmation row accepted");
     });
     test("legacy red confirmation button remains recognizable", [&] {

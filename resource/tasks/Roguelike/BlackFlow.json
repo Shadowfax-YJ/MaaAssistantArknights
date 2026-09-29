@@ -621,7 +621,7 @@
     },
     "BlackFlow@Roguelike@AutomationShopRefreshConfirm": {
         "baseTask": "Roguelike@StageTraderRefreshConfirm",
-        "Doc": "绿色弹窗同时匹配左右取消/确认按钮，避免货架亮块命中单独勾选图标；识别整行后仍只点击右侧确认。保留旧版红色按钮。",
+        "Doc": "使用真实刷新弹窗的取消/确定双按钮模板，避免零件箱取消/确认按钮行或货架亮块被当作刷新确认；识别整行后只点击右侧确定。保留旧版红色按钮。",
         "template": [
             "BlackFlow@Roguelike@AutomationShopRefreshConfirm.png",
             "Roguelike@StageTraderRefreshConfirm.png"
