@@ -1,4 +1,4 @@
-## v1.1.15
+## v1.1.16
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.16 (2026-09-29)</b></summary>
+
+### 修复 | Fix
+
+* 修复自动采集在诡意行商刷新成功后，仍可能等待并停止的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.15 (2026-09-26)</b></summary>
 
 ### 修复 | Fix

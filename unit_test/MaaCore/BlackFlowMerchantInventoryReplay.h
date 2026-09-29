@@ -17,6 +17,11 @@ struct BlackFlowStoreReplayAccess
         return p.read_good_price(image, name);
     }
 
+    static bool wallet_page(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image)
+    {
+        return p.purchase_wallet_page(image, AutomationStoreKind::Eerie);
+    }
+
     static bool sold(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& before, const cv::Mat& after)
     {
         p.m_pending_purchase_name = "小八界";
@@ -55,6 +60,86 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
     auto session = std::make_shared<BlackFlowSession>();
     BlackFlowAutomationStoreTaskPlugin store({}, nullptr, "Roguelike", config, nullptr, session, nullptr);
     BlackFlowMovementTaskPlugin movement({}, nullptr, "Roguelike", config, nullptr, session, nullptr);
+    const auto refresh_fixtures = repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20260929";
+    auto refresh_frame = [&](const char* name) {
+        auto image = MAA_NS::imread(refresh_fixtures / name);
+        require(!image.empty(), name);
+        return image;
+    };
+    const std::string refresh_confirm = "BlackFlow@Roguelike@AutomationShopRefreshConfirm";
+    auto confirm_visible = [&](const cv::Mat& image) {
+        Matcher matcher(image);
+        matcher.set_task_info(refresh_confirm);
+        return matcher.analyze().has_value();
+    };
+    for (const auto* name : { "refresh-paid-wallet-18.jpg", "refresh-paid-final.jpg" }) {
+        test(name, [&] {
+            const auto image = refresh_frame(name);
+            require(!confirm_visible(image), "shelf matched a refresh confirmation dialog");
+            require(BlackFlowStoreReplayAccess::wallet_page(store, image), "paid shop rejected");
+            require(BlackFlowStoreReplayAccess::wallet(store, image) == 18, "26 - 8 receipt unreadable");
+        });
+    }
+    test("paid shelf follows the refresh button rather than falsely confirming payment", [&] {
+        PipelineAnalyzer analyzer(refresh_frame("refresh-paid-wallet-18.jpg"));
+        const auto refresh = Task.get("BlackFlow@Roguelike@AutomationShopRefresh");
+        analyzer.set_tasks(refresh->next);
+        const auto result = analyzer.analyze();
+        require(result && result->task_ptr->name == refresh->name, "shelf routed to payment confirmation");
+    });
+    test("shared green confirmation dialog remains recognizable", [&] {
+        // This is an actual inventory-full prompt with the same confirmation row,
+        // not a fabricated recording of a refresh dialog.
+        require(confirm_visible(refresh_frame("shared-confirm-dialog.jpg")), "real confirmation row rejected");
+    });
+    test("compressed confirmation dialog remains recognizable", [&] {
+        std::vector<uchar> jpeg;
+        require(
+            cv::imencode(".jpg", refresh_frame("shared-confirm-dialog.jpg"), jpeg, { cv::IMWRITE_JPEG_QUALITY, 45 }),
+            "JPEG encoding failed");
+        require(confirm_visible(cv::imdecode(jpeg, cv::IMREAD_COLOR)), "compressed confirmation rejected");
+    });
+    test("confirmation row without its cancel button is rejected", [&] {
+        auto image = refresh_frame("shared-confirm-dialog.jpg");
+        image(cv::Rect(285, 455, 130, 61)).setTo(cv::Scalar(60, 60, 60));
+        require(!confirm_visible(image), "missing cancel button accepted");
+    });
+    test("confirmation row without its confirm button is rejected", [&] {
+        auto image = refresh_frame("shared-confirm-dialog.jpg");
+        image(cv::Rect(928, 455, 133, 61)).setTo(cv::Scalar(95, 158, 112));
+        require(!confirm_visible(image), "missing confirm button accepted");
+    });
+    test("a green check button alone cannot establish a confirmation dialog", [&] {
+        auto image = refresh_frame("refresh-paid-wallet-18.jpg");
+        const auto button =
+            MAA_NS::imread(repo / "resource/template/Roguelike/base/Roguelike@StageTraderRefreshConfirmNew.png");
+        require(!button.empty(), "button fixture missing");
+        button.copyTo(image(cv::Rect(800, 458, button.cols, button.rows)));
+        require(!confirm_visible(image), "isolated check button accepted without the dialog row");
+    });
+    test("confirmation row outside its expected position is rejected", [&] {
+        auto image = refresh_frame("refresh-paid-wallet-18.jpg");
+        const auto dialog = refresh_frame("shared-confirm-dialog.jpg");
+        dialog(cv::Rect(278, 454, 792, 66)).copyTo(image(cv::Rect(338, 454, 792, 66)));
+        require(!confirm_visible(image), "shifted confirmation row accepted");
+    });
+    test("legacy red confirmation button remains recognizable", [&] {
+        auto image = refresh_frame("refresh-paid-wallet-18.jpg");
+        const auto button =
+            MAA_NS::imread(repo / "resource/template/Roguelike/base/Roguelike@StageTraderRefreshConfirm.png");
+        require(!button.empty(), "legacy button missing");
+        button.copyTo(image(cv::Rect(640, 458, button.cols, button.rows)));
+        require(confirm_visible(image), "legacy confirmation rejected");
+    });
+    test("confirmation click is restricted to the right-hand button", [&] {
+        const auto confirm = Task.get(refresh_confirm);
+        require(confirm->action == ProcessTaskAction::ClickRect, "dialog row may click cancellation");
+        const auto& click = confirm->specific_rect;
+        require(
+            click.x >= 640 && click.y >= 451 && click.x + click.width <= 1280 && click.y + click.height <= 522 &&
+                click.width > 0 && click.height > 0,
+            "confirmation click is outside the right-hand button");
+    });
     for (const auto& [name, expected] :
          std::vector<std::pair<const char*, int>> { { "refresh-wallet-9.jpg", 9 },
                                                     { "refresh-wallet-17.jpg", 17 },

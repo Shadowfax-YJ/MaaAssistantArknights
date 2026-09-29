@@ -621,10 +621,15 @@
     },
     "BlackFlow@Roguelike@AutomationShopRefreshConfirm": {
         "baseTask": "Roguelike@StageTraderRefreshConfirm",
+        "Doc": "绿色弹窗同时匹配左右取消/确认按钮，避免货架亮块命中单独勾选图标；识别整行后仍只点击右侧确认。保留旧版红色按钮。",
         "template": [
-            "Roguelike@StageTraderRefreshConfirmNew.png",
+            "BlackFlow@Roguelike@AutomationShopRefreshConfirm.png",
             "Roguelike@StageTraderRefreshConfirm.png"
         ],
+        "templThreshold": [0.9, 0.9],
+        "roi": [270, 440, 820, 90],
+        "action": "ClickRect",
+        "specificRect": [925, 465, 110, 38],
         "postDelay": 1200,
         "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopRefresh*3"],
         "next": ["BlackFlow@Roguelike@AutomationShopRefreshCompleted"]
