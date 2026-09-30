@@ -791,6 +791,12 @@ asst::TaskPtr asst::TaskData::generate_ocr_task_info(
     utils::get_and_check_value_or(
         name,
         task_json,
+        "joinAdjacent",
+        ocr_task_info_ptr->join_adjacent,
+        default_ptr->join_adjacent);
+    utils::get_and_check_value_or(
+        name,
+        task_json,
         "fuzzyMatch",
         ocr_task_info_ptr->fuzzy_match,
         default_ptr->fuzzy_match);
@@ -1098,7 +1104,7 @@ bool asst::TaskData::syntax_check(const std::string& task_name, const json::valu
               // specific
               "cache",         "fullMatch",   "fuzzyMatch",      "isAscii",       "ocrReplace",   "rectMove",
               "replaceFull",   "roi",         "text",            "withoutDet",   "useRaw",
-              "binThreshold",  "fuzzyMatchMinLength",
+              "binThreshold",  "fuzzyMatchMinLength", "joinAdjacent",
           } },
         { AlgorithmType::FeatureMatch,
           {

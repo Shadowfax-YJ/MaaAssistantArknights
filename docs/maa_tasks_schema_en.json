@@ -306,6 +306,11 @@
                     "default": false,
                     "description": "Optional, whether text content is ASCII characters\nDefault false"
                 },
+                "joinAdjacent": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If individual boxes do not match, join adjacent fragments on the same line. Joined text must exactly match a complete text candidate. Disabled by default; requires withoutDet=false."
+                },
                 "ocrReplace": {
                     "type": "array",
                     "items": {

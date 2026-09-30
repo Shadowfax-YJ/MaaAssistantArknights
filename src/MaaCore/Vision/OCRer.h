@@ -36,7 +36,8 @@ protected:
     void postproc_trim_(Result& res) const;
     void postproc_replace_(Result& res) const;
 
-    bool filter_and_replace_by_required_(Result& res) const;
+    bool filter_and_replace_by_required_(Result& res, bool allow_fuzzy_match = true) const;
+    ResultsVec join_adjacent_(const ResultsVec& fragments) const;
 
 private:
     // FIXME: 老接口太难重构了，先弄个这玩意兼容下，后续慢慢全删掉

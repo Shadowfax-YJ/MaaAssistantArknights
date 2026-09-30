@@ -306,6 +306,11 @@
                     "default": false,
                     "description": "可选项，要识别的文字内容是否为 ASCII 码字符\n不填写默认 false"
                 },
+                "joinAdjacent": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "单框未匹配时拼接位置相邻、同一行的文字片段，只接受完整 text 候选的精确匹配。默认关闭，仅在 withoutDet 为 false 时生效。"
+                },
                 "ocrReplace": {
                     "type": "array",
                     "items": {

@@ -13,6 +13,11 @@
 using namespace asst;
 using namespace asst::blackflow;
 
+struct OcrJoinProbe : OCRer
+{
+    using OCRer::join_adjacent_;
+};
+
 void require(bool ok, const std::string& message)
 {
     if (!ok) {
@@ -284,6 +289,114 @@ int main(int argc, char** argv)
     });
     auto small = MAA_NS::imread(fixtures / "floor-four-small.jpg");
     auto large = MAA_NS::imread(fixtures / "floor-four-large.jpg");
+    for (int floor = 1; floor <= 6; ++floor) {
+        test(("canonical title through pipeline and direct OCR, floor " + std::to_string(floor)).c_str(), [&] {
+            const auto file = floor == 3 ? "floor-three-split.png" : floor == 4 ? "floor-four-small.jpg" :
+                "floor-" + std::to_string(floor) + "-title.jpg";
+            const auto image = MAA_NS::imread(fixtures / file);
+            require(!image.empty(), "floor title fixture missing");
+            const auto task = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel");
+            const auto& expected = task->text.at(floor - 1);
+            PipelineAnalyzer analyzer(image);
+            analyzer.set_tasks({ task->name });
+            const auto result = analyzer.analyze();
+            require(result && std::get<OCRer::Result>(result->result).text == expected, "pipeline returned wrong title");
+            OCRer direct(image);
+            direct.set_task_info(task);
+            const auto titles = direct.analyze();
+            require(titles && titles->front().text == expected, "direct attribution OCR returned wrong title");
+            if (floor <= 5) {
+                OCRer returning(image);
+                returning.set_task_info("BlackFlow@Roguelike@TreeHoleReturnTitle");
+                const auto outer = returning.analyze();
+                require(outer && outer->front().text == expected, "tree-hole return title inherited wrong behavior");
+            }
+        });
+    }
+    test("split third-floor title reaches NextLevel after entry zoom", [&] {
+        const auto image = MAA_NS::imread(fixtures / "floor-three-split.png");
+        require(!image.empty(), "split title fixture missing");
+        PipelineAnalyzer analyzer(image);
+        analyzer.set_tasks(Task.get("BlackFlow@Roguelike@MapPrepare-FloorEnterZoomClick")->next);
+        const auto result = analyzer.analyze();
+        require(result && result->task_ptr->name == "BlackFlow@Roguelike@NextLevel", "entry zoom has no successor");
+        require(std::get<OCRer::Result>(result->result).text == "血色空脉", "floor title is incomplete or incorrect");
+    });
+    test("split title joining is opt-in", [&] {
+        const auto image = MAA_NS::imread(fixtures / "floor-three-split.png");
+        auto strict_task = std::make_shared<OcrTaskInfo>(*Task.get<OcrTaskInfo>("BlackFlow@Roguelike@NextLevel"));
+        strict_task->join_adjacent = false;
+        OCRer strict(image);
+        strict.set_task_info(strict_task);
+        require(!strict.analyze(), "disabled joining changed single-box recognition");
+    });
+    for (const char* file : { "floor-three-entry-next.jpg", "floor-three-entry-close.jpg" }) {
+        test(file, [&] {
+            const auto image = MAA_NS::imread(fixtures / file);
+            require(!image.empty(), "floor entry popup fixture missing");
+            for (const char* dispatcher : { "BlackFlow@Roguelike@MapPrepare-FloorEnterZoomGuard",
+                                           "BlackFlow@Roguelike@NextLevel" }) {
+                const auto name = recognize(image, Task.get(dispatcher)->next);
+                require(name.find("CloseCollection") != std::string::npos, "entry reward did not precede map/title handling");
+            }
+        });
+    }
+    auto fragment = [](std::string text, Rect rect, double score = 0.99) {
+        OCRer::Result result;
+        result.text = std::move(text);
+        result.rect = rect;
+        result.score = score;
+        return result;
+    };
+    OcrJoinProbe joiner;
+    joiner.set_task_info("BlackFlow@Roguelike@NextLevel");
+    test("title fragments are ordered and preserve bounds and weakest confidence", [&] {
+        const auto result = joiner.join_adjacent_(
+            {
+                fragment("诡意行商", { 642, 27, 70, 14 }),
+                fragment("空脉", { 640, 5, 50, 25 }, 0.95),
+                fragment("血色", { 593, 2, 53, 32 }),
+            });
+        require(result.size() == 1 && result[0].text == "血色空脉", "split title not reconstructed");
+        require(result[0].rect == Rect { 593, 2, 97, 32 } && result[0].score == 0.95, "joined evidence corrupted");
+    });
+    test("joining supports a title split into three boxes", [&] {
+        const auto result = joiner.join_adjacent_(
+            {
+                fragment("甜美", { 581, 6, 48, 24 }),
+                fragment("的", { 629, 6, 24, 24 }),
+                fragment("伤口", { 653, 6, 48, 24 }),
+            });
+        require(result.size() == 1 && result[0].text == "甜美的伤口", "three fragments not reconstructed");
+    });
+    test("joining cannot accept a partial title through fuzzy matching", [&] {
+        require(
+            joiner.join_adjacent_({ fragment("血", { 593, 2, 26, 32 }), fragment("色空", { 619, 2, 53, 32 }) }).empty(),
+            "incomplete joined floor title accepted");
+    });
+    for (const auto& [name, rect] : std::vector<std::pair<const char*, Rect>> {
+             { "different line", { 640, 27, 50, 25 } },
+             { "distant node", { 730, 5, 50, 25 } },
+             { "different text size", { 640, 12, 24, 10 } },
+             { "duplicate overlapping box", { 596, 5, 50, 25 } },
+         }) {
+        test(name, [&] {
+            require(
+                joiner.join_adjacent_({ fragment("血色", { 593, 2, 53, 32 }), fragment("空脉", rect) }).empty(),
+                "unrelated boxes established floor identity");
+        });
+    }
+    test("conflicting complete joined titles are rejected", [&] {
+        require(
+            joiner
+                .join_adjacent_(
+                    { fragment("血色", { 593, 2, 53, 32 }),
+                      fragment("空脉", { 640, 5, 50, 25 }),
+                      fragment("甜美的", { 800, 2, 70, 32 }),
+                      fragment("伤口", { 870, 5, 50, 25 }) })
+                .empty(),
+            "conflicting floor identity accepted");
+    });
     test("floor recovery keeps prepared map small", [&] { check_floor_recovery(small, large, false, argv[3]); });
     test("floor recovery handles enlarged map", [&] { check_floor_recovery(small, large, true, argv[3]); });
     std::cout << passed << " passed, " << failed << " failed" << std::endl;

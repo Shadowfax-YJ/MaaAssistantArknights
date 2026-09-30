@@ -15,6 +15,7 @@ public:
         std::vector<std::pair<std::string, std::string>> required; // raw, equivalent
         bool full_match = false;
         bool fuzzy_match = false;
+        bool join_adjacent = false;
         unsigned fuzzy_match_min_length = 0;
         std::vector<std::pair<std::string, std::string>> replace;
         bool replace_full = false;

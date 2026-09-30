@@ -3196,7 +3196,7 @@
         ]
     },
     "BlackFlow@Roguelike@NextLevel": {
-        "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层；失与得选择页也保留层名，循环中必须允许恢复物品选择。",
+        "Doc": "本任务注册了插件 BlackFlowLifecycleTaskPlugin，识别成功后记录当前楼层；楼名被节点文字干扰而拆框时，仅拼接相邻同行片段精确匹配完整层名，保留标题完整高度。失与得选择页也保留层名，循环中必须允许恢复物品选择。",
         "algorithm": "OcrDetect",
         "action": "DoNothing",
         "roi": [524, 0, 246, 42],
@@ -3204,6 +3204,7 @@
         "text": ["玻利瓦尔肤层", "甜美的伤口", "血色空脉", "受害者腐殖", "卡德霍之颅", "未萌生的摇篮"],
         "fullMatch": true,
         "fuzzyMatch": true,
+        "joinAdjacent": true,
         "postDelay": 600,
         "maxTimes": 30,
         "exceededNext": ["BlackFlow@Roguelike@RecoverMap-Enter"],

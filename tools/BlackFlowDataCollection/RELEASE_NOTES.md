@@ -1,8 +1,8 @@
-黑流树海采集版 v1.1.17
+黑流树海采集版 v1.1.18
 
 ### 本次更新
 
-* 修复自动采集在诡意行商刷新确认界面停止的问题。
+* 修复进入新楼层时，楼层标题识别失败导致自动采集停止、楼层记录未更新的问题。
 
 ### 升级
 
@@ -12,8 +12,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.17/MAA-BlackFlow-Data-Collection-v1.1.17-win-x64.zip)
-* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.17/MAA-BlackFlow-Data-Collection-v1.1.17-macos-universal.dmg)
+* [Windows x64 国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.18/MAA-BlackFlow-Data-Collection-v1.1.18-win-x64.zip)
+* [macOS 通用包国内下载](https://img.lubiao.wiki/maa/blackflow/v1.1.18/MAA-BlackFlow-Data-Collection-v1.1.18-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

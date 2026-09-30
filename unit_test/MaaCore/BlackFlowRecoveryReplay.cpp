@@ -338,6 +338,34 @@ int main(int argc, char** argv)
         require(expected.has_value() && *expected == json::value(difficulty_events), "shared fixture drifted");
     });
     merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
+    test("split title updates lifecycle attribution from floor two to three", [&] {
+        require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
+        require(session->set_current_floor(2), "previous floor");
+        require(session->update(map_frame(2, 1, 0)), "previous map");
+        const auto image = MAA_NS::imread(
+            std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-transitions/floor-three-split.png");
+        require(!image.empty(), "split title fixture missing");
+        PipelineAnalyzer analyzer(image);
+        analyzer.set_tasks({ "BlackFlow@Roguelike@NextLevel" });
+        const auto result = analyzer.analyze();
+        require(result.has_value(), "third-floor title not recognized");
+        const auto& title = std::get<OCRer::Result>(result->result);
+        require(title.text == "血色空脉", "wrong canonical floor name");
+        require(
+            plugin.verify(
+                AsstMsg::SubTaskCompleted,
+                json::object {
+                    { "subtask", "ProcessTask" },
+                    { "details",
+                      json::object { { "task", result->task_ptr->name }, { "result", title.to_json() } } } }),
+            "floor callback rejected");
+        require(plugin.run(), "floor callback failed");
+        require(session->current_floor() == 3, "recognized floor retained the previous floor");
+        // The run/map snapshot advances when the next observation is merged, after title confirmation.
+        require(session->update(map_frame(3, 2, 0)), "new-floor observation rejected");
+        require(session->run().floor == 3, "map/log attribution retained the previous floor");
+        require(!session->terminated(), "floor recognition terminated collection");
+    });
     std::cout << passed << " passed, " << failed << " failed" << std::endl;
     return failed ? 1 : 0;
 }

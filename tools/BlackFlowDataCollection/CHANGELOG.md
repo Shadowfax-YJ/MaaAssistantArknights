@@ -1,4 +1,4 @@
-## v1.1.17
+## v1.1.18
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.18 (2026-09-30)</b></summary>
+
+### 修复 | Fix
+
+* 修复进入新楼层时，楼层标题识别失败导致自动采集停止、楼层记录未更新的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.17 (2026-09-30)</b></summary>
 
 ### 修复 | Fix
