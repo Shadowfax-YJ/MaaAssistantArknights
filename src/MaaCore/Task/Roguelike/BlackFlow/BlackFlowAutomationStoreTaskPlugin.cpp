@@ -283,7 +283,7 @@ AutomationStoreIdentity
     if (const auto& context = m_session->page_context(); context.has_value() && context->node != InvalidNodeId) {
         node = context->node;
     }
-    return AutomationStoreIdentity { m_session->map_generation(), node, kind };
+    return AutomationStoreIdentity { m_session->map_section_generation(), node, kind };
 }
 
 std::vector<RunResources::MovementInstance>

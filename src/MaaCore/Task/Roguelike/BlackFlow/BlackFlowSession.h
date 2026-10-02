@@ -165,6 +165,10 @@ public:
     void set_difficulty(int difficulty) noexcept { m_difficulty = difficulty; }
     [[nodiscard]] int difficulty() const noexcept { return m_difficulty; }
     [[nodiscard]] std::uint64_t map_generation() const noexcept { return m_map_generation; }
+
+    // Same physical map after a tree-hole return; a new floor/remembrance map gets a new section.
+    [[nodiscard]] std::uint64_t map_section_generation() const noexcept { return m_map_section_generation; }
+
     [[nodiscard]] std::uint64_t run_revision() const noexcept { return m_run_revision; }
     [[nodiscard]] json::object run_log_state() const;
 
@@ -414,7 +418,7 @@ private:
     bool m_expedition_core_away = false;
     int m_difficulty = 0;
     std::uint64_t m_map_generation = 0;
-    // A tree-hole round trip refreshes perception but resumes the same report section.
+    // A tree-hole round trip refreshes perception but preserves the physical map and report section.
     std::uint64_t m_map_section_generation = 0;
     std::uint64_t m_initial_prediction_generation = 0;
     std::optional<std::uint64_t> m_initial_reveal_checked_generation;

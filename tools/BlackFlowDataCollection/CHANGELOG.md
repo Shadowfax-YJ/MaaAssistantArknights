@@ -1,4 +1,4 @@
-## v1.1.18
+## v1.1.19
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.19 (2026-10-02)</b></summary>
+
+### 修复 | Fix
+
+* 修复从树洞返回后再次进店时，重复刷新商店并导致自动采集停止的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.18 (2026-09-30)</b></summary>
 
 ### 修复 | Fix

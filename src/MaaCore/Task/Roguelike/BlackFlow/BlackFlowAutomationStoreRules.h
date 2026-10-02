@@ -198,7 +198,7 @@ struct AutomationStorePurchaseVerification
 
 struct AutomationStoreIdentity
 {
-    std::uint64_t map_generation = 0;
+    std::uint64_t map_section_generation = 0;
     NodeId node = InvalidNodeId;
     AutomationStoreKind kind = AutomationStoreKind::Eerie;
 
@@ -209,7 +209,7 @@ struct AutomationStoreIdentityHash
 {
     [[nodiscard]] std::size_t operator()(const AutomationStoreIdentity& identity) const noexcept
     {
-        std::size_t result = std::hash<std::uint64_t> {}(identity.map_generation);
+        std::size_t result = std::hash<std::uint64_t> {}(identity.map_section_generation);
         result ^= std::hash<NodeId> {}(identity.node) + 0x9e3779b9U + (result << 6) + (result >> 2);
         result ^= std::hash<unsigned> {}(static_cast<unsigned>(identity.kind)) + 0x9e3779b9U + (result << 6) +
                   (result >> 2);

@@ -7,6 +7,30 @@ namespace asst::blackflow
 {
 struct BlackFlowStoreReplayAccess
 {
+    static auto identity(BlackFlowAutomationStoreTaskPlugin& p, AutomationStoreKind kind)
+    {
+        return p.current_store_identity(kind);
+    }
+
+    // Seed previously verified payments; entering/re-entering still runs the actual plugin callback.
+    static void prior_refreshes(BlackFlowAutomationStoreTaskPlugin& p, AutomationStoreKind kind, int count)
+    {
+        const auto identity = p.current_store_identity(kind);
+        for (int i = 0; i < count; ++i) {
+            p.m_refresh_ledger.record_refresh(identity);
+        }
+    }
+
+    static int refresh_count(const BlackFlowAutomationStoreTaskPlugin& p, AutomationStoreKind kind)
+    {
+        return kind == AutomationStoreKind::Eerie ? p.m_shop_refresh_count : p.m_scrap_shop_refresh_count;
+    }
+
+    static int queued_refresh_index(const BlackFlowAutomationStoreTaskPlugin& p)
+    {
+        return p.m_pending_eerie_store_snapshot.has_value() ? p.m_pending_eerie_store_snapshot->second : -1;
+    }
+
     static auto wallet(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image)
     {
         return p.read_optional_number(image, "BlackFlow@Roguelike@StageTraderInvest-Wallet");

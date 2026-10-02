@@ -3794,7 +3794,7 @@ TEST_CASE("BlackFlow protected natural parts respect minimum sale prices")
     REQUIRE(natural_sale_price_allowed("血蕈", std::nullopt));
 }
 
-TEST_CASE("BlackFlow store refresh ledger persists per shop in one map generation")
+TEST_CASE("BlackFlow store refresh ledger persists per shop in one physical map section")
 {
     AutomationStoreRefreshLedger ledger;
     const AutomationStoreIdentity eerie { 7, 101, AutomationStoreKind::Eerie };
