@@ -51,9 +51,9 @@ try
     var requests = new List<Uri>();
     var fallback = await BlackFlowUpdate.CheckAsync(url => {
         requests.Add(url);
-        return url.Host == "img.lubiao.wiki" ? Task.FromException<string?>(new IOException("offline")) : Task.FromResult<string?>(manifest.ToJsonString());
+        return url.Host == "cdn.lubiao.wiki" ? Task.FromException<string?>(new IOException("offline")) : Task.FromResult<string?>(manifest.ToJsonString());
     }, "x64");
-    Check(fallback.Version == version && requests.Select(x => x.Host).SequenceEqual(new[] { "img.lubiao.wiki", "github.com" }), "CDN feed failure falls back to collection GitHub feed");
+    Check(fallback.Version == version && requests.Select(x => x.Host).SequenceEqual(new[] { "cdn.lubiao.wiki", "github.com" }), "CDN feed failure falls back to collection GitHub feed");
     requests.Clear();
     await BlackFlowUpdate.CheckAsync(url => { requests.Add(url); return Task.FromResult<string?>(manifest.ToJsonString()); }, "x64", "GitHub");
     Check(requests.Count == 1 && requests[0].Host == "github.com", "explicit GitHub selection bypasses CDN");
@@ -61,7 +61,7 @@ try
     string target = Path.Combine(root, "download.zip");
     await BlackFlowUpdate.DownloadAsync(release, target, async (url, path) => {
         requests.Add(url);
-        await File.WriteAllBytesAsync(path, url.Host == "img.lubiao.wiki" ? new byte[data.Length] : data);
+        await File.WriteAllBytesAsync(path, url.Host == "cdn.lubiao.wiki" ? new byte[data.Length] : data);
         return true;
     });
     Check(requests.Count == 2 && File.ReadAllBytes(target).SequenceEqual(data), "corrupt CDN package falls back with original hash and identity verification");

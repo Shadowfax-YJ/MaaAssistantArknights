@@ -28,7 +28,7 @@ internal static class BlackFlowUpdate
 {
     public const string Channel = "blackflow-data-collection";
     public const string MetadataFile = "blackflow-update.json";
-    public const string CdnRoot = "https://img.lubiao.wiki/maa/blackflow";
+    public const string CdnRoot = "https://cdn.lubiao.wiki/maa/blackflow";
     public const string GitHubRoot = "https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/download";
     public const string FeedUrl = CdnRoot + "/latest.json";
 

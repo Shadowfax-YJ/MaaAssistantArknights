@@ -42,9 +42,17 @@ python tools/VerifyBlackFlowRunArchive.py "D:\reports\run-example.zip" --json
 
 ## COS 和 CDN
 
-配置在 `cdn.json`：`https://img.lubiao.wiki/maa/blackflow`，存储桶 `lubiao-wiki-1450633361`，地域 `ap-shanghai`。客户端内置同一地址；更换域名时需同步客户端并先发布过渡版本。
+配置在 `cdn.json`：`https://cdn.lubiao.wiki/maa/blackflow`，存储桶 `lubiao-wiki-1450633361`，地域 `ap-shanghai`。Windows 的 `BlackFlowUpdate.CdnRoot` 和 macOS 的 `MaaUpdaterDelegate.feedURLString` 同步使用这个域名；macOS 构建时的 `SUFeedURL` 由 `cdn.json` 生成。
 
-发布端通过 `global_acceleration: true` 使用 COS 全球加速入口 `lubiao-wiki-1450633361.cos.accelerate.myqcloud.com`，用于 GitHub 运行器到存储桶的上传及发布校验请求。需先在 COS 控制台开启桶的全球加速，通常约 15 分钟生效，使用加速链路会产生额外流量费用。客户端更新和公开下载校验仍使用 `img.lubiao.wiki`；桶地域及目录授权按 `ap-shanghai` 配置。将该开关设为 `false` 可改回 COS 公网区域入口。参见[全球加速说明](https://cloud.tencent.com/document/product/436/38866)和 [Python SDK 接入](https://intl.cloud.tencent.com/zh/document/product/436/46484)。
+从 `img.lubiao.wiki` 迁移到 `cdn.lubiao.wiki` 时，桶和 `maa/blackflow` 对象路径保持不变：
+
+1. 新域名应能通过 HTTPS 访问 `latest.json`、`appcast.xml` 和完整版本包。同步修改上述三个源码位置、下载说明和现有更新测试，再运行 `blackflow-cdn-check` 验证发布身份的上传与刷新权限。
+2. 发布使用新域名的新版本。v1.1.19 及以前的已安装客户端仍访问旧域名，Windows 下载地址还会用其内置 CDN 根路径重新拼接，仅修改清单中的包 URL 无法迁移这些客户端。保留旧域名对同一桶和路径的访问，让旧版本取得新版本清单并完成升级；清单在两个域名上都应保持最新。
+3. 旧域名若已不可用，旧客户端可将更新源切到 GitHub，或手动覆盖升级。显式选择“国内 CDN”时不会自动尝试 GitHub；“自动”仅在访问或解析失败时尝试备用源，旧清单正常返回但版本过时不会触发切换。
+
+更换域名无需更换更新签名密钥。现有版本包保持原字节和哈希，新版本按正常流程重新构建并计算哈希，客户端升级保留用户配置。不要为修改域名重新构建并覆盖已发布的同版本安装包；尤其 v1.1.19 的 macOS 构建证明仍记录旧 `SUFeedURL`，新配置需要配套的新版本构建。
+
+发布端通过 `global_acceleration: true` 使用 COS 全球加速入口 `lubiao-wiki-1450633361.cos.accelerate.myqcloud.com`，用于 GitHub 运行器到存储桶的上传及发布校验请求。需先在 COS 控制台开启桶的全球加速，通常约 15 分钟生效，使用加速链路会产生额外流量费用。客户端更新和公开下载校验仍使用 `cdn.lubiao.wiki`；桶地域及目录授权按 `ap-shanghai` 配置。将该开关设为 `false` 可改回 COS 公网区域入口。参见[全球加速说明](https://cloud.tencent.com/document/product/436/38866)和 [Python SDK 接入](https://intl.cloud.tencent.com/zh/document/product/436/46484)。
 
 - 清单：`/maa/blackflow/latest.json` 和 `/maa/blackflow/appcast.xml`。
 - 版本包及校验表：`/maa/blackflow/vX.Y.Z/`。同版本文件不可覆盖成不同内容。
@@ -59,7 +67,7 @@ python tools/VerifyBlackFlowRunArchive.py "D:\reports\run-example.zip" --json
 上传身份需要两份自定义 CAM 策略。本目录提供的 JSON 已填好当前桶、地域和更新路径，可在 CAM 的策略页面通过策略语法创建，再关联到 Actions 密钥所属的子用户。已有业务策略继续保留，以下策略作为额外授权；同一子用户的权限会累加。
 
 - `cos-publish-policy.json`：只增加 `maa/blackflow/*` 下的读取、查看元数据、上传及分块上传权限。脚本直接初始化分块任务，按 SDK 默认的 1 MiB 大小读取并上传，每块校验 MD5，完成后仍校验对象元数据和公开下载的 SHA256；失败时尝试终止本次分块任务。重试会创建新任务，无需 `ListMultipartUploads` 或 `ListParts` 查询权限。此策略不授予删除对象、修改 ACL 或其他目录的对象读写权限。参见 [COS API 授权策略](https://intl.cloud.tencent.com/zh/document/product/436/30580)。
-- `cdn-purge-policy.json`：只增加 `cdn:PurgeUrlsCache` 操作。腾讯云当前将此接口列为操作级，要求 `resource: "*"`，不能通过资源字段限制到 `img.lubiao.wiki` 或更新目录。这会授予账号范围内的 CDN URL 刷新权限，不包含域名配置修改或源文件写入权限。发布脚本实际只刷新配置中的更新 URL，但这是脚本行为，并非 CAM 的权限隔离。参见[腾讯云 CDN 接口授权粒度](https://cloud.tencent.com/document/product/598/98110)。
+- `cdn-purge-policy.json`：只增加 `cdn:PurgeUrlsCache` 操作。腾讯云当前将此接口列为操作级，要求 `resource: "*"`，不能通过资源字段限制到 `cdn.lubiao.wiki` 或更新目录。这会授予账号范围内的 CDN URL 刷新权限，不包含域名配置修改或源文件写入权限。发布脚本实际只刷新配置中的更新 URL，但这是脚本行为，并非 CAM 的权限隔离。参见[腾讯云 CDN 接口授权粒度](https://cloud.tencent.com/document/product/598/98110)。
 
 当前发布和连通检查流程均需要这两份授权，缺少 CDN 刷新权限也会失败。仅授予 `lubiao-wiki/sources/*` 或 `lubiao-wiki/incoming/shadowfax/*` 不覆盖 `maa/blackflow/*`；这种情况下，检查会在读取 `/maa/blackflow/latest.json` 时返回 `AccessDenied`。关联策略后可以沿用已有的子用户密钥，无需重新生成；尚需重新执行 `blackflow-cdn-check` 验证实际权限及 CDN 回源下载。
 

@@ -1,4 +1,4 @@
-## v1.1.19
+## v1.1.20
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.20 (2026-10-03)</b></summary>
+
+### 改进 | Improved
+
+* Windows 和 macOS 的国内自动更新与安装包下载改用 `cdn.lubiao.wiki`。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.19 (2026-10-02)</b></summary>
 
 ### 修复 | Fix
