@@ -34,7 +34,7 @@ void move_preview_regressions(const std::filesystem::path& repo, Test&& test)
     });
     for (const char* filename : {
              "walk-preview.jpg", "walk-preview-next.jpg", "battle-intel-preview.jpg", "processed-preview.png",
-             "legacy-preview.jpg" }) {
+             "legacy-preview.jpg", "zero-cost/charged-preview.jpg" }) {
         const auto frame = MAA_NS::imread(root / filename);
         require(!frame.empty(), std::string("missing preview: ") + filename);
         for (const char* task : {
@@ -63,6 +63,40 @@ void move_preview_regressions(const std::filesystem::path& repo, Test&& test)
         analyzer.set_task_info("BlackFlow@Roguelike@MovePreviewEnter");
         return analyzer.analyze().has_value();
     };
+    // These independent frames show -0 after M07 selection. A cropped zero must
+    // neither disappear from OCR nor turn into a different action-point cost.
+    for (const char* filename : {
+             "001560-move-preview-failed.jpg", "001587-move-preview-failed.jpg", "001614-move-preview-failed.jpg",
+             "001641-move-preview-failed.jpg", "001668-move-preview-failed.jpg", "001695-move-preview-failed.jpg",
+             "001722-move-preview-failed.jpg", "001749-move-preview-failed.jpg" }) {
+        const std::string name = std::string(filename) + " retains exact processed cost zero";
+        test(name.c_str(), [&] {
+            const auto frame = MAA_NS::imread(root / "zero-cost" / filename);
+            require(!frame.empty(), "zero-cost preview fixture missing");
+            require(recognizes_depart(frame), "zero-cost processed button missing");
+            OCRer analyzer(frame);
+            analyzer.set_task_info("BlackFlow@Roguelike@MovePreviewCost");
+            const auto result = analyzer.analyze();
+            require(result.has_value() && result->size() == 1, "zero cost is not recognized");
+            require(parse_move_preview_action_point_cost(result->front().text) == 0, "zero cost misread");
+        });
+    }
+    for (const char* filename : {
+             "walk-preview.jpg", "processed-preview.png", "legacy-preview.jpg",
+             "zero-cost/001587-move-preview-failed.jpg" }) {
+        const std::string name = std::string(filename) + " missing cost is rejected despite visible button";
+        test(name.c_str(), [&] {
+            auto frame = MAA_NS::imread(root / filename);
+            require(!frame.empty(), "missing-cost source fixture missing");
+            // Synthetic negative: remove only the physical fee text, leaving the
+            // title and depart label intact. Missing evidence is not a free move.
+            frame(cv::Rect(1074, 540, 44, 36)).setTo(cv::Scalar::all(0));
+            require(recognizes_depart(frame), "cost removal changed button visibility");
+            OCRer analyzer(frame);
+            analyzer.set_task_info("BlackFlow@Roguelike@MovePreviewCost");
+            require(!analyzer.analyze().has_value(), "missing cost recognized as a valid fee");
+        });
+    }
     for (const auto& frame : { image, processed }) {
         const char* label = frame.cols == 1280 ? "walk" : "processed";
         const std::string name = std::string(label) + " survives standard 1280x720 capture normalization";

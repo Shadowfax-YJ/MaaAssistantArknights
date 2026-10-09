@@ -1,4 +1,4 @@
-## v1.1.21
+## v1.1.22
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.22 (2026-10-09)</b></summary>
+
+### 修复 | Fix
+
+* 修复部分零行动力消耗的加工品移动反复打开预览、无法继续探索的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.21 (2026-10-09)</b></summary>
 
 ### 修复 | Fix

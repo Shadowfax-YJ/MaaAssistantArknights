@@ -1,8 +1,8 @@
-黑流树海采集版 v1.1.21
+黑流树海采集版 v1.1.22
 
 ### 本次更新
 
-* 修复黑流树海节点预览按钮文案变化后，反复重试、无法继续自动采集的问题，兼容“出发前往”“步行前往”和“加工品前往”。
+* 修复部分零行动力消耗的加工品移动反复打开预览、无法继续探索的问题。
 
 ### 升级
 
@@ -13,8 +13,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.21/MAA-BlackFlow-Data-Collection-v1.1.21-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.21/MAA-BlackFlow-Data-Collection-v1.1.21-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.22/MAA-BlackFlow-Data-Collection-v1.1.22-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.22/MAA-BlackFlow-Data-Collection-v1.1.22-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。
