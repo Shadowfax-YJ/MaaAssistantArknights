@@ -132,6 +132,7 @@ struct Port final : IBlackFlowTaskPort
 
 #include "BlackFlowMerchantInventoryReplay.h"
 #include "BlackFlowStoreIdentityReplay.h"
+#include "BlackFlowMovePreviewReplay.h"
 
 int main(int argc, char** argv)
 {
@@ -340,6 +341,7 @@ int main(int argc, char** argv)
     });
     merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
     store_identity_regressions(std::filesystem::path(argv[1]), test);
+    move_preview_regressions(std::filesystem::path(argv[1]), test);
     test("split title updates lifecycle attribution from floor two to three", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         require(session->set_current_floor(2), "previous floor");

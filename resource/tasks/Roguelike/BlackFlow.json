@@ -2171,7 +2171,11 @@
         "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
     },
     "BlackFlow@Roguelike@HuntedConfirmDestination": {
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "action": "DoNothing",
         "next": ["BlackFlow@Roguelike@HuntedConfirmCompleted"]
@@ -2196,7 +2200,11 @@
     },
     "BlackFlow@Roguelike@HuntedDepart": {
         "Doc": "追猎战斗预览点击出发后先被动观察；按钮持续存在约两秒才允许再次点击，避免转场残影导致连点。",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
@@ -2215,7 +2223,11 @@
     },
     "BlackFlow@Roguelike@HuntedDepartObserve": {
         "baseTask": "BlackFlow@Roguelike@HuntedDepart",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
@@ -2432,7 +2444,11 @@
             "保留本地固定安全点击区和跨区域二次确认弹窗处理；Confirm 的 maxTimes 只统计真实点击。"
         ],
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
         "next": [
@@ -2477,7 +2493,11 @@
     "BlackFlow@Roguelike@MovePreviewConfirmObserve": {
         "Doc": "观察期间只识别、不点击；跨区域二次确认优先处理，按钮连续存在约两秒后才回到真实点击任务。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
@@ -2546,7 +2566,11 @@
         "text": []
     },
     "BlackFlow@Roguelike@MovePreviewEnter": {
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewWait*3"]
     },
@@ -3594,7 +3618,11 @@
     "BlackFlow@Roguelike@ResumeMovePreviewEnter": {
         "Doc": "只有画面确实仍停在可出发的节点预览页时，才撤销节点选择并返回地图；禁止用无条件兜底误伤招募展示页。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "action": "DoNothing",
         "next": ["BlackFlow@Roguelike@CancelNodeSelection"]
@@ -4059,7 +4087,11 @@
     "BlackFlow@Roguelike@StageEncounterBattleDepart": {
         "Doc": "事件选项转入战斗预览后，点击固定安全区并被动观察；按钮持续存在约两秒才允许再次点击，快捷编队阳性后才交回作战链。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
@@ -4078,7 +4110,11 @@
     },
     "BlackFlow@Roguelike@StageEncounterBattleDepartObserve": {
         "baseTask": "BlackFlow@Roguelike@StageEncounterBattleDepart",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",
@@ -4402,7 +4438,11 @@
     "BlackFlow@Roguelike@StageEnterBattleAgain": {
         "Doc": "快捷编队确认并返回节点预览后，点击固定安全区并被动观察；按钮持续存在约两秒才允许再次点击，战斗准备页阳性后才继续。",
         "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "roi": [1122, 520, 153, 65],
         "action": "ClickRect",
         "specificRect": [1135, 525, 70, 70],
@@ -4421,7 +4461,11 @@
     },
     "BlackFlow@Roguelike@StageEnterBattleAgainObserve": {
         "baseTask": "BlackFlow@Roguelike@StageEnterBattleAgain",
-        "template": "BlackFlow@Roguelike@MovePreviewEnter.png",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@DirectDepartInventoryOverloadPrompt",

@@ -55,6 +55,12 @@
 using namespace asst::blackflow;
 using namespace asst::blackflow::perception;
 
+static const std::vector<std::string> ExpectedBlackFlowDepartTemplates {
+    "BlackFlow@Roguelike@MovePreviewEnter.png",
+    "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+    "BlackFlow@Roguelike@MovePreviewProcessedEnter.png",
+};
+
 TEST_CASE("BlackFlow battle intel accepts an unconfigured title without timing out")
 {
     const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
@@ -2732,7 +2738,7 @@ TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
         REQUIRE(destination.get("next", std::vector<std::string> {}) == std::vector<std::string> { completed });
     }
     const auto& hunted_destination = tasks->at("BlackFlow@Roguelike@HuntedConfirmDestination");
-    REQUIRE(hunted_destination.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(hunted_destination.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(
         hunted_destination.get("next", std::vector<std::string> {}) ==
         std::vector<std::string> { "BlackFlow@Roguelike@HuntedConfirmCompleted" });
@@ -2988,8 +2994,7 @@ TEST_CASE("BlackFlow open encounter pages take precedence over the visible floor
     }
 
     const auto& resume_enter = tasks->at("BlackFlow@Roguelike@ResumeMovePreviewEnter");
-    REQUIRE(resume_enter.get("template", std::string {}) ==
-            "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(resume_enter.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(resume_enter.get("next", std::vector<std::string> {}) ==
             std::vector<std::string> { "BlackFlow@Roguelike@CancelNodeSelection" });
     const auto& resume_blocked = tasks->at("BlackFlow@Roguelike@ResumeMovePreviewCannotEnter");
@@ -4444,7 +4449,7 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
     REQUIRE(battle < close);
 
     const auto& depart = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepart");
-    REQUIRE(depart.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(depart.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(depart.get("roi", std::vector<int> {}) == std::vector<int> { 1122, 520, 153, 65 });
     REQUIRE(depart.get("action", std::string {}) == "ClickRect");
     REQUIRE(depart.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
@@ -4458,7 +4463,7 @@ TEST_CASE("BlackFlow encounter options can transition through a battle preview")
             });
 
     const auto& observer = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartObserve");
-    REQUIRE(observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(observer.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(observer.get("action", std::string {}) == "DoNothing");
 
     const auto& destination = tasks->at("BlackFlow@Roguelike@StageEncounterBattleDepartDestination");
@@ -4484,7 +4489,7 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
     REQUIRE(tasks->contains("BlackFlow@Roguelike@StageEnterBattleAgain"));
 
     const auto& reenter = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgain");
-    REQUIRE(reenter.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(reenter.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(reenter.get("roi", std::vector<int> {}) == std::vector<int> { 1122, 520, 153, 65 });
     REQUIRE(reenter.get("action", std::string {}) == "ClickRect");
     REQUIRE(reenter.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
@@ -4500,7 +4505,7 @@ TEST_CASE("BlackFlow re-enters battle from the preview button instead of the con
             std::vector<std::string> { "BlackFlow@Roguelike@RecoverMap-Enter" });
 
     const auto& observer = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainObserve");
-    REQUIRE(observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(observer.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(observer.get("action", std::string {}) == "DoNothing");
 
     const auto& destination = tasks->at("BlackFlow@Roguelike@StageEnterBattleAgainDestination");
@@ -4920,7 +4925,7 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
     REQUIRE(battle_entry == std::vector<std::string> { "BlackFlow@Roguelike@HuntedDepart" });
 
     const auto departure = tasks->at("BlackFlow@Roguelike@HuntedDepart");
-    REQUIRE(departure.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(departure.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(departure.get("action", std::string {}) == "ClickRect");
     REQUIRE(departure.get("specificRect", std::vector<int> {}) == std::vector<int> { 1135, 525, 70, 70 });
     const auto departure_successors = departure.get("next", std::vector<std::string> {});
@@ -4932,7 +4937,7 @@ TEST_CASE("BlackFlow floor three pursuit departs before waiting for quick format
     REQUIRE(overload < observer);
 
     const auto& departure_observer = tasks->at("BlackFlow@Roguelike@HuntedDepartObserve");
-    REQUIRE(departure_observer.get("template", std::string {}) == "BlackFlow@Roguelike@MovePreviewEnter.png");
+    REQUIRE(departure_observer.get("template", std::vector<std::string> {}) == ExpectedBlackFlowDepartTemplates);
     REQUIRE(departure_observer.get("action", std::string {}) == "DoNothing");
 
     const auto& destination = tasks->at("BlackFlow@Roguelike@HuntedDepartDestination");

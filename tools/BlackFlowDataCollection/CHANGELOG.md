@@ -1,4 +1,4 @@
-## v1.1.20
+## v1.1.21
 
 ### Highlights
 
@@ -36,6 +36,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.21 (2026-10-09)</b></summary>
+
+### 修复 | Fix
+
+* 修复黑流树海节点预览按钮文案变化导致自动采集无法继续的问题，兼容“出发前往”“步行前往”和“加工品前往”。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.20 (2026-10-03)</b></summary>
 
 ### 改进 | Improved
