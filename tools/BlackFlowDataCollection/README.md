@@ -83,6 +83,7 @@ python tools/VerifyBlackFlowRunArchive.py "D:\reports\run-example.zip" --json
 
 1. 在 `.github/workflows/ci.yml` 增加 `BLACKFLOW_DATA_COLLECTION_VERSION`，同步编写本目录 `RELEASE_NOTES.md`。已发布版本不可重新打包覆盖。
 2. 运行 `Release Pipeline`，选择 `build_scope=blackflow-packages`。默认只构建和验证两个平台。
+   `macos_runner` 默认使用 `macos-26`；ARM 运行器容量不足时可选择 `macos-26-intel`，仍会构建并校验 arm64、x86_64 通用包。
 3. 正式发布时勾选 `publish_blackflow`。必须使用正式发布代码的提交。工作流将验证 Windows 包身份、两个平台版本、DMG 构建证明、哈希以及签名公钥。
 4. 校验 COS 凭据及已有渠道后，版本包先发布到 `blackflow-vX.Y.Z` Release，随后更新 `blackflow-updates/latest.json` 和 `appcast.xml`。再同步版本包到 COS，经 CDN 公开下载及完整 SHA256 校验成功后更新国内清单。不更改普通版的 Latest Release。发布串行运行且拒绝渠道降级。同一提交、同一字节的包可以重试清单上传；重新构建出不同内容时必须增加版本。COS/CDN 失败会使发布任务失败，已成功发布的 GitHub 版本仍可作为备用源。
 
