@@ -855,8 +855,8 @@ jobs:
           fi
           if [[ '${{ inputs.build_scope }}' == blackflow-* ]]; then
             executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
-            lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$executable"
-            lipo -verify_arch arm64 x86_64 "$core_library"
+            lipo "$app/Contents/MacOS/$executable" -verify_arch arm64 x86_64
+            lipo "$core_library" -verify_arch arm64 x86_64
           fi
           python3 tools/VerifyMaaResourceLoad.py \
             --root "$app/Contents/Resources" \
