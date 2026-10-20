@@ -6,10 +6,12 @@
 #include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowLifecycleTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPluginBase.h"
 #include <iostream>
 #include <stdexcept>
 #include <fstream>
+#include <array>
 #include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 
 using namespace asst;
@@ -133,6 +135,8 @@ struct Port final : IBlackFlowTaskPort
 #include "BlackFlowMerchantInventoryReplay.h"
 #include "BlackFlowStoreIdentityReplay.h"
 #include "BlackFlowMovePreviewReplay.h"
+#include "BlackFlowEmployReplay.h"
+#include "BlackFlowExpeditionPickerReplay.h"
 
 int main(int argc, char** argv)
 {
@@ -152,6 +156,39 @@ int main(int argc, char** argv)
             std::cout << "FAIL " << name << ": " << e.what() << std::endl;
         }
     };
+    struct DlcMovementImage
+    {
+        MovementKind movement;
+        const char* filename;
+        const char* task;
+    };
+    const std::array dlc_movement_images {
+        DlcMovementImage { MovementKind::M13, "m13.png", "BlackFlow@Roguelike@MovementLoaded-M13" },
+        DlcMovementImage { MovementKind::M14, "m14.png", "BlackFlow@Roguelike@MovementLoaded-M14" },
+        DlcMovementImage { MovementKind::M15, "m15.png", "BlackFlow@Roguelike@MovementLoaded-M15" },
+        DlcMovementImage { MovementKind::M16, "m16.png", "BlackFlow@Roguelike@MovementLoaded-M16" },
+    };
+    for (const auto& [movement, filename, task] : dlc_movement_images) {
+        const std::string name = "captured DLC loaded movement " + std::string(to_string(movement));
+        test(name.c_str(), [&] {
+            const auto image = MAA_NS::imread(
+                std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-dlc-movement" / filename);
+            require(!image.empty(), "DLC movement screenshot missing");
+            const auto recognized = recognize_loaded_movement_with_evidence(image);
+            require(recognized.has_value() && recognized->movement == movement, "wrong loaded movement");
+            for (const auto& [other, other_filename, other_task] : dlc_movement_images) {
+                if (other == movement) {
+                    continue;
+                }
+                Matcher matcher(image);
+                matcher.set_task_info(other_task);
+                require(!matcher.analyze().has_value(), "DLC movement icons cross-matched");
+            }
+            cv::Mat masked = image.clone();
+            masked(cv::Rect(1162, 88, 94, 94)).setTo(cv::Scalar(0, 0, 0));
+            require(!recognize_loaded_movement(masked).has_value(), "missing icon produced a loaded movement");
+        });
+    }
     auto config = std::make_shared<RoguelikeConfig>();
     require(config->verify_and_load_params(json::object { { "theme", "BlackFlow" }, { "mode", 30002 } }), "config");
     auto session = std::make_shared<BlackFlowSession>();
@@ -339,9 +376,24 @@ int main(int argc, char** argv)
             json::open(std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-difficulty/events.json");
         require(expected.has_value() && *expected == json::value(difficulty_events), "shared fixture drifted");
     });
+    test("opening candidate pages cannot pass squad confirmation gate", [&] {
+        const auto fixtures = std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-opening";
+        for (int i = 1; i <= 3; ++i) {
+            const auto image = MAA_NS::imread(fixtures / ("candidates-" + std::to_string(i) + ".jpg"));
+            require(!image.empty(), "opening fixture missing");
+            PipelineAnalyzer guarded(image);
+            guarded.set_tasks({ "BlackFlow@Roguelike@SquadConfirm" });
+            require(!guarded.analyze().has_value(), "reward page passed squad page guard");
+            PipelineAnalyzer reward(image);
+            reward.set_tasks({ "BlackFlow@Roguelike@LastReward-EnterPoint" });
+            require(reward.analyze().has_value(), "reward page did not enter logged selection flow");
+        }
+    });
     merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
     store_identity_regressions(std::filesystem::path(argv[1]), test);
     move_preview_regressions(std::filesystem::path(argv[1]), test);
+    employ_capture_regressions(std::filesystem::path(argv[1]), test);
+    expedition_picker_regressions(std::filesystem::path(argv[1]), test);
     test("split title updates lifecycle attribution from floor two to three", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         require(session->set_current_floor(2), "previous floor");

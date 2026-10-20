@@ -18,7 +18,7 @@ namespace asst::blackflow
 inline constexpr std::size_t PreparationCombatSettleDelayMs = 1500;
 
 [[nodiscard]] inline std::optional<std::string> resolve_battle_intel_stage_name(
-    std::string_view captured, const std::vector<std::string>& configured_stage_names)
+    std::string_view captured, const std::vector<std::string>& known_stage_names)
 {
     const auto first = captured.find_first_not_of(" \t\r\n");
     if (first == std::string_view::npos) {
@@ -29,9 +29,9 @@ inline constexpr std::size_t PreparationCombatSettleDelayMs = 1500;
         captured == "未知的诡秘" || captured == "险路恶敌") {
         return std::nullopt;
     }
-    // 情报收集不要求已有自动作战脚本。脚本名称仅用于纠正可唯一匹配的 OCR 误差；
+    // 情报收集不要求已有自动作战脚本。关卡词表仅用于纠正可唯一匹配的 OCR 误差；
     // 未配置的关卡仍保留预览原文，由调用方的连续两帧稳定性检查确认。
-    const auto match = utils::fuzzy_match_ocr_text(captured, configured_stage_names);
+    const auto match = utils::fuzzy_match_ocr_text(captured, known_stage_names);
     return match.accepted ? match.canonical : std::string(captured);
 }
 

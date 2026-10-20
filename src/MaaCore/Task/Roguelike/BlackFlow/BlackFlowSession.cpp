@@ -422,6 +422,7 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
     m_exploration_notebook.reset();
     m_viewport.clear(0, 0);
     m_run = RunState {};
+    m_run.resources.random_reveals_on_processing_move = m_start_squad == "踏足遍历分队" ? 3 : 0;
     m_current_floor.reset();
     m_map_generation = 0;
     m_map_section_generation = 0;
@@ -529,6 +530,7 @@ void BlackFlowSession::set_start_loadout(std::string core_char, std::string squa
     m_start_core_char = std::move(core_char);
     m_start_squad = std::move(squad);
     m_start_roles = std::move(roles);
+    m_run.resources.random_reveals_on_processing_move = m_start_squad == "踏足遍历分队" ? 3 : 0;
 }
 
 void BlackFlowSession::set_start_reward(std::string reward)
@@ -2517,6 +2519,10 @@ bool BlackFlowSession::merge_perception(
             swaddled_eagle_full_reveal);
         const auto observed = observed_initial_floor_reveals(m_map.snapshot(), normalized->current_node);
         const RevealConsistencyResult consistency = compare_move_reveals(expected, observed);
+        const auto extra_merchants = unexpected_merchant_reveals(m_map.snapshot(), consistency.unexpected);
+        const std::string possible_explanation = extra_merchants.empty()
+                                                     ? ""
+                                                     : "额外点亮的商店可能由鸭力板造成，尚未确认持有";
         const auto serialize_ids = [](const auto& ids) {
             std::vector<json::value> result;
             result.reserve(ids.size());
@@ -2538,6 +2544,8 @@ bool BlackFlowSession::merge_perception(
             { "observed_revealed_nodes", serialize_ids(observed) },
             { "missing_revealed_nodes", serialize_ids(consistency.missing) },
             { "unexpected_revealed_nodes", serialize_ids(consistency.unexpected) },
+            { "possible_duck_pressure_board_nodes", serialize_ids(extra_merchants) },
+            { "possible_explanation", possible_explanation },
             { "consistency", consistency.consistent() ? "一致" : "不一致" },
             { "correction", "" },
         };
@@ -2549,7 +2557,8 @@ bool BlackFlowSession::merge_perception(
             append_map_visualization(consistency_details);
             queue_warning(
                 "reveal_consistency_mismatch",
-                "进入新地图时的实际视野与初始揭示规则不一致；已采用当前观测并重新规划",
+                "进入新地图时的实际视野与初始揭示规则不一致；已采用当前观测并重新规划" +
+                    (possible_explanation.empty() ? std::string {} : "；" + possible_explanation),
                 DiagnosticTrigger::PostMoveMismatch,
                 std::move(consistency_details));
         }
@@ -2872,8 +2881,10 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
             m_map.snapshot().upsert_node(std::move(updated));
         }
     }
-    else if (context.floor == m_run.floor && !context.resident_occupied_node.has_value() &&
-             context.identity_from_event_name) {
+    else if (
+        context.floor == m_run.floor && !context.resident_occupied_node.has_value() &&
+        (context.identity_from_event_name || (context.node_type == NodeType::Shop && m_transaction.has_value() &&
+                                              m_transaction->proposal().movement == MovementKind::M16))) {
         const Node* observed = m_map.snapshot().find_node(context.node);
         if (observed != nullptr &&
             !(observed->type == NodeType::Empty && observed->progress == NodeProgress::Completed)) {
@@ -2890,7 +2901,7 @@ void BlackFlowSession::finalize_entered_node(const PageExecutionContext& context
             updated.identity_from_topology = false;
             updated.identity_from_prediction = false;
             updated.prediction_rule.clear();
-            updated.identity_source = "event_name";
+            updated.identity_source = resolved.identity_source;
             updated.detected_by_vision = true;
             m_map.snapshot().upsert_node(std::move(updated));
             m_run.revealed_nodes.emplace(context.node);
@@ -3217,8 +3228,14 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             observed_page_contents,
             m_page_context.has_value() && m_page_context->node_type == NodeType::Incident,
             expected);
+        add_observed_random_reveal_expectations(
+            map_before_move, run_before_move, m_map.snapshot(), committed_move, endpoint_available, expected);
         const auto observed = observed_move_reveals(map_before_move, run_before_move, m_map.snapshot());
         const RevealConsistencyResult consistency = compare_move_reveals(expected, observed);
+        const auto extra_merchants = unexpected_merchant_reveals(m_map.snapshot(), consistency.unexpected);
+        const std::string possible_explanation = extra_merchants.empty()
+                                                     ? ""
+                                                     : "额外点亮的商店可能由鸭力板造成，尚未确认持有";
         const auto serialize_ids = [](const auto& ids) {
             std::vector<json::value> result;
             result.reserve(ids.size());
@@ -3248,6 +3265,8 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             { "missing_revealed_nodes", serialize_ids(consistency.missing) },
             { "unexpected_revealed_nodes", serialize_ids(consistency.unexpected) },
             { "observed_page_contents", json::array(std::move(contents)) },
+            { "possible_duck_pressure_board_nodes", serialize_ids(extra_merchants) },
+            { "possible_explanation", possible_explanation },
             { "consistency", consistency.consistent() ? "一致" : "不一致" },
             { "correction", "" },
         };
@@ -3257,7 +3276,8 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             append_map_visualization(consistency_details);
             queue_warning(
                 "reveal_consistency_mismatch",
-                "本步实际揭示的节点与路线规划预期不一致；已采用当前观测并重新规划",
+                "本步实际揭示的节点与路线规划预期不一致；已采用当前观测并重新规划" +
+                    (possible_explanation.empty() ? std::string {} : "；" + possible_explanation),
                 DiagnosticTrigger::PostMoveMismatch,
                 std::move(consistency_details));
         }
@@ -3269,6 +3289,24 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             error == nullptr ? "map return does not match the committed movement" : *error,
             DiagnosticTrigger::PostMoveMismatch);
         return false;
+    }
+    NodeType actual_landing_type = NodeType::Unknown;
+    if (const Node* landed = map_before_move.find_node(observation.current_node); landed != nullptr) {
+        actual_landing_type = landed->type;
+    }
+    if (m_page_context.has_value() && m_page_context->has_landing &&
+        m_page_context->floor == observation.floor && m_page_context->node == observation.current_node) {
+        actual_landing_type = m_page_context->node_type;
+    }
+    if (observation.floor == run_before_move.floor &&
+        lorentz_eye_activates(run_before_move.resources.lorentz_eye_available, committed_move.movement, actual_landing_type)) {
+        m_run.resources.lorentz_eye_available = false;
+        ++m_run.resources_revision;
+        m_last_plan.reset();
+    }
+    if (committed_move.movement != MovementKind::Walk &&
+        m_run.resources.random_reveals_on_processing_move > 0) {
+        m_last_plan.reset();
     }
     if (m_last_plan.has_value()) {
         // 到达 Applied 才能证明首步真的执行过。尤其对 source == landing 的合法原地移动，
@@ -3440,7 +3478,8 @@ bool BlackFlowSession::apply_movement_panel_observation(
 
 bool BlackFlowSession::apply_movement_inventory_observation(
     const std::vector<RunResources::MovementInstance>& visible_instances,
-    std::string* error)
+    std::string* error,
+    std::optional<bool> lorentz_eye_present)
 {
     BlackFlowSession staged = *this;
     const RunResources resources_before = staged.m_run.resources;
@@ -3461,6 +3500,12 @@ bool BlackFlowSession::apply_movement_inventory_observation(
     }
     staged.m_run.resources.movement_instances = std::move(rebuilt_instances);
     rebuild_movement_aggregates(staged.m_run.resources);
+    if (lorentz_eye_present.has_value() &&
+        staged.m_run.resources.lorentz_eye_available != *lorentz_eye_present) {
+        staged.m_run.resources.lorentz_eye_available = *lorentz_eye_present;
+        staged.m_last_plan.reset();
+        staged.m_pending_candidate.reset();
+    }
     if (staged.m_run.active_movement.has_value() && *staged.m_run.active_movement != MovementKind::Walk &&
         !staged.m_run.resources.movement_pieces.contains(*staged.m_run.active_movement)) {
         staged.m_run.active_movement.reset();
@@ -3615,6 +3660,8 @@ bool BlackFlowSession::should_retry_post_move_reveal_observation(
         observed_contents,
         m_page_context.has_value() && m_page_context->node_type == NodeType::Incident,
         expected);
+    add_observed_random_reveal_expectations(
+        m_map.snapshot(), m_run, observed_map.snapshot(), committed_move, endpoint_available, expected);
     const auto observed = observed_move_reveals(m_map.snapshot(), m_run, observed_map.snapshot());
     return should_retry_transient_reveal_observation(expected, observed, observed_map.snapshot());
 }
@@ -4433,6 +4480,15 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
             }
         }
     }
+    const MovementSpec* entered_movement = find_movement_spec(proposal.movement);
+    const bool confirmed_target_conversion =
+        proposal.controllable && target != nullptr && target->type == NodeType::Incident &&
+        entered_movement != nullptr && entered_movement->transformed_target_type == NodeType::Shop &&
+        entered_page.classified_type == NodeType::Shop && !entered_page.classification_conflict;
+    if (confirmed_target_conversion) {
+        // 保留转换前的地图直到回图结算；页面名称不能沿用原事件标题。
+        map_name = "诡意行商";
+    }
     const bool event_identity_conflict =
         proposal.controllable && target != nullptr && event_effect.resolved_type.has_value() &&
         event_node_type_is_known(target->type) && target->type != *event_effect.resolved_type;
@@ -4442,8 +4498,8 @@ bool BlackFlowSession::commit(EnteredPageObservation entered_page, std::string* 
     const bool entered_identity_conflict =
         entered_page.classification_conflict ||
         (proposal.controllable && target != nullptr && target->identity_revealed && !resident_battle &&
-         entered_page.classified_type.has_value() && entered_page.classified_type != NodeType::HideBattle &&
-         target->type != *entered_page.classified_type);
+         !confirmed_target_conversion && entered_page.classified_type.has_value() &&
+         entered_page.classified_type != NodeType::HideBattle && target->type != *entered_page.classified_type);
     if (entered_identity_conflict || event_identity_conflict) {
         json::object evidence {
             { "floor", page_floor },
@@ -5364,6 +5420,8 @@ json::object BlackFlowSession::run_log_state() const
         { "sellable_scraps", m_run.resources.sellable_scraps },
         { "white_model_birds", m_run.resources.white_model_birds },
         { "painted_liberi", m_run.resources.painted_liberi },
+        { "lorentz_eye_available", m_run.resources.lorentz_eye_available },
+        { "random_reveals_on_processing_move", m_run.resources.random_reveals_on_processing_move },
         { "resources_revision", m_run.resources_revision },
         { "active_movement",
           m_run.active_movement.has_value() ? std::string(to_string(*m_run.active_movement)) : std::string() },

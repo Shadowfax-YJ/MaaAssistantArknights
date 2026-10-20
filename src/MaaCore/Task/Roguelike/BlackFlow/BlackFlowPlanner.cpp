@@ -240,17 +240,22 @@ int unknown_big_nodes_revealed(
     const MapSnapshot& map,
     const OnDemandStateGraph& graph,
     SafetyStateId state,
-    NodeId light)
+    NodeId light,
+    MovementKind movement)
 {
     const Node* light_node = map.find_node(light);
     if (light_node == nullptr || light_node->type != NodeType::Light) {
         return 0;
     }
     int count = 0;
-    for (const NodeId id : map.nodes_within_manhattan(light, LightRevealRadius)) {
+    const bool full_map = !graph.is_light_consumed(state, light) &&
+                          lorentz_eye_activates(graph.state(state).lorentz_eye_available, movement, light_node->type);
+    for (const NodeId id : light_reveal_nodes(map, light, full_map)) {
         const Node* candidate = map.find_node(id);
         if (candidate == nullptr || candidate->type == NodeType::Empty || candidate->identity_revealed ||
             graph.is_completed(state, id) || graph.source_run().revealed_nodes.contains(id) ||
+            (graph.node_mask(id).has_value() &&
+             (graph.state(state).newly_revealed_nodes & *graph.node_mask(id)) != 0) ||
             revealed_by_consumed_light(map, graph, state, id)) {
             continue;
         }
@@ -269,7 +274,12 @@ void add_newly_revealed_nodes(
     bool endpoint_observation_available,
     PlannerNodeMask& revealed)
 {
-    const auto newly_revealed = expected_move_reveals(map, run, move, landing, endpoint_observation_available);
+    RunState projected = run;
+    projected.resources.lorentz_eye_available = graph.state(source).lorentz_eye_available;
+    if (graph.is_light_consumed(source, landing)) {
+        projected.consumed_one_time_nodes.emplace(landing);
+    }
+    const auto newly_revealed = expected_move_reveals(map, projected, move, landing, endpoint_observation_available);
     for (const NodeId id : newly_revealed) {
         // 先前完成而未探明的节点已经消失，后续视野也无法补回其原身份。
         if (graph.is_completed(source, id)) {
@@ -976,7 +986,12 @@ struct FloorThreeBossApproach
     int route_length = 0;
 };
 
-NodeType route_node_type(const MapSnapshot& map, const OnDemandStateGraph& graph, SafetyStateId source, NodeId node);
+NodeType route_node_type(
+    const MapSnapshot& map,
+    const OnDemandStateGraph& graph,
+    SafetyStateId source,
+    NodeId node,
+    MovementKind movement = MovementKind::Walk);
 
 struct FloorThreeBossSearchKey
 {
@@ -1207,11 +1222,24 @@ MobileMarkerLookaheadResult assess_mobile_marker_lookahead(
     return result;
 }
 
-NodeType route_node_type(const MapSnapshot& map, const OnDemandStateGraph& graph, SafetyStateId source, NodeId node)
+NodeType route_node_type(
+    const MapSnapshot& map,
+    const OnDemandStateGraph& graph,
+    SafetyStateId source,
+    NodeId node,
+    MovementKind movement)
 {
     const Node* target = map.find_node(node);
     if (target == nullptr) {
         return NodeType::Unknown;
+    }
+    const MovementSpec* spec = find_movement_spec(movement);
+    if (spec != nullptr && spec->transformed_target_type.has_value()) {
+        return *spec->transformed_target_type;
+    }
+    if (const auto mask = graph.node_mask(node);
+        mask.has_value() && (graph.state(source).projected_shops & *mask) != 0) {
+        return NodeType::Shop;
     }
     if (!target->traversal.repeatable && graph.is_completed(source, node)) {
         return NodeType::Empty;
@@ -1227,7 +1255,7 @@ RouteMetric move_metric(
     NodeId landing = InvalidNodeId)
 {
     const NodeId entered = !move.controllable && landing != InvalidNodeId ? landing : move.target;
-    const bool battle = is_route_battle_node_type(route_node_type(map, graph, source, entered));
+    const bool battle = is_route_battle_node_type(route_node_type(map, graph, source, entered, move.movement));
     const MovementSpec* spec = find_movement_spec(move.movement);
     const bool processing = move.movement != MovementKind::Walk;
     const bool persistent = processing && spec != nullptr && !spec->expires_on_floor_end;
@@ -1271,7 +1299,10 @@ void add_effective_landing(
                                             ? std::string_view {}
                                             : landing_node->marker_type;
         NodeIncome income = node_income_at_floor(
-            route_node_type(map, graph, source, landing), landing_node->floor, marker, movement);
+            route_node_type(map, graph, source, landing, movement),
+            landing_node->floor,
+            marker,
+            movement);
         if (!first_move && (possible_residents & *bit) != 0) {
             income = conservative_resident_income(income);
         }
@@ -1704,14 +1735,18 @@ RouteLabel best_route_after_outcome(
     const NodeId entered_node =
         root_move.controllable ? root_move.target : graph.state(root_outcome.successor).node;
     if (ranking_options.minimize_intermediate_interactions && !graph.is_terminal(root_outcome.successor)) {
-        initial.intermediate_interactions =
-            intermediate_interaction_cost(route_node_type(map, graph, graph.initial_state(), entered_node));
+        initial.intermediate_interactions = intermediate_interaction_cost(
+            route_node_type(map, graph, graph.initial_state(), entered_node, root_move.movement));
     }
     if (const Node* target = map.find_node(entered_node); target != nullptr) {
         const bool endpoint_observation_available =
             move_endpoint_observation_available(root_move.terminal_on_completion, remaining_action_points);
         Node entered = *target;
-        entered.type = route_node_type(map, graph, graph.initial_state(), target->id);
+        entered.type = route_node_type(map, graph, graph.initial_state(), target->id, root_move.movement);
+        if (entered.type == NodeType::Shop && target->type != NodeType::Shop) {
+            entered.name = "诡意行商";
+            entered.badged = false;
+        }
         if (entered.type == NodeType::Empty) {
             entered.name = EmptyNodeName;
         }
@@ -1723,7 +1758,7 @@ RouteLabel best_route_after_outcome(
             initial.progress,
             initial.counted,
             endpoint_observation_available
-                ? unknown_big_nodes_revealed(map, graph, graph.initial_state(), entered.id)
+                ? unknown_big_nodes_revealed(map, graph, graph.initial_state(), entered.id, root_move.movement)
                 : 0);
         initial.trace = traces.append(InvalidRouteTraceId, target->id, std::move(initial_step));
         add_newly_revealed_nodes(
@@ -1872,12 +1907,12 @@ RouteLabel best_route_after_outcome(
             next.effective_nodes,
             next.possible_residents);
         if (ranking_options.minimize_intermediate_interactions && !graph.is_terminal(outcome.successor)) {
-            next.intermediate_interactions +=
-                intermediate_interaction_cost(route_node_type(
-                    map,
-                    graph,
-                    current.state,
-                    action.candidate.controllable ? action.candidate.target : graph.state(outcome.successor).node));
+            next.intermediate_interactions += intermediate_interaction_cost(route_node_type(
+                map,
+                graph,
+                current.state,
+                action.candidate.controllable ? action.candidate.target : graph.state(outcome.successor).node,
+                action.candidate.movement));
         }
         MoveCandidate planned_move = action.candidate;
         planned_move.action_point_requirement = requirement;
@@ -1895,7 +1930,11 @@ RouteLabel best_route_after_outcome(
             const bool endpoint_observation_available =
                 move_endpoint_observation_available(action.candidate.terminal_on_completion, remaining);
             Node entered = *target;
-            entered.type = route_node_type(map, graph, current.state, target->id);
+            entered.type = route_node_type(map, graph, current.state, target->id, action.candidate.movement);
+            if (entered.type == NodeType::Shop && target->type != NodeType::Shop) {
+                entered.name = "诡意行商";
+                entered.badged = false;
+            }
             if (entered.type == NodeType::Empty) {
                 entered.name = EmptyNodeName;
             }
@@ -1906,7 +1945,9 @@ RouteLabel best_route_after_outcome(
                 mission,
                 next.progress,
                 next.counted,
-                endpoint_observation_available ? unknown_big_nodes_revealed(map, graph, current.state, entered.id) : 0);
+                endpoint_observation_available
+                    ? unknown_big_nodes_revealed(map, graph, current.state, entered.id, action.candidate.movement)
+                    : 0);
             entered_trace_node = target->id;
             add_newly_revealed_nodes(
                 map,
@@ -1981,6 +2022,9 @@ RouteLabel best_route_after_outcome(
                 break;
             case MovementRange::FullMap:
                 range_weight = 8;
+                break;
+            case MovementRange::FullRowColumn:
+                range_weight = 6;
                 break;
             }
             const int charges = state.movement_charges[static_cast<std::size_t>(movement.kind)];
@@ -2406,12 +2450,12 @@ RouteLabel best_route_after_outcome(
                 next.effective_nodes,
                 next.possible_residents);
             if (ranking_options.minimize_intermediate_interactions && !graph.is_terminal(outcome.successor)) {
-                next.intermediate_interactions +=
-                    intermediate_interaction_cost(route_node_type(
-                        map,
-                        graph,
-                        current.state,
-                        action.candidate.controllable ? action.candidate.target : graph.state(outcome.successor).node));
+                next.intermediate_interactions += intermediate_interaction_cost(route_node_type(
+                    map,
+                    graph,
+                    current.state,
+                    action.candidate.controllable ? action.candidate.target : graph.state(outcome.successor).node,
+                    action.candidate.movement));
             }
             MoveCandidate planned_move = action.candidate;
             planned_move.action_point_requirement = requirement;
@@ -2429,7 +2473,11 @@ RouteLabel best_route_after_outcome(
                 const bool endpoint_observation_available =
                     move_endpoint_observation_available(action.candidate.terminal_on_completion, remaining);
                 Node entered = *target;
-                entered.type = route_node_type(map, graph, current.state, target->id);
+                entered.type = route_node_type(map, graph, current.state, target->id, action.candidate.movement);
+                if (entered.type == NodeType::Shop && target->type != NodeType::Shop) {
+                    entered.name = "诡意行商";
+                    entered.badged = false;
+                }
                 if (entered.type == NodeType::Empty) {
                     entered.name = EmptyNodeName;
                 }
@@ -2441,7 +2489,7 @@ RouteLabel best_route_after_outcome(
                     next.progress,
                     next.counted,
                     endpoint_observation_available
-                        ? unknown_big_nodes_revealed(map, graph, current.state, entered.id)
+                        ? unknown_big_nodes_revealed(map, graph, current.state, entered.id, action.candidate.movement)
                         : 0);
                 entered_trace_node = target->id;
                 add_newly_revealed_nodes(
@@ -2508,12 +2556,24 @@ RouteLabel best_route_after_outcome(
     return materialize(best.value_or(initial));
 }
 
-ReachableFeatures planned_route_features(const MapSnapshot& map, const std::vector<NodeId>& route)
+ReachableFeatures planned_route_features(
+    const MapSnapshot& map, const std::vector<NodeId>& route, const std::vector<PlannedRouteStep>& steps)
 {
     ReachableFeatures result;
+    std::unordered_set<NodeId> converted_shops;
+    for (const PlannedRouteStep& step : steps) {
+        const MovementSpec* spec = find_movement_spec(step.move.movement);
+        if (spec != nullptr && spec->transformed_target_type == NodeType::Shop) {
+            converted_shops.emplace(step.move.target);
+        }
+    }
     for (const NodeId id : route) {
         const Node* node = map.find_node(id);
         if (node == nullptr || node->type == NodeType::Empty || node->progress == NodeProgress::Removed) {
+            continue;
+        }
+        if (converted_shops.contains(id)) {
+            result.node_types.emplace(to_string(NodeType::Shop));
             continue;
         }
         result.node_types.emplace(to_string(node->type));
@@ -2571,6 +2631,15 @@ FactStore on_demand_candidate_facts(
     FactStore facts;
     const MoveCandidate& move = root_action.candidate;
     const Node* target = map.find_node(move.target);
+    Node converted;
+    const MovementSpec* movement = find_movement_spec(move.movement);
+    if (target != nullptr && movement != nullptr && movement->transformed_target_type.has_value()) {
+        converted = *target;
+        converted.type = *movement->transformed_target_type;
+        converted.name = "诡意行商";
+        converted.badged = false;
+        target = &converted;
+    }
     facts.set("candidate.node_type", std::string(target == nullptr ? "unclassified" : to_string(target->type)));
     facts.set("candidate.roaming_resident_allowed", false);
     facts.set("candidate.node_name", target == nullptr ? std::string() : target->name);
@@ -2588,7 +2657,7 @@ FactStore on_demand_candidate_facts(
         "candidate.light_reveal_count",
         static_cast<std::int64_t>(
             target != nullptr && target->type == NodeType::Light
-                ? unknown_big_nodes_revealed(map, graph, graph.initial_state(), target->id)
+                ? unknown_big_nodes_revealed(map, graph, graph.initial_state(), target->id, move.movement)
                 : 0));
 
     set_route_feature_facts(facts, ReachableFeatures {}, ReachableFeatures {});
@@ -2774,7 +2843,8 @@ PreviewSafetyVerification BlackFlowPlanner::verify_previewed_move_impl(
                 return result;
             }
             newly_revealed_unknown_big_nodes =
-                unknown_big_nodes_revealed(*request.map, source_graph, source_graph.initial_state(), entered->id);
+                unknown_big_nodes_revealed(
+                    *request.map, source_graph, source_graph.initial_state(), entered->id, move.movement);
         }
 
         const auto advanced = safety_goal->advance_node(
@@ -3243,7 +3313,7 @@ BlackFlowPlan BlackFlowPlanner::plan_impl(const BlackFlowPlanRequest& request) c
                 static_cast<int>(node_mask_size(route.revealed_nodes)) + route.continuation.revealed_delta);
             guaranteed_effective_nodes =
                 std::min(guaranteed_effective_nodes, route.effective_node_score + route.continuation.effective_delta);
-            const ReachableFeatures outcome_features = planned_route_features(*request.map, route.route);
+            const ReachableFeatures outcome_features = planned_route_features(*request.map, route.route, route.steps);
             merge_route_union(possible_route_features, outcome_features);
             if (!guaranteed_route_features.has_value()) {
                 guaranteed_route_features = outcome_features;

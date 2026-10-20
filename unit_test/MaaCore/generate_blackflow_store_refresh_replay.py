@@ -18,4 +18,7 @@ signature='bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt(
 receipt=extract(src,signature) if signature in src else ''
 # Replace only clock I/O so deadline tests run deterministically without real sleeps.
 receipt=receipt.replace('std::chrono::steady_clock::now()', 'ReplayClock::now()')
-a.output.write_text(template.replace('/*DISPATCH*/',branches).replace('/*RECEIPT*/',receipt),encoding='utf-8')
+sale = extract(src, '    if (work == PendingWork::ShopSellConfirmed)')
+sale_decision = extract(src, '        if (m_shop_sale_refresh_pending)') if 'if (m_shop_sale_refresh_pending)' in src else ''
+dispatch = sale + '\n    if (work == PendingWork::ShopSellDecision) {\n' + sale_decision + '\n    }\n' + branches
+a.output.write_text(template.replace('/*DISPATCH*/',dispatch).replace('/*RECEIPT*/',receipt),encoding='utf-8')

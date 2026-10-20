@@ -12,6 +12,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
 using namespace asst;
 using namespace asst::blackflow;
 void check(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
@@ -157,6 +158,15 @@ struct BlackFlowNodeEvidenceTaskPlugin {
 /*REWARD*/
 /*GUARD*/
 namespace start_reward_replay {
+enum class RoguelikeCustomType { Reward, CoreChar, CoreCharVoucher };
+enum class RoguelikeTheme { BlackFlow };
+enum class RoguelikeMode { BlackFlowAutomationCollection };
+struct Config {
+    RoguelikeTheme get_theme(){return RoguelikeTheme::BlackFlow;}
+    RoguelikeMode get_mode(){return RoguelikeMode::BlackFlowAutomationCollection;}
+};
+struct ParentTask { bool enabled=true;void set_enable(bool value){enabled=value;} };
+struct AbstractRoguelikeTaskPlugin { static bool on_run_fails(){return true;} };
 // Only device/OCR I/O is injected; run() contains the extracted production start-reward branch.
 struct Controller {
     int stage=0, clicks=0;
@@ -184,10 +194,16 @@ struct OCRer {
     }
 };
 struct Plugin {
+    Config config;
+    Config* m_config=&config;
+    ParentTask parent;
+    ParentTask* m_task_ptr=&parent;
+    RoguelikeCustomType m_waiting_to_run=RoguelikeCustomType::Reward;
     Controller controller;
     std::uint64_t m_start_reward_observation_index=0;
     std::function<void(std::string_view)> m_blackflow_start_reward_observer;
-    std::function<void(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::string fail_save;
     std::vector<std::string> confirmed;
     std::vector<json::value> events;
     Plugin() {
@@ -198,21 +214,26 @@ struct Plugin {
             {{1130,420,20,20},0.5,"???"}};
         m_blackflow_start_reward_observer=[this](std::string_view name){confirmed.emplace_back(name);};
         m_blackflow_start_reward_evidence_observer=[this](std::string_view kind,json::object details,std::shared_ptr<cv::Mat> image){
-            const bool selected=kind=="selected";
+            if(kind==fail_save)return false;
+            const bool selected=kind=="selected", confirming=kind=="confirming", failed=kind=="failed";
+            if(confirming)check(!image&&controller.stage==1,"pending identity must precede confirmation click");
             if(selected){check(!image&&controller.stage==2,"selection must be confirmed before recording");}
-            else{
+            else if(kind=="candidates"){
                 check(controller.clicks==0,"candidate evidence must be saved before clicking");
                 check(image&&!image->empty()&&image->at<cv::Vec3b>(0,0)[0]==0,"must preserve the actual OCR frame");
             }
             events.emplace_back(json::object{{"action","start.reward."+std::string(kind)},
-                {"phase",selected?"completed":"observed"},
-                {"outcome",selected?"confirmed":details.get("recognition_status",std::string())},
-                {"details",std::move(details)},{"level","INFO"},
+                {"phase",confirming?"before-click":selected||failed?"completed":"observed"},
+                {"outcome",selected?"confirmed":failed?"failed":confirming?"pending":details.get("recognition_status",std::string())},
+                {"details",std::move(details)},{"level",failed?"WARN":"INFO"},
                 {"task","RoguelikeCustomStartTaskPlugin"},{"state",json::object{}},{"floor",0},{"map_generation",0}});
+            return true;
         };
     }
     Controller* ctrler(){return &controller;}
     bool sleep(int){return true;}
+    bool need_exit(){return false;}
+    bool on_run_fails() /*START_REWARD_FAILURE*/
     bool run() {
         const bool automation_collection=true;
         /*START_REWARD*/
@@ -224,8 +245,10 @@ namespace inventory_replay {
 constexpr std::string_view InventoryObservationAction="observe-action", InventoryCloseTask="close", InventoryCheckTask="reopen";
 struct Session {
     int inventory=5, commits=0;
-    bool failed=false;
-    bool apply_movement_inventory_observation(const std::vector<RunResources::MovementInstance>& items,std::string*) {inventory=int(items.size());++commits;return true;}
+    bool failed=false, eye=false;
+    bool apply_movement_inventory_observation(const std::vector<RunResources::MovementInstance>& items,std::string*,std::optional<bool> observed_eye={}) {
+        inventory=int(items.size());++commits;if(observed_eye)eye=*observed_eye;return true;
+    }
     void mark_map_preserved_after_inventory(){}
     void fail(std::string,std::string,FailureDisposition){failed=true;}
 };
@@ -235,7 +258,7 @@ struct Port {
 };
 struct BlackFlowMovementTaskPlugin {
     struct InventoryFrame {
-        bool page_lost=false;
+        bool page_lost=false, lorentz_eye_found=false;
         std::vector<RunResources::MovementInstance> movement_instances;
         std::optional<MovementKind> loaded_movement;
     };
@@ -253,9 +276,134 @@ struct BlackFlowMovementTaskPlugin {
 /*INVENTORY_OBSERVE*/
 }
 
+// The scan loop and title-analysis method below are extracted from production.
+// Only controller frames, OCR results and movement-star I/O are injected.
+namespace whole_inventory_replay {
+constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
+constexpr std::string_view LoadedText="装载中";
+constexpr int MaxFrameRecognitionAttempts=2, RecognitionRetryDelay=200, InventoryNewRightColumnMinimumX=760;
+constexpr int InventoryLoadedMarkerMaximumVerticalGap=32;
+constexpr double InventoryUnchangedFrameMaximumDifference=3.0;
+struct OcrTaskInfo {};
+struct { template<class T> std::shared_ptr<T> get(std::string) const{return std::make_shared<T>();} } Task;
+struct OCRer {
+    cv::Mat image;
+    inline static std::vector<std::vector<TextRect>> pages;
+    explicit OCRer(const cv::Mat& value):image(value){}
+    void set_task_info(std::shared_ptr<OcrTaskInfo>){}
+    void set_required(std::vector<std::string>){}
+    std::optional<std::vector<TextRect>> analyze(){return pages.at(image.at<cv::Vec3b>(0,0)[0]/20);}
+};
+bool movement_inventory_page_visible(const cv::Mat& image){return !image.empty()&&image.at<cv::Vec3b>(0,0)[2]==0;}
+std::optional<std::string_view> inventory_boundary_label(std::string_view name){
+    if(name=="板藤")return "自然物";
+    if(name=="洛伦茨之眼"||name=="白模狗")return "概念体";
+    if(name=="待收集零件")return "空格";
+    return {};
+}
+std::optional<std::pair<int,std::vector<MovementInventoryStarSlot>>>
+recognize_movement_inventory_remaining_uses(const cv::Mat&,const Rect&,int count){return std::pair{count,std::vector<MovementInventoryStarSlot>{}};}
+/*INVENTORY_REGION*/
+/*INVENTORY_NAMES_UNCHANGED*/
+struct Controller {
+    int page=0, last_page=0;
+    cv::Mat get_image(){return cv::Mat(720,1280,CV_8UC3,cv::Scalar(page*20,0,0));}
+};
+struct BlackFlowMovementTaskPlugin {
+    enum class InventoryAnalysisOutcome {Recognized,NoCandidate,Failed};
+    struct InventoryItem {
+        MovementKind movement;Rect name_rect;double name_score;int remaining_uses;
+        std::vector<MovementInventoryStarSlot> star_slots;bool loaded=false;int scan_page=0,inventory_index=0;
+    };
+    struct InventoryBoundaryItem {std::string name,boundary_label;Rect name_rect;double name_score;int scan_page=0;};
+    struct InventoryFrame {
+        std::vector<RunResources::MovementInstance> movement_instances;
+        std::optional<MovementKind> loaded_movement;
+        std::vector<InventoryItem> items;
+        std::vector<InventoryBoundaryItem> type_boundary_items;
+        std::vector<std::pair<int,std::shared_ptr<cv::Mat>>> images;
+        bool scan_complete=false,lorentz_eye_found=false,has_clipped_item=false,page_lost=false;
+    };
+    Controller controller;
+    bool cancelled=false;
+    Controller* ctrler(){return &controller;}
+    bool need_exit(){return cancelled;}
+    bool sleep(int){return !cancelled;}
+    bool run_fixed_task(std::string_view task){
+        if(cancelled)return false;
+        controller.page=task==InventorySwipeToStartTask?std::max(0,controller.page-1):std::min(controller.last_page,controller.page+1);
+        return true;
+    }
+    static const MovementSpec* movement_from_name(std::string_view name){
+        for(const auto& spec:movement_specs())if(spec.name==name)return &spec;
+        return nullptr;
+    }
+    static std::vector<std::string> inventory_ocr_candidates(){return {};}
+    bool scan_inventory_frame(InventoryFrame&,std::string*);
+    InventoryAnalysisOutcome analyze_inventory_frame(const cv::Mat&,InventoryFrame&,int,std::string*) const;
+};
+/*INVENTORY_SCAN*/
+/*INVENTORY_ANALYZE*/
+TextRect title(std::string text,int x=900){return {{x,258,140,24},0.99,std::move(text)};}
+void configure(BlackFlowMovementTaskPlugin& plugin,std::vector<std::vector<TextRect>> pages){
+    OCRer::pages=std::move(pages);plugin.controller.last_page=int(OCRer::pages.size())-1;
+    plugin.controller.page=plugin.controller.last_page;
+}
+}
+
 int main(int argc,char** argv) {
     int failed=0,passed=0;
     auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    test("whole inventory resets to start and continues past goods and concepts to the eye",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")},{title("洛伦茨之眼")}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.lorentz_eye_found&&frame.movement_instances.size()==1,"stopped at type boundary or failed to scan from start");
+        check(p.controller.page==3,"did not reach the actual tail");
+    });
+    test("whole inventory detects the eye in an overlapping left column at the tail",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("洛伦茨之眼",600)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error)&&frame.lorentz_eye_found,"right-column filter discarded positive eye evidence");
+    });
+    test("whole inventory confirms absence only after reaching the tail",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error)&&frame.scan_complete&&!frame.lorentz_eye_found,"no-eye full inventory was not recognized");
+    });
+    test("whole inventory rejects an unreadable last page",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"OCR miss became confirmed absence");
+    });
+    test("whole inventory clipped eye title cannot complete the scan",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("洛伦茨之眼",1240),title("白模狗",600)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete&&!frame.lorentz_eye_found,"clipped eye became positive or confirmed absent");
+    });
+    test("employ screenshot must be saved before leave click",[]{BlackFlowNodeEvidenceTaskPlugin p;
+        p.m_pending_task="BlackFlow@Roguelike@EmployLeave";
+        p.controller.frames={cv::Mat::zeros(720,1280,CV_8UC3)};
+        bool saved=false;
+        p.m_capture=[&](auto task,auto,auto){check(task=="BlackFlow@Roguelike@EmployLeave"&&p.controller.clicks==0,"left before save");saved=true;return true;};
+        p._run();check(saved&&p.controller.clicks==1,"successful save did not leave");});
+    test("employ capture or disk failure must not leave",[]{BlackFlowNodeEvidenceTaskPlugin p;
+        p.m_pending_task="BlackFlow@Roguelike@EmployLeave";
+        p.m_capture=[](auto,auto,auto){return false;};
+        p._run();check(p.controller.clicks==0&&p.m_pending_task.empty(),"failed capture clicked leave");});
+    test("employ cancellation after save must not leave",[]{BlackFlowNodeEvidenceTaskPlugin p;
+        p.m_pending_task="BlackFlow@Roguelike@EmployLeave";
+        p.m_capture=[&](auto,auto,auto){p.controller.cancelled=true;return true;};
+        p._run();check(p.controller.clicks==0,"cancelled task clicked leave");});
+    test("employ stale leave button is rechecked after save",[]{BlackFlowNodeEvidenceTaskPlugin p;
+        p.m_pending_task="BlackFlow@Roguelike@EmployLeave";
+        p.controller.frames={cv::Mat{}};
+        p._run();check(p.controller.clicks==0,"stale button clicked");});
     test("lost inventory page does not erase previous resources",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
         p.observe_inventory();check(!p.m_session->failed&&p.m_session->inventory==5&&p.m_session->commits==0&&Task.next=="reopen","map scan committed or failed instead of reopening");});
     test("inventory observation recovery is bounded",[]{inventory_replay::BlackFlowMovementTaskPlugin p;
@@ -324,8 +472,13 @@ int main(int argc,char** argv) {
         Matcher::reward_matches=[&](const cv::Mat& image){return cv::norm(image,after,cv::NORM_INF)!=0;};p.run();
         check(p.controller.clicks==1&&p.outcomes==std::vector<std::string>{"page_changed"},"destination page must count as transition");});
     std::vector<json::value> start_reward_events;
+    test("opening popup reached through squad task is still a start reward",[]{
+        check(collection_popup_source("BlackFlow@Roguelike@SquadConfirm@BlackFlow@Roguelike@CloseCollection")
+            ==CollectionPopupSource::StartReward,"task name invented a squad reward source");});
+    test("failed start reward plugin prevents parent fallback clicks",[]{start_reward_replay::Plugin p;
+        check(!p.on_run_fails()&&!p.parent.enabled,"failed reward plugin left unrecorded confirmation fallback enabled");});
     test("start reward retains every raw OCR candidate and the confirmed selection",[&]{start_reward_replay::Plugin p;
-        check(p.run(),"normal reward confirmation failed");check(p.events.size()==2,"candidate and selection events missing");
+        check(p.run(),"normal reward confirmation failed");check(p.events.size()==3,"candidate, pending and selection events missing");
         const auto& details=p.events[0].at("details");const auto& candidates=details.at("candidates").as_array();
         check(details.get("candidate_count",0)==5&&candidates.size()==5,"unselected or unknown OCR candidates were dropped");
         const auto& raw=*start_reward_replay::OCRer::titles;
@@ -341,17 +494,17 @@ int main(int argc,char** argv) {
         check(details.at("planned_selection").get("detected_index",-1)==1,"planned selection differs from click");
         check(p.controller.clicked==raw[1].rect&&p.controller.clicks==2,"existing click behavior changed");
         check(p.confirmed==std::vector<std::string>{"襁褓骏鹰"},"confirmed reward changed");
-        check(p.events[1].at("details").get("selected_index",-1)==1,"selected candidate index missing");
-        check(p.events[1].at("details").get("observation_index",0)==details.get("observation_index",-1),"selection not linked to candidates");
+        check(p.events[2].at("details").get("selected_index",-1)==1,"selected candidate index missing");
+        check(p.events[2].at("details").get("observation_index",0)==details.get("observation_index",-1),"selection not linked to candidates");
         check(start_reward_replay::OCRer::title_reads==1,"logging must not trigger another OCR");
         start_reward_events=p.events;});
     test("failed confirmation keeps candidates without claiming a reward",[&]{start_reward_replay::Plugin p;p.controller.confirm_ok=false;
         check(!p.run(),"failed confirmation reported success");
-        check(p.events.size()==1&&p.confirmed.empty(),"failed confirmation must record candidates only");
+        check(p.events.size()==4&&p.confirmed.empty()&&p.events.back().get("action","")=="start.reward.failed","failed confirmation must keep pending identity and failure");
         check(p.controller.clicks==3,"confirmation retry budget changed");
         start_reward_events.insert(start_reward_events.end(),p.events.begin(),p.events.end());});
     test("missing confirmation prompt does not claim a reward",[]{start_reward_replay::Plugin p;start_reward_replay::OCRer::show_prompt=false;
-        check(!p.run()&&p.events.size()==1&&p.confirmed.empty(),"missing prompt must keep only candidates");
+        check(!p.run()&&p.events.size()==2&&p.confirmed.empty(),"missing prompt must keep candidates and failure");
         check(p.controller.clicks==1,"missing prompt dispatched another click");});
     test("OCR failure records an empty observation",[&]{start_reward_replay::Plugin p;start_reward_replay::OCRer::titles=std::nullopt;
         check(!p.run()&&p.events.size()==1&&p.controller.clicks==0,"OCR failure evidence missing or clicked blindly");
@@ -368,10 +521,23 @@ int main(int argc,char** argv) {
     test("repeat selection uses a new observation index",[]{start_reward_replay::Plugin p;
         check(p.run(),"first reward selection failed");p.controller.stage=0;p.controller.clicks=0;
         start_reward_replay::OCRer::titles=std::vector<TextRect>{{{300,400,140,28},0.99,"调查预付款"}};
-        check(p.run()&&p.events.size()==4,"second reward selection lost its candidate or confirmation");
-        check(p.events[2].at("details").get("observation_index",0)==2&&p.events[3].at("details").get("observation_index",0)==2,"observations cannot be paired");
-        check(p.events[2].at("details").get("candidate_count",0)==1,"second page inherited old candidates");
+        check(p.run()&&p.events.size()==6,"second reward selection lost its candidate or confirmation");
+        check(p.events[3].at("details").get("observation_index",0)==2&&p.events[5].at("details").get("observation_index",0)==2,"observations cannot be paired");
+        check(p.events[3].at("details").get("candidate_count",0)==1,"second page inherited old candidates");
         check(p.confirmed==std::vector<std::string>{"襁褓骏鹰","调查预付款"},"multiple confirmed rewards changed");});
+    test("candidate save failure stops before selecting",[]{start_reward_replay::Plugin p;p.fail_save="candidates";
+        check(!p.run()&&p.controller.clicks==0&&p.confirmed.empty(),"unsaved candidates allowed a selection");});
+    test("pending identity save failure stops before confirming",[]{start_reward_replay::Plugin p;p.fail_save="confirming";
+        check(!p.run()&&p.controller.clicks==1&&p.confirmed.empty(),"unsaved identity allowed reward receipt");});
+    test("final record failure retains pending identity and stops parent",[]{start_reward_replay::Plugin p;p.fail_save="selected";
+        check(!p.run()&&p.controller.stage==2&&p.confirmed.empty(),"failed durable selection was committed to session");
+        check(p.events.size()==3&&p.events[1].get("action","")=="start.reward.confirming","pending identity lost after reward receipt");
+        check(p.events.back().at("details").get("failure_reason","")=="selection_evidence_not_saved","failure reason missing");
+        check(!p.on_run_fails()&&!p.parent.enabled,"failed save continued with fallback clicks");});
+    test("hydra title is recorded without changing the selection policy",[]{start_reward_replay::Plugin p;
+        start_reward_replay::OCRer::titles=std::vector<TextRect>{{{120,400,140,28},0.99,"襁褓九头蛇"},{{380,400,140,28},0.99,"林间代步"}};
+        check(p.run()&&p.confirmed==std::vector<std::string>{"林间代步"},"recording Hydra changed preference");
+        check(p.events[0].at("details").at("candidates").as_array()[0].get("canonical","")=="襁褓九头蛇","known offered option omitted");});
     test("start reward selection works without an evidence observer",[]{start_reward_replay::Plugin p;p.m_blackflow_start_reward_evidence_observer={};
         check(p.run()&&p.controller.clicks==2&&p.confirmed.size()==1,"optional logger changed gameplay");});
     if(argc>2&&!failed){

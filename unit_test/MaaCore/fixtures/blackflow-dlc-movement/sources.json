@@ -1,0 +1,74 @@
+[
+  {
+    "movement": "M13",
+    "sourceFile": "MuMu-20261016-220121-651.png",
+    "fixture": "m13.png",
+    "sourceSha256": "1456b3a9e5852f2e088725ae96dd5bdd880f034770d355ea5452dc94b3531365",
+    "templateSha256": "924400e43595cca83fdd6d009451cd897457e3a70014c7edc94350cd4e1102c4",
+    "sourceSize": [
+      1280,
+      720
+    ],
+    "cropXYWH": [
+      1176,
+      100,
+      64,
+      44
+    ],
+    "unchangedCropPixels": true
+  },
+  {
+    "movement": "M14",
+    "sourceFile": "MuMu-20261016-214651-676.png",
+    "fixture": "m14.png",
+    "sourceSha256": "8fe30e5eb2de3916f5231b0d311badc6438a278c41ed2426f673317a6e29c247",
+    "templateSha256": "9873f3761a49a5f6a73f83a04525959d003c1375771933eb0a647a462b1a1352",
+    "sourceSize": [
+      1280,
+      720
+    ],
+    "cropXYWH": [
+      1176,
+      100,
+      64,
+      44
+    ],
+    "unchangedCropPixels": true
+  },
+  {
+    "movement": "M15",
+    "sourceFile": "1))$M[7WWPYAC(903(9)MXK_tmb.png",
+    "fixture": "m15.png",
+    "sourceSha256": "5013df5ac730a93cb6b6b1ba66d0edbb64a442e1e2d81673eadfcda56faf831d",
+    "templateSha256": "34cf682eacf62e6361c14f3e33782cadc0403ae9b91073898804d808e430e34c",
+    "sourceSize": [
+      1280,
+      720
+    ],
+    "cropXYWH": [
+      1176,
+      100,
+      64,
+      44
+    ],
+    "unchangedCropPixels": true
+  },
+  {
+    "movement": "M16",
+    "sourceFile": "MuMu-20261018-005930-349.png",
+    "fixture": "m16.png",
+    "sourceSha256": "262b26a4e0d52a02a3075d54b0f6e1942f1955d0b17fb725d2185052b8ebd1da",
+    "templateSha256": "7e786a986eb9d78d0809f885b5f5abf7ff410629e75417f7c1534a98e28dbb8d",
+    "sourceSize": [
+      1280,
+      720
+    ],
+    "cropXYWH": [
+      1176,
+      100,
+      64,
+      44
+    ],
+    "unchangedCropPixels": true
+  }
+]

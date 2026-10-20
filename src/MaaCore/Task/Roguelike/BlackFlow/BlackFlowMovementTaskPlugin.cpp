@@ -44,6 +44,7 @@ constexpr std::string_view InventoryNaturalPriorityTask = "BlackFlow@Roguelike@I
 constexpr std::string_view InventoryConceptPriorityTask = "BlackFlow@Roguelike@InventoryConceptPriority";
 constexpr std::string_view InventoryEmptySlotText = "待收集零件";
 constexpr std::string_view InventorySwipeTask = "BlackFlow@Roguelike@MovementInventorySwipe";
+constexpr std::string_view InventorySwipeToStartTask = "BlackFlow@Roguelike@MovementInventorySwipeToStart";
 // 经 -Enter 转发，避免占位任务从 MovementInventoryClose 继承 maxTimes。
 constexpr std::string_view InventoryCloseTask = "BlackFlow@Roguelike@MovementInventoryClose-Enter";
 constexpr std::string_view OpenPanelTask = "BlackFlow@Roguelike@MovementPanelOpenClick";
@@ -90,6 +91,28 @@ cv::Mat inventory_card_region(const cv::Mat& image)
     const cv::Rect bounds(0, 0, image.cols, image.rows);
     const cv::Rect actual = requested & bounds;
     return actual.empty() ? cv::Mat {} : image(actual);
+}
+
+bool inventory_name_rows_unchanged(const cv::Mat& before, const cv::Mat& after)
+{
+    if (before.empty() || after.empty() || before.size() != after.size() || before.type() != after.type()) {
+        return false;
+    }
+    const cv::Mat previous_cards = inventory_card_region(before);
+    const cv::Mat current_cards = inventory_card_region(after);
+    if (previous_cards.rows < 479 || current_cards.rows < 479) {
+        return false;
+    }
+    for (const int row : { 120, 282, 444 }) {
+        const auto previous_names = previous_cards.rowRange(row, row + 35);
+        const auto current_names = current_cards.rowRange(row, row + 35);
+        const double denominator = static_cast<double>(current_names.total() * current_names.channels());
+        if (cv::norm(previous_names, current_names, cv::NORM_L1) / denominator >
+            InventoryUnchangedFrameMaximumDifference) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool task_contains_inventory_name(std::string_view task_name, std::string_view name)
@@ -335,7 +358,7 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
         return true;
     }
     if (!scan_inventory_frame(frame, &error) ||
-        !m_session->apply_movement_inventory_observation(frame.movement_instances, &error)) {
+        !m_session->apply_movement_inventory_observation(frame.movement_instances, &error, frame.lorentz_eye_found)) {
         record_inventory_evidence(frame, "识别或状态更新失败", error);
         if (frame.page_lost && ++m_inventory_observation_retries <= 2 && !need_exit()) {
             // No inventory observation has been committed. Reopen and rescan from
@@ -371,12 +394,37 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
 bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, std::string* error)
 {
     frame = {};
+    cv::Mat reset_previous = ctrler()->get_image().clone();
+    if (!movement_inventory_page_visible(reset_previous)) {
+        frame.page_lost = true;
+        set_error(error, "inventory page is not visible before resetting the list");
+        return false;
+    }
+    const bool reset = scroll_inventory_to_start(
+        [&] {
+            const auto image = ctrler()->get_image();
+            if (!movement_inventory_page_visible(image)) {
+                frame.page_lost = true;
+                return false;
+            }
+            return !need_exit() && run_fixed_task(InventorySwipeToStartTask);
+        },
+        [&] {
+            cv::Mat current = ctrler()->get_image();
+            const bool unchanged = inventory_name_rows_unchanged(reset_previous, current);
+            reset_previous = current.clone();
+            return unchanged;
+        });
+    if (!reset) {
+        set_error(error, "inventory observation could not confirm the start of the list");
+        return false;
+    }
     std::optional<cv::Mat> previous;
     std::vector<InventoryColumnItem> previous_items;
     int scan_page = 0;
     bool reached_end = false;
     int stationary_frames = 0;
-    bool pending_clipped_movement = false;
+    bool pending_clipped_item = false;
     constexpr int MaximumScanSwipes = InventoryMaximumSwipes * 2;
 
     for (; scan_page <= MaximumScanSwipes; ++scan_page) {
@@ -412,22 +460,10 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             return false;
         }
         if (previous.has_value() && previous->size() == image.size() && previous->type() == image.type()) {
-            const cv::Mat previous_cards = inventory_card_region(*previous);
-            const cv::Mat current_cards = inventory_card_region(image);
             // 图标有循环光效；只比较三行名称，避免到头后永远被判断为仍在移动。
-            bool unchanged = previous_cards.rows >= 479 && current_cards.rows >= 479;
-            for (const int row : { 120, 282, 444 }) {
-                if (!unchanged) {
-                    break;
-                }
-                const auto before = previous_cards.rowRange(row, row + 35);
-                const auto after = current_cards.rowRange(row, row + 35);
-                const double denominator = static_cast<double>(after.total() * after.channels());
-                unchanged =
-                    cv::norm(before, after, cv::NORM_L1) / denominator <= InventoryUnchangedFrameMaximumDifference;
-            }
+            const bool unchanged = inventory_name_rows_unchanged(*previous, image);
             stationary_frames = unchanged ? stationary_frames + 1 : 0;
-            if (stationary_frames >= 2 && !pending_clipped_movement) {
+            if (stationary_frames >= 2 && !pending_clipped_item) {
                 reached_end = true;
                 break;
             }
@@ -443,7 +479,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
                 page,
                 scan_page > 0 ? InventoryNewRightColumnMinimumX : 0,
                 &latest_error);
-            if (outcome != InventoryAnalysisOutcome::Failed) {
+            if (outcome == InventoryAnalysisOutcome::Recognized) {
                 break;
             }
             if (attempt + 1 < MaxFrameRecognitionAttempts) {
@@ -453,7 +489,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         }
         // 出错页也保存，避免证据只剩上一张成功截图。
         frame.images.emplace_back(scan_page, std::make_shared<cv::Mat>(image.clone()));
-        if (outcome == InventoryAnalysisOutcome::Failed) {
+        if (outcome != InventoryAnalysisOutcome::Recognized) {
             frame.page_lost = !movement_inventory_page_visible(image);
             set_error(error, latest_error.empty() ? "movement inventory OCR failed" : latest_error);
             return false;
@@ -466,7 +502,9 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             scan_page > 0 && inventory_column_only_shifted_partially(previous_items, current_items);
         previous_items = std::move(current_items);
         previous = image.clone();
-        pending_clipped_movement = page.has_clipped_movement;
+        pending_clipped_item = page.has_clipped_item;
+        // 存在性不按新右列去重。末尾回弹/不足一列的移动也可能第一次完整露出洛眼标题。
+        frame.lorentz_eye_found = frame.lorentz_eye_found || page.lorentz_eye_found;
         if (scan_page > 0 && (stationary_frames > 0 || partial_scroll)) {
             Log.info("BlackFlow inventory column has not advanced completely; continuing scan", scan_page);
             continue;
@@ -490,14 +528,10 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             item.scan_page = scan_page;
             frame.type_boundary_items.emplace_back(std::move(item));
         }
-        if (!page.type_boundary_items.empty() && !pending_clipped_movement) {
-            frame.stopped_at_ordered_boundary = true;
-            break;
-        }
     }
-    frame.scan_complete = frame.stopped_at_ordered_boundary || reached_end;
+    frame.scan_complete = reached_end;
     if (!frame.scan_complete) {
-        set_error(error, "movement inventory did not reach a complete boundary after scrolling retries");
+        set_error(error, "inventory observation did not reach the end of the whole list after scrolling retries");
     }
     return frame.scan_complete;
 }
@@ -529,20 +563,29 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
 
     std::vector<InventoryItem> items;
     std::vector<Rect> loaded_markers;
+    bool readable_inventory_name = false;
     for (const auto& result : *results) {
+        const bool complete_name = inventory_name_is_complete(result.rect, image.cols, image.rows);
+        if (result.text != LoadedText && complete_name) {
+            readable_inventory_name = true;
+        }
+        if (result.text == "洛伦茨之眼" && complete_name) {
+            // PASSIVE没有加工品星标；只从完整标题识别当前存在性，不读取静态buffStack。
+            frame.lorentz_eye_found = true;
+        }
         if (const MovementSpec* movement = movement_from_name(result.text);
             movement != nullptr && movement->kind != MovementKind::Walk) {
             if (result.rect.x + result.rect.width / 2 < minimum_name_x) {
                 continue;
             }
             if (!inventory_name_is_complete(result.rect, image.cols, image.rows)) {
-                frame.has_clipped_movement = true;
+                frame.has_clipped_item = true;
                 continue;
             }
             const auto charge_recognition =
                 recognize_movement_inventory_remaining_uses(image, result.rect, movement->initial_charges);
             if (!charge_recognition.has_value()) {
-                frame.has_clipped_movement = true;
+                frame.has_clipped_item = true;
                 continue;
             }
             items.emplace_back(
@@ -559,8 +602,11 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
             loaded_markers.emplace_back(result.rect);
         }
         else if (const auto boundary_label = inventory_boundary_label(result.text); boundary_label.has_value()) {
-            if (result.rect.x + result.rect.width / 2 < minimum_name_x ||
-                !inventory_name_is_complete(result.rect, image.cols, image.rows)) {
+            if (result.rect.x + result.rect.width / 2 < minimum_name_x) {
+                continue;
+            }
+            if (!complete_name) {
+                frame.has_clipped_item = true;
                 continue;
             }
             frame.type_boundary_items.emplace_back(
@@ -591,7 +637,7 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
         loaded_item->loaded = true;
     }
     frame.items = std::move(items);
-    return InventoryAnalysisOutcome::Recognized;
+    return readable_inventory_name ? InventoryAnalysisOutcome::Recognized : InventoryAnalysisOutcome::NoCandidate;
 }
 
 BlackFlowMovementTaskPlugin::SelectionOutcome
@@ -1407,16 +1453,15 @@ void BlackFlowMovementTaskPlugin::record_inventory_evidence(
                   } },
             });
     }
-    const std::string scan_stop_reason =
-        !frame.scan_complete ? "扫描未完成"
-        : frame.stopped_at_ordered_boundary
-            ? "看到" + frame.type_boundary_items.front().boundary_label + "，已到达加工品列表末尾"
-            : "已扫描到零件箱末尾";
+    const std::string scan_stop_reason = frame.scan_complete ? "已扫描到零件箱末尾" : "扫描未完成";
     json::object evidence {
         { "evidence_type", "inventory_ocr" },
         { "outcome", std::string(outcome) },
         { "scan_complete", frame.scan_complete },
-        { "stopped_at_ordered_boundary", frame.stopped_at_ordered_boundary },
+        { "stopped_at_ordered_boundary", false },
+        { "scan_scope", "whole_inventory" },
+        { "lorentz_eye_found", frame.lorentz_eye_found },
+        { "lorentz_eye_presence", frame.scan_complete ? (frame.lorentz_eye_found ? "present" : "absent") : "unknown" },
         { "scan_stop_reason", scan_stop_reason },
         { "items", json::array(std::move(items)) },
         { "type_boundary_items", json::array(std::move(type_boundary_items)) },

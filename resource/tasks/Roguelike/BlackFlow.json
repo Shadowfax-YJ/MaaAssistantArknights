@@ -552,7 +552,29 @@
             "医者-自医",
             "铁卫-侵掠",
             "迷藏",
-            "“小格兰法洛”"
+            "“小格兰法洛”",
+            "紧急逃生座椅",
+            "力反馈方向盘",
+            "鸣笛",
+            "坎诺特特快",
+            "薄葬草",
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚",
+            "洛伦茨之眼",
+            "白模坎诺特",
+            "涂装坎诺特",
+            "装饰性佯谬",
+            "“鸡尾酒针”",
+            "羽蛇翁",
+            "鸭力板",
+            "树海贵宾套餐",
+            "《去踏足》",
+            "可疑的集点卡",
+            "似曾相识棋盒"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -705,12 +727,12 @@
             "恋家果",
             "光彩松露",
             "笼控器",
-            "白模鱼",
-            "白模狗",
-            "涂装阿戈尔",
-            "涂装佩洛",
-            "白模鸟",
-            "涂装黎博利"
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -817,7 +839,12 @@
             "涂装阿戈尔",
             "涂装佩洛",
             "白模鸟",
-            "涂装黎博利"
+            "涂装黎博利",
+            "生逝",
+            "血橙",
+            "无缘果",
+            "力反馈方向盘",
+            "洛伦茨之眼"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -977,12 +1004,12 @@
             "恋家果",
             "光彩松露",
             "笼控器",
-            "白模鱼",
-            "白模狗",
-            "涂装阿戈尔",
-            "涂装佩洛",
-            "白模鸟",
-            "涂装黎博利"
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -1261,10 +1288,6 @@
             "结构性原理",
             "“简易遥控器”",
             "简易遥控器",
-            "白模鱼",
-            "白模狗",
-            "涂装阿戈尔",
-            "涂装佩洛",
             "白模鸟",
             "涂装黎博利"
         ],
@@ -1459,10 +1482,10 @@
         "next": ["BlackFlow@Roguelike@EmployLeave"]
     },
     "BlackFlow@Roguelike@EmployLeave": {
-        "Doc": "点击离开后先等待确认弹窗或地图阳性状态；旧按钮持续存在约两秒才允许再次点击。",
+        "Doc": "NodeEvidence 插件等待提示消失并保存应急助力截图后才点击；失败不点击。之后等待确认弹窗或地图阳性状态；旧按钮持续存在约两秒才允许再次尝试。",
         "template": "BlackFlow@Roguelike@EmployLeave.png",
         "roi": [1099, 541, 179, 86],
-        "action": "ClickSelf",
+        "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@EmployLeaveConfirm",
             "BlackFlow@Roguelike@EmployLeaveObserve",
@@ -1478,6 +1501,41 @@
             "BlackFlow@Roguelike@EmployLeaveObserve*2",
             "BlackFlow@Roguelike@EmployLeaveTransitionWait*20"
         ]
+    },
+    "BlackFlow@Roguelike@EmployCaptureInstruction": {
+        "algorithm": "OcrDetect",
+        "roi": [930, 72, 310, 40],
+        "text": ["且在队期间无法被重复招募"]
+    },
+    "BlackFlow@Roguelike@EmployCaptureCardTop": {
+        "template": "BlackFlow@Roguelike@EmployCaptureCard.png",
+        "roi": [1190, 137, 40, 38],
+        "templThreshold": 0.85
+    },
+    "BlackFlow@Roguelike@EmployCaptureCardMiddle": {
+        "baseTask": "BlackFlow@Roguelike@EmployCaptureCardTop",
+        "template": "BlackFlow@Roguelike@EmployCaptureCard.png",
+        "roi": [1190, 287, 40, 38]
+    },
+    "BlackFlow@Roguelike@EmployCaptureCardBottom": {
+        "baseTask": "BlackFlow@Roguelike@EmployCaptureCardTop",
+        "template": "BlackFlow@Roguelike@EmployCaptureCard.png",
+        "roi": [1190, 437, 40, 38]
+    },
+    "BlackFlow@Roguelike@EmployCaptureCostTop": {
+        "template": "BlackFlow@Roguelike@EmployCaptureCost.png",
+        "roi": [1110, 226, 90, 42],
+        "templThreshold": 0.85
+    },
+    "BlackFlow@Roguelike@EmployCaptureCostMiddle": {
+        "baseTask": "BlackFlow@Roguelike@EmployCaptureCostTop",
+        "template": "BlackFlow@Roguelike@EmployCaptureCost.png",
+        "roi": [1110, 376, 90, 42]
+    },
+    "BlackFlow@Roguelike@EmployCaptureNotification": {
+        "algorithm": "OcrDetect",
+        "roi": [930, 60, 350, 490],
+        "text": ["损毁", "自动切换", "带到了", "已经从林间消失"]
     },
     "BlackFlow@Roguelike@EmployLeaveObserve": {
         "template": "BlackFlow@Roguelike@EmployLeave.png",
@@ -1655,6 +1713,9 @@
             "窥视箱中",
             "泪之聚落",
             "调谐仪式",
+            "制图桌",
+            "大红按钮",
+            "手术祭坛",
             "行动奖励",
             "溯源"
         ],
@@ -2049,8 +2110,8 @@
         "fullMatch": true,
         "fuzzyMatch": true
     },
-    "BlackFlow@Roguelike@TrophyRewardPriority": {
-        "Doc": "战斗后战利品零件二选一专用的跨类别完整优先级；数组从高到低，白模和涂装概念体均为 R。",
+    "BlackFlow@Roguelike@TrophyRewardNames": {
+        "Doc": "战利品名称识别白名单，与 TrophyRewardPriority 的取舍顺序独立。",
         "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
         "text": [
             "结构性原理",
@@ -2082,7 +2143,70 @@
             "涂装阿戈尔",
             "涂装黎博利",
             "白模鸟",
-            "笼控器"
+            "笼控器",
+            "紧急逃生座椅",
+            "力反馈方向盘",
+            "鸣笛",
+            "坎诺特特快",
+            "薄葬草",
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚",
+            "洛伦茨之眼",
+            "白模坎诺特",
+            "涂装坎诺特"
+        ]
+    },
+    "BlackFlow@Roguelike@TrophyRewardPriority": {
+        "Doc": "战斗后战利品零件二选一专用的跨类别完整优先级；数组从高到低，白模和涂装概念体均为 R。",
+        "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
+        "text": [
+            "结构性原理",
+            "“简易遥控器”",
+            "力反馈方向盘",
+            "一次性喷气背包",
+            "光彩松露",
+            "板藤",
+            "恋家果",
+            "老妈妈的融雪",
+            "坎诺特特快",
+            "重弹簧",
+            "坎诺特的触须",
+            "旅行绒",
+            "紧急逃生座椅",
+            "多生苔藓",
+            "气垫底座",
+            "试作外骨骼",
+            "标准引擎",
+            "洛伦茨之眼",
+            "小八界",
+            "种子",
+            "报废轮子",
+            "报废假肢",
+            "生逝",
+            "回声玉米",
+            "霜晶树",
+            "恋心草",
+            "血橙",
+            "无缘果",
+            "浪花",
+            "雾滚草",
+            "白模鱼",
+            "薄葬草",
+            "血蕈",
+            "种荚",
+            "枯苔藓球",
+            "涂装坎诺特",
+            "白模狗",
+            "涂装佩洛",
+            "白模坎诺特",
+            "涂装黎博利",
+            "涂装阿戈尔",
+            "白模鸟",
+            "鸣笛"
         ]
     },
     "BlackFlow@Roguelike@InventoryNaturalPriority": {
@@ -2100,13 +2224,30 @@
             "种子",
             "血蕈",
             "雾滚草",
-            "枯苔藓球"
+            "枯苔藓球",
+            "薄葬草",
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚"
         ]
     },
     "BlackFlow@Roguelike@InventoryConceptPriority": {
         "Doc": "零件箱概念体识别名单及保留优先级；不参与战斗后战利品二选一排序。",
         "baseTask": "BlackFlow@Roguelike@TrophyRewardNameOCR",
-        "text": ["白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛", "白模鸟", "涂装黎博利"]
+        "text": [
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利",
+            "洛伦茨之眼",
+            "白模坎诺特",
+            "涂装坎诺特"
+        ]
     },
     "BlackFlow@Roguelike@HuntedConfirm": {
         "Doc": "点击追猎确认后等待弹窗稳定消失并识别实际战斗预览；确认按钮持续存在约两秒才允许重击。",
@@ -2279,7 +2420,7 @@
         "Doc": "自动化收集行动奖励的完整标题 OCR；襁褓动物卡会比其余三张卡上移，ROI 同时覆盖两条标题高度。代码对 OCR 原文做封闭词表模糊匹配，优先选择襁褓动物，否则从四项允许奖励中随机选择；不再使用卡片模板匹配。",
         "algorithm": "OcrDetect",
         "roi": [100, 380, 1100, 130],
-        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
+        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "襁褓九头蛇", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
         "fullMatch": true,
         "fuzzyMatch": true
     },
@@ -2294,7 +2435,7 @@
         "Doc": "奖励入口只按完整标题 OCR 识别；不再依赖六张奖励卡底图模板。插件会在入口内直接完成二次确认，之后可能弹出收藏品详情、仍有可连续选择的奖励、直接进入职业组合/招募页或进入地图。关闭详情后必须先重新探测本入口，再接续后续页面。",
         "algorithm": "OcrDetect",
         "roi": [100, 380, 1100, 130],
-        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
+        "text": ["襁褓金乌", "襁褓天马", "襁褓白泽", "襁褓巨龙", "襁褓骏鹰", "襁褓九头蛇", "未编号物", "退行补偿", "林间代步", "巢寄生", "调查预付款", "空间租赁"],
         "fullMatch": true,
         "fuzzyMatch": true,
         "next": [
@@ -2558,12 +2699,26 @@
         "text": []
     },
     "BlackFlow@Roguelike@MovePreviewStageName": {
-        "Doc": "节点预览右上角第二行的具体事件/关卡名；战斗情报探查只读取这一行。",
+        "Doc": "节点预览右上角第二行的具体事件/关卡名。text 补充无自动作战脚本的新版关卡名，和已有脚本名共同用于情报 OCR 纠错；不作为可自动作战名单，未收录的稳定原文仍保留。",
         "baseTask": "BattleStageName",
         "roi": [912, 135, 195, 50],
         "withoutDet": false,
         "fuzzyMatch": true,
-        "text": []
+        "text": [
+            "木本玉米",
+            "圆石技艺",
+            "取景胜地",
+            "安魂节起义",
+            "灵魂归宿",
+            "刺生灾害",
+            "贫瘠行军",
+            "不解之缘",
+            "失恒常量",
+            "熄日",
+            "晶矿惊蝗",
+            "易燃隐患",
+            "灰坑"
+        ]
     },
     "BlackFlow@Roguelike@MovePreviewEnter": {
         "template": [
@@ -2684,6 +2839,20 @@
             "坎诺特的触须",
             "结构性原理",
             "简易遥控器",
+            "紧急逃生座椅",
+            "力反馈方向盘",
+            "鸣笛",
+            "坎诺特特快",
+            "薄葬草",
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚",
+            "洛伦茨之眼",
+            "白模坎诺特",
+            "涂装坎诺特",
             "恋家果",
             "光彩松露",
             "笼控器",
@@ -2825,10 +2994,50 @@
             ["^简易遥控器$", "“简易遥控器”"]
         ],
         "text": [
-            "报废轮子", "报废假肢", "标准引擎", "重弹簧", "气垫底座", "试作外骨骼",
-            "小八界", "一次性喷气背包", "老妈妈的融雪", "坎诺特的触须", "结构性原理", "“简易遥控器”",
-            "恋家果", "光彩松露", "笼控器", "板藤", "霜晶树", "回声玉米", "多生苔藓", "浪花", "种子", "血蕈", "雾滚草", "枯苔藓球",
-            "白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛", "白模鸟", "涂装黎博利"
+            "报废轮子",
+            "报废假肢",
+            "标准引擎",
+            "重弹簧",
+            "气垫底座",
+            "试作外骨骼",
+            "小八界",
+            "一次性喷气背包",
+            "老妈妈的融雪",
+            "坎诺特的触须",
+            "结构性原理",
+            "“简易遥控器”",
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "板藤",
+            "霜晶树",
+            "回声玉米",
+            "多生苔藓",
+            "浪花",
+            "种子",
+            "血蕈",
+            "雾滚草",
+            "枯苔藓球",
+            "白模鱼",
+            "白模狗",
+            "涂装阿戈尔",
+            "涂装佩洛",
+            "白模鸟",
+            "涂装黎博利",
+            "紧急逃生座椅",
+            "力反馈方向盘",
+            "鸣笛",
+            "坎诺特特快",
+            "薄葬草",
+            "生逝",
+            "血橙",
+            "旅行绒",
+            "恋心草",
+            "无缘果",
+            "种荚",
+            "洛伦茨之眼",
+            "白模坎诺特",
+            "涂装坎诺特"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -2840,31 +3049,45 @@
             "白模鸟",
             "涂装黎博利",
             "枯苔藓球",
+            "鸣笛",
             "报废假肢",
             "报废轮子",
+            "种荚",
             "涂装阿戈尔",
             "涂装佩洛",
             "白模狗",
+            "白模坎诺特",
+            "涂装坎诺特",
             "血蕈",
+            "薄葬草",
             "白模鱼",
             "雾滚草",
             "浪花",
             "霜晶树",
             "回声玉米",
             "种子",
+            "血橙",
+            "恋心草",
             "小八界",
             "标准引擎",
+            "洛伦茨之眼",
             "试作外骨骼",
             "气垫底座",
             "多生苔藓",
+            "生逝",
+            "紧急逃生座椅",
             "坎诺特的触须",
             "重弹簧",
             "老妈妈的融雪",
+            "坎诺特特快",
+            "无缘果",
             "笼控器",
             "恋家果",
+            "旅行绒",
             "板藤",
             "光彩松露",
             "一次性喷气背包",
+            "力反馈方向盘",
             "“简易遥控器”",
             "结构性原理"
         ]
@@ -2979,6 +3202,22 @@
         "template": "BlackFlow@Roguelike@Movement-M11.png",
         "roi": [1162, 88, 94, 94]
     },
+    "BlackFlow@Roguelike@MovementLoaded-M13": {
+        "template": "BlackFlow@Roguelike@Movement-M13.png",
+        "roi": [1162, 88, 94, 94]
+    },
+    "BlackFlow@Roguelike@MovementLoaded-M14": {
+        "template": "BlackFlow@Roguelike@Movement-M14.png",
+        "roi": [1162, 88, 94, 94]
+    },
+    "BlackFlow@Roguelike@MovementLoaded-M15": {
+        "template": "BlackFlow@Roguelike@Movement-M15.png",
+        "roi": [1162, 88, 94, 94]
+    },
+    "BlackFlow@Roguelike@MovementLoaded-M16": {
+        "template": "BlackFlow@Roguelike@Movement-M16.png",
+        "roi": [1162, 88, 94, 94]
+    },
     "BlackFlow@Roguelike@MovementLoaded-Walk": {
         "template": "BlackFlow@Roguelike@Movement-Walk.png",
         "roi": [1162, 88, 94, 94]
@@ -3016,6 +3255,10 @@
             "坎诺特的触须",
             "结构性原理",
             "简易遥控器",
+            "紧急逃生座椅",
+            "力反馈方向盘",
+            "鸣笛",
+            "坎诺特特快",
             "徒步跋涉",
             "装载中",
             "剩余1次",
@@ -3671,30 +3914,36 @@
     "BlackFlow@Roguelike@SelectTheme": {
         "text": ["源流堆栈"]
     },
-    "BlackFlow@Roguelike@SquadConfirm": {
-        "Doc": "开局分队确认，之后可能出现藏品弹窗、干员选择或招募界面。",
-        "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
+    "BlackFlow@Roguelike@Squad-EnterPoint": {
+        "Doc": "分队插件点击后可能已经进入奖励页，先重新辨认页面，不能直接拿奖励确认模板当分队按钮。",
         "next": [
-            "BlackFlow@Roguelike@SquadConfirmRewardPopup",
             "BlackFlow@Roguelike@LastReward-EnterPoint",
+            "BlackFlow@Roguelike@SquadConfirm",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@RecruitMain",
-            "BlackFlow@Roguelike@SquadConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages#next"
         ]
     },
-    "BlackFlow@Roguelike@SquadConfirmRewardPopup": {
-        "template": "BlackFlow@Roguelike@Confirm.png",
-        "roi": [581, 555, 118, 76],
-        "action": "ClickSelf",
+    "BlackFlow@Roguelike@SquadConfirm": {
+        "Doc": "仅在仍显示分队标题时执行分队确认；与奖励共用按钮模板，必须先核验页面身份。",
+        "algorithm": "OcrDetect",
+        "text": ["分队"],
+        "roi": [620, 20, 100, 34],
+        "action": "DoNothing",
+        "sub": ["BlackFlow@Roguelike@SquadConfirmButton"],
         "next": [
-            "#self",
             "BlackFlow@Roguelike@LastReward-EnterPoint",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@RecruitMain",
-            "BlackFlow@Roguelike@SquadConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@Stages#next"
         ]
+    },
+    "BlackFlow@Roguelike@SquadConfirmButton": {
+        "baseTask": "Roguelike@SquadConfirm",
+        "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
+        "next": []
     },
     "BlackFlow@Roguelike@SquadDefault": {
         "template": "BlackFlow@Roguelike@SquadDefault.png"
@@ -3805,6 +4054,9 @@
             "窥视箱中",
             "泪之聚落",
             "调谐仪式",
+            "制图桌",
+            "大红按钮",
+            "手术祭坛",
             "行动奖励",
             "溯源"
         ],
@@ -3988,18 +4240,11 @@
         "onErrorNext": []
     },
     "BlackFlow@Roguelike@ExpeditionPicker": {
-        "algorithm": "OcrDetect",
-        "roi": [
-            230,
-            125,
-            200,
-            60
-        ],
-        "text": [
-            "先行一步"
-        ],
-        "fullMatch": false,
-        "fuzzyMatch": false,
+        "Doc": "匹配派遣页标题、两侧装饰及英文副标题，避免将地图上的同名节点识别为派遣选人界面。",
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@ExpeditionPicker.png",
+        "roi": [230, 120, 200, 70],
+        "templThreshold": 0.85,
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@ExpeditionSelectOper"

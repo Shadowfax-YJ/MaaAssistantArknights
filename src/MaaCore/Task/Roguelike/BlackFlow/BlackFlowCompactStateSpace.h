@@ -103,7 +103,9 @@ private:
     std::vector<std::vector<CompactNeighbor>> m_relaxed_adjacency;
     std::vector<PlannerNodeMask> m_endpoint_hidden_battle_reveals;
     std::vector<PlannerNodeMask> m_endpoint_hidden_node_reveals;
-    std::array<std::vector<std::vector<std::uint8_t>>, 13> m_geometric_targets;
+    PlannerNodeMask m_all_hidden_node_reveals = 0;
+    PlannerNodeMask m_all_hidden_battle_reveals = 0;
+    std::array<std::vector<std::vector<std::uint8_t>>, ProcessingMovementSlotCount> m_geometric_targets;
     std::array<PlannerNodeMask, 21> m_type_nodes {};
     PlannerNodeMask m_blocking_nodes = 0;
     PlannerNodeMask m_transfer_nodes = 0;

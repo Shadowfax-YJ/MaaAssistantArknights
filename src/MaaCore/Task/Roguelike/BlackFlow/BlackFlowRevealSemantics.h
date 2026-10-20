@@ -16,6 +16,26 @@ inline constexpr int LightRevealRadius = 3;
 inline constexpr int InitialLightRevealRadius = 2;
 inline constexpr int TransientRevealObservationMaximumAttempts = 4;
 
+[[nodiscard]] inline bool lorentz_eye_activates(bool available, MovementKind movement, NodeType landing_type)
+{
+    return available && movement != MovementKind::Walk && landing_type == NodeType::Light;
+}
+
+[[nodiscard]] inline std::unordered_set<NodeId>
+light_reveal_nodes(const MapSnapshot& map, NodeId light, bool full_map)
+{
+    if (!full_map) {
+        return map.nodes_within_manhattan(light, LightRevealRadius);
+    }
+    std::unordered_set<NodeId> result;
+    for (const auto& [id, node] : map.nodes()) {
+        if (node.type != NodeType::Empty && node.progress == NodeProgress::Active && !node.identity_unrecoverable) {
+            result.emplace(id);
+        }
+    }
+    return result;
+}
+
 [[nodiscard]] constexpr bool move_endpoint_observation_available(
     bool terminal_on_completion,
     int action_points_after) noexcept
@@ -199,7 +219,10 @@ observed_initial_floor_reveals(const MapSnapshot& map, NodeId entrance = Invalid
                                       ? landing_type_override
                                       : (landed == nullptr ? NodeType::Unknown : landed->type);
     if (endpoint_observation_available && landed != nullptr && landing_type == NodeType::Light) {
-        for (const NodeId id : map.nodes_within_manhattan(landing, LightRevealRadius)) {
+        const bool full_map = (landing_type_override == NodeType::Light ||
+                               !run.consumed_one_time_nodes.contains(landing)) &&
+                              lorentz_eye_activates(run.resources.lorentz_eye_available, move.movement, landing_type);
+        for (const NodeId id : light_reveal_nodes(map, landing, full_map)) {
             // 羽瞰点是主动照亮，不属于沿连线产生的自然揭示。弥散虚雾只抑制
             // 理想域内的自然视野，不能阻止羽瞰点照亮范围内的节点。
             add_if_initially_unknown(id);
@@ -291,6 +314,33 @@ observed_move_reveals(const MapSnapshot& before, const RunState& run, const MapS
     return result;
 }
 
+inline void add_observed_random_reveal_expectations(
+    const MapSnapshot& before,
+    const RunState& run,
+    const MapSnapshot& after,
+    const MoveCandidate& move,
+    bool endpoint_available,
+    std::unordered_set<NodeId>& expected)
+{
+    if (!endpoint_available) {
+        return;
+    }
+    const auto observed = observed_move_reveals(before, run, after);
+    if (move.movement != MovementKind::Walk && run.resources.random_reveals_on_processing_move > 0) {
+        std::vector<NodeId> random_reveals;
+        for (const NodeId id : observed) {
+            if (!expected.contains(id)) {
+                random_reveals.emplace_back(id);
+            }
+        }
+        // 随机揭示没有可预测的具体身份。只在已确认分队效果且新增数不超过上限时归因，
+        // 超额仍作为不一致上报；不能拿随机效果吞掉任意额外视野。
+        if (random_reveals.size() <= static_cast<std::size_t>(run.resources.random_reveals_on_processing_move)) {
+            expected.insert(random_reveals.begin(), random_reveals.end());
+        }
+    }
+}
+
 [[nodiscard]] inline bool should_retry_transient_reveal_observation(
     const std::unordered_set<NodeId>& expected,
     const std::unordered_set<NodeId>& observed,
@@ -348,6 +398,20 @@ struct RevealConsistencyResult
 
     [[nodiscard]] bool consistent() const noexcept { return missing.empty() && unexpected.empty(); }
 };
+
+[[nodiscard]] inline std::vector<NodeId>
+unexpected_merchant_reveals(const MapSnapshot& observed_map, const std::vector<NodeId>& unexpected)
+{
+    std::vector<NodeId> result;
+    for (const NodeId id : unexpected) {
+        const Node* node = observed_map.find_node(id);
+        if (node != nullptr && node->identity_revealed && !node->identity_from_prediction &&
+            !node->visually_hidden && (node->type == NodeType::Shop || node->type == NodeType::ScrapShop)) {
+            result.emplace_back(id);
+        }
+    }
+    return result;
+}
 
 [[nodiscard]] inline RevealConsistencyResult compare_move_reveals(
     const std::unordered_set<NodeId>& expected,

@@ -447,8 +447,9 @@ ResourceRegistry::ResourceRegistry()
     register_resource("persistent_long_range_movement", [](const RunState& state) {
         std::int64_t total = 0;
         for (const auto& spec : movement_specs()) {
-            const bool long_range =
-                spec.range == MovementRange::FullMap || spec.range == MovementRange::OrthogonalThree;
+            const bool long_range = spec.range == MovementRange::FullMap ||
+                                    spec.range == MovementRange::OrthogonalThree ||
+                                    spec.range == MovementRange::FullRowColumn;
             if (long_range && !spec.expires_on_floor_end) {
                 total += movement_count(state, spec.kind);
             }
@@ -503,7 +504,8 @@ std::optional<std::int64_t>
             const bool persistent_full_map =
                 movement->range == MovementRange::FullMap && !movement->expires_on_floor_end;
             const bool persistent_long_range =
-                (movement->range == MovementRange::FullMap || movement->range == MovementRange::OrthogonalThree) &&
+                (movement->range == MovementRange::FullMap || movement->range == MovementRange::OrthogonalThree ||
+                 movement->range == MovementRange::FullRowColumn) &&
                 !movement->expires_on_floor_end;
             if (id == "persistent_full_map_movement" && persistent_full_map) {
                 --after;

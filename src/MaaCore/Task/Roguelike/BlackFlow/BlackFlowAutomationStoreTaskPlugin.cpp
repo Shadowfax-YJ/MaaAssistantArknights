@@ -253,6 +253,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_shop_goods.clear();
     m_shop_entry_processing_items.clear();
     m_shop_refresh_count = 0;
+    m_shop_sale_refresh_pending = false;
     m_shop_refresh_wallet_before.reset();
     m_shop_refresh_diagnostics.clear();
     m_shop_collectibles_purchased_in_run = 0;
@@ -522,6 +523,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_shop_entry_processing_items = projected_entry_processing_items();
         m_active_shop_identity = current_store_identity(AutomationStoreKind::Eerie);
         m_shop_refresh_count = m_refresh_ledger.refresh_count(*m_active_shop_identity);
+        m_shop_sale_refresh_pending = false;
         m_shop_sold_in_cycle = false;
         m_shop_shelf_page = ShelfPage::Top;
         Task.set_task_base(std::string(ShopResumeAction), std::string(automation_shop_resume_base_task()));
@@ -607,6 +609,14 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         return true;
     }
     if (work == PendingWork::ShopSellDecision) {
+        if (m_shop_sale_refresh_pending) {
+            // 先让买入页的完整扫描采集本次售出后的货架，再处理下一件自然物；
+            // 否则连续卖出多枚无缘果可能覆盖尚未采集的中间货架。
+            m_shop_sale_refresh_pending = false;
+            m_shop_sold_in_cycle = false;
+            Task.set_task_base(std::string(ShopSellAction), std::string(ShopToggleToBuyEntry));
+            return true;
+        }
         const cv::Mat image = ctrler()->get_image();
         const auto items = recognize(image, std::string(ShopSellItemsTask));
         const auto available = std::ranges::find_if(items, [&](const TextRect& item) {
@@ -614,9 +624,6 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
                 return false;
             }
             const std::string_view name = normalized_good_name(item.text);
-            if (!merchant_sale_allowed(name)) {
-                return false;
-            }
             const std::optional<int> minimum = minimum_natural_sale_price(name);
             if (!minimum.has_value()) {
                 return true;
@@ -679,6 +686,37 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
     }
     if (work == PendingWork::ShopSellConfirmed) {
         m_shop_sold_in_cycle = true;
+        if (m_pending_sale_name.has_value() &&
+            merchant_sale_may_refresh(AutomationStoreKind::Eerie, *m_pending_sale_name)) {
+            const int before = m_shop_refresh_count;
+            const bool exhausted = automation_store_refresh_exhausted(before);
+            if (!exhausted) {
+                m_shop_refresh_count = m_active_shop_identity.has_value()
+                                           ? m_refresh_ledger.record_refresh(*m_active_shop_identity)
+                                           : before + 1;
+                clear_pending_purchase();
+                m_shop_purchased.clear();
+                m_shop_attempted.clear();
+                m_shop_attempted_names.clear();
+                m_shop_sell_attempted.clear();
+                m_shop_goods.clear();
+                m_shop_refresh_wallet_before.reset();
+                m_shop_sale_refresh_pending = true;
+                // 本节点成功购买数与整局藏品上限保持；只使旧货位和尝试缓存失效。
+                queue_eerie_store_snapshot("after_refresh", m_shop_refresh_count);
+            }
+            record_run_event(
+                RunLogLevel::Info,
+                "store.eerie.sale.refresh",
+                "completed",
+                exhausted ? "exhausted" : "refreshed",
+                json::object { { "item_name", *m_pending_sale_name },
+                               { "refresh_index_before", before },
+                               { "refresh_index", m_shop_refresh_count },
+                               { "refresh_limit", N6StoreRefreshLimit },
+                               { "trigger", "item_sale" } },
+                "BlackFlowAutomationStore");
+        }
         m_pending_sale.reset();
         m_pending_sale_name.reset();
         return true;
@@ -889,9 +927,6 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
                 return false;
             }
             const std::string_view name = normalized_good_name(item.text);
-            if (!merchant_sale_allowed(name)) {
-                return false;
-            }
             const std::optional<int> minimum = minimum_natural_sale_price(name);
             if (!minimum.has_value()) {
                 return true;
@@ -1042,9 +1077,31 @@ std::vector<TextRect> BlackFlowAutomationStoreTaskPlugin::recognize(const cv::Ma
     }
     OCRer analyzer(image);
     analyzer.set_task_info(task_info);
-    analyzer.set_required(task_info->text);
+    const bool sale_task = task == ShopSellItemsTask || task == ScrapShopSellItemsTask;
+    if (sale_task) {
+        const auto inventory = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@MovementInventoryAllItems");
+        if (inventory == nullptr) {
+            return {};
+        }
+        analyzer.set_required(merchant_sale_recognition_vocabulary(task_info->text, inventory->text));
+    }
+    else {
+        analyzer.set_required(task_info->text);
+    }
     const auto result = analyzer.analyze();
-    return result.has_value() ? std::move(*result) : std::vector<TextRect> {};
+    if (!result.has_value()) {
+        return {};
+    }
+    auto items = std::move(*result);
+    if (sale_task) {
+        std::erase_if(items, [&](const TextRect& item) {
+            return std::ranges::find(task_info->text, normalized_good_name(item.text)) == task_info->text.end();
+        });
+        std::ranges::stable_sort(items, {}, [&](const TextRect& item) {
+            return std::ranges::find(task_info->text, normalized_good_name(item.text)) - task_info->text.begin();
+        });
+    }
+    return items;
 }
 
 int BlackFlowAutomationStoreTaskPlugin::read_number(const cv::Mat& image, const std::string& task) const

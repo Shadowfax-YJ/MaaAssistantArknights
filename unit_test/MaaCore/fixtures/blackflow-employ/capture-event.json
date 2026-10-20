@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "sequence": 2,
+  "elapsed_ms": 1000,
+  "action": "node.employ.capture",
+  "level": "INFO",
+  "phase": "before-leave",
+  "outcome": "captured",
+  "task": "BlackFlow@Roguelike@EmployLeave",
+  "transaction_id": "BF-T1-1",
+  "timestamp": "2026-10-17T00:00:00Z",
+  "floor": 2,
+  "map_generation": 2,
+  "state": {
+    "profile": "automation_collection",
+    "floor": 2,
+    "page": {"node_type": "employ", "node_name": "应急助力", "page_revision": 1}
+  },
+  "details": {
+    "screen": "employ",
+    "capture_kind": "unobstructed_before_leave",
+    "capture_stability": {"sampled_frames": 9, "clear_frames": 3},
+    "node_evidence_directory": "collection-popups/floor-2/node-unresolved-p1",
+    "attribution": {
+      "kind": "unresolved_node",
+      "reason": "landing_remained_unresolved",
+      "floor": 2,
+      "map_generation": 2,
+      "page_revision": 1,
+      "node_type": "employ",
+      "node_name": "应急助力",
+      "directory": "collection-popups/floor-2/node-unresolved-p1"
+    }
+  },
+  "image": {"path": "collection-popups/floor-2/node-unresolved-p1/000002-node.employ.capture-before-leave.jpg"}
+}

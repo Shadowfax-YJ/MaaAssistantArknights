@@ -1,0 +1,20 @@
+{
+  "complete_with_eye": {
+    "state": {"lorentz_eye_available": true},
+    "evidence": {"evidence_type": "inventory_ocr", "scan_scope": "whole_inventory", "scan_complete": true, "stopped_at_ordered_boundary": false, "lorentz_eye_found": true, "lorentz_eye_presence": "present"}
+  },
+  "complete_without_eye": {
+    "state": {"lorentz_eye_available": false},
+    "evidence": {"evidence_type": "inventory_ocr", "scan_scope": "whole_inventory", "scan_complete": true, "stopped_at_ordered_boundary": false, "lorentz_eye_found": false, "lorentz_eye_presence": "absent"}
+  },
+  "interrupted": {
+    "state": {"lorentz_eye_available": true},
+    "evidence": {"evidence_type": "inventory_ocr", "scan_scope": "whole_inventory", "scan_complete": false, "stopped_at_ordered_boundary": false, "lorentz_eye_found": false, "lorentz_eye_presence": "unknown"}
+  },
+  "extra_merchant_explanation": {
+    "possible_duck_pressure_board_nodes": [1001],
+    "possible_explanation": "额外点亮的商店可能由鸭力板造成，尚未确认持有",
+    "unexpected_revealed_nodes": [1001, 1002],
+    "consistency": "不一致"
+  }
+}

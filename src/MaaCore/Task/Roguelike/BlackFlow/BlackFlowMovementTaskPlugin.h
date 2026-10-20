@@ -104,8 +104,8 @@ private:
         std::vector<InventoryBoundaryItem> type_boundary_items;
         std::vector<std::pair<int, std::shared_ptr<cv::Mat>>> images;
         bool scan_complete = false;
-        bool stopped_at_ordered_boundary = false;
-        bool has_clipped_movement = false;
+        bool lorentz_eye_found = false;
+        bool has_clipped_item = false;
         bool page_lost = false;
     };
 

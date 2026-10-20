@@ -422,6 +422,7 @@ public:
     }
 
     virtual bool select_recruitment_voucher(std::string* = nullptr) { return false; }
+    virtual bool capture_employ_page(std::string* = nullptr) { return false; }
 
     virtual bool
         capture_store_page(std::string_view, std::string_view, int, const cv::Mat* = nullptr, std::string* = nullptr)
@@ -520,6 +521,7 @@ public:
         std::string* error = nullptr,
         const cv::Mat* selection_image = nullptr) override;
     bool select_recruitment_voucher(std::string* error = nullptr) override;
+    bool capture_employ_page(std::string* error = nullptr) override;
     bool capture_store_page(
         std::string_view store_kind,
         std::string_view capture_phase,

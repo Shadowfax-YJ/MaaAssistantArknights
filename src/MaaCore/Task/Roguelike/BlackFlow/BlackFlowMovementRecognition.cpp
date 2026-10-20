@@ -86,7 +86,8 @@ std::optional<LoadedMovementRecognition> recognize_loaded_movement_with_evidence
         LoadedTask { MovementKind::M01, "BlackFlow@Roguelike@MovementLoaded-M01" },
         LoadedTask { MovementKind::M02, "BlackFlow@Roguelike@MovementLoaded-M02" },
         LoadedTask { MovementKind::M03, "BlackFlow@Roguelike@MovementLoaded-M03" },
-        // M04（重弹簧）、M12（简易遥控器）缺少 Movement 模板与 MovementLoaded 任务
+        // M04、M12 暂无实录图标模板；这些加工品仍由选择面板中的
+        // 名称和“装载中”标记阳性复核，不能用其他加工品的图标冒充。
         // LoadedTask { MovementKind::M04, "BlackFlow@Roguelike@MovementLoaded-M04" },
         LoadedTask { MovementKind::M05, "BlackFlow@Roguelike@MovementLoaded-M05" },
         LoadedTask { MovementKind::M06, "BlackFlow@Roguelike@MovementLoaded-M06" },
@@ -96,6 +97,10 @@ std::optional<LoadedMovementRecognition> recognize_loaded_movement_with_evidence
         LoadedTask { MovementKind::M10, "BlackFlow@Roguelike@MovementLoaded-M10" },
         LoadedTask { MovementKind::M11, "BlackFlow@Roguelike@MovementLoaded-M11" },
         // LoadedTask { MovementKind::M12, "BlackFlow@Roguelike@MovementLoaded-M12" },
+        LoadedTask { MovementKind::M13, "BlackFlow@Roguelike@MovementLoaded-M13" },
+        LoadedTask { MovementKind::M14, "BlackFlow@Roguelike@MovementLoaded-M14" },
+        LoadedTask { MovementKind::M15, "BlackFlow@Roguelike@MovementLoaded-M15" },
+        LoadedTask { MovementKind::M16, "BlackFlow@Roguelike@MovementLoaded-M16" },
     };
 
     std::optional<LoadedMovementRecognition> best;

@@ -183,14 +183,19 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             const auto session = weak_session.lock();
             const auto port = weak_port.lock();
             if (session == nullptr || port == nullptr || session->profile() != "automation_collection") {
-                return;
+                return false;
             }
             const bool selected = kind == "selected";
+            const bool confirming = kind == "confirming";
+            const bool failed = kind == "failed";
             const blackflow::RunLogEvent event {
-                .level = blackflow::RunLogLevel::Info,
+                .level = failed ? blackflow::RunLogLevel::Warning : blackflow::RunLogLevel::Info,
                 .action = "start.reward." + std::string(kind),
-                .phase = selected ? "completed" : "observed",
-                .outcome = selected ? "confirmed" : details.get("recognition_status", std::string()),
+                .phase = confirming ? "before-click" : selected || failed ? "completed" : "observed",
+                .outcome = selected ? "confirmed" :
+                           failed ? "failed" :
+                           confirming ? "pending" :
+                                        details.get("recognition_status", std::string()),
                 .task = "RoguelikeCustomStartTaskPlugin",
                 .state = session->run_log_state(),
                 .details = std::move(details),
@@ -198,7 +203,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             std::string error;
             if (!port->record_run_event(session->run_revision(), event, std::move(image), false, &error)) {
                 Log.warn("BlackFlow start reward evidence could not be saved", error);
+                return false;
             }
+            return true;
         });
     encounter_plugin->set_blackflow_encounter_context_provider(
         [weak_config = std::weak_ptr<RoguelikeConfig>(m_config_ptr),
@@ -353,6 +360,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             const auto port = weak_port.lock();
             if (port != nullptr && task == "BlackFlow@Roguelike@GetDropSelectRecruit") {
                 return port->select_recruitment_voucher(error);
+            }
+            if (task == "BlackFlow@Roguelike@EmployLeave") {
+                return port != nullptr && port->capture_employ_page(error);
             }
             return port == nullptr ? true : port->capture_get_drop(task, selected_button, error);
         });

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <limits>
@@ -417,24 +418,19 @@ enum class MovementKind
     M10,
     M11,
     M12,
+    M13,
+    M14,
+    M15,
+    M16,
 };
 
-inline constexpr std::size_t ProcessingMovementSlotCount = static_cast<std::size_t>(MovementKind::M12) + 1;
+inline constexpr std::size_t ProcessingMovementSlotCount = static_cast<std::size_t>(MovementKind::M16) + 1;
 
 // 只描述加工品的移动/资源能力，由强到弱；路线收益和总残值打平后才逐项使用这一顺序。
-inline constexpr std::array<MovementKind, 12> ProcessingMovementStrengthOrder = {
-    MovementKind::M08,
-    MovementKind::M11,
-    MovementKind::M12,
-    MovementKind::M09,
-    MovementKind::M07,
-    MovementKind::M10,
-    MovementKind::M06,
-    MovementKind::M04,
-    MovementKind::M05,
-    MovementKind::M03,
-    MovementKind::M02,
-    MovementKind::M01,
+inline constexpr std::array<MovementKind, ProcessingMovementSlotCount - 1> ProcessingMovementStrengthOrder = {
+    MovementKind::M08, MovementKind::M11, MovementKind::M12, MovementKind::M09, MovementKind::M07, MovementKind::M10,
+    MovementKind::M13, MovementKind::M16, MovementKind::M14, MovementKind::M06, MovementKind::M04, MovementKind::M05,
+    MovementKind::M03, MovementKind::M02, MovementKind::M01, MovementKind::M15,
 };
 
 enum class MovementRange
@@ -445,6 +441,7 @@ enum class MovementRange
     ManhattanTwo,
     OrthogonalThree,
     FullMap,
+    FullRowColumn,
 };
 
 struct MovementEffect
@@ -466,6 +463,8 @@ struct MovementSpec
     bool random_target = false;
     bool expires_on_floor_end = false;
     MovementEffect effect;
+    // 坎诺特特快在抵达时将不期而遇转成诡意行商；预览仍可显示转换前的事件。
+    std::optional<NodeType> transformed_target_type;
 };
 
 [[nodiscard]] bool node_type_allowed(const MovementSpec& movement, NodeType type) noexcept;
@@ -528,6 +527,9 @@ struct RunResources
     int sellable_scraps = 0;
     int white_model_birds = 0;
     bool painted_liberi = false;
+    // 完整零件箱扫描确认的洛眼能力；触发后消费，下一次按完整扫描刷新。
+    bool lorentz_eye_available = false;
+    int random_reveals_on_processing_move = 0;
     // 零件箱观测到的加工品实例。它是持有件数与剩余次数的事实源；下面两张按种类
     // 聚合的表只供规划器使用，不能反过来覆盖实例。
     struct MovementInstance
@@ -572,6 +574,8 @@ struct RunState
     std::unordered_set<NodeId> visited_nodes;
     std::unordered_set<NodeId> consumed_one_time_nodes;
     std::unordered_set<NodeId> revealed_nodes;
+    // 仅供规划投影保留节点转换，实局身份由进入页面和回图观测写入地图。
+    std::unordered_set<NodeId> projected_shops;
     std::unordered_set<MovementKind> cross_floor_expired;
     std::unordered_map<NodeId, NodeProgress> node_progress;
     bool strategy_terminal = false;

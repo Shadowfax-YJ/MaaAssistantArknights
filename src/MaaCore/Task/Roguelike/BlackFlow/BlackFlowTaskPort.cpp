@@ -23,6 +23,7 @@
 #include "BlackFlowCollectionPopup.h"
 #include "BlackFlowCollectionPopupTaskPlugin.h"
 #include "BlackFlowEvidenceFrame.h"
+#include "BlackFlowEmployCapture.h"
 #include "BlackFlowInventoryRules.h"
 #include "BlackFlowMovementRecognition.h"
 #include "BlackFlowRecruitmentEvidence.h"
@@ -603,7 +604,13 @@ std::optional<std::string> recognize_battle_intel_stage_name(const cv::Mat& imag
     if (!results.has_value() || results->size() != 1) {
         return std::nullopt;
     }
-    return resolve_battle_intel_stage_name(results->front().text, RoguelikeCopilot.get_stage_names("BlackFlow"));
+    auto known_stage_names = RoguelikeCopilot.get_stage_names("BlackFlow");
+    for (const std::string& name : task->text) {
+        if (std::ranges::find(known_stage_names, name) == known_stage_names.end()) {
+            known_stage_names.emplace_back(name);
+        }
+    }
+    return resolve_battle_intel_stage_name(results->front().text, known_stage_names);
 }
 
 CollectionPopupOrigin collection_popup_origin(const BlackFlowSession& session)
@@ -877,6 +884,17 @@ public:
     [[nodiscard]] std::shared_ptr<cv::Mat> last_image() const noexcept { return m_last_image; }
 
     [[nodiscard]] cv::Mat capture() const { return ctrler()->get_image(); }
+
+    bool capture_employ_frame(cv::Mat& image, int& sampled_frames)
+    {
+        return capture_unobstructed_employ_frame(
+            [&] { return capture(); },
+            employ_capture_frame_is_clear,
+            [&](int milliseconds) { return sleep(milliseconds); },
+            [&] { return need_exit(); },
+            image,
+            sampled_frames);
+    }
 
     bool capture_stable_move_preview(
         cv::Mat& image,
@@ -2404,6 +2422,46 @@ bool BlackFlowTaskPort::select_recruitment_voucher(std::string* error)
         set_error(error, unchanged ? "recruitment choice click failed" : "recruitment choice changed before click");
     }
     return clicked;
+}
+
+bool BlackFlowTaskPort::capture_employ_page(std::string* error)
+{
+    const auto session = m_collection_popup_session.lock();
+    if (session == nullptr) {
+        set_error(error, "employ capture session is not attached");
+        return false;
+    }
+    if (session->profile() != "automation_collection") {
+        return true;
+    }
+    if (m_task_context == nullptr) {
+        set_error(error, "employ capture context is not attached");
+        return false;
+    }
+    cv::Mat captured;
+    int sampled_frames = 0;
+    if (!m_task_context->capture_employ_frame(captured, sampled_frames)) {
+        set_error(error, "employ page did not become unobstructed before leaving (samples " +
+                             std::to_string(sampled_frames) + ")");
+        return false;
+    }
+    // Save before leaving even if a random landing cannot yet be bound to a map
+    // node. Keep unresolved attribution instead of borrowing the previous node.
+    const auto destination = resolve_collection_popup_destination(*session, {}, true);
+    const auto resolved = destination.value_or(collection_popup_origin(*session).unresolved_destination);
+    return persist_node_evidence_capture(
+        NodeEmployRunLogAction,
+        "BlackFlow@Roguelike@EmployLeave",
+        "before-leave",
+        captured,
+        resolved.directory,
+        resolved.attribution,
+        json::object {
+            { "screen", "employ" },
+            { "capture_kind", "unobstructed_before_leave" },
+            { "capture_stability", json::object { { "sampled_frames", sampled_frames }, { "clear_frames", 3 } } },
+        },
+        error);
 }
 
 bool BlackFlowTaskPort::capture_get_drop(

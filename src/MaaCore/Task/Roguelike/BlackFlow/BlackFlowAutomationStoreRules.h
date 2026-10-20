@@ -7,6 +7,7 @@
 #include <iterator>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -218,7 +219,15 @@ struct AutomationStoreIdentityHash
 };
 
 inline constexpr int AutomationStoreRefreshPriceStep = 4;
+// 自动采集在第 2 轮后停止付费刷新；N6 商店实际共有 4 次刷新机会，
+// 无缘果同样消耗这些机会，不能拿策略预算当作游戏的耗尽条件。
 inline constexpr int AutomationStoreMaxRefreshTimes = 2;
+inline constexpr int N6StoreRefreshLimit = 4;
+
+[[nodiscard]] inline constexpr bool automation_store_refresh_exhausted(int completed_refreshes) noexcept
+{
+    return completed_refreshes >= N6StoreRefreshLimit;
+}
 
 [[nodiscard]] inline constexpr int automation_store_refresh_price(int completed_refreshes) noexcept
 {
@@ -228,7 +237,7 @@ inline constexpr int AutomationStoreMaxRefreshTimes = 2;
 [[nodiscard]] inline constexpr bool
     automation_store_can_refresh(int completed_refreshes, int wallet, int reserve) noexcept
 {
-    return completed_refreshes < AutomationStoreMaxRefreshTimes &&
+    return completed_refreshes >= 0 && completed_refreshes < AutomationStoreMaxRefreshTimes &&
            wallet >= automation_store_refresh_price(completed_refreshes) + reserve;
 }
 
@@ -244,7 +253,7 @@ public:
     int record_refresh(const AutomationStoreIdentity& identity)
     {
         int& count = m_counts[identity];
-        count = std::min(count + 1, AutomationStoreMaxRefreshTimes);
+        count = std::min(count + 1, N6StoreRefreshLimit);
         return count;
     }
 
@@ -253,6 +262,11 @@ public:
 private:
     std::unordered_map<AutomationStoreIdentity, int, AutomationStoreIdentityHash> m_counts;
 };
+
+[[nodiscard]] inline constexpr bool merchant_sale_may_refresh(AutomationStoreKind kind, std::string_view name) noexcept
+{
+    return kind == AutomationStoreKind::Eerie && name == "无缘果";
+}
 
 [[nodiscard]] inline constexpr std::string_view automation_shop_resume_base_task() noexcept
 {
@@ -292,24 +306,6 @@ private:
     return std::nullopt;
 }
 
-// 两类商店共用同一组零件购买顺序；不在对应商店优先级中的商品永远不会进入购买候选。
-inline constexpr std::array<std::string_view, 14> SharedStorePartBuyPriority {
-    "一次性喷气背包",
-    "重弹簧",
-    "种子",
-    "老妈妈的融雪",
-    "坎诺特的触须",
-    "试作外骨骼",
-    "小八界",
-    "气垫底座",
-    "标准引擎",
-    "报废轮子",
-    "报废假肢",
-    "多生苔藓",
-    "雾滚草",
-    "白模鱼",
-};
-
 inline constexpr std::array<std::string_view, 8> EerieStoreCollectibleBuyPriority {
     "猎犬咖啡",
     "悲伤的红",
@@ -340,7 +336,7 @@ inline constexpr std::size_t EerieStoreCollectibleRunPurchaseLimit = 2;
     return name.ends_with("招募券");
 }
 
-inline constexpr std::array<std::string_view, 29> ShopBuyPriority {
+inline constexpr std::array<std::string_view, 34> ShopBuyPriority {
     "沙盘β",
     "医者-新典训",
     "医疗招募券",
@@ -370,9 +366,14 @@ inline constexpr std::array<std::string_view, 29> ShopBuyPriority {
     "铁卫-侵掠",
     "迷藏",
     "“小格兰法洛”",
+    "生逝",
+    "血橙",
+    "无缘果",
+    "力反馈方向盘",
+    "洛伦茨之眼",
 };
 
-inline constexpr std::array<std::string_view, 14> ScrapShopBuyPriority {
+inline constexpr std::array<std::string_view, 19> ScrapShopBuyPriority {
     "一次性喷气背包",
     "重弹簧",
     "种子",
@@ -387,22 +388,44 @@ inline constexpr std::array<std::string_view, 14> ScrapShopBuyPriority {
     "多生苔藓",
     "雾滚草",
     "白模鱼",
+    "生逝",
+    "血橙",
+    "无缘果",
+    "力反馈方向盘",
+    "洛伦茨之眼",
 };
 
-// 配额表示进入节点后希望保有的同名零件数；非零件商品不设配额。
+// 只列有限配额；未列出的可购买物品不限量。加工品还扣除进节点时的可用实例，
+// 自然物/概念体沿用本节点成功购买次数，不推算完整持有清单。
+struct StorePurchaseQuota
+{
+    std::string_view name;
+    std::size_t maximum;
+};
+
+inline constexpr std::array<StorePurchaseQuota, 15> StorePurchaseQuotas { {
+    { "重弹簧", 2 },
+    { "种子", 2 },
+    { "老妈妈的融雪", 2 },
+    { "坎诺特的触须", 1 },
+    { "试作外骨骼", 2 },
+    { "小八界", 1 },
+    { "气垫底座", 2 },
+    { "标准引擎", 2 },
+    { "报废轮子", 2 },
+    { "报废假肢", 2 },
+    { "多生苔藓", 2 },
+    { "雾滚草", 2 },
+    { "白模鱼", 2 },
+    { "生逝", 2 },
+    { "血橙", 2 },
+} };
+
 [[nodiscard]] inline constexpr std::optional<std::size_t>
     automation_store_purchase_quota(std::string_view name) noexcept
 {
-    if (name == "一次性喷气背包") {
-        return std::nullopt;
-    }
-    if (name == "坎诺特的触须" || name == "小八界") {
-        return 1;
-    }
-    if (std::ranges::find(SharedStorePartBuyPriority, name) != SharedStorePartBuyPriority.end()) {
-        return 2;
-    }
-    return std::nullopt;
+    const auto iter = std::ranges::find(StorePurchaseQuotas, name, &StorePurchaseQuota::name);
+    return iter == StorePurchaseQuotas.end() ? std::nullopt : std::optional<std::size_t> { iter->maximum };
 }
 
 [[nodiscard]] inline constexpr bool
@@ -431,25 +454,19 @@ inline constexpr std::array<std::string_view, 14> ScrapShopBuyPriority {
     }));
 }
 
-inline constexpr std::array<std::string_view, 6> MerchantConceptRecognitionVocabulary {
-    "白模鱼",
-    "白模狗",
-    "涂装阿戈尔",
-    "涂装佩洛",
-    "白模鸟",
-    "涂装黎博利",
-};
-
-inline constexpr std::array<std::string_view, 4> ProtectedMerchantConcepts {
-    "白模鱼",
-    "白模狗",
-    "涂装阿戈尔",
-    "涂装佩洛",
-};
-
-[[nodiscard]] inline constexpr bool merchant_sale_allowed(std::string_view name) noexcept
+// 识别完整零件词表，再按各店的出售名单筛选。未出售的相似名称也必须参与
+// OCR 纠错，避免把白模狗等名称纠成名单中允许出售的白模鸟。
+[[nodiscard]] inline std::vector<std::string> merchant_sale_recognition_vocabulary(
+    const std::vector<std::string>& sale_candidates,
+    const std::vector<std::string>& inventory_names)
 {
-    return std::ranges::find(ProtectedMerchantConcepts, name) == ProtectedMerchantConcepts.end();
+    std::vector<std::string> vocabulary = sale_candidates;
+    for (const auto& name : inventory_names) {
+        if (std::ranges::find(vocabulary, name) == vocabulary.end()) {
+            vocabulary.emplace_back(name);
+        }
+    }
+    return vocabulary;
 }
 
 // 只有秘境行商的轮子和假肢仍要求持有板藤；诡意行商及其余零件均不受此条件限制。
@@ -487,11 +504,15 @@ struct NaturalSaleFloor
     int minimum_price;
 };
 
-inline constexpr std::array<NaturalSaleFloor, 4> NaturalSaleFloors { {
-    { "雾滚草", 8 },
-    { "板藤", 32 },
-    { "浪花", 8 },
+inline constexpr std::array<NaturalSaleFloor, 8> NaturalSaleFloors { {
     { "多生苔藓", 12 },
+    { "雾滚草", 8 },
+    { "浪花", 8 },
+    { "板藤", 50 },
+    { "生逝", 16 },
+    { "血橙", 8 },
+    { "旅行绒", 24 },
+    { "无缘果", 14 },
 } };
 
 inline constexpr int PriceTextMaximumSaturation = 96;

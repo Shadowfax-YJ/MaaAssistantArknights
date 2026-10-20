@@ -1,0 +1,124 @@
+[
+    {
+        "schema_version": 1,
+        "sequence": 1,
+        "elapsed_ms": 1,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 1,
+        "task": "BlackFlowAutomationStore",
+        "action": "store.eerie.sale.refresh",
+        "phase": "completed",
+        "outcome": "refreshed",
+        "state": {},
+        "details": {
+            "item_name": "无缘果",
+            "refresh_index_before": 0,
+            "refresh_index": 1,
+            "refresh_limit": 4,
+            "trigger": "item_sale"
+        }
+    },
+    {
+        "schema_version": 1,
+        "sequence": 2,
+        "elapsed_ms": 2,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 1,
+        "task": "BlackFlowAutomationStore",
+        "action": "node.store.capture",
+        "phase": "after_refresh",
+        "outcome": "captured",
+        "state": {},
+        "details": {
+            "store_kind": "eerie_merchant",
+            "capture_phase": "after_refresh",
+            "capture_kind": "stitched_store_goods",
+            "refresh_index": 1
+        }
+    },
+    {
+        "schema_version": 1,
+        "sequence": 3,
+        "elapsed_ms": 3,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 2,
+        "task": "BlackFlowAutomationStore",
+        "action": "node.store.capture",
+        "phase": "initial",
+        "outcome": "captured",
+        "state": {},
+        "details": {
+            "store_kind": "eerie_merchant",
+            "capture_phase": "initial",
+            "capture_kind": "stitched_store_goods",
+            "refresh_index": 1
+        }
+    },
+    {
+        "schema_version": 1,
+        "sequence": 4,
+        "elapsed_ms": 4,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 3,
+        "task": "BlackFlowAutomationStore",
+        "action": "node.store.capture",
+        "phase": "after_refresh",
+        "outcome": "captured",
+        "state": {},
+        "details": {
+            "store_kind": "secret_merchant",
+            "capture_phase": "after_refresh",
+            "capture_kind": "stable_store_page",
+            "refresh_index": 1
+        }
+    },
+    {
+        "schema_version": 1,
+        "sequence": 5,
+        "elapsed_ms": 5,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 1,
+        "task": "BlackFlowAutomationStore",
+        "action": "store.eerie.sale.refresh",
+        "phase": "completed",
+        "outcome": "exhausted",
+        "state": {},
+        "details": {
+            "item_name": "无缘果",
+            "refresh_index_before": 4,
+            "refresh_index": 4,
+            "refresh_limit": 4,
+            "trigger": "item_sale"
+        }
+    },
+    {
+        "schema_version": 1,
+        "sequence": 6,
+        "elapsed_ms": 6,
+        "timestamp": "2026-10-20T00:00:00Z",
+        "level": "INFO",
+        "floor": 1,
+        "map_generation": 1,
+        "task": "BlackFlowAutomationStore",
+        "action": "node.store.capture",
+        "phase": "after_sale",
+        "outcome": "captured",
+        "state": {},
+        "details": {
+            "store_kind": "eerie_merchant",
+            "capture_phase": "after_sale",
+            "capture_kind": "stitched_store_goods",
+            "refresh_index": null
+        }
+    }
+]

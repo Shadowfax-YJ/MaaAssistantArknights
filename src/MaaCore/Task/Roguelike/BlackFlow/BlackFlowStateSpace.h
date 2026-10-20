@@ -27,13 +27,15 @@ using PlannerNodeMask = std::uint64_t;
 struct PlannerState
 {
     NodeId node = InvalidNodeId;
-    std::array<std::uint8_t, 13> movement_charges {};
+    std::array<std::uint8_t, ProcessingMovementSlotCount> movement_charges { };
+    bool lorentz_eye_available = false;
     PlannerNodeMask completed_nodes = 0;
     PlannerNodeMask opened_blockers = 0;
     PlannerNodeMask consumed_lights = 0;
     // 凶戾揭示控制避战合法性；其他隐藏节点的揭示也会改变小八界和定向加工品的动作集。
     PlannerNodeMask revealed_hidden_battles = 0;
     PlannerNodeMask newly_revealed_nodes = 0;
+    PlannerNodeMask projected_shops = 0;
     SafetyGoalProgressId goal_progress_id = InvalidSafetyGoalProgressId;
     // 只有当前站在“选择路过”的险路尽头时为 true；离开后自动清除，之后仍可重新
     // 进入同一尽头并选择真正下层。它不能写进 completed_nodes。

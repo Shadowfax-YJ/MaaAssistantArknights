@@ -1,4 +1,4 @@
-## v1.1.22
+## v1.1.23
 
 ### Highlights
 
@@ -6,9 +6,13 @@
 
 完善树洞探索和返回外层地图的衔接，修正树洞模板连线与日志归属，探索笔记保留已探明的事件和关卡名称。
 
-#### 路线规划与事件处理
+#### 内容拓展与路线规划
 
-改进随机落点、流窜居民与加工品的路线评估，完善派遣和祭献流程，并修复零件箱恢复首屏时的卡顿。
+接入四件新移动加工品和洛伦茨之眼，补齐新物品、关卡与三个事件的识别处理，更新难度 6 的物品取舍；继续保留随机落点、流窜居民与加工品的路线评估。
+
+#### 采集稳定性
+
+修复事件转作战时误入派遣界面的卡死，完善开局奖励确认与记录，保存无遮挡的应急助力截图。
 
 #### 独立自动更新与国内下载
 
@@ -21,9 +25,13 @@ Windows 和 macOS 支持采集版独立自动更新，保留已有设置与采�
 
 Improve tree-hole exploration and return routing, correct template corridors and evidence attribution, and preserve revealed event and stage names in exploration notes.
 
-#### Route planning and event handling
+#### Content expansion and route planning
 
-Improve route evaluation for random landings, roaming residents and movement items, refine expedition and sacrifice handling, and recover the inventory panel when scrolling cannot settle.
+Support four new movement items and the Lorentz Eye, recognize new items, stage names and three encounters, and update difficulty-6 item policies while retaining route evaluation for random landings and roaming residents.
+
+#### Collection stability
+
+Fix combat departure getting stuck in a falsely detected expedition page, improve opening reward confirmation and recording, and capture unobstructed emergency assistance pages.
 
 #### Dedicated automatic updates and CDN downloads
 
@@ -36,6 +44,27 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.23 (2026-10-21)</b></summary>
+
+### 新增 | New
+
+* 接入紧急逃生座椅、力反馈方向盘、鸣笛、坎诺特特快的移动范围、次数和路线规划。 @Shadowfax-YJ
+* 支持洛伦茨之眼的全图视野效果，补充新物品和 13 个新关卡名的识别。 @Shadowfax-YJ
+* 新增制图桌、大红按钮、手术祭坛的事件选择处理。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 更新难度 6 的物品购买、出售、战利品和过载取舍策略，支持无缘果售出触发的商店刷新。 @Shadowfax-YJ
+* 完整扫描零件箱，完善视野核对；应急助力离开前等待通知消失并保存清晰截图。 @Shadowfax-YJ
+
+### 修复 | Fix
+
+* 修复事件转入作战时，误把地图上的“先行一步”识别为派遣界面而卡住的问题。 @Shadowfax-YJ
+* 修复开局奖励漏记和来源归属错误，记录失败时阻止继续领取未记录的奖励。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.22 (2026-10-09)</b></summary>
 
 ### 修复 | Fix

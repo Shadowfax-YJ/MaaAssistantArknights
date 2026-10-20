@@ -15,6 +15,7 @@ constexpr std::string_view ButtonTask = "BlackFlow@Roguelike@GetDropTrophyReward
 constexpr std::string_view NameTask = "BlackFlow@Roguelike@TrophyRewardNameOCR";
 constexpr std::string_view CategoryTask = "BlackFlow@Roguelike@TrophyRewardCategoryOCR";
 constexpr std::string_view PriorityTask = "BlackFlow@Roguelike@TrophyRewardPriority";
+constexpr std::string_view NamesTask = "BlackFlow@Roguelike@TrophyRewardNames";
 } // namespace
 
 bool BlackFlowTrophyRewardAnalyzer::analyze()
@@ -24,6 +25,7 @@ bool BlackFlowTrophyRewardAnalyzer::analyze()
     const auto name_task = Task.get<OcrTaskInfo>(std::string(NameTask));
     const auto category_task = Task.get<OcrTaskInfo>(std::string(CategoryTask));
     const auto priority_task = Task.get<OcrTaskInfo>(std::string(PriorityTask));
+    const auto names_task = Task.get<OcrTaskInfo>(std::string(NamesTask));
     if (name_task == nullptr || category_task == nullptr || priority_task == nullptr) {
         Log.error(__FUNCTION__, "| trophy reward OCR task is missing");
         return false;
@@ -45,7 +47,7 @@ bool BlackFlowTrophyRewardAnalyzer::analyze()
 
         RegionOCRer name_ocr(m_image);
         name_ocr.set_task_info(name_task);
-        name_ocr.set_required(priority_task->text);
+        name_ocr.set_required(names_task == nullptr ? priority_task->text : names_task->text);
         name_ocr.set_roi(button.rect.move(name_task->roi));
         if (const auto result = name_ocr.analyze(); result.has_value()) {
             detection.name_rect = result->rect;

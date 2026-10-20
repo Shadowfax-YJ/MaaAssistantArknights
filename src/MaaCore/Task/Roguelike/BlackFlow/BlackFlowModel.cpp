@@ -26,7 +26,8 @@ bool move_preview_updates_target_identity(const MoveCandidate& candidate) noexce
 {
     // 定向移动的预览标题描述的是玩家点选的目标；小八界的点选节点只负责激活随机移动，
     // 既不是承诺落点，也不能因为标题揭示了它就取消本次随机移动并重规划。
-    return candidate.controllable;
+    const MovementSpec* spec = find_movement_spec(candidate.movement);
+    return candidate.controllable && (spec == nullptr || !spec->transformed_target_type.has_value());
 }
 
 bool is_generic_battle_name(NodeType type, std::string_view name) noexcept
@@ -122,6 +123,9 @@ NodeProgress effective_progress(const Node& node, const RunState& state) noexcep
 
 NodeType effective_node_type(const Node& node, const RunState& state) noexcept
 {
+    if (state.projected_shops.contains(node.id)) {
+        return NodeType::Shop;
+    }
     if (effective_progress(node, state) == NodeProgress::Completed && !node.traversal.repeatable &&
         node.type != NodeType::Empty) {
         return NodeType::Empty;
@@ -135,7 +139,7 @@ bool is_targetable(const Node& node, const RunState& state) noexcept
     if (!node.traversal.enterable || progress == NodeProgress::Removed) {
         return false;
     }
-    return progress != NodeProgress::Completed || node.traversal.repeatable;
+    return progress != NodeProgress::Completed || node.traversal.repeatable || state.projected_shops.contains(node.id);
 }
 
 bool is_walk_transparent(const Node& node, const RunState& state, GraphLayer layer) noexcept
@@ -887,7 +891,7 @@ PageContentEffect classify_page_content_effect(std::string_view source, std::str
         return {};
     }
 
-    static constexpr std::array<std::string_view, 29> IncidentEvents = {
+    static constexpr std::array<std::string_view, 33> IncidentEvents = {
         "桑尼的邀请",
         "色味不同源",
         "货从口出",
@@ -916,6 +920,10 @@ PageContentEffect classify_page_content_effect(std::string_view source, std::str
         "好奇心之死",
         "窥视箱中",
         "调谐仪式",
+        "制图桌",
+        "制图桌-2",
+        "大红按钮",
+        "手术祭坛",
         "行动奖励",
     };
     if (std::ranges::find(IncidentEvents, content) != IncidentEvents.end()) {
@@ -1002,7 +1010,7 @@ bool node_type_allowed(const MovementSpec& movement, NodeType type) noexcept
 const std::vector<MovementSpec>& movement_specs()
 {
     static const std::vector<MovementSpec> Specs = {
-        { MovementKind::Walk, "walk", "徒步跋涉", MovementRange::WalkEdges, AllTargetTypes, 1, -1, false, false, {} },
+        { MovementKind::Walk, "walk", "徒步跋涉", MovementRange::WalkEdges, AllTargetTypes, 1, -1, false, false, { } },
         { MovementKind::M01,
           "rogue_6_scrap_M_01",
           "报废轮子",
@@ -1012,7 +1020,7 @@ const std::vector<MovementSpec>& movement_specs()
           1,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M02,
           "rogue_6_scrap_M_02",
           "报废假肢",
@@ -1022,7 +1030,7 @@ const std::vector<MovementSpec>& movement_specs()
           1,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M03,
           "rogue_6_scrap_M_03",
           "标准引擎",
@@ -1032,7 +1040,7 @@ const std::vector<MovementSpec>& movement_specs()
           3,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M04,
           "rogue_6_scrap_M_04",
           "重弹簧",
@@ -1042,7 +1050,7 @@ const std::vector<MovementSpec>& movement_specs()
           1,
           false,
           true,
-          {} },
+          { } },
         { MovementKind::M05,
           "rogue_6_scrap_M_05",
           "气垫底座",
@@ -1052,7 +1060,7 @@ const std::vector<MovementSpec>& movement_specs()
           2,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M06,
           "rogue_6_scrap_M_06",
           "试作外骨骼",
@@ -1062,7 +1070,7 @@ const std::vector<MovementSpec>& movement_specs()
           2,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M07,
           "rogue_6_scrap_M_07",
           "小八界",
@@ -1072,7 +1080,7 @@ const std::vector<MovementSpec>& movement_specs()
           1,
           true,
           true,
-          {} },
+          { } },
         { MovementKind::M08,
           "rogue_6_scrap_M_08",
           "一次性喷气背包",
@@ -1082,7 +1090,7 @@ const std::vector<MovementSpec>& movement_specs()
           1,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M09,
           "rogue_6_scrap_M_09",
           "老妈妈的融雪",
@@ -1112,7 +1120,7 @@ const std::vector<MovementSpec>& movement_specs()
           3,
           false,
           false,
-          {} },
+          { } },
         { MovementKind::M12,
           "rogue_6_scrap_M_12",
           "简易遥控器",
@@ -1123,6 +1131,51 @@ const std::vector<MovementSpec>& movement_specs()
           false,
           false,
           { 3, 0, 0 } },
+        { MovementKind::M13,
+          "rogue_6_scrap_M_13",
+          "紧急逃生座椅",
+          MovementRange::FullMap,
+          { NodeType::Final, NodeType::BattleBoss, NodeType::Evacuate },
+          1,
+          1,
+          false,
+          false,
+          { } },
+        { MovementKind::M14,
+          "rogue_6_scrap_M_14",
+          "力反馈方向盘",
+          MovementRange::FullRowColumn,
+          AllTargetTypes,
+          1,
+          2,
+          false,
+          false,
+          { } },
+        { MovementKind::M15,
+          "rogue_6_scrap_M_15",
+          "鸣笛",
+          MovementRange::ManhattanTwo,
+          { NodeType::BattleNormal,
+            NodeType::BattleElite,
+            NodeType::BattleSavage,
+            NodeType::HideBattle,
+            NodeType::BattleBoss },
+          1,
+          1,
+          false,
+          false,
+          { } },
+        { MovementKind::M16,
+          "rogue_6_scrap_M_16",
+          "坎诺特特快",
+          MovementRange::FullMap,
+          { NodeType::Incident },
+          1,
+          1,
+          false,
+          false,
+          { },
+          NodeType::Shop },
     };
     return Specs;
 }
@@ -1229,6 +1282,8 @@ bool is_in_geometric_range(
         return (row_delta == 0 || column_delta == 0) && row_delta + column_delta <= 3;
     case MovementRange::FullMap:
         return true;
+    case MovementRange::FullRowColumn:
+        return row_delta == 0 || column_delta == 0;
     }
     return false;
 }
@@ -1306,7 +1361,9 @@ std::vector<MoveAction> enumerate_move_actions(
                     state.costs.movement_cost(*walk, action.candidate.path.size()));
                 action.candidate.predicted_action_point_gain = predicted_node_gain(*source_node, state);
                 action.candidate.possible_landings.emplace_back(action.candidate.landing);
-                action.candidate.landing_node_types.emplace(action.candidate.landing, source_node->type);
+                action.candidate.landing_node_types.emplace(
+                    action.candidate.landing,
+                    effective_node_type(*source_node, state));
                 action.candidate.landing_action_point_gains.emplace(
                     action.candidate.landing,
                     action.candidate.predicted_action_point_gain);
@@ -1366,7 +1423,9 @@ std::vector<MoveAction> enumerate_move_actions(
                             state.costs.movement_cost(*walk, path.size()));
                         action.candidate.predicted_action_point_gain = predicted_node_gain(*node, state);
                         action.candidate.possible_landings.emplace_back(action.candidate.landing);
-                        action.candidate.landing_node_types.emplace(action.candidate.landing, node->type);
+                        action.candidate.landing_node_types.emplace(
+                            action.candidate.landing,
+                            effective_node_type(*node, state));
                         action.candidate.landing_action_point_gains.emplace(
                             action.candidate.landing,
                             action.candidate.predicted_action_point_gain);
@@ -1512,7 +1571,9 @@ std::vector<MoveAction> enumerate_move_actions(
             action.candidate.predicted_action_point_gain =
                 movement.effect.action_point_gain + predicted_node_gain(*target_node, state);
             action.candidate.possible_landings.emplace_back(landing);
-            action.candidate.landing_node_types.emplace(landing, effective_node_type(*target_node, state));
+            action.candidate.landing_node_types.emplace(
+                landing,
+                movement.transformed_target_type.value_or(effective_node_type(*target_node, state)));
             action.candidate.landing_action_point_gains.emplace(landing, action.candidate.predicted_action_point_gain);
             action.candidate.controllable = true;
             action.candidate.terminal_on_completion = is_exit_node_type(target_node->type);
@@ -1582,8 +1643,13 @@ std::vector<MoveAction> enumerate_move_actions(
             return false;
         }
         const MovementSpec* movement = find_movement_spec(kind);
+        if (state.resources.random_reveals_on_processing_move > 0 ||
+            (state.resources.lorentz_eye_available &&
+             move_landing_type(action.candidate, action.candidate.landing) == NodeType::Light)) {
+            return false;
+        }
         if (movement == nullptr || movement->effect.action_point_gain != 0 || movement->effect.hope_gain != 0 ||
-            movement->effect.ingot_gain != 0) {
+            movement->effect.ingot_gain != 0 || movement->transformed_target_type.has_value()) {
             return false;
         }
         return std::ranges::any_of(confirmed_walks, [&](const ConfirmedWalk& walk_action) {

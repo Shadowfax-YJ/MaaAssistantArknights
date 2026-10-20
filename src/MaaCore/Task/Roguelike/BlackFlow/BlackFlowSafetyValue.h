@@ -34,8 +34,8 @@ struct SafetyValueAction
 struct SafetyDominanceDescriptor
 {
     std::uint64_t structure_hash = 0;
-    std::array<std::uint64_t, 5> structure {};
-    std::array<std::uint8_t, 13> movement_charges {};
+    std::array<std::uint64_t, 6> structure { };
+    std::array<std::uint8_t, ProcessingMovementSlotCount> movement_charges { };
 };
 
 struct LazySafetyValueProblem

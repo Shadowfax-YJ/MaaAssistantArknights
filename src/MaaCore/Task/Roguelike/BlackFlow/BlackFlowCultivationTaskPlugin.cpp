@@ -137,9 +137,7 @@ bool BlackFlowCultivationTaskPlugin::_run()
     if (work == PendingWork::SellDecision) {
         Task.set_task_base(std::string(SellAction), std::string(ToggleToBuyTask));
         const auto items = recognize(ctrler()->get_image(), std::string(SellItemsTask));
-        const auto sellable = std::ranges::find_if(items, [](const TextRect& item) {
-            return merchant_sale_allowed(item.text);
-        });
+        const auto sellable = items.begin();
         if (sellable != items.end()) {
             record_run_event(
                 RunLogLevel::Info,
@@ -276,9 +274,28 @@ std::vector<TextRect> BlackFlowCultivationTaskPlugin::recognize(const cv::Mat& i
 
     OCRer analyzer(image);
     analyzer.set_task_info(task_info);
-    analyzer.set_required(task_info->text);
+    const bool sale_task = task == SellItemsTask;
+    if (sale_task) {
+        const auto inventory = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@MovementInventoryAllItems");
+        if (inventory == nullptr) {
+            return {};
+        }
+        analyzer.set_required(merchant_sale_recognition_vocabulary(task_info->text, inventory->text));
+    }
+    else {
+        analyzer.set_required(task_info->text);
+    }
     const auto results = analyzer.analyze();
-    return results.has_value() ? std::move(*results) : std::vector<TextRect> {};
+    if (!results.has_value()) {
+        return {};
+    }
+    auto items = std::move(*results);
+    if (sale_task) {
+        std::erase_if(items, [&](const TextRect& item) {
+            return std::ranges::find(task_info->text, item.text) == task_info->text.end();
+        });
+    }
+    return items;
 }
 
 int BlackFlowCultivationTaskPlugin::read_number(const cv::Mat& image, const std::string& task) const

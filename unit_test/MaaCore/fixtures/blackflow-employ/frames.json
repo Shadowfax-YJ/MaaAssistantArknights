@@ -1,0 +1,42 @@
+[
+  {
+    "file": "run-20261016-165116-426279-3995.jpg",
+    "sha256": "f94a3982d0948a17e95a4cc08db3b19e5634eb3a4e619fe6984b05349cd22f62",
+    "clear": true
+  },
+  {
+    "file": "run-20261016-174433-616850-1099.jpg",
+    "sha256": "c4a4df7046c728210f9c6dbfbfca20be209b5f1aa9154fe6afe7ec8f80de19d2",
+    "clear": false
+  },
+  {
+    "file": "run-20261016-183343-806558-1501.jpg",
+    "sha256": "39adad9c72eead88632bf7e98b72d3493ef6b21b0f3d552f721104565f0266d0",
+    "clear": false
+  },
+  {
+    "file": "run-20261016-183343-806558-4977.jpg",
+    "sha256": "e08c03aeb0b20f0ad8af180fc7083c3327de1136460bcdbf7e236264e9697c65",
+    "clear": true
+  },
+  {
+    "file": "run-20261016-222401-293898-2807.jpg",
+    "sha256": "5e89d7b2af30f4fa9673d3608365db301b16bd423435f245b214cab92ba687f2",
+    "clear": false
+  },
+  {
+    "file": "run-20261016-222401-293898-3524.jpg",
+    "sha256": "7a68a6f2bbd8ec5f4fd4f3c90d609010019dc55421c239008d6b794fd1622b3d",
+    "clear": true
+  },
+  {
+    "file": "run-20261016-231801-731127-3686.jpg",
+    "sha256": "78ab393a0fea391822b9ac8f60dd62720cc69a8c94f2cc3e61ca63d541c5c1d1",
+    "clear": false
+  },
+  {
+    "file": "run-20261016-231801-731127-5304.jpg",
+    "sha256": "eae2adc1c0a4c1257eadae5b4cc700e5a983e18a6a113b321d6398bf847a9e48",
+    "clear": true
+  }
+]

@@ -39,6 +39,7 @@ RunState materialize_run_state(
     RunState result = source;
     result.current_node = state.node;
     result.resources.action_points = action_points;
+    result.resources.lorentz_eye_available = state.lorentz_eye_available;
     result.resources.movement_charges.clear();
     for (const auto& spec : movement_specs()) {
         if (spec.kind != MovementKind::Walk) {
@@ -52,9 +53,13 @@ RunState materialize_run_state(
     result.visited_nodes.clear();
     result.consumed_one_time_nodes.clear();
     result.revealed_nodes = source.revealed_nodes;
+    result.projected_shops.clear();
     for (std::size_t index = 0; index < indexed_nodes.size(); ++index) {
         const PlannerNodeMask bit = PlannerNodeMask { 1 } << index;
         const NodeId node = indexed_nodes[index];
+        if ((state.projected_shops & bit) != 0) {
+            result.projected_shops.emplace(node);
+        }
         if ((state.completed_nodes & bit) != 0) {
             result.node_progress.emplace(node, NodeProgress::Completed);
         }
@@ -77,7 +82,8 @@ bool unavailable_target(
     const Node* node = map.find_node(target);
     const auto bit = node_bit(node_indices, target);
     return node == nullptr || !bit.has_value() ||
-           (((state.completed_nodes & *bit) != 0) && !node->traversal.repeatable);
+           (((state.completed_nodes & *bit) != 0) && !node->traversal.repeatable &&
+            (state.projected_shops & *bit) == 0);
 }
 
 PlannerState transition_state(
@@ -105,8 +111,12 @@ PlannerState transition_state(
         return successor;
     }
 
-    if (!action.candidate.bypass_final_on_completion && !node->traversal.repeatable &&
-        node->type != NodeType::Empty) {
+    const MovementSpec* movement = find_movement_spec(action.candidate.movement);
+    if (movement != nullptr && movement->transformed_target_type == NodeType::Shop) {
+        successor.projected_shops |= *bit;
+    }
+    if (!action.candidate.bypass_final_on_completion && (successor.projected_shops & *bit) == 0 &&
+        !node->traversal.repeatable && node->type != NodeType::Empty) {
         successor.completed_nodes |= *bit;
         successor.opened_blockers &= ~*bit;
     }
@@ -114,6 +124,11 @@ PlannerState transition_state(
         successor.opened_blockers |= *bit;
     }
 
+    const bool full_light = node->type == NodeType::Light && (source.consumed_lights & *bit) == 0 &&
+                            lorentz_eye_activates(source.lorentz_eye_available, action.candidate.movement, node->type);
+    if (full_light) {
+        successor.lorentz_eye_available = false;
+    }
     if (node->type == NodeType::Light) {
         successor.consumed_lights |= *bit;
     }
@@ -122,7 +137,7 @@ PlannerState transition_state(
         auto revealed = map.reveal_through_transparent_nodes(landing);
         const Node* landed = map.find_node(landing);
         if (landed != nullptr && landed->type == NodeType::Light) {
-            const auto light_revealed = map.nodes_within_manhattan(landing, LightRevealRadius);
+            const auto light_revealed = light_reveal_nodes(map, landing, full_light);
             for (const NodeId id : light_revealed) {
                 revealed.emplace(id);
             }
@@ -130,6 +145,9 @@ PlannerState transition_state(
         for (const NodeId id : revealed) {
             const Node* revealed_node = map.find_node(id);
             const auto revealed_bit = node_bit(node_indices, id);
+            if (revealed_bit.has_value() && (source.completed_nodes & *revealed_bit) != 0) {
+                continue;
+            }
             if (revealed_node != nullptr && revealed_bit.has_value() &&
                 (revealed_node->visually_hidden || revealed_node->type == NodeType::HideInvisible ||
                  revealed_node->type == NodeType::HideBattle)) {
@@ -185,18 +203,20 @@ int unknown_big_nodes_revealed(
     const RunState& run,
     const PlannerState& state,
     const std::unordered_map<NodeId, std::uint8_t>& node_indices,
-    NodeId light)
+    NodeId light,
+    bool full_map)
 {
     const Node* light_node = map.find_node(light);
     if (light_node == nullptr || light_node->type != NodeType::Light) {
         return 0;
     }
     int count = 0;
-    for (const NodeId id : map.nodes_within_manhattan(light, LightRevealRadius)) {
+    for (const NodeId id : light_reveal_nodes(map, light, full_map)) {
         const Node* candidate = map.find_node(id);
         const auto candidate_mask = node_bit(node_indices, id);
         if (candidate == nullptr || candidate->type == NodeType::Empty || candidate->identity_revealed ||
             (candidate_mask.has_value() && (state.completed_nodes & *candidate_mask) != 0) ||
+            (candidate_mask.has_value() && (state.newly_revealed_nodes & *candidate_mask) != 0) ||
             run.revealed_nodes.contains(id) || revealed_by_consumed_light(map, state, node_indices, id)) {
             continue;
         }
@@ -231,10 +251,19 @@ bool advance_goal_progress(
         }
         return false;
     }
-    const int revealed = unknown_big_nodes_revealed(map, run, source, node_indices, entered_node);
+    const int revealed = unknown_big_nodes_revealed(
+        map, run, source, node_indices, entered_node, source.lorentz_eye_available && !successor.lorentz_eye_available);
+    Node effective_entered = *entered;
+    if (const auto entered_bit = node_bit(node_indices, entered_node);
+        entered_bit.has_value() && (successor.projected_shops & *entered_bit) != 0) {
+        effective_entered.type = NodeType::Shop;
+        effective_entered.name = "诡意行商";
+        effective_entered.badged = false;
+        effective_entered.traversal = default_traversal_for(NodeType::Shop);
+    }
     const auto next_progress =
         options.safety_goal
-            ->advance_node(source.goal_progress_id, *entered, revealed, *options.safety_goal_facts, error);
+            ->advance_node(source.goal_progress_id, effective_entered, revealed, *options.safety_goal_facts, error);
     if (!next_progress.has_value()) {
         return false;
     }
@@ -294,12 +323,20 @@ std::optional<ProjectedMoveOutcome> project_move_outcome(
     }
 
     outcome.run.visited_nodes.emplace(move.target);
-    if (!move.bypass_final_on_completion && !target->traversal.repeatable && target->type != NodeType::Empty) {
+    if (movement->transformed_target_type == NodeType::Shop) {
+        outcome.run.projected_shops.emplace(move.target);
+    }
+    if (!move.bypass_final_on_completion && !outcome.run.projected_shops.contains(move.target) &&
+        !target->traversal.repeatable && target->type != NodeType::Empty) {
         outcome.run.node_progress.insert_or_assign(move.target, NodeProgress::Completed);
     }
     if (target->type == NodeType::Light && !outcome.run.consumed_one_time_nodes.contains(move.target)) {
         outcome.run.consumed_one_time_nodes.emplace(move.target);
-        const auto revealed = map.nodes_within_manhattan(move.target, 2);
+        const bool full_map = lorentz_eye_activates(run.resources.lorentz_eye_available, move.movement, target->type);
+        if (full_map) {
+            outcome.run.resources.lorentz_eye_available = false;
+        }
+        const auto revealed = light_reveal_nodes(map, move.target, full_map);
         outcome.run.revealed_nodes.insert(revealed.begin(), revealed.end());
     }
     if (move.movement != MovementKind::Walk && is_route_battle_node_type(target->type) &&
@@ -315,6 +352,7 @@ std::optional<ProjectedMoveOutcome> project_move_outcome(
 std::size_t PlannerStateHash::operator()(const PlannerState& state) const noexcept
 {
     std::size_t seed = std::hash<NodeId> {}(state.node);
+    seed = combine_hash(seed, std::hash<bool> {}(state.lorentz_eye_available));
     for (const auto charge : state.movement_charges) {
         seed = combine_hash(seed, std::hash<std::uint8_t> {}(charge));
     }
@@ -323,6 +361,7 @@ std::size_t PlannerStateHash::operator()(const PlannerState& state) const noexce
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.consumed_lights));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.revealed_hidden_battles));
     seed = combine_hash(seed, std::hash<PlannerNodeMask> {}(state.newly_revealed_nodes));
+    seed = combine_hash(seed, std::hash<PlannerNodeMask> { }(state.projected_shops));
     seed = combine_hash(seed, std::hash<SafetyGoalProgressId> {}(state.goal_progress_id));
     seed = combine_hash(seed, std::hash<bool> {}(state.current_final_bypassed));
     return combine_hash(seed, std::hash<bool> {}(state.terminal));
@@ -392,6 +431,12 @@ bool OnDemandStateGraph::initialize(
 
     PlannerState initial;
     initial.node = run.current_node;
+    initial.lorentz_eye_available = run.resources.lorentz_eye_available;
+    for (const NodeId node : run.projected_shops) {
+        if (const auto mask = bit(node); mask.has_value()) {
+            initial.projected_shops |= *mask;
+        }
+    }
     if (const Node* current = map.find_node(run.current_node); current != nullptr && current->type == NodeType::Final) {
         // 能观察到仍停留在本层尽头，就说明上一次选择的是“路过”；真正进入尽头不会
         // 再产生这张同层地图。
@@ -646,7 +691,7 @@ const std::vector<OnDemandSafetyAction>* OnDemandStateGraph::actions(SafetyState
                         return false;
                     }
                     return node != nullptr && route_landing_is_forbidden(
-                                                  node->type,
+                                                  move_landing_type(move.candidate, id),
                                                   revealed_before_landing,
                                                   m_options.allow_revealed_hidden_battle,
                                                   m_options.forbidden_node_types);

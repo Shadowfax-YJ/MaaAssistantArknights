@@ -27,6 +27,10 @@ if __name__ == '__main__':
         ('WALK', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::verify_walking_on_map('),
         ('CLOSE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::close_panel('),
         ('INVENTORY_OBSERVE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::observe_inventory('),
+        ('INVENTORY_REGION', 'BlackFlowMovementTaskPlugin.cpp', 'cv::Mat inventory_card_region('),
+        ('INVENTORY_NAMES_UNCHANGED', 'BlackFlowMovementTaskPlugin.cpp', 'bool inventory_name_rows_unchanged('),
+        ('INVENTORY_SCAN', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::scan_inventory_frame('),
+        ('INVENTORY_ANALYZE', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugin::analyze_inventory_frame('),
         ('REWARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'bool BlackFlowNodeEvidenceTaskPlugin::_run('),
         ('GUARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check('),
     ):
@@ -38,4 +42,6 @@ if __name__ == '__main__':
     source = subprocess.check_output(['git', 'show', f'{args.source_ref}:{path.as_posix()}'], cwd=repo).decode('utf-8') if args.source_ref else (repo / path).read_text('utf-8')
     reward_method = extract(source, 'bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()')
     result = result.replace('/*START_REWARD*/', extract(reward_method, 'if (automation_collection)'))
+    failure_method = extract(source, 'bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()')
+    result = result.replace('/*START_REWARD_FAILURE*/', failure_method[failure_method.index('{'):])
     args.output.write_text(result, encoding='utf-8')

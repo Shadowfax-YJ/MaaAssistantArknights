@@ -644,7 +644,7 @@ TEST_CASE("BlackFlow collection popups classify buttons and explicit sources")
     REQUIRE(
         collection_popup_source(
             "BlackFlow@Roguelike@SquadConfirm@(BlackFlow@Roguelike@CloseCollection)") ==
-        CollectionPopupSource::SquadReward);
+        CollectionPopupSource::StartReward);
     REQUIRE(
         collection_popup_source(
             "BlackFlow@Roguelike@NextLevel@(BlackFlow@Roguelike@CloseCollection)") ==
@@ -1072,6 +1072,7 @@ TEST_CASE("BlackFlow node evidence classifies exact GetDrop screens")
     REQUIRE(is_node_evidence_run_log_action(NodeEventRunLogAction));
     REQUIRE(is_node_evidence_run_log_action(NodeGetDropRunLogAction));
     REQUIRE(is_node_evidence_run_log_action(NodeRecruitmentRunLogAction));
+    REQUIRE(is_node_evidence_run_log_action(NodeEmployRunLogAction));
     REQUIRE(is_node_evidence_run_log_action(NodeStoreRunLogAction));
     REQUIRE(is_node_evidence_run_log_action(NodeStorePurchaseRunLogAction));
     const auto two_option_selection = resolve_drop_option_selection(
@@ -2215,6 +2216,7 @@ TEST_CASE("BlackFlow automation collection prioritizes swaddled-animal start rew
                 "襁褓白泽",
                 "襁褓巨龙",
                 "襁褓骏鹰",
+                "襁褓九头蛇",
                 "未编号物",
                 "退行补偿",
                 "林间代步",
@@ -2281,6 +2283,16 @@ TEST_CASE("BlackFlow start reward selection is OCR-only and confirms the selecte
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
+
+    const auto& squad_confirm = tasks->at("BlackFlow@Roguelike@SquadConfirm");
+    REQUIRE(squad_confirm.get("algorithm", std::string {}) == "OcrDetect");
+    REQUIRE(squad_confirm.get("text", std::vector<std::string> {}) == std::vector<std::string> { "分队" });
+    REQUIRE(squad_confirm.get("action", std::string {}) == "DoNothing");
+    REQUIRE(squad_confirm.get("sub", std::vector<std::string> {}) ==
+            std::vector<std::string> { "BlackFlow@Roguelike@SquadConfirmButton" });
+    REQUIRE_FALSE(tasks->contains("BlackFlow@Roguelike@SquadConfirmRewardPopup"));
+    REQUIRE(tasks->at("BlackFlow@Roguelike@Squad-EnterPoint").get("next", std::vector<std::string> {}).front() ==
+            "BlackFlow@Roguelike@LastReward-EnterPoint");
 
     const auto& enter = tasks->at("BlackFlow@Roguelike@LastReward-EnterPoint");
     REQUIRE(enter.get("algorithm", std::string {}) == "OcrDetect");
@@ -2558,6 +2570,8 @@ TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
         REQUIRE(task.get("maxTimes", 0) >= 3);
         REQUIRE_FALSE(task.get("exceededNext", std::vector<std::string> {}).empty());
     };
+    // The capture plugin owns this click; ProcessTask must never bypass a failed save.
+    REQUIRE(tasks->at("BlackFlow@Roguelike@EmployLeave").get("action", std::string()) == "DoNothing");
     for (const std::string& name : {
              "BlackFlow@Roguelike@MovementInventoryOpen",
              "BlackFlow@Roguelike@MovementInventoryClose",
@@ -3066,6 +3080,15 @@ TEST_CASE("BlackFlow inventory defers clipped names and does not count a partial
     REQUIRE_FALSE(inventory_column_only_shifted_partially(before, different));
 }
 
+static json::value approved_n6_item_policy()
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto approved = json::open(root / "unit_test/MaaCore/fixtures/blackflow-item-policy/approved-n6.json");
+    REQUIRE(approved.has_value());
+    REQUIRE(approved->at("difficulty").as_integer() == 6);
+    return approved->at("policy");
+}
+
 TEST_CASE("BlackFlow overload cleanup keeps the configured cross-category discard order")
 {
     const std::filesystem::path repository_root =
@@ -3076,14 +3099,7 @@ TEST_CASE("BlackFlow overload cleanup keeps the configured cross-category discar
     const auto discard_priority =
         tasks->at("BlackFlow@Roguelike@MovementInventoryDiscardPriority")
             .get("text", std::vector<std::string> {});
-    const std::vector<std::string> expected {
-        "白模鸟",         "涂装黎博利",   "枯苔藓球",   "报废假肢",       "报废轮子",
-        "涂装阿戈尔",     "涂装佩洛",     "白模狗",     "血蕈",           "白模鱼",
-        "雾滚草",         "浪花",         "霜晶树",     "回声玉米",       "种子",
-        "小八界",         "标准引擎",     "试作外骨骼", "气垫底座",       "多生苔藓",
-        "坎诺特的触须",   "重弹簧",       "老妈妈的融雪", "笼控器",       "恋家果",
-        "板藤",           "光彩松露",     "一次性喷气背包", "“简易遥控器”", "结构性原理",
-    };
+    const auto expected = approved_n6_item_policy().get("discard", std::vector<std::string> {});
     REQUIRE(discard_priority == expected);
 
     const auto before_quota_excess =
@@ -3559,55 +3575,11 @@ TEST_CASE("BlackFlow eerie merchant scans the lower shelf before choosing a prod
 
 TEST_CASE("BlackFlow automation merchant uses the configured recruitment and part priorities")
 {
-    constexpr std::array<std::string_view, 29> expected_shop_priority {
-        "沙盘β",
-        "医者-新典训",
-        "医疗招募券",
-        "重装招募券",
-        "精锐重装招募券",
-        "堡垒协议招募券",
-        "特种招募券",
-        "一次性喷气背包",
-        "重弹簧",
-        "种子",
-        "老妈妈的融雪",
-        "坎诺特的触须",
-        "试作外骨骼",
-        "小八界",
-        "气垫底座",
-        "标准引擎",
-        "报废轮子",
-        "报废假肢",
-        "多生苔藓",
-        "雾滚草",
-        "白模鱼",
-        "猎犬咖啡",
-        "悲伤的红",
-        "《炎国字汇》",
-        "三尺万象",
-        "医者-自医",
-        "铁卫-侵掠",
-        "迷藏",
-        "“小格兰法洛”",
-    };
-    constexpr std::array<std::string_view, 14> expected_scrap_shop_priority {
-        "一次性喷气背包",
-        "重弹簧",
-        "种子",
-        "老妈妈的融雪",
-        "坎诺特的触须",
-        "试作外骨骼",
-        "小八界",
-        "气垫底座",
-        "标准引擎",
-        "报废轮子",
-        "报废假肢",
-        "多生苔藓",
-        "雾滚草",
-        "白模鱼",
-    };
-    REQUIRE(ShopBuyPriority == expected_shop_priority);
-    REQUIRE(ScrapShopBuyPriority == expected_scrap_shop_priority);
+    const auto approved = approved_n6_item_policy();
+    const auto shop = approved.get("shop_buy", std::vector<std::string> {});
+    const auto secret = approved.get("scrap_shop_buy", std::vector<std::string> {});
+    REQUIRE(std::ranges::equal(ShopBuyPriority, shop));
+    REQUIRE(std::ranges::equal(ScrapShopBuyPriority, secret));
 
     const auto shop_wheel = std::ranges::find(ShopBuyPriority, "报废轮子");
     const auto shop_limb = std::ranges::find(ShopBuyPriority, "报废假肢");
@@ -3644,8 +3616,8 @@ TEST_CASE("BlackFlow automation merchant uses the configured recruitment and par
     REQUIRE(std::next(seed) != trophy_priority.end());
     REQUIRE(*std::prev(seed) == "小八界");
     REQUIRE(*std::next(seed) == "报废轮子");
-    REQUIRE(trophy_priority[trophy_priority.size() - 2] == "白模鸟");
-    REQUIRE(trophy_priority.back() == "笼控器");
+    REQUIRE(trophy_priority == approved.get("loot", std::vector<std::string> {}));
+    REQUIRE(std::ranges::find(trophy_priority, "笼控器") == trophy_priority.end());
 
 }
 
@@ -3655,12 +3627,17 @@ TEST_CASE("BlackFlow merchant purchase limits include usable parts held on node 
     REQUIRE(automation_store_purchase_quota("坎诺特的触须") == 1);
     REQUIRE(automation_store_purchase_quota("小八界") == 1);
 
-    for (const std::string_view name : SharedStorePartBuyPriority) {
+    const auto approved = approved_n6_item_policy();
+    for (const std::string_view name : ScrapShopBuyPriority) {
         CAPTURE(name);
-        if (name == "一次性喷气背包" || name == "坎诺特的触须" || name == "小八界") {
-            continue;
+        const auto& quotas = approved.at("purchase_quotas");
+        if (quotas.contains(std::string(name))) {
+            REQUIRE(automation_store_purchase_quota(name) == quotas.at(std::string(name)).as_integer());
         }
-        REQUIRE(automation_store_purchase_quota(name) == 2);
+        else {
+            REQUIRE_FALSE(automation_store_purchase_quota(name).has_value());
+            REQUIRE(automation_store_purchase_quota_allowed(name, 100, 100));
+        }
     }
     REQUIRE_FALSE(automation_store_purchase_quota("猎犬咖啡").has_value());
 
@@ -3784,15 +3761,15 @@ TEST_CASE("BlackFlow merchant OCR keeps concept recognition separate from purcha
 TEST_CASE("BlackFlow protected natural parts respect minimum sale prices")
 {
     REQUIRE(minimum_natural_sale_price("雾滚草") == 8);
-    REQUIRE(minimum_natural_sale_price("板藤") == 32);
+    REQUIRE(minimum_natural_sale_price("板藤") == 50);
     REQUIRE(minimum_natural_sale_price("浪花") == 8);
     REQUIRE(minimum_natural_sale_price("多生苔藓") == 12);
     REQUIRE_FALSE(minimum_natural_sale_price("血蕈").has_value());
 
     REQUIRE_FALSE(natural_sale_price_allowed("雾滚草", 7));
     REQUIRE(natural_sale_price_allowed("雾滚草", 8));
-    REQUIRE_FALSE(natural_sale_price_allowed("板藤", 31));
-    REQUIRE(natural_sale_price_allowed("板藤", 32));
+    REQUIRE_FALSE(natural_sale_price_allowed("板藤", 49));
+    REQUIRE(natural_sale_price_allowed("板藤", 50));
     REQUIRE_FALSE(natural_sale_price_allowed("浪花", std::nullopt));
     REQUIRE_FALSE(natural_sale_price_allowed("多生苔藓", 11));
     REQUIRE(natural_sale_price_allowed("多生苔藓", 12));
@@ -4051,12 +4028,14 @@ TEST_CASE("BlackFlow merchant sale recognition never includes processing product
     }
 }
 
-TEST_CASE("BlackFlow merchant sale OCR recognizes protected concepts without selling them")
+TEST_CASE("BlackFlow merchant sale whitelists keep declined names in the recognition vocabulary")
 {
     const std::filesystem::path repository_root =
         std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
+    const auto inventory = tasks->at("BlackFlow@Roguelike@MovementInventoryAllItems")
+                               .get("text", std::vector<std::string> {});
 
     for (const std::string_view task_name : {
              "BlackFlow@Roguelike@AutomationShopSellItems",
@@ -4064,21 +4043,25 @@ TEST_CASE("BlackFlow merchant sale OCR recognizes protected concepts without sel
              "BlackFlow@Roguelike@CultivateSellItems",
          }) {
         CAPTURE(task_name);
-        const auto recognized = tasks->at(std::string(task_name)).get("text", std::vector<std::string> {});
+        const auto candidates = tasks->at(std::string(task_name)).get("text", std::vector<std::string> {});
+        const auto recognized = merchant_sale_recognition_vocabulary(candidates, inventory);
         REQUIRE(tasks->at(std::string(task_name)).get("fuzzyMatch", false));
-        for (const std::string_view concept_name : MerchantConceptRecognitionVocabulary) {
+        for (const std::string_view concept_name : { "白模鱼", "白模狗", "涂装阿戈尔", "涂装佩洛" }) {
             REQUIRE(std::ranges::find(recognized, concept_name) != recognized.end());
             const FuzzyTextMatch match = fuzzy_match_ocr_text(concept_name, recognized);
             REQUIRE(match.accepted);
             REQUIRE(match.exact);
             REQUIRE(match.canonical == concept_name);
+            REQUIRE(std::ranges::find(candidates, match.canonical) == candidates.end());
+        }
+        for (const std::string_view concept_name : { "白模鸟", "涂装黎博利", "洛伦茨之眼", "白模坎诺特", "涂装坎诺特" }) {
+            REQUIRE(std::ranges::find(recognized, concept_name) != recognized.end());
+            const bool automatic = task_name != "BlackFlow@Roguelike@CultivateSellItems";
+            if (automatic) {
+                REQUIRE(std::ranges::find(candidates, concept_name) == candidates.end());
+            }
         }
     }
-    for (const std::string_view protected_concept : ProtectedMerchantConcepts) {
-        REQUIRE_FALSE(merchant_sale_allowed(protected_concept));
-    }
-    REQUIRE(merchant_sale_allowed("白模鸟"));
-    REQUIRE(merchant_sale_allowed("涂装黎博利"));
 }
 
 TEST_CASE("BlackFlow automation shops use the required post-purchase settle delay")
@@ -4544,7 +4527,7 @@ TEST_CASE("BlackFlow inventory knowledge expires on floor entry and node complet
 
 TEST_CASE("BlackFlow event titles restore their landing node semantics")
 {
-    static constexpr std::array<std::string_view, 28> incident_events = {
+    static constexpr std::array<std::string_view, 32> incident_events = {
         "桑尼的邀请",
         "色味不同源",
         "货从口出",
@@ -4573,6 +4556,10 @@ TEST_CASE("BlackFlow event titles restore their landing node semantics")
         "好奇心之死",
         "窥视箱中",
         "调谐仪式",
+        "制图桌",
+        "制图桌-2",
+        "大红按钮",
+        "手术祭坛",
     };
     for (const std::string_view event : incident_events) {
         const PageContentEffect effect = classify_page_content_effect("RoguelikeEvent", event);
@@ -11206,4 +11193,65 @@ TEST_CASE("BlackFlow future route value accounts for residents moving off or ont
     REQUIRE(found != plan.decision.candidate_summaries.end());
     CHECK(found->effective_node_count == expected);
     CHECK(found->effective_node_income.total() == expected);
+}
+
+TEST_CASE("BlackFlow approved N6 sale prices and automatic whitelists are applied together")
+{
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+    const auto tasks = json::open(root / "resource/tasks/Roguelike/BlackFlow.json");
+    REQUIRE(tasks.has_value());
+    const auto policy = approved_n6_item_policy();
+    for (const auto& [task, key] : {
+             std::pair { "AutomationShopSellItems", "shop_sale" },
+             std::pair { "AutomationCultivateSellItems", "scrap_shop_sale" },
+         }) {
+        const auto actual = tasks->at(std::string("BlackFlow@Roguelike@") + task).get("text", std::vector<std::string> {});
+        REQUIRE(actual == policy.get(key, std::vector<std::string> {}));
+        for (const auto& name : actual) {
+            CAPTURE(task, name);
+            const auto& floors = policy.at("minimum_sale_prices");
+            if (floors.contains(name)) {
+                const int floor = floors.at(name).as_integer();
+                REQUIRE(minimum_natural_sale_price(name) == floor);
+                REQUIRE_FALSE(natural_sale_price_allowed(name, std::nullopt));
+                REQUIRE_FALSE(natural_sale_price_allowed(name, floor - 1));
+                REQUIRE(natural_sale_price_allowed(name, floor));
+            }
+            else {
+                REQUIRE_FALSE(minimum_natural_sale_price(name).has_value());
+            }
+        }
+    }
+    const auto secret_vocabulary = tasks->at("BlackFlow@Roguelike@AutomationCultivateBuyItems")
+                                      .get("text", std::vector<std::string> {});
+    for (const auto name : ScrapShopBuyPriority) {
+        REQUIRE(std::ranges::find(secret_vocabulary, name) != secret_vocabulary.end());
+    }
+}
+
+TEST_CASE("BlackFlow fruit sale uses the game refresh limit rather than the paid strategy budget")
+{
+    REQUIRE(merchant_sale_may_refresh(AutomationStoreKind::Eerie, "无缘果"));
+    REQUIRE_FALSE(merchant_sale_may_refresh(AutomationStoreKind::Secret, "无缘果"));
+    REQUIRE_FALSE(merchant_sale_may_refresh(AutomationStoreKind::Eerie, "生逝"));
+    AutomationStoreRefreshLedger ledger;
+    const AutomationStoreIdentity shop { 9, 42, AutomationStoreKind::Eerie };
+    const AutomationStoreIdentity secret { 9, 42, AutomationStoreKind::Secret };
+    REQUIRE(ledger.record_refresh(shop) == 1);
+    REQUIRE(automation_store_can_refresh(ledger.refresh_count(shop), 100, 8));
+    REQUIRE(automation_store_refresh_price(ledger.refresh_count(shop)) == 8);
+    REQUIRE(ledger.record_refresh(shop) == 2);
+    REQUIRE_FALSE(automation_store_can_refresh(ledger.refresh_count(shop), 100, 8));
+    REQUIRE_FALSE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
+    REQUIRE(ledger.record_refresh(shop) == 3);
+    REQUIRE_FALSE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
+    REQUIRE(ledger.record_refresh(shop) == 4);
+    REQUIRE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
+    REQUIRE(ledger.record_refresh(shop) == 4);
+    REQUIRE(ledger.refresh_count(secret) == 0);
+    ledger.clear();
+    REQUIRE(ledger.refresh_count(shop) == 0);
+    REQUIRE(ledger.record_refresh(shop) == 1);
+    REQUIRE(ledger.record_refresh(shop) == 2);
+    REQUIRE(ledger.record_refresh(shop) == 3);
 }

@@ -10,8 +10,9 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 using namespace asst;
 using namespace asst::blackflow;
-struct {void set_task_base(std::string, std::string){}} Task;
+struct {std::string destination; void set_task_base(std::string, std::string to){destination=std::move(to);}} Task;
 constexpr std::string_view ShopRefreshConfirmTask="confirm", ShopWalletTask="wallet", ShopLeaveEntry="leave";
+constexpr std::string_view ShopSellAction="sale", ShopToggleToBuyEntry="buy";
 // Only clock, vision and controller I/O are injected; the callback and polling logic are production code.
 struct ReplayClock {
     inline static std::chrono::milliseconds elapsed{0};
@@ -38,7 +39,7 @@ namespace asst::blackflow {
 class BlackFlowAutomationStoreTaskPlugin {
 public:
     BlackFlowAutomationStoreTaskPlugin(){ReplayClock::elapsed=std::chrono::milliseconds(0);}
-    enum class PendingWork {ShopRefreshOpening,ShopRefreshFailed,ShopRefreshCompleted};
+    enum class PendingWork {ShopSellConfirmed,ShopSellDecision,ShopRefreshOpening,ShopRefreshFailed,ShopRefreshCompleted};
     Controller controller;
     std::optional<int> m_shop_refresh_wallet_before=25;
     json::object m_shop_refresh_diagnostics;
@@ -48,6 +49,13 @@ public:
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     AutomationStoreRefreshLedger m_refresh_ledger;
     std::vector<int> m_shop_purchased,m_shop_attempted,m_shop_attempted_names,m_shop_sell_attempted,m_shop_goods;
+    std::vector<std::string> m_shop_purchased_names;
+    std::optional<Rect> m_pending_sale;
+    std::optional<std::string> m_pending_sale_name;
+    bool m_shop_sale_refresh_pending=false;
+    std::string capture_phase;
+    int capture_index=0;
+    int cleared_purchases=0;
     bool m_shop_sold_in_cycle=false;
     enum class ShelfPage{Top}; ShelfPage m_shop_shelf_page=ShelfPage::Top;
     Controller* ctrler(){return &controller;}
@@ -55,8 +63,8 @@ public:
     bool sleep(int milliseconds){ReplayClock::elapsed+=std::chrono::milliseconds(milliseconds);if(cancel_after_reads && controller.reads>=cancel_after_reads)cancel=true;return !cancel;}
     bool purchase_wallet_page(const cv::Mat& i, AutomationStoreKind) const {return !i.empty() && i.at<cv::Vec3b>(0,0)[0]==1;}
     std::optional<int> read_optional_number(const cv::Mat& i,std::string) const {return i.empty() || i.at<cv::Vec3b>(0,0)[1]==255 ? std::nullopt:std::optional<int>(i.at<cv::Vec3b>(0,0)[1]);}
-    void clear_pending_purchase(){}
-    void queue_eerie_store_snapshot(std::string,int){++snapshots;}
+    void clear_pending_purchase(){++cleared_purchases;}
+    void queue_eerie_store_snapshot(std::string phase,int index){++snapshots;capture_phase=std::move(phase);capture_index=index;}
     template<class... T> void record_run_event(T&&...){}
     void stop_unverified_shop_refresh(std::string){stopped=true;}
     bool verify_shop_refresh_receipt();
@@ -132,6 +140,51 @@ int main(){
     cancel_wait.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
     ok=!cancel_wait.stopped && cancel_wait.m_shop_refresh_count==0 && cancel_wait.snapshots==0 && cancel_wait.controller.reads==6;
     std::cout<<(ok?"PASS ":"FAIL ")<<"cancellation during network wait has no success or failure side effects"<<std::endl;failed+=!ok;++total;
+    for (const int prior : {0, 1, 2, 3, 4}) {
+        BlackFlowAutomationStoreTaskPlugin fruit;
+        fruit.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
+        for(int i=0;i<prior;++i)fruit.m_refresh_ledger.record_refresh(*fruit.m_active_shop_identity);
+        fruit.m_shop_refresh_count=prior;
+        fruit.m_pending_sale_name="无缘果";
+        fruit.m_pending_sale=Rect{400,200,100,30};
+        fruit.m_shop_purchased={1}; fruit.m_shop_goods={2}; fruit.m_shop_attempted={3};
+        fruit.m_shop_attempted_names={4}; fruit.m_shop_sell_attempted={5};
+        fruit.m_shop_purchased_names={"生逝","生逝"};
+        fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+        const bool refreshed=prior<4;
+        const int expected=refreshed?prior+1:prior;
+        ok=fruit.m_shop_refresh_count==expected && fruit.m_refresh_ledger.refresh_count(*fruit.m_active_shop_identity)==expected &&
+           fruit.snapshots==int(refreshed) && fruit.m_shop_sale_refresh_pending==refreshed &&
+           fruit.m_shop_purchased.empty()==refreshed && fruit.m_shop_goods.empty()==refreshed &&
+           fruit.m_shop_attempted.empty()==refreshed && fruit.m_shop_attempted_names.empty()==refreshed &&
+           fruit.m_shop_sell_attempted.empty()==refreshed && fruit.m_shop_purchased_names.size()==2 && !fruit.m_pending_sale_name &&
+           automation_store_can_refresh(fruit.m_shop_refresh_count,100,8)==(expected<2);
+        if(refreshed)ok=ok && fruit.capture_phase=="after_refresh" && fruit.capture_index==expected && !fruit.m_shop_refresh_wallet_before;
+        std::cout<<(ok?"PASS ":"FAIL ")<<"fruit sale advances until game exhaustion after "<<prior<<" refreshes"<<std::endl;failed+=!ok;++total;
+        fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+        ok=fruit.snapshots==int(refreshed);
+        std::cout<<(ok?"PASS ":"FAIL ")<<"repeated confirmation callback does not duplicate fruit evidence"<<std::endl;failed+=!ok;++total;
+        Task.destination.clear();
+        if(refreshed)fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellDecision);
+        ok=refreshed ? Task.destination=="buy" && !fruit.m_shop_sale_refresh_pending && !fruit.m_shop_sold_in_cycle :
+                      Task.destination.empty() && !fruit.m_shop_sale_refresh_pending;
+        std::cout<<(ok?"PASS ":"FAIL ")<<"fruit sale returns to purchase scan before another sale"<<std::endl;failed+=!ok;++total;
+    }
+    BlackFlowAutomationStoreTaskPlugin mixed;
+    mixed.m_pending_sale_name="无缘果";
+    mixed.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
+    mixed.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+    mixed.m_shop_refresh_wallet_before=25;
+    mixed.controller.frames={frame(1,17)};
+    mixed.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=!mixed.stopped && mixed.m_shop_refresh_count==2 && mixed.snapshots==2 && mixed.capture_index==2;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"paid refresh after a fruit uses the second-cycle price and shared ledger"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin ordinary;
+    ordinary.m_pending_sale_name="生逝";
+    ordinary.m_shop_goods={1};
+    ordinary.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+    ok=ordinary.m_shop_refresh_count==0 && ordinary.snapshots==0 && !ordinary.m_shop_goods.empty();
+    std::cout<<(ok?"PASS ":"FAIL ")<<"ordinary sale does not change the shelf generation"<<std::endl;failed+=!ok;++total;
     std::cout<<total-failed<<" passed, "<<failed<<" failed"<<std::endl;
     return failed?1:0;
 }

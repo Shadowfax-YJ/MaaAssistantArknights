@@ -138,7 +138,8 @@ public:
         std::string* error = nullptr);
     bool apply_movement_inventory_observation(
         const std::vector<RunResources::MovementInstance>& visible_instances,
-        std::string* error = nullptr);
+        std::string* error = nullptr,
+        std::optional<bool> lorentz_eye_present = std::nullopt);
     [[nodiscard]] std::optional<int> minimum_movement_instance_charges(MovementKind movement) const noexcept;
     void record_processing_item_evidence(
         json::object evidence,

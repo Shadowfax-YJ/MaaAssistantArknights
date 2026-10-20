@@ -165,10 +165,11 @@ bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()
 {
     if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
         m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection &&
-        (m_waiting_to_run == RoguelikeCustomType::CoreChar ||
+        (m_waiting_to_run == RoguelikeCustomType::Reward ||
+         m_waiting_to_run == RoguelikeCustomType::CoreChar ||
          m_waiting_to_run == RoguelikeCustomType::CoreCharVoucher)) {
-        // 回调插件的失败不会自动传给父任务；选券校验已用尽重试，不能继续招募错误职业。
-        Log.error("BlackFlow recruitment voucher validation failed; stopping before operator recruitment");
+        // 回调插件的失败不会自动传给父任务；不能兜底领取未记录的奖励或继续招募错误职业。
+        Log.error("BlackFlow opening selection failed; stopping before unrecorded fallback clicks");
         if (m_task_ptr != nullptr) {
             m_task_ptr->set_enable(false);
         }
@@ -250,9 +251,10 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             details["observation_index"] = observation_index;
             Log.info("BlackFlow start reward candidates", details.to_string());
             if (m_blackflow_start_reward_evidence_observer) {
-                m_blackflow_start_reward_evidence_observer(
+                return m_blackflow_start_reward_evidence_observer(
                     "candidates", std::move(details), std::make_shared<cv::Mat>(image));
             }
+            return true;
         };
         if (!detected.has_value()) {
             record_candidates(std::optional<blackflow::AutomationCollectionStartRewardSelection> {});
@@ -266,7 +268,10 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             titles.emplace_back(result.text);
         }
         const auto selected = blackflow::select_automation_collection_start_reward(titles, ordinary_priority);
-        record_candidates(selected);
+        if (!record_candidates(selected)) {
+            Log.error("BlackFlow start reward candidates could not be saved; stopping before selection");
+            return false;
+        }
         if (!selected.has_value() || selected->detected_index >= detected->size()) {
             Log.error("BlackFlow automation collection could not fuzzy-match any allowed start reward", titles);
             return false;
@@ -278,7 +283,26 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             selected->preferred,
             "captured=",
             (*detected)[selected->detected_index].text);
-        ctrler()->click((*detected)[selected->detected_index].rect);
+        const auto selection_details = [&] {
+            return json::object {
+                { "observation_index", observation_index },
+                { "selected_index", selected->detected_index },
+                { "selected_name", selected->canonical },
+                { "preferred", selected->preferred },
+            };
+        };
+        const auto fail_selection = [&](std::string_view reason) {
+            if (m_blackflow_start_reward_evidence_observer) {
+                auto details = selection_details();
+                details["failure_reason"] = std::string(reason);
+                details["selection_status"] = "unconfirmed";
+                m_blackflow_start_reward_evidence_observer("failed", std::move(details), nullptr);
+            }
+            return false;
+        };
+        if (need_exit() || !ctrler()->click((*detected)[selected->detected_index].rect)) {
+            return fail_selection("selection_click_not_dispatched");
+        }
 
         // 第一次点击只会把卡片切换到“你确定要这么做”的待确认状态。旧逻辑在这里
         // 直接返回，随后依赖一张带卡片背景的 LastRewardConfirm 模板；卡片底图变化时
@@ -288,7 +312,9 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
         constexpr int PromptRecognitionDelay = 250;
         std::optional<Rect> confirmation_prompt;
         for (int attempt = 0; attempt < PromptRecognitionAttempts; ++attempt) {
-            sleep(PromptRecognitionDelay);
+            if (!sleep(PromptRecognitionDelay)) {
+                return fail_selection("cancelled_before_confirmation");
+            }
             OCRer prompt_analyzer(ctrler()->get_image());
             prompt_analyzer.set_task_info("BlackFlow@Roguelike@AutomationCollectionStartRewardConfirmationPrompt");
             if (const auto prompt = prompt_analyzer.analyze(); prompt.has_value() && !prompt->empty()) {
@@ -300,7 +326,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             Log.error(
                 "BlackFlow automation collection selected a start reward but did not observe its confirmation prompt",
                 selected->canonical);
-            return false;
+            return fail_selection("confirmation_prompt_not_observed");
         }
 
         const Point confirmation_point =
@@ -309,27 +335,36 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
         constexpr int ConfirmationSettleChecks = 6;
         constexpr int ConfirmationSettleDelay = 250;
         for (int click_attempt = 0; click_attempt < ConfirmationClickAttempts; ++click_attempt) {
-            ctrler()->click(confirmation_point);
+            // 先持久保存本次确认的身份；即使点击后界面校验或最终日志失败，也保留未决选择。
+            if (m_blackflow_start_reward_evidence_observer) {
+                auto details = selection_details();
+                details["confirmation_attempt"] = click_attempt + 1;
+                details["selection_status"] = "pending";
+                details["confirmation_x"] = confirmation_point.x;
+                details["confirmation_y"] = confirmation_point.y;
+                if (!m_blackflow_start_reward_evidence_observer("confirming", std::move(details), nullptr)) {
+                    return fail_selection("confirmation_evidence_not_saved");
+                }
+            }
+            if (need_exit() || !ctrler()->click(confirmation_point)) {
+                return fail_selection("confirmation_click_not_dispatched");
+            }
             for (int settle_check = 0; settle_check < ConfirmationSettleChecks; ++settle_check) {
-                sleep(ConfirmationSettleDelay);
+                if (!sleep(ConfirmationSettleDelay)) {
+                    return fail_selection("cancelled_after_confirmation");
+                }
                 OCRer prompt_analyzer(ctrler()->get_image());
                 prompt_analyzer.set_task_info(
                     "BlackFlow@Roguelike@AutomationCollectionStartRewardConfirmationPrompt");
                 const auto prompt = prompt_analyzer.analyze();
                 if (!prompt.has_value() || prompt->empty()) {
+                    if (m_blackflow_start_reward_evidence_observer) {
+                        if (!m_blackflow_start_reward_evidence_observer("selected", selection_details(), nullptr)) {
+                            return fail_selection("selection_evidence_not_saved");
+                        }
+                    }
                     if (m_blackflow_start_reward_observer) {
                         m_blackflow_start_reward_observer(selected->canonical);
-                    }
-                    if (m_blackflow_start_reward_evidence_observer) {
-                        m_blackflow_start_reward_evidence_observer(
-                            "selected",
-                            json::object {
-                                { "observation_index", observation_index },
-                                { "selected_index", selected->detected_index },
-                                { "selected_name", selected->canonical },
-                                { "preferred", selected->preferred },
-                            },
-                            nullptr);
                     }
                     return true;
                 }
@@ -339,7 +374,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()
             "BlackFlow automation collection start reward confirmation did not leave the confirmation state",
             selected->canonical,
             confirmation_point);
-        return false;
+        return fail_selection("confirmation_did_not_settle");
     }
 
     const auto& list = get_select_list();

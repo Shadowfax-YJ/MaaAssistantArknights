@@ -38,3 +38,11 @@ The generated `start-reward-events.json` is copied to `unit_test/fixtures/BlackF
 for signed-archive and analysis compatibility tests. Coordinates, scores, ordering,
 timestamps and device frames in these new cases are synthetic test inputs, not a
 new game recording. The cross-run cases are combined only for contract validation.
+
+2026-10-19: the production failure handler is also extracted. Tests cover stopping
+the parent before unrecorded fallback clicks, writing `start.reward.confirming`
+before confirmation, preserving pending identity on failure, and refusing to
+advance after evidence storage fails. `start.reward.failed` is not a selection.
+The new fixture is `start-reward-lifecycle-events.json`; the previous fixture is
+kept as an older producer sample. The Hydra title is recorded without changing
+the existing selection priority. Native page recognition uses `blackflow-opening`.

@@ -141,6 +141,7 @@ private:
     std::size_t m_shop_collectibles_purchased_in_run = 0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     bool m_shop_sold_in_cycle = false;
+    bool m_shop_sale_refresh_pending = false;
     ShelfPage m_shop_shelf_page = ShelfPage::Top;
     std::optional<std::pair<std::string, int>> m_pending_eerie_store_snapshot;
 

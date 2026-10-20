@@ -597,6 +597,7 @@ LazySafetyValueProblem make_on_demand_safety_value_problem(
             planner.completed_nodes,
             planner.opened_blockers,
             planner.consumed_lights,
+            planner.projected_shops,
             (static_cast<std::uint64_t>(planner.goal_progress_id) << 1U) | static_cast<std::uint64_t>(planner.terminal),
         };
         descriptor.movement_charges = planner.movement_charges;

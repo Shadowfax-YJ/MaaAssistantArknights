@@ -161,7 +161,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_expedition_picker()
     if (m_expedition_context.has_value() && m_expedition_context->floor == 2 && !m_expedition_finished) {
         for (const std::string& candidate : m_expedition_context->operators) {
             for (int slot = 0; slot < 5 && !need_exit(); ++slot) {
-                OCRer picker(ctrler()->get_image());
+                Matcher picker(ctrler()->get_image());
                 picker.set_task_info("BlackFlow@Roguelike@ExpeditionPicker");
                 if (!picker.analyze()) {
                     return true;
@@ -236,7 +236,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
         if (sacrifice_picker.analyze()) {
             return handle_sacrifice_picker();
         }
-        OCRer picker(ctrler()->get_image());
+        Matcher picker(ctrler()->get_image());
         picker.set_task_info("BlackFlow@Roguelike@ExpeditionPicker");
         if (picker.analyze()) {
             refresh_expedition_context();

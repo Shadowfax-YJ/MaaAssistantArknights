@@ -158,6 +158,118 @@ int main(int argc, char** argv)
             std::cout << "FAIL " << name << ": " << e.what() << std::endl;
         }
     };
+    test("whole inventory observation owns the eye presence and absence state", [&] {
+        BlackFlowSession s;
+        std::string error;
+        require(s.initialize("automation_collection", &error), error);
+        require(s.apply_movement_inventory_observation({}, &error, true), error);
+        require(s.run().resources.lorentz_eye_available, "whole box eye detection ignored");
+        require(s.apply_movement_inventory_observation({}, &error), error);
+        require(s.run().resources.lorentz_eye_available, "movement-only observation invented eye absence");
+        const std::vector<RunResources::MovementInstance> invalid { { MovementKind::Walk, 1, 0, false } };
+        require(!s.apply_movement_inventory_observation(invalid, &error, false), "invalid inventory accepted");
+        require(s.run().resources.lorentz_eye_available, "failed observation erased last good eye state");
+        require(s.apply_movement_inventory_observation({}, &error, false), error);
+        require(!s.run().resources.lorentz_eye_available, "whole box absence retained the eye");
+        require(s.apply_movement_inventory_observation({}, &error, true), error);
+        s.reset_run();
+        require(!s.run().resources.lorentz_eye_available, "new run retained old inventory");
+    });
+    for (const auto movement : { MovementKind::Walk, MovementKind::M01 }) {
+        test(movement == MovementKind::Walk ? "walking to a resolved light preserves the eye"
+                                           : "processing to a resolved light consumes the eye exactly once", [&] {
+            BlackFlowSession s;
+            std::string error;
+            require(s.initialize("automation_collection", &error), error);
+            require(s.set_current_floor(2, &error), error);
+            require(s.update(map_frame(2, 1, 0, "light"), &error), error);
+            require(s.apply_movement_inventory_observation(
+                        { { MovementKind::M01, 1, 0, true } }, &error, true), error);
+            MoveCandidate move;
+            move.action_id = "eye-light-landing";
+            move.source = *make_stable_node_id(2, { 0, 0 });
+            move.target = move.landing = *make_stable_node_id(2, { 0, 1 });
+            move.movement = movement;
+            move.path = move.possible_landings = { move.target };
+            move.predicted_action_point_cost = move.predicted_action_point_gain = 1;
+            move.landing_action_point_gains.emplace(move.target, 1);
+            require(s.begin_transaction(move, &error), error);
+            require(s.accept_preview({ PreviewReachability::Reachable, 1 }, &error) ==
+                        PreviewDisposition::ReadyToCommit, error);
+            EnteredPageObservation entered;
+            entered.classified_type = NodeType::Light;
+            require(s.commit(entered, &error), error);
+            require(s.mark_page_running(&error), error);
+            NodeTaskResult completed;
+            completed.kind = NodeTaskResultKind::PageCompleted;
+            require(s.apply_node_task_result(completed, json::object {}, &error), error);
+            require(s.page_context() && s.page_context()->node_type == NodeType::Light &&
+                        s.page_context()->stage == PageExecutionStage::Resolved, "test did not resolve the light page");
+            require(s.run().resources.lorentz_eye_available, "unreconciled page consumed the eye");
+            auto after = map_frame(2, 2, 1);
+            require(s.update(after, &error), error);
+            const bool remaining = movement == MovementKind::Walk;
+            require(s.run().resources.lorentz_eye_available == remaining, "wrong eye count after actual landing");
+            after.observation.observation_id += "-again";
+            ++after.observation.sequence;
+            require(s.update(after, &error), error);
+            require(s.run().resources.lorentz_eye_available == remaining, "map refresh consumed the eye twice");
+        });
+    }
+    test("random reveal squad evidence follows the selected squad and run reset", [&] {
+        BlackFlowSession s;
+        std::string error;
+        s.set_start_loadout("", "踏足遍历分队", "");
+        require(s.initialize("automation_collection", &error), error);
+        require(s.run().resources.random_reveals_on_processing_move == 3, "selected squad effect missing");
+        s.reset_run();
+        require(s.run().resources.random_reveals_on_processing_move == 3, "run reset lost selected squad");
+        s.set_start_loadout("", "堡垒战术分队", "");
+        require(s.run().resources.random_reveals_on_processing_move == 0, "squad effect leaked to collection squad");
+    });
+    test("express enters and preserves a converted merchant at the original event coordinate", [&] {
+        BlackFlowSession s;
+        std::string error;
+        require(s.initialize("automation_collection", &error), error);
+        require(s.set_current_floor(2, &error), error);
+        auto initial = map_frame(2, 1, 0, "incident");
+        initial.run.active_movement = MovementKind::M16;
+        initial.run.movement_charges = std::unordered_map<MovementKind, int> { { MovementKind::M16, 1 } };
+        require(s.update(initial, &error), error);
+        const auto moves = enumerate_move_actions(s.map().snapshot(), s.run());
+        const auto selected =
+            std::ranges::find_if(moves, [](const auto& move) { return move.candidate.movement == MovementKind::M16; });
+        require(selected != moves.end(), "express move missing");
+        const NodeId target = selected->candidate.target;
+        require(s.begin_transaction(selected->candidate, &error), error);
+        MovePreview preview { PreviewReachability::Reachable, 1 };
+        preview.displayed_type = NodeType::Incident;
+        preview.displayed_name = "黑诞";
+        preview.identity_revealed = true;
+        require(s.accept_preview(preview, &error) == PreviewDisposition::ReadyToCommit, error);
+        EnteredPageObservation entered;
+        entered.classified_type = NodeType::Shop;
+        entered.matched_texts = { "坎诺特" };
+        require(s.commit(entered, &error), error);
+        require(s.page_context() && s.page_context()->node == target, "conversion moved to another node");
+        require(s.page_context()->node_type == NodeType::Shop, "conversion dispatched as an event");
+        require(s.page_context()->node_name == "诡意行商", "conversion retained an event name");
+        require(s.mark_page_running(&error), error);
+        NodeTaskResult completed;
+        completed.kind = NodeTaskResultKind::PageCompleted;
+        require(s.apply_node_task_result(completed, json::object { }, &error), error);
+        auto after = map_frame(2, 2, 1, "shop");
+        after.run.action_points = after.observation.hud_action_points = 6;
+        after.run.active_movement = MovementKind::Walk;
+        after.run.movement_charges = std::unordered_map<MovementKind, int> { };
+        require(s.update(after, &error), error);
+        const Node* mapped = s.map().snapshot().find_node(target);
+        const Node* noted = s.exploration_notebook().snapshot().find_node(target);
+        require(
+            mapped && mapped->type == NodeType::Shop && mapped->traversal.repeatable,
+            "converted merchant disappeared on return");
+        require(noted && noted->type == NodeType::Shop, "notebook retained the old event identity");
+    });
     test("empty landing pursuit advances into floor four", [&] {
         auto s = pending_move(true);
         std::string e;

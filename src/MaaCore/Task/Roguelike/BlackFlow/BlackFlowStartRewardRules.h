@@ -29,12 +29,13 @@ inline constexpr std::array<std::string_view, 5> AutomationCollectionPreferredSt
 
 // 开局界面实际可能出现的完整标题词表。自动化收集只用 OCR 识别这些标题，
 // 不再用奖励卡片模板兜底；模板在动画、缩放和局部遮挡下比标题 OCR 更不稳定。
-inline constexpr std::array<std::string_view, 11> AutomationCollectionStartRewardTitles = {
+inline constexpr std::array<std::string_view, 12> AutomationCollectionStartRewardTitles = {
     "襁褓金乌",
     "襁褓天马",
     "襁褓白泽",
     "襁褓巨龙",
     "襁褓骏鹰",
+    "襁褓九头蛇", // 记录可见候选；不改变上面的自动选择优先级。
     "未编号物",
     "退行补偿",
     "林间代步",

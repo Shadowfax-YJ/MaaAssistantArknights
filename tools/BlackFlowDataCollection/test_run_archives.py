@@ -61,8 +61,83 @@ class RunArchiveTests(unittest.TestCase):
         self.assertFalse(result["origin_attested"])
         self.assertEqual(result["event_count"], 3)
 
+    def test_additive_employ_capture_keeps_v1_archive_compatible(self):
+        fixture = ROOT / 'unit_test/MaaCore/fixtures/blackflow-employ'
+        capture = json.loads((fixture / 'capture-event.json').read_text('utf-8'))
+        events = [json.loads(line) for line in self.files['run-fixture/run-events.jsonl'].splitlines()]
+        capture['sequence'] = 3
+        capture['elapsed_ms'] = events[1]['elapsed_ms']
+        events[-1]['sequence'] = 4
+        events.insert(2, capture)
+        self.files['run-fixture/run-events.jsonl'] = b''.join(
+            (json.dumps(event, ensure_ascii=False) + '\n').encode() for event in events)
+        image_path = capture['image']['path']
+        image = (fixture / 'run-20261016-165116-426279-3995.jpg').read_bytes()
+        self.files['run-fixture/' + image_path] = image
+        index = json.loads(self.files['run-fixture/integrity.json'])
+        index['event_count'] = 4
+        index['files'].append({'path': image_path, 'size': len(image), 'sha512': hashlib.sha512(image).hexdigest()})
+        self.files['run-fixture/integrity.json'] = json.dumps(index).encode()
+        result = verify_run.verify_archive(self.resign(refresh_event_digest=True))
+        self.assertEqual(result['status'], 'valid_local_signature')
+        self.assertEqual(result['event_count'], 4)
+
     def test_manual_repack_has_no_program_signature(self):
         self.assertEqual(verify_run.verify_archive(self.repack())["status"], "unsigned_or_repacked")
+
+    def test_opening_reward_lifecycle_keeps_v1_archive_compatible(self):
+        for name in ('start-reward-events.json', 'start-reward-lifecycle-events.json'):
+            with self.subTest(fixture=name):
+                opening = json.loads((ROOT / 'unit_test/fixtures/BlackFlow' / name).read_text('utf-8'))
+                events = [json.loads(line) for line in self.files['run-fixture/run-events.jsonl'].splitlines()]
+                # Each sample combines synthetic scenarios, not another real run.
+                events = events[:2] + opening + events[-1:]
+                for sequence, event in enumerate(events, 1):
+                    event['sequence'] = sequence
+                    event['elapsed_ms'] = sequence
+                    event['timestamp'] = events[0]['timestamp']
+                self.files['run-fixture/run-events.jsonl'] = b''.join(
+                    (json.dumps(event, ensure_ascii=False) + '\n').encode() for event in events)
+                index = json.loads(self.files['run-fixture/integrity.json'])
+                index['event_count'] = len(events)
+                self.files['run-fixture/integrity.json'] = json.dumps(index).encode()
+                result = verify_run.verify_archive(self.resign(refresh_event_digest=True))
+                self.assertEqual(result['status'], 'valid_local_signature')
+                self.assertEqual(result['event_count'], len(events))
+                self.assertFalse(result['origin_attested'])
+
+    def test_inventory_scan_and_possible_explanation_are_additive_v1_metadata(self):
+        sample_path = ROOT / 'unit_test/MaaCore/fixtures/blackflow-dlc-movement/inventory-scan-contract.json'
+        samples = json.loads(sample_path.read_text('utf-8'))
+        for name in ('complete_with_eye', 'complete_without_eye', 'interrupted'):
+            with self.subTest(name=name):
+                events = [json.loads(line) for line in self.files['run-fixture/run-events.jsonl'].splitlines()]
+                events[1].setdefault('state', {}).update(samples[name]['state'])
+                events[1].setdefault('details', {}).update({
+                    'inventory_scan': samples[name]['evidence'],
+                    'reveal_consistency': samples['extra_merchant_explanation'],
+                })
+                self.files['run-fixture/run-events.jsonl'] = b''.join(
+                    (json.dumps(event, ensure_ascii=False) + '\n').encode() for event in events)
+                result = verify_run.verify_archive(self.resign(refresh_event_digest=True))
+                self.assertEqual(result['status'], 'valid_local_signature')
+                self.assertEqual(result['event_count'], 3)
+
+    def test_sale_refresh_cycles_and_legacy_unknown_keep_v1_archive_compatible(self):
+        sample = ROOT / 'unit_test/fixtures/BlackFlow/store-sale-refresh-events.json'
+        added = json.loads(sample.read_text('utf-8'))
+        events = [json.loads(line) for line in self.files['run-fixture/run-events.jsonl'].splitlines()]
+        events = events[:2] + added + events[-1:]
+        for sequence, event in enumerate(events, 1):
+            event.update(sequence=sequence, elapsed_ms=sequence, timestamp=events[0]['timestamp'])
+        self.files['run-fixture/run-events.jsonl'] = b''.join(
+            (json.dumps(event, ensure_ascii=False) + '\n').encode() for event in events)
+        index = json.loads(self.files['run-fixture/integrity.json'])
+        index['event_count'] = len(events)
+        self.files['run-fixture/integrity.json'] = json.dumps(index).encode()
+        result = verify_run.verify_archive(self.resign(refresh_event_digest=True))
+        self.assertEqual(result['status'], 'valid_local_signature')
+        self.assertEqual(result['event_count'], len(events))
 
     def test_copied_signature_does_not_authenticate_a_repack(self):
         with self.assertRaisesRegex(ValueError, "ZIP bytes changed"):

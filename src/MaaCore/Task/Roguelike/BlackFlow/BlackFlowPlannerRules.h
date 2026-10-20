@@ -69,7 +69,9 @@ inline void advance_route_hint_after_applied_move(
 {
     const auto landing_is_forbidden = [&](NodeId id) {
         const Node* node = map.find_node(id);
-        return node != nullptr && forbidden.contains(node->type) &&
+        const NodeType planned_type = move_landing_type(move, id);
+        const NodeType type = planned_type == NodeType::Unknown && node != nullptr ? node->type : planned_type;
+        return node != nullptr && forbidden.contains(type) &&
                !(allow_roaming_residents && node_has_explicit_roaming_resident_marker(*node));
     };
 

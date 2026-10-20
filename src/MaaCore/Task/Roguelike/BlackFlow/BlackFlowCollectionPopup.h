@@ -20,6 +20,7 @@ inline constexpr std::string_view CollectionPopupRunLogAction = "collection.popu
 inline constexpr std::string_view NodeEventRunLogAction = "node.event.capture";
 inline constexpr std::string_view NodeGetDropRunLogAction = "node.get-drop.capture";
 inline constexpr std::string_view NodeRecruitmentRunLogAction = "node.recruitment.capture";
+inline constexpr std::string_view NodeEmployRunLogAction = "node.employ.capture";
 inline constexpr std::string_view NodeStoreRunLogAction = "node.store.capture";
 inline constexpr std::string_view NodeStorePurchaseRunLogAction = "node.store.purchase";
 
@@ -44,7 +45,7 @@ inline constexpr std::string_view NodeStorePurchaseRunLogAction = "node.store.pu
 {
     return action == CollectionPopupRunLogAction || action == NodeEventRunLogAction ||
            action == NodeGetDropRunLogAction || action == NodeRecruitmentRunLogAction ||
-           action == NodeStoreRunLogAction ||
+           action == NodeStoreRunLogAction || action == NodeEmployRunLogAction ||
            action == NodeStorePurchaseRunLogAction;
 }
 
@@ -222,7 +223,8 @@ struct DropOptionSelection
         return CollectionPopupSource::StartReward;
     }
     if (task.find("SquadConfirm") != std::string_view::npos) {
-        return CollectionPopupSource::SquadReward;
+        // 历史分队确认兜底也会关闭开局奖励；任务路径不是游戏中的奖励来源。
+        return CollectionPopupSource::StartReward;
     }
     if (task.find("NextLevel") != std::string_view::npos) {
         return CollectionPopupSource::FloorEntry;
