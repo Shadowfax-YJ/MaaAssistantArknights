@@ -906,11 +906,11 @@ jobs:
 
           本专用版本使用独立的采集版更新渠道，更新会保留设置和采集数据。由于使用 ad-hoc 签名且未经过 Apple 公证，首次启动若被 macOS 拦截，请在 Finder 中右键 MAA.app 并选择“打开”。
           NOTICE
-          hdiutil create \
-            -volname 'MAA BlackFlow Data Collection ${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}' \
-            -srcfolder "$staging" \
-            -ov -format UDZO \
-            'release/MAA-BlackFlow-Data-Collection-${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}-macos-universal.dmg'
+          python3 -m unittest discover -s tools/BlackFlowDataCollection -p 'test_create_dmg.py' -v
+          python3 tools/BlackFlowDataCollection/create_dmg.py \
+            --volume 'MAA BlackFlow Data Collection ${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}' \
+            --source "$staging" \
+            --output 'release/MAA-BlackFlow-Data-Collection-${{ env.BLACKFLOW_DATA_COLLECTION_VERSION }}-macos-universal.dmg'
           python3 tools/BlackFlowDataCollection/updates.py attest-macos \
             --version '${{ needs.meta.outputs.tag }}' --app "$app" \
             --dmg 'release/MAA-BlackFlow-Data-Collection-${{ needs.meta.outputs.tag }}-macos-universal.dmg' \
