@@ -280,6 +280,8 @@ struct BlackFlowMovementTaskPlugin {
 // Only controller frames, OCR results and movement-star I/O are injected.
 namespace whole_inventory_replay {
 constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
+constexpr std::string_view InventoryResetCollapseTask="reset-collapse", InventoryScanResetExpandTask="reset-expand";
+constexpr int InventoryStabilityMaximumSamples=6, InventoryStabilityProbeDelay=250;
 constexpr std::string_view LoadedText="装载中";
 constexpr std::string_view InventoryEmptySlotText="待收集零件";
 constexpr int MaxFrameRecognitionAttempts=2, RecognitionRetryDelay=200, InventoryNewRightColumnMinimumX=760;
@@ -292,11 +294,13 @@ struct OCRer {
     inline static std::vector<std::vector<TextRect>> pages;
     inline static bool jitter_names=false;
     inline static int reads=0;
+    inline static std::vector<std::vector<TextRect>> reset_layouts;
     explicit OCRer(const cv::Mat& value):image(value){}
     void set_task_info(std::shared_ptr<OcrTaskInfo>){}
     void set_required(std::vector<std::string>){}
     std::optional<std::vector<TextRect>> analyze(){
-        auto names=pages.at(image.at<cv::Vec3b>(0,0)[0]/20);
+        const int reset_sample=image.at<cv::Vec3b>(0,0)[1];
+        auto names=reset_sample?reset_layouts.at(reset_sample-1):pages.at(image.at<cv::Vec3b>(0,0)[0]/20);
         if(jitter_names&&(++reads%2))for(auto& name:names){name.rect.y-=3;name.rect.height+=5;}
         return names;
     }
@@ -318,12 +322,23 @@ struct Controller {
     bool animate_loaded=false;
     bool jitter_after_forward=false;
     int reads=0;
+    bool replay_reset=false, settle_on_wait=true, reopened=false;
+    int reset_index=0, reset_swipes=0, panel_state=0, collapses=0, expands=0;
+    bool collapse_ok=true, expand_ok=true, reset_swipe_ok=true, stuck_expanded=false, unstable_after_reopen=false;
+    bool unknown_after_collapse=false;
     cv::Mat get_image(){
-        cv::Mat image(720,1280,CV_8UC3,cv::Scalar(page*20,0,0));
+        cv::Mat image(720,1280,CV_8UC3,cv::Scalar(page*20,replay_reset?reset_index+1:0,panel_state));
         if(animate_loaded&&page==last_page)
             image(cv::Rect(600,588,215,23)).setTo(cv::Scalar::all(((++reads/2)%2)*255));
         return image;
     }
+};
+struct Matcher {
+    cv::Mat image;
+    explicit Matcher(const cv::Mat& frame):image(frame){}
+    std::string task;
+    void set_task_info(std::string_view value){task=value;}
+    std::optional<int> analyze(){return image.at<cv::Vec3b>(0,0)[2]==(task.ends_with("InventoryOpened")?0:1)?std::optional<int>(1):std::nullopt;}
 };
 struct BlackFlowMovementTaskPlugin {
     enum class InventoryAnalysisOutcome {Recognized,NoCandidate,Failed};
@@ -343,15 +358,30 @@ struct BlackFlowMovementTaskPlugin {
     };
     Controller controller;
     bool cancelled=false;
+    bool cancel_on_wait=false, lose_page_on_wait=false;
+    int waits=0;
     Controller* ctrler(){return &controller;}
     bool need_exit(){return cancelled;}
-    bool sleep(int){return !cancelled;}
+    bool sleep(int){
+        ++waits;
+        if(cancel_on_wait)cancelled=true;
+        if(lose_page_on_wait)controller.panel_state=2;
+        if(controller.replay_reset){
+            if(controller.settle_on_wait)controller.reset_index=0;
+            else controller.reset_index=(controller.reset_index+1)%int(OCRer::reset_layouts.size());
+        }
+        return !cancelled;
+    }
     bool run_fixed_task(std::string_view task){
         if(cancelled)return false;
+        if(task==InventoryResetCollapseTask){++controller.collapses;if(!controller.collapse_ok)return false;if(!controller.stuck_expanded)controller.panel_state=controller.unknown_after_collapse?2:1;return true;}
+        if(task==InventoryScanResetExpandTask){++controller.expands;if(!controller.expand_ok)return false;controller.panel_state=0;controller.replay_reset=controller.unstable_after_reopen;controller.reset_index=0;controller.reopened=true;controller.page=0;return true;}
         if(task==InventorySwipeTask){
             ++controller.forward_swipes;
+            controller.replay_reset=false;
             if(controller.jitter_after_forward)OCRer::jitter_names=true;
         }
+        if(task==InventorySwipeToStartTask){++controller.reset_swipes;if(!controller.reset_swipe_ok)return false;if(controller.replay_reset)controller.reset_index=std::min(controller.reset_index+1,int(OCRer::reset_layouts.size())-1);}
         controller.page=task==InventorySwipeToStartTask?std::max(0,controller.page-1):std::min(controller.last_page,controller.page+1);
         return true;
     }
@@ -361,9 +391,13 @@ struct BlackFlowMovementTaskPlugin {
     }
     static std::vector<std::string> inventory_ocr_candidates(){return {};}
     bool scan_inventory_frame(InventoryFrame&,std::string*);
+    bool wait_for_inventory_stability(InventoryFrame&,cv::Mat&,std::string*);
+    bool reopen_inventory_for_scan(std::string*);
     InventoryAnalysisOutcome analyze_inventory_frame(const cv::Mat&,InventoryFrame&,int,std::string*) const;
 };
 /*INVENTORY_SCAN*/
+/*INVENTORY_STABLE*/
+/*INVENTORY_REOPEN*/
 /*INVENTORY_ANALYZE*/
 TextRect title(std::string text,int x=900){return {{x,258,140,24},0.99,std::move(text)};}
 void configure(BlackFlowMovementTaskPlugin& plugin,std::vector<std::vector<TextRect>> pages){
@@ -376,6 +410,76 @@ void configure(BlackFlowMovementTaskPlugin& plugin,std::vector<std::vector<TextR
 int main(int argc,char** argv) {
     int failed=0,passed=0;
     auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    auto reset_replay=[&](whole_inventory_replay::BlackFlowMovementTaskPlugin& p,const char* instance){
+        using namespace whole_inventory_replay;
+        const auto path=std::filesystem::path(argv[1]).parent_path()/"blackflow-inventory/20261022/runtime-layouts.json";
+        const auto data=json::open(path);check(data.has_value(),"runtime reset fixture missing");
+        OCRer::reset_layouts.clear();
+        for(const auto& observation:data->at(instance).as_array()){
+            std::vector<TextRect> names;
+            for(const auto& row:observation.at("names").as_array()){
+                const auto& r=row.at("rect");
+                names.emplace_back(Rect{r[0].as_integer(),r[1].as_integer(),r[2].as_integer(),r[3].as_integer()},1.0,row.at("text").as_string());
+            }
+            OCRer::reset_layouts.push_back(std::move(names));
+        }
+        configure(p,{OCRer::reset_layouts.front(),{title("待收集零件")}});
+        p.controller.page=0;p.controller.replay_reset=true;
+    };
+    for(const char* instance:{"MAA-001","MAA-003"}){
+        test((std::string(instance)+" whole scan waits out recorded reset rebound").c_str(),[&]{
+            whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,instance);
+            whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+            check(p.scan_inventory_frame(frame,&error),error.c_str());
+            check(frame.scan_complete&&p.waits>0&&!p.controller.reopened,"did not settle before another reset swipe");
+            check(frame.movement_instances.size()==(std::string_view(instance)=="MAA-001"?6:2),"partial reset lost or duplicated inventory");
+        });
+    }
+    test("reset timeout reopens once and rescans the first inventory page",[&]{
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-001");p.controller.settle_on_wait=false;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.movement_instances.size()==6,"reopened scan used stale or partial items");
+        check(p.controller.collapses==1&&p.controller.expands==1,"reopen was missing or repeated");
+    });
+    test("reset cancellation cannot trigger recovery clicks",[&]{
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-001");p.cancel_on_wait=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"cancelled reset completed");
+        check(p.controller.reset_swipes==1&&p.controller.collapses==0&&p.controller.expands==0,"cancelled reset issued further input");
+    });
+    test("inventory disappearing while reset settles cannot trigger recovery clicks",[&]{
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-001");p.lose_page_on_wait=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&frame.page_lost&&!frame.scan_complete,"lost reset page was accepted");
+        check(p.controller.collapses==0&&p.controller.expands==0,"reset clicked an unknown page");
+    });
+    test("failed reset gesture cannot trigger recovery clicks",[&]{
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-001");p.controller.reset_swipe_ok=false;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"failed reset gesture completed the scan");
+        check(p.controller.reset_swipes==1&&p.controller.collapses==0&&p.controller.expands==0,"failed gesture triggered further input");
+    });
+    test("unknown page after collapse cannot authorize a reopen click",[&]{
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-003");
+        p.controller.settle_on_wait=false;p.controller.unknown_after_collapse=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"unknown collapsed page completed the scan");
+        check(p.controller.collapses==1&&p.controller.expands==0&&p.waits<50,"recovery clicked an unverified map");
+    });
+    for(const int failure:{0,1,2,3}){
+        test(("reset recovery failure remains bounded "+std::to_string(failure)).c_str(),[&]{
+            whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,"MAA-003");p.controller.settle_on_wait=false;
+            if(failure==0)p.controller.collapse_ok=false;
+            if(failure==1)p.controller.stuck_expanded=true;
+            if(failure==2)p.controller.expand_ok=false;
+            if(failure==3)p.controller.unstable_after_reopen=true;
+            whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+            check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"unverified recovery completed the scan");
+            check(p.controller.collapses<=2&&p.controller.expands<=1&&p.waits<50,"recovery exceeded its budget");
+            check(!frame.images.empty(),"failed reset discarded its last frame");
+        });
+    }
     test("whole inventory resets to start and continues past goods and concepts to the eye",[]{
         using namespace whole_inventory_replay;
         whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")},{title("洛伦茨之眼")}});

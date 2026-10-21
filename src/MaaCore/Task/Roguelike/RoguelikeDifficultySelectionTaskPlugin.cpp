@@ -205,11 +205,55 @@ bool
     return false;
 }
 
+int asst::RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_panel_difficulty(const cv::Mat& image) const
+{
+    if (image.empty()) {
+        return -1;
+    }
+    Matcher panel(image);
+    panel.set_task_info("BlackFlow@Roguelike@ChooseDifficulty");
+    if (!panel.analyze()) {
+        return -1;
+    }
+
+    // 基础档的选中行只有“保密等级”，不能把没有读到数字当成 0。
+    OCRer base(image);
+    base.set_task_info("BlackFlow@Roguelike@DifficultyPanelBase");
+    const bool base_selected = base.analyze() && base.get_result().size() == 1 &&
+                               base.get_result().front().score >= 0.9;
+    OCRer number(image);
+    number.set_task_info("BlackFlow@Roguelike@DifficultyPanelNumber");
+    int selected = -1;
+    if (number.analyze()) {
+        for (const auto& result : number.get_result()) {
+            int difficulty = -1;
+            if (result.score < 0.9 || result.text.empty() ||
+                result.text.find_first_not_of("0123456789") != std::string::npos ||
+                !utils::chars_to_number(result.text, difficulty) || difficulty < 0 || difficulty > 20) {
+                continue;
+            }
+            if (selected >= 0) {
+                return -1; // 多个数字无法证明哪个是当前选中档位。
+            }
+            selected = difficulty;
+        }
+    }
+    if (base_selected) {
+        return selected < 0 ? 0 : -1; // 文案与数字同时出现时等待下一帧，不猜档位。
+    }
+    return selected;
+}
+
 int asst::RoguelikeDifficultySelectionTaskPlugin::detect_current_difficulty() const
 {
     LogTraceFunction;
 
     const cv::Mat image = ctrler()->get_image();
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow) {
+        const int difficulty = detect_blackflow_panel_difficulty(image);
+        Log.info("Detected BlackFlow panel difficulty:", difficulty);
+        return difficulty;
+    }
     OCRer analyzer(image);
     analyzer.set_task_info("Roguelike@ChooseDifficulty_AnalyzeCurrentDifficulty");
     if (analyzer.analyze()) {

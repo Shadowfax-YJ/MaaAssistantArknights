@@ -30,6 +30,8 @@ if __name__ == '__main__':
         ('INVENTORY_REGION', 'BlackFlowMovementTaskPlugin.cpp', 'cv::Mat inventory_card_region('),
         ('INVENTORY_NAMES_UNCHANGED', 'BlackFlowMovementTaskPlugin.cpp', 'bool inventory_name_rows_unchanged('),
         ('INVENTORY_SCAN', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::scan_inventory_frame('),
+        ('INVENTORY_STABLE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::wait_for_inventory_stability('),
+        ('INVENTORY_REOPEN', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::reopen_inventory_for_scan('),
         ('INVENTORY_ANALYZE', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugin::analyze_inventory_frame('),
         ('REWARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'bool BlackFlowNodeEvidenceTaskPlugin::_run('),
         ('GUARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check('),

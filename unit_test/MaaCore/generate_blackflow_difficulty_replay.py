@@ -21,6 +21,7 @@ signatures = [
     'int asst::RoguelikeDifficultySelectionTaskPlugin::detect_current_difficulty() const',
     'bool asst::RoguelikeDifficultySelectionTaskPlugin::select_difficulty(',
     'int asst::RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_home_difficulty(',
+    'int asst::RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_panel_difficulty(',
     'bool asst::RoguelikeDifficultySelectionTaskPlugin::verify_blackflow_difficulty(',
 ]
 methods = '\n'.join(extract(source, signature) for signature in signatures if signature in source)

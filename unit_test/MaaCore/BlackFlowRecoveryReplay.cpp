@@ -20,6 +20,7 @@ using namespace asst::blackflow;
 struct DifficultyProbe : RoguelikeDifficultySelectionTaskPlugin
 {
     using RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_home_difficulty;
+    using RoguelikeDifficultySelectionTaskPlugin::detect_blackflow_panel_difficulty;
     using RoguelikeDifficultySelectionTaskPlugin::RoguelikeDifficultySelectionTaskPlugin;
 };
 
@@ -138,6 +139,8 @@ struct Port final : IBlackFlowTaskPort
 #include "BlackFlowEmployReplay.h"
 #include "BlackFlowExpeditionPickerReplay.h"
 #include "BlackFlowOpeningCultivationReplay.h"
+#include "BlackFlowLinkedEncounterReplay.h"
+#include "BlackFlowDifficultyPanelReplay.h"
 
 int main(int argc, char** argv)
 {
@@ -396,6 +399,8 @@ int main(int argc, char** argv)
     employ_capture_regressions(std::filesystem::path(argv[1]), test);
     expedition_picker_regressions(std::filesystem::path(argv[1]), test);
     opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
+    linked_encounter_regressions(std::filesystem::path(argv[1]), test);
+    difficulty_panel_regressions(std::filesystem::path(argv[1]), config, test);
     test("split title updates lifecycle attribution from floor two to three", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         require(session->set_current_floor(2), "previous floor");

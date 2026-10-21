@@ -289,6 +289,17 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
             "closed map has no successor");
     });
     std::vector<TextRect> previous_names;
+    for (const char* file : { "instance001-first-page.jpg", "instance003-first-page.jpg" }) {
+        test((std::string("captured reset first page retains the inventory guard ") + file).c_str(), [&] {
+            const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261022" / file);
+            require(!image.empty(), "captured reset first page missing");
+            require(movement_inventory_page_visible(image), "captured inventory page lost its contents guard");
+            Matcher collapse(image);
+            collapse.set_task_info("BlackFlow@Roguelike@MovementInventoryResetCollapse");
+            require(collapse.analyze().has_value(), "captured inventory page cannot use the guarded collapse task");
+            require(!BlackFlowMovementReplayAccess::names(movement, image).empty(), "captured inventory names missing");
+        });
+    }
     int stationary = 0;
     for (int index = 1; index <= 9; ++index) {
         test(("captured inventory scan with loaded highlight page " + std::to_string(index)).c_str(), [&] {

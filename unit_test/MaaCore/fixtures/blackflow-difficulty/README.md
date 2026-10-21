@@ -1,5 +1,7 @@
 # Difficulty verification fixtures
 
+- `20261021/`: two original MAA-001 base difficulty panel failures and native recognition regression inputs;
+  see its README for source paths, hashes, and the controlled negative/numeric variants.
 - `home-5.jpg`: original `images/000020-run-ended-completed.jpg` from MAA-003
   `run-20260923-133827-975254.zip`. The configured target was 6; the home badge is 5.
   SHA-256: `75378aa5caf7b230afddc87e6dce649d0297b646786e244c2cf06d189be65398`.

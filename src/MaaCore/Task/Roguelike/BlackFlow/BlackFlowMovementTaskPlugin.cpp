@@ -45,6 +45,8 @@ constexpr std::string_view InventoryConceptPriorityTask = "BlackFlow@Roguelike@I
 constexpr std::string_view InventoryEmptySlotText = "待收集零件";
 constexpr std::string_view InventorySwipeTask = "BlackFlow@Roguelike@MovementInventorySwipe";
 constexpr std::string_view InventorySwipeToStartTask = "BlackFlow@Roguelike@MovementInventorySwipeToStart";
+constexpr std::string_view InventoryResetCollapseTask = "BlackFlow@Roguelike@MovementInventoryResetCollapse";
+constexpr std::string_view InventoryScanResetExpandTask = "BlackFlow@Roguelike@MovementInventoryScanResetExpand";
 // 经 -Enter 转发，避免占位任务从 MovementInventoryClose 继承 maxTimes。
 constexpr std::string_view InventoryCloseTask = "BlackFlow@Roguelike@MovementInventoryClose-Enter";
 constexpr std::string_view OpenPanelTask = "BlackFlow@Roguelike@MovementPanelOpenClick";
@@ -68,6 +70,8 @@ constexpr int SelectionStabilityProbeDelay = 150;
 constexpr int RecognitionRetryDelay = 200;
 constexpr int InventoryLoadedMarkerMaximumVerticalGap = 32;
 constexpr int InventoryNewRightColumnMinimumX = 760;
+constexpr int InventoryStabilityMaximumSamples = 6;
+constexpr int InventoryStabilityProbeDelay = 250;
 
 void set_error(std::string* error, std::string message)
 {
@@ -368,25 +372,53 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
     }
     InventoryFrame reset_frame;
     (void)analyze_inventory_frame(reset_previous, reset_frame, 0, nullptr);
-    const bool reset = scroll_inventory_to_start(
-        [&] {
-            const auto image = ctrler()->get_image();
-            if (!movement_inventory_page_visible(image)) {
-                frame.page_lost = true;
-                return false;
-            }
-            return !need_exit() && run_fixed_task(InventorySwipeToStartTask);
-        },
-        [&] {
-            InventoryFrame current;
-            const auto image = ctrler()->get_image();
-            (void)analyze_inventory_frame(image, current, 0, nullptr);
-            const bool unchanged = inventory_name_layout_unchanged(reset_frame.visible_names, current.visible_names);
-            reset_frame = std::move(current);
-            return unchanged;
-        });
+    cv::Mat reset_image = reset_previous;
+    bool input_failed = false;
+    std::string reset_error;
+    const auto reset_to_start = [&] {
+        bool observation_failed = false;
+        return scroll_inventory_to_start(
+            [&] {
+                if (observation_failed || need_exit()) {
+                    return false;
+                }
+                if (!movement_inventory_page_visible(ctrler()->get_image())) {
+                    frame.page_lost = true;
+                    return false;
+                }
+                input_failed = !run_fixed_task(InventorySwipeToStartTask);
+                return !input_failed;
+            },
+            [&] {
+                InventoryFrame current;
+                if (!wait_for_inventory_stability(current, reset_image, &reset_error)) {
+                    frame.page_lost = current.page_lost;
+                    observation_failed = true;
+                    return false;
+                }
+                const bool unchanged = inventory_name_layout_unchanged(reset_frame.visible_names, current.visible_names);
+                reset_frame = std::move(current);
+                return unchanged;
+            });
+    };
+    bool reset = reset_to_start();
+    if (!reset && !input_failed && !frame.page_lost && !need_exit()) {
+        // 不在仍然回弹的列表上继续连发手势。最多重开一次，再从首屏重新确认和扫描。
+        Log.warn("BlackFlow inventory reset did not settle at the left edge; reopening once");
+        if (reopen_inventory_for_scan(&reset_error)) {
+            reset_image = ctrler()->get_image();
+            reset_frame = {};
+            (void)analyze_inventory_frame(reset_image, reset_frame, 0, nullptr);
+            reset = reset_to_start();
+        }
+    }
     if (!reset) {
-        set_error(error, "inventory observation could not confirm the start of the list");
+        reset_image = ctrler()->get_image();
+        if (!reset_image.empty()) {
+            frame.images.emplace_back(0, std::make_shared<cv::Mat>(reset_image.clone()));
+        }
+        set_error(error, reset_error.empty() ? "inventory observation could not confirm the start of the list"
+                                             : std::move(reset_error));
         return false;
     }
     std::vector<TextRect> previous_names;
@@ -510,6 +542,76 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         set_error(error, "inventory observation did not reach the end of the whole list after scrolling retries");
     }
     return frame.scan_complete;
+}
+
+bool BlackFlowMovementTaskPlugin::wait_for_inventory_stability(
+    InventoryFrame& frame,
+    cv::Mat& image,
+    std::string* error)
+{
+    InventoryFrame previous;
+    int stable_samples = 0;
+    for (int sample = 0; sample < InventoryStabilityMaximumSamples && !need_exit(); ++sample) {
+        image = ctrler()->get_image();
+        frame = {};
+        if (!movement_inventory_page_visible(image)) {
+            frame.page_lost = true;
+            set_error(error, "inventory page disappeared while waiting for the reset swipe to settle");
+            return false;
+        }
+        (void)analyze_inventory_frame(image, frame, 0, nullptr);
+        const bool unchanged = inventory_name_layout_unchanged(previous.visible_names, frame.visible_names);
+        stable_samples = unchanged ? stable_samples + 1 : 0;
+        if (stable_samples >= 2) {
+            return true;
+        }
+        previous = frame;
+        if (sample + 1 < InventoryStabilityMaximumSamples && !sleep(InventoryStabilityProbeDelay)) {
+            break;
+        }
+    }
+    set_error(error, "inventory reset swipe did not settle before the observation limit");
+    return false;
+}
+
+bool BlackFlowMovementTaskPlugin::reopen_inventory_for_scan(std::string* error)
+{
+    const bool reopened = reopen_inventory_to_start(
+        [&] {
+            if (need_exit()) {
+                return InventoryPanelState::Unknown;
+            }
+            const auto image = ctrler()->get_image();
+            if (image.empty()) {
+                return InventoryPanelState::Unknown;
+            }
+            if (movement_inventory_page_visible(image)) {
+                return InventoryPanelState::Expanded;
+            }
+            Matcher opened(image);
+            opened.set_task_info("BlackFlow@Roguelike@MovementInventoryOpened");
+            if (opened.analyze()) {
+                return InventoryPanelState::Unknown;
+            }
+            for (const auto* task : { "BlackFlow@Roguelike@MapPrepare-Ready", "BlackFlow@Roguelike@MapPrepare-ZoomOut" }) {
+                Matcher map(image);
+                map.set_task_info(task);
+                if (map.analyze()) {
+                    return InventoryPanelState::Collapsed;
+                }
+            }
+            return InventoryPanelState::Unknown;
+        },
+        [&](InventoryPanelState current) {
+            return !need_exit() && run_fixed_task(
+                                       current == InventoryPanelState::Expanded ? InventoryResetCollapseTask
+                                                                               : InventoryScanResetExpandTask);
+        },
+        [&] { return sleep(InventoryStabilityProbeDelay); });
+    if (!reopened) {
+        set_error(error, "inventory reset could not verify collapse and reopen");
+    }
+    return reopened;
 }
 
 BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugin::analyze_inventory_frame(

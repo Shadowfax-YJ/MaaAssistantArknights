@@ -1,0 +1,442 @@
+{
+  "nodes": [
+    {
+      "row": 3,
+      "column": 5,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 6,
+      "type": "hide_battle",
+      "name": "未知的凶戾",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 1,
+      "type": "employ",
+      "name": "应急助力",
+      "marker_type": "savage",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 4,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 2,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 7,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 5,
+      "type": "incident",
+      "name": "不期而遇",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 6,
+      "type": "wish",
+      "name": "得偿所愿",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 3,
+      "type": "final",
+      "name": "险路尽头",
+      "marker_type": "",
+      "visually_hidden": true
+    },
+    {
+      "row": 2,
+      "column": 2,
+      "type": "battle_savage",
+      "name": "“居民”据点",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 4,
+      "type": "hide_invisible",
+      "name": "未知的诡秘",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "type": "hide_battle",
+      "name": "未知的凶戾",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "type": "scrap_shop",
+      "name": "秘境行商",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 6,
+      "type": "door",
+      "name": "曲折密道",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 0,
+      "column": 5,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 2,
+      "type": "light",
+      "name": "羽瞰点",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 4,
+      "type": "hide_invisible",
+      "name": "未知的诡秘",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 1,
+      "column": 7,
+      "type": "final",
+      "name": "险路尽头",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 0,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "savage",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 4,
+      "type": "duel",
+      "name": "狭路相逢",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 1,
+      "type": "expedition",
+      "name": "先行一步",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 3,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 6,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 2,
+      "column": 7,
+      "type": "battle_normal",
+      "name": "作战",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 7,
+      "type": "evacuate",
+      "name": "险路小径",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 0,
+      "type": "door",
+      "name": "曲折密道",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 0,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 3,
+      "column": 7,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 1,
+      "type": "incident",
+      "name": "不期而遇",
+      "marker_type": "god_sorrow",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 2,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 3,
+      "type": "rest",
+      "name": "安全的角落",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 4,
+      "type": "battle_elite",
+      "name": "紧急作战",
+      "marker_type": "savage",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 5,
+      "type": "empty",
+      "name": "林间空地",
+      "marker_type": "",
+      "visually_hidden": false
+    },
+    {
+      "row": 4,
+      "column": 6,
+      "type": "final",
+      "name": "险路尽头",
+      "marker_type": "",
+      "visually_hidden": false
+    }
+  ],
+  "edges": [
+    [
+      5,
+      9
+    ],
+    [
+      9,
+      1
+    ],
+    [
+      11,
+      15
+    ],
+    [
+      11,
+      17
+    ],
+    [
+      15,
+      2
+    ],
+    [
+      6,
+      18
+    ],
+    [
+      13,
+      19
+    ],
+    [
+      12,
+      21
+    ],
+    [
+      1,
+      17
+    ],
+    [
+      17,
+      4
+    ],
+    [
+      8,
+      18
+    ],
+    [
+      8,
+      23
+    ],
+    [
+      19,
+      26
+    ],
+    [
+      21,
+      3
+    ],
+    [
+      10,
+      16
+    ],
+    [
+      4,
+      7
+    ],
+    [
+      7,
+      23
+    ],
+    [
+      7,
+      0
+    ],
+    [
+      23,
+      24
+    ],
+    [
+      24,
+      28
+    ],
+    [
+      26,
+      3
+    ],
+    [
+      26,
+      27
+    ],
+    [
+      3,
+      16
+    ],
+    [
+      3,
+      29
+    ],
+    [
+      16,
+      22
+    ],
+    [
+      22,
+      20
+    ],
+    [
+      20,
+      0
+    ],
+    [
+      20,
+      32
+    ],
+    [
+      0,
+      14
+    ],
+    [
+      0,
+      33
+    ],
+    [
+      14,
+      28
+    ],
+    [
+      14,
+      34
+    ],
+    [
+      28,
+      25
+    ],
+    [
+      27,
+      29
+    ],
+    [
+      29,
+      30
+    ],
+    [
+      31,
+      32
+    ],
+    [
+      32,
+      33
+    ],
+    [
+      33,
+      34
+    ],
+    [
+      34,
+      25
+    ]
+  ]
+}

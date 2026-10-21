@@ -232,6 +232,21 @@
         "ocrReplace": [],
         "fullMatch": true
     },
+    "BlackFlow@Roguelike@DifficultyPanelBase": {
+        "Doc": "基础保密等级在选中行显示完整名称，没有数字 0；只接受当前行的精确文字。",
+        "algorithm": "OcrDetect",
+        "roi": [430, 365, 195, 55],
+        "text": ["保密等级"],
+        "fullMatch": true,
+        "fuzzyMatchMinLength": 5
+    },
+    "BlackFlow@Roguelike@DifficultyPanelNumber": {
+        "Doc": "使用通用文字模型读取大号档位数字；插件校验置信度、纯数字、范围与唯一性，忽略英文 DIFFICULTY 等说明。",
+        "algorithm": "OcrDetect",
+        "roi": [400, 300, 225, 160],
+        "ocrReplace": [],
+        "fullMatch": true
+    },
     "BlackFlow@Roguelike@ChooseOper": {
         "next": [
             "BlackFlow@Roguelike@RecruitTransitionLoading",
@@ -2969,6 +2984,13 @@
     "BlackFlow@Roguelike@MovementInventoryResetWait": {
         "algorithm": "JustReturn",
         "postDelay": 300
+    },
+    "BlackFlow@Roguelike@MovementInventoryScanResetExpand": {
+        "Doc": "完整扫描回滑失败后的单步重开；仅在插件连续确认地图和收起状态后执行，不进入路由或过载清理。",
+        "algorithm": "JustReturn",
+        "action": "ClickRect",
+        "specificRect": [617, 653, 49, 57],
+        "postDelay": 500
     },
     "BlackFlow@Roguelike@MovementInventoryOverloadPrompt": {
         "Doc": "移动确认后弹出的零件箱过载提示。现场整行为‘零件箱已满，无法进入下个节点’，因此只做前缀/包含匹配。",

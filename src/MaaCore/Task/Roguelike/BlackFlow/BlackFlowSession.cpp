@@ -586,6 +586,19 @@ std::optional<std::size_t> BlackFlowSession::preferred_encounter_choice(std::str
     m_page_context->linked_transfer_type = *linked_type;
     m_page_context->linked_transfer_targets.clear();
 
+    // “独活”直接前往应急助力会触发占据该格的流窜居民。尚未揭示的应急助力
+    // 也可能显示为未知的诡秘，因此检查本层当前地图的这两类节点，而非仅检查
+    // 已知传送目标；该事件限制不受二、三层普通移动允许居民的规则影响。
+    if (event_name == LoneSurvivorFollowupEventName &&
+        std::ranges::any_of(m_map.snapshot().nodes(), [](const auto& entry) {
+            const Node& node = entry.second;
+            return (node.type == NodeType::Employ || node.type == NodeType::HideInvisible) &&
+                   node_has_explicit_roaming_resident_marker(node);
+        })) {
+        Log.info("BlackFlow Lone Survivor keeps reveal-only option: resident on Emergency Aid or unknown mystery");
+        return 2U;
+    }
+
     std::vector<NodeId> targets;
     for (const auto& [id, node] : m_map.snapshot().nodes()) {
         if (node.type == *linked_type) {

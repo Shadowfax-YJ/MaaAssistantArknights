@@ -21,6 +21,7 @@ public:
 protected:
     virtual bool _run() override;
     int detect_blackflow_home_difficulty(const cv::Mat& image) const;
+    int detect_blackflow_panel_difficulty(const cv::Mat& image) const;
 
 private:
     int detect_current_difficulty() const;

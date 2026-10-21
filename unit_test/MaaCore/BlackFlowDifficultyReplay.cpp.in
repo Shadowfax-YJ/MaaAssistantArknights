@@ -1,6 +1,7 @@
 // Injected I/O models missed confirms/transition frames; it does not claim to reconstruct unseen screenshots.
 #include <algorithm>
 #include <climits>
+#include <charconv>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -10,7 +11,7 @@
 #define LogTraceFunction ((void)0)
 struct { template<class... T> void info(T...) {} template<class... T> void error(T...) {}
          template<class... T> void warn(T...) {} } Log;
-namespace cv { struct Mat { int applied=5, selected=6; bool panel=false, home=true; }; }
+namespace cv { struct Mat { int applied=5, selected=6; bool panel=false, home=true; bool empty() const { return false; } }; }
 namespace json { struct value {
     std::string get(const char*, const std::string&) const { return "ProcessTask"; }
     std::string get(const char*, const char*, const char*) const { return "BlackFlow@Roguelike@StartExplore"; }
@@ -46,7 +47,10 @@ struct Result { std::string text; int rect=0; double score=1; };
 int confirms=0, missed_confirms=0, forced_applied=-1, task_calls=0;
 bool confirm_result=true, enter_result=true, selection_result=true, stopped=false;
 bool unreadable_home=false, record_result=true;
+bool missing_base_label=false, force_base_label=false, extra_panel_number=false, panel_number_suffix=false;
+bool panel_heading_first=false;
 double home_score=1;
+double panel_number_score=1;
 struct OCRer {
     cv::Mat image; std::string task; std::vector<Result> result;
     OCRer(cv::Mat frame):image(frame) {}
@@ -57,7 +61,21 @@ struct OCRer {
             if (unreadable_home) return false;
             result={{std::to_string(image.applied),0,home_score}};
         }
-        else { if (!image.panel) return false; result={{std::to_string(image.selected)}}; }
+        else {
+            if (!image.panel) return false;
+            if (task.ends_with("DifficultyPanelBase")) {
+                if (missing_base_label || (image.selected != 0 && !force_base_label)) return false;
+                result={{"保密等级",0,1}};
+            }
+            else if (task.ends_with("DifficultyPanelNumber")) {
+                result={{"DIFFICULTY",0,1}};
+                if (image.selected == 0) result.push_back({"1",0,0.52});
+                else result.push_back({std::to_string(image.selected)+(panel_number_suffix?"invalid":""),0,panel_number_score});
+                if (extra_panel_number) result.push_back({"7",0,1});
+            }
+            else if (image.selected == 0 || panel_heading_first) result={{"D1FF1CU1TY",0,1}};
+            else result={{std::to_string(image.selected)}};
+        }
         return true;
     }
     const auto& get_result() const { return result; }
@@ -68,7 +86,10 @@ struct Matcher {
     bool analyze() { return task.ends_with("ChooseDifficulty")?image.panel:image.home; }
     Result get_result() { return {}; }
 };
-namespace utils { bool chars_to_number(const std::string& s,int& n) { n=std::stoi(s); return true; } }
+namespace utils { bool chars_to_number(const std::string& s,int& n) {
+    const auto result=std::from_chars(s.data(),s.data()+s.size(),n);
+    return result.ec==std::errc{};
+} }
 class RoguelikeDifficultySelectionTaskPlugin {
 public:
     RoguelikeConfig config; RoguelikeConfig* m_config=&config;
@@ -81,6 +102,7 @@ public:
     bool verify(AsstMsg,const json::value&) const;
     bool _run(); int detect_current_difficulty() const; bool select_difficulty(int);
     int detect_blackflow_home_difficulty(const cv::Mat&) const;
+    int detect_blackflow_panel_difficulty(const cv::Mat&) const;
     bool verify_blackflow_difficulty(int,int&,cv::Mat&);
 };
 struct ProcessTask {
@@ -115,7 +137,8 @@ int main() {
     auto test=[&](const char* name, auto setup, bool expected, bool next=true) {
         controller={}; confirms=missed_confirms=task_calls=0; forced_applied=-1;
         confirm_result=enter_result=selection_result=record_result=true;
-        stopped=unreadable_home=false;home_score=1;
+        stopped=unreadable_home=false;home_score=panel_number_score=1;
+        missing_base_label=force_base_label=extra_panel_number=panel_number_suffix=panel_heading_first=false;
         RoguelikeDifficultySelectionTaskPlugin p; setup(p);
         bool reported=false, verified=false; int target=-1,observed=-1;
         p.m_difficulty_observer=[&](int t,int o,bool v,const cv::Mat& frame) {
@@ -131,6 +154,14 @@ int main() {
     };
     test("already applied target",[](auto&){controller.frame.applied=6;},true);
     test("apply target from 5",[](auto&){controller.frame.selected=5;},true);
+    test("apply target from base label without numeric zero",[](auto&){controller.frame.applied=0;controller.frame.selected=0;},true);
+    test("English heading cannot hide the selected numeric difficulty",[](auto&){panel_heading_first=true;controller.frame.selected=5;},true);
+    test("missing base label cannot be inferred from missing number",[](auto&){controller.frame.applied=0;controller.frame.selected=0;missing_base_label=true;},false);
+    test("low confidence panel number stops",[](auto&){panel_number_score=0.5;},false);
+    test("nonnumeric panel suffix stops",[](auto&){panel_number_suffix=true;},false);
+    test("ambiguous panel numbers stop",[](auto&){extra_panel_number=true;},false);
+    test("base label and numeric row conflict stops",[](auto&){force_base_label=true;},false);
+    test("out of range panel number stops",[](auto&){controller.frame.selected=21;},false);
     test("observed 6 before confirm but applied 5 stops",[](auto&){forced_applied=5;},false);
     test("failed confirm stops",[](auto&){confirm_result=false;},false);
     test("missed first confirm is retried without outer start click",[](auto&){missed_confirms=1;},true);

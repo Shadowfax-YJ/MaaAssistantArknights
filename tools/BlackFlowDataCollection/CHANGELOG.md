@@ -1,4 +1,4 @@
-## v1.1.25
+## v1.1.26
 
 ### Highlights
 
@@ -44,6 +44,17 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.26 (2026-10-22)</b></summary>
+
+### 修复 | Fix
+
+* 修复零件箱列表回弹时反复滑动、无法确认起点而停止采集的问题，并增加收起重开恢复。 @Shadowfax-YJ
+* 修复基础保密等级识别失败，导致开局无法切换至目标难度的问题。 @Shadowfax-YJ
+* 完善“独活”事件选择：本层应急助力或未知的诡秘上存在流窜居民时，不再选择传送。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.25 (2026-10-21)</b></summary>
 
 ### 修复 | Fix

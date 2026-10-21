@@ -114,6 +114,8 @@ private:
     bool observe_inventory();
     bool cleanup_direct_depart_overload(std::string_view source_task);
     bool scan_inventory_frame(InventoryFrame& frame, std::string* error);
+    bool wait_for_inventory_stability(InventoryFrame& frame, cv::Mat& image, std::string* error);
+    bool reopen_inventory_for_scan(std::string* error);
     InventoryAnalysisOutcome
         analyze_inventory_frame(const cv::Mat& image, InventoryFrame& frame, int minimum_name_x, std::string* error) const;
 
