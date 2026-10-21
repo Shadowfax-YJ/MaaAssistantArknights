@@ -68,7 +68,6 @@ constexpr int SelectionStabilityProbeDelay = 150;
 constexpr int RecognitionRetryDelay = 200;
 constexpr int InventoryLoadedMarkerMaximumVerticalGap = 32;
 constexpr int InventoryNewRightColumnMinimumX = 760;
-constexpr double InventoryUnchangedFrameMaximumDifference = 3.0;
 
 void set_error(std::string* error, std::string message)
 {
@@ -80,39 +79,6 @@ void set_error(std::string* error, std::string message)
 int vertical_center(const Rect& rect) noexcept
 {
     return rect.y + rect.height / 2;
-}
-
-cv::Mat inventory_card_region(const cv::Mat& image)
-{
-    if (image.empty()) {
-        return {};
-    }
-    const cv::Rect requested(348, 132, 930, 495);
-    const cv::Rect bounds(0, 0, image.cols, image.rows);
-    const cv::Rect actual = requested & bounds;
-    return actual.empty() ? cv::Mat {} : image(actual);
-}
-
-bool inventory_name_rows_unchanged(const cv::Mat& before, const cv::Mat& after)
-{
-    if (before.empty() || after.empty() || before.size() != after.size() || before.type() != after.type()) {
-        return false;
-    }
-    const cv::Mat previous_cards = inventory_card_region(before);
-    const cv::Mat current_cards = inventory_card_region(after);
-    if (previous_cards.rows < 479 || current_cards.rows < 479) {
-        return false;
-    }
-    for (const int row : { 120, 282, 444 }) {
-        const auto previous_names = previous_cards.rowRange(row, row + 35);
-        const auto current_names = current_cards.rowRange(row, row + 35);
-        const double denominator = static_cast<double>(current_names.total() * current_names.channels());
-        if (cv::norm(previous_names, current_names, cv::NORM_L1) / denominator >
-            InventoryUnchangedFrameMaximumDifference) {
-            return false;
-        }
-    }
-    return true;
 }
 
 bool task_contains_inventory_name(std::string_view task_name, std::string_view name)
@@ -394,12 +360,14 @@ bool BlackFlowMovementTaskPlugin::observe_inventory()
 bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, std::string* error)
 {
     frame = {};
-    cv::Mat reset_previous = ctrler()->get_image().clone();
+    const cv::Mat reset_previous = ctrler()->get_image();
     if (!movement_inventory_page_visible(reset_previous)) {
         frame.page_lost = true;
         set_error(error, "inventory page is not visible before resetting the list");
         return false;
     }
+    InventoryFrame reset_frame;
+    (void)analyze_inventory_frame(reset_previous, reset_frame, 0, nullptr);
     const bool reset = scroll_inventory_to_start(
         [&] {
             const auto image = ctrler()->get_image();
@@ -410,16 +378,18 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             return !need_exit() && run_fixed_task(InventorySwipeToStartTask);
         },
         [&] {
-            cv::Mat current = ctrler()->get_image();
-            const bool unchanged = inventory_name_rows_unchanged(reset_previous, current);
-            reset_previous = current.clone();
+            InventoryFrame current;
+            const auto image = ctrler()->get_image();
+            (void)analyze_inventory_frame(image, current, 0, nullptr);
+            const bool unchanged = inventory_name_layout_unchanged(reset_frame.visible_names, current.visible_names);
+            reset_frame = std::move(current);
             return unchanged;
         });
     if (!reset) {
         set_error(error, "inventory observation could not confirm the start of the list");
         return false;
     }
-    std::optional<cv::Mat> previous;
+    std::vector<TextRect> previous_names;
     std::vector<InventoryColumnItem> previous_items;
     int scan_page = 0;
     bool reached_end = false;
@@ -459,16 +429,6 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             set_error(error, "inventory page disappeared during observation");
             return false;
         }
-        if (previous.has_value() && previous->size() == image.size() && previous->type() == image.type()) {
-            // 图标有循环光效；只比较三行名称，避免到头后永远被判断为仍在移动。
-            const bool unchanged = inventory_name_rows_unchanged(*previous, image);
-            stationary_frames = unchanged ? stationary_frames + 1 : 0;
-            if (stationary_frames >= 2 && !pending_clipped_item) {
-                reached_end = true;
-                break;
-            }
-        }
-
         InventoryFrame page;
         std::string latest_error;
         InventoryAnalysisOutcome outcome = InventoryAnalysisOutcome::Failed;
@@ -494,6 +454,12 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             set_error(error, latest_error.empty() ? "movement inventory OCR failed" : latest_error);
             return false;
         }
+        const bool unchanged = inventory_name_layout_unchanged(previous_names, page.visible_names);
+        stationary_frames = unchanged ? stationary_frames + 1 : 0;
+        if (stationary_frames >= 2 && !pending_clipped_item && !page.has_clipped_item) {
+            reached_end = true;
+            break;
+        }
         std::vector<InventoryColumnItem> current_items;
         for (const auto& item : page.items) {
             current_items.emplace_back(InventoryColumnItem { item.movement, item.remaining_uses, item.name_rect });
@@ -501,7 +467,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         const bool partial_scroll =
             scan_page > 0 && inventory_column_only_shifted_partially(previous_items, current_items);
         previous_items = std::move(current_items);
-        previous = image.clone();
+        previous_names = std::move(page.visible_names);
         pending_clipped_item = page.has_clipped_item;
         // 存在性不按新右列去重。末尾回弹/不足一列的移动也可能第一次完整露出洛眼标题。
         frame.lorentz_eye_found = frame.lorentz_eye_found || page.lorentz_eye_found;
@@ -568,6 +534,8 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
         const bool complete_name = inventory_name_is_complete(result.rect, image.cols, image.rows);
         if (result.text != LoadedText && complete_name) {
             readable_inventory_name = true;
+            // 在右列去重之前保留整屏布局；左列同样可以证明是否发生了局部滚动。
+            frame.visible_names.emplace_back(result);
         }
         if (result.text == "洛伦茨之眼" && complete_name) {
             // PASSIVE没有加工品星标；只从完整标题识别当前存在性，不读取静态buffStack。

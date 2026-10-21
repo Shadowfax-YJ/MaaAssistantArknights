@@ -162,4 +162,59 @@ void move_preview_regressions(const std::filesystem::path& repo, Test&& test)
         analyzer.set_task_info("BlackFlow@Roguelike@MovePreviewCannotEnter");
         require(analyzer.analyze().has_value(), "unreachable control lost");
     });
+    const auto conversion = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-move-preview/20261021/m16-confirm.png");
+    require(!conversion.empty(), "M16 destination-change fixture missing");
+    for (const char* stage : {"MovePreviewConfirm", "MovePreviewConfirm-Loading", "MovePreviewConfirmObserve", "MovePreviewConfirmAbsentOnce"}) {
+        test((std::string("M16 dialog is handled before success after ") + stage).c_str(), [&] {
+            PipelineAnalyzer analyzer(conversion);
+            analyzer.set_tasks(Task.get(std::string("BlackFlow@Roguelike@") + stage)->next);
+            const auto result = analyzer.analyze();
+            require(result && result->task_ptr->name == "BlackFlow@Roguelike@MoveConversionConfirm", "open conversion dialog was bypassed");
+        });
+    }
+    test("M16 requires entered-page classification despite a revealed preview", [&] {
+        MoveCandidate movement;
+        movement.movement = MovementKind::M16;
+        movement.controllable = true;
+        MovePreview preview;
+        preview.identity_revealed = true;
+        require(move_confirmation_requires_entered_page_classification(movement, preview), "converted shop would be dispatched as its original event");
+    });
+    const auto conversion_task = Task.get("BlackFlow@Roguelike@MoveConversionConfirm");
+    require(conversion_task != nullptr, "conversion dialog task missing");
+    test("M16 still-open dialog is observed instead of completed", [&] {
+        PipelineAnalyzer analyzer(conversion);
+        analyzer.set_tasks(conversion_task->next);
+        const auto result = analyzer.analyze();
+        require(result && result->task_ptr->name == "BlackFlow@Roguelike@MoveConversionConfirmObserve", "open dialog accepted as completed");
+    });
+    test("M16 reappearing dialog cancels the absence streak", [&] {
+        PipelineAnalyzer analyzer(conversion);
+        analyzer.set_tasks(Task.get("BlackFlow@Roguelike@MoveConversionConfirmAbsentOnce")->next);
+        const auto result = analyzer.analyze();
+        require(result && result->task_ptr->name == "BlackFlow@Roguelike@MoveConversionConfirmObserve", "dialog reappearance bypassed observation");
+    });
+    for (const auto& frame : {image, cv::Mat(cv::Mat::zeros(720,1280,CV_8UC3))}) {
+        test("M16 dialog does not match an ordinary preview or blank frame", [&] {
+            Matcher matcher(frame);
+            matcher.set_task_info(conversion_task);
+            require(!matcher.analyze(), "unrelated page matched conversion dialog");
+        });
+    }
+    test("M16 confirm button alone cannot identify the conversion dialog", [&] {
+        auto button_only = conversion.clone();
+        button_only(cv::Rect(250,294,780,52)).setTo(cv::Scalar::all(0));
+        Matcher matcher(button_only);
+        matcher.set_task_info(conversion_task);
+        require(!matcher.analyze(), "generic confirm button established M16 dialog identity");
+    });
+    test("M16 confirmation click and retry budget remain bounded", [&] {
+        const auto& click = conversion_task->specific_rect;
+        require(conversion_task->action == ProcessTaskAction::ClickRect && click.x >= 900 && click.y >= 451 &&
+                    click.x + click.width <= 1100 && click.y + click.height <= 522,
+                "M16 confirmation may click outside its right button");
+        const auto observe = Task.get("BlackFlow@Roguelike@MoveConversionConfirmObserve");
+        require(conversion_task->max_times == 3 && observe->max_times == 2 && observe->reduce_other_times.empty(),
+                "M16 observe inherited a self-reset or unbounded retry budget");
+    });
 }

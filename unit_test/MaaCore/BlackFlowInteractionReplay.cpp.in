@@ -158,7 +158,7 @@ struct BlackFlowNodeEvidenceTaskPlugin {
 /*REWARD*/
 /*GUARD*/
 namespace start_reward_replay {
-enum class RoguelikeCustomType { Reward, CoreChar, CoreCharVoucher };
+enum class RoguelikeCustomType { Reward, CoreChar, CoreCharVoucher, CultivationHarvest };
 enum class RoguelikeTheme { BlackFlow };
 enum class RoguelikeMode { BlackFlowAutomationCollection };
 struct Config {
@@ -307,7 +307,14 @@ recognize_movement_inventory_remaining_uses(const cv::Mat&,const Rect&,int count
 /*INVENTORY_NAMES_UNCHANGED*/
 struct Controller {
     int page=0, last_page=0;
-    cv::Mat get_image(){return cv::Mat(720,1280,CV_8UC3,cv::Scalar(page*20,0,0));}
+    bool animate_loaded=false;
+    int reads=0;
+    cv::Mat get_image(){
+        cv::Mat image(720,1280,CV_8UC3,cv::Scalar(page*20,0,0));
+        if(animate_loaded&&page==last_page)
+            image(cv::Rect(600,588,215,23)).setTo(cv::Scalar::all(((++reads/2)%2)*255));
+        return image;
+    }
 };
 struct BlackFlowMovementTaskPlugin {
     enum class InventoryAnalysisOutcome {Recognized,NoCandidate,Failed};
@@ -321,6 +328,7 @@ struct BlackFlowMovementTaskPlugin {
         std::optional<MovementKind> loaded_movement;
         std::vector<InventoryItem> items;
         std::vector<InventoryBoundaryItem> type_boundary_items;
+        std::vector<TextRect> visible_names;
         std::vector<std::pair<int,std::shared_ptr<cv::Mat>>> images;
         bool scan_complete=false,lorentz_eye_found=false,has_clipped_item=false,page_lost=false;
     };
@@ -373,6 +381,15 @@ int main(int argc,char** argv) {
         whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
         whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
         check(p.scan_inventory_frame(frame,&error)&&frame.scan_complete&&!frame.lorentz_eye_found,"no-eye full inventory was not recognized");
+    });
+    test("whole inventory completes with a flashing loaded highlight at the tail",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
+        p.controller.animate_loaded=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        const bool complete=p.scan_inventory_frame(frame,&error);
+        check(complete,error.c_str());
+        check(frame.scan_complete&&frame.movement_instances.size()==1,"highlight prevented full scan or duplicated a movement");
     });
     test("whole inventory rejects an unreadable last page",[]{
         using namespace whole_inventory_replay;
@@ -527,6 +544,9 @@ int main(int argc,char** argv) {
         check(p.confirmed==std::vector<std::string>{"襁褓骏鹰","调查预付款"},"multiple confirmed rewards changed");});
     test("candidate save failure stops before selecting",[]{start_reward_replay::Plugin p;p.fail_save="candidates";
         check(!p.run()&&p.controller.clicks==0&&p.confirmed.empty(),"unsaved candidates allowed a selection");});
+    test("cultivation claim failure disables the opening parent",[]{start_reward_replay::Plugin p;
+        p.m_waiting_to_run=start_reward_replay::RoguelikeCustomType::CultivationHarvest;
+        check(!p.on_run_fails()&&!p.parent.enabled,"failed cultivation continued with fallback clicks");});
     test("pending identity save failure stops before confirming",[]{start_reward_replay::Plugin p;p.fail_save="confirming";
         check(!p.run()&&p.controller.clicks==1&&p.confirmed.empty(),"unsaved identity allowed reward receipt");});
     test("final record failure retains pending identity and stops parent",[]{start_reward_replay::Plugin p;p.fail_save="selected";

@@ -211,14 +211,17 @@ struct EnteredPageObservation
 };
 
 // A controllable move whose preview already revealed the destination keeps that
-// preview as the identity authority.  The confirmation state machine has already
+// preview as the identity authority, unless the movement transforms the target.
+// The confirmation state machine has already
 // verified that the depart button disappeared; only random or still-hidden
 // landings need post-entry page classification.
 [[nodiscard]] inline bool move_confirmation_requires_entered_page_classification(
     const MoveCandidate& proposal,
     const MovePreview& preview) noexcept
 {
-    return !proposal.controllable || !preview.identity_revealed;
+    const auto* movement = find_movement_spec(proposal.movement);
+    return !proposal.controllable || !preview.identity_revealed ||
+           (movement != nullptr && movement->transformed_target_type.has_value());
 }
 
 enum class MoveConfirmationStatus

@@ -59,6 +59,15 @@ struct BlackFlowStoreReplayAccess
 
 struct BlackFlowMovementReplayAccess
 {
+    static std::vector<TextRect> names(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
+    {
+        BlackFlowMovementTaskPlugin::InventoryFrame frame;
+        std::string error;
+        require(p.analyze_inventory_frame(image, frame, 0, &error) ==
+                    BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
+                error.empty() ? "inventory names not recognized" : error);
+        return frame.visible_names;
+    }
     static bool rejects_map(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
     {
         BlackFlowMovementTaskPlugin::InventoryFrame frame;
@@ -270,4 +279,23 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
             result.has_value() && result->task_ptr->name == "BlackFlow@Roguelike@MapPrepare-Ready",
             "closed map has no successor");
     });
+    std::vector<TextRect> previous_names;
+    int stationary = 0;
+    for (int index = 1; index <= 9; ++index) {
+        test(("captured inventory scan with loaded highlight page " + std::to_string(index)).c_str(), [&] {
+            const auto frame = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261021" /
+                                            ("page-" + std::to_string(index) + ".jpg"));
+            require(!frame.empty(), "captured inventory frame missing");
+            const auto current_names = BlackFlowMovementReplayAccess::names(movement, frame);
+            const bool unchanged = inventory_name_layout_unchanged(previous_names, current_names);
+            stationary = unchanged ? stationary + 1 : 0;
+            if (index <= 4) {
+                require(!unchanged, "moving inventory accepted as stationary");
+            }
+            if (index >= 6) {
+                require(stationary >= 2, "loaded animation reset the completed inventory tail");
+            }
+            previous_names = current_names;
+        });
+    }
 }

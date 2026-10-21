@@ -127,6 +127,25 @@ struct InventoryColumnItem
     Rect name_rect;
 };
 
+// 装载卡片的循环高亮会穿过名称行，像素差不能证明列表仍在滚动。
+// 比较完整可见名称及其位置；允许 OCR 小幅抖动，但不能把同名列的局部移动当成到头。
+[[nodiscard]] inline bool inventory_name_layout_unchanged(
+    std::span<const TextRect> previous,
+    std::span<const TextRect> current) noexcept
+{
+    if (previous.empty() || previous.size() != current.size()) {
+        return false;
+    }
+    return std::ranges::all_of(previous, [&](const TextRect& before) {
+        return std::ranges::any_of(current, [&](const TextRect& after) {
+            return before.text == after.text && std::abs(before.rect.x - after.rect.x) <= 3 &&
+                   std::abs(before.rect.y - after.rect.y) <= 3 &&
+                   std::abs(before.rect.width - after.rect.width) <= 4 &&
+                   std::abs(before.rect.height - after.rect.height) <= 4;
+        });
+    });
+}
+
 // 手势只挪动几十像素时，最右侧完整列仍是上一屏的同一列。此时不能重复记账；
 // 下一屏同名同次数的独立实例通常回到相同列位置，不能仅凭名称去重。
 [[nodiscard]] inline bool inventory_column_only_shifted_partially(

@@ -137,6 +137,7 @@ struct Port final : IBlackFlowTaskPort
 #include "BlackFlowMovePreviewReplay.h"
 #include "BlackFlowEmployReplay.h"
 #include "BlackFlowExpeditionPickerReplay.h"
+#include "BlackFlowOpeningCultivationReplay.h"
 
 int main(int argc, char** argv)
 {
@@ -394,6 +395,7 @@ int main(int argc, char** argv)
     move_preview_regressions(std::filesystem::path(argv[1]), test);
     employ_capture_regressions(std::filesystem::path(argv[1]), test);
     expedition_picker_regressions(std::filesystem::path(argv[1]), test);
+    opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
     test("split title updates lifecycle attribution from floor two to three", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         require(session->set_current_floor(2), "previous floor");

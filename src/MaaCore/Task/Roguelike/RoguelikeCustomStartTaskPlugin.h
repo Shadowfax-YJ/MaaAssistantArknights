@@ -14,6 +14,7 @@ enum class RoguelikeCustomType
     Roles,           // 职业类型， like 先手必胜, 稳扎稳打, etc
     CoreChar,        // 首选干员， 干员名
     CoreCharVoucher, // 自动化收集的核心干员招募券
+    CultivationHarvest, // 开局培育成果领取
     // CoCoreChar,  // 次选干员， 干员名
 };
 
@@ -49,6 +50,11 @@ public:
     {
         m_blackflow_start_reward_evidence_observer = std::move(observer);
     }
+    void set_blackflow_cultivation_evidence_observer(
+        std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> observer)
+    {
+        m_blackflow_cultivation_evidence_observer = std::move(observer);
+    }
 
 protected:
     virtual bool _run() override;
@@ -58,6 +64,7 @@ protected:
 private:
     bool hijack_squad();
     bool hijack_reward();
+    bool hijack_cultivation_harvest();
     bool hijack_roles();
     bool hijack_core_char();
     bool hijack_core_char_voucher();
@@ -76,6 +83,7 @@ private:
     bool m_automation_collection_core_char_voucher_selected = false;
     std::function<void(std::string_view)> m_blackflow_start_reward_observer;
     std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_cultivation_evidence_observer;
     std::uint64_t m_start_reward_observation_index = 0;
 };
 }

@@ -14,6 +14,7 @@
 #include "Vision/Roguelike/RoguelikeRecruitImageAnalyzer.h"
 
 #include "BlackFlow/BlackFlowStartRewardRules.h"
+#include "BlackFlow/BlackFlowOpeningCultivation.h"
 #include "BlackFlow/BlackFlowAutomationCollectionRules.h"
 
 bool asst::RoguelikeCustomStartTaskPlugin::verify(AsstMsg msg, const json::value& details) const
@@ -33,11 +34,12 @@ bool asst::RoguelikeCustomStartTaskPlugin::verify(AsstMsg msg, const json::value
     if (task_view.starts_with(roguelike_name)) {
         task_view.remove_prefix(roguelike_name.length());
     }
-    static const std::array<std::tuple<AsstMsg, std::string_view, RoguelikeCustomType>, 4> TaskMap = {
+    static const std::array<std::tuple<AsstMsg, std::string_view, RoguelikeCustomType>, 5> TaskMap = {
         std::make_tuple(AsstMsg::SubTaskCompleted, "Roguelike@Squad-EnterPoint", RoguelikeCustomType::Squad),
         std::make_tuple(AsstMsg::SubTaskStart, "Roguelike@LastReward-EnterPoint", RoguelikeCustomType::Reward),
         std::make_tuple(AsstMsg::SubTaskCompleted, "Roguelike@RolesDefault", RoguelikeCustomType::Roles),
         std::make_tuple(AsstMsg::SubTaskStart, "Roguelike@RecruitMain", RoguelikeCustomType::CoreChar),
+        std::make_tuple(AsstMsg::SubTaskStart, "Roguelike@OpeningCultivationHarvest", RoguelikeCustomType::CultivationHarvest),
     };
 
     m_waiting_to_run = RoguelikeCustomType::None;
@@ -66,7 +68,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::verify(AsstMsg msg, const json::value
     if (m_waiting_to_run == RoguelikeCustomType::None) {
         return false;
     }
-    if (m_waiting_to_run == RoguelikeCustomType::Reward) {
+    if (m_waiting_to_run == RoguelikeCustomType::Reward || m_waiting_to_run == RoguelikeCustomType::CultivationHarvest) {
         return true;
     }
     if (m_waiting_to_run == RoguelikeCustomType::Squad) {
@@ -147,6 +149,8 @@ bool asst::RoguelikeCustomStartTaskPlugin::_run()
     const std::unordered_map<RoguelikeCustomType, std::function<bool(void)>> TypeActuator = {
         { RoguelikeCustomType::Squad, std::bind(&RoguelikeCustomStartTaskPlugin::hijack_squad, this) },
         { RoguelikeCustomType::Reward, std::bind(&RoguelikeCustomStartTaskPlugin::hijack_reward, this) },
+        { RoguelikeCustomType::CultivationHarvest,
+          std::bind(&RoguelikeCustomStartTaskPlugin::hijack_cultivation_harvest, this) },
         { RoguelikeCustomType::Roles, std::bind(&RoguelikeCustomStartTaskPlugin::hijack_roles, this) },
         { RoguelikeCustomType::CoreChar, std::bind(&RoguelikeCustomStartTaskPlugin::hijack_core_char, this) },
         { RoguelikeCustomType::CoreCharVoucher,
@@ -166,6 +170,7 @@ bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()
     if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
         m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection &&
         (m_waiting_to_run == RoguelikeCustomType::Reward ||
+         m_waiting_to_run == RoguelikeCustomType::CultivationHarvest ||
          m_waiting_to_run == RoguelikeCustomType::CoreChar ||
          m_waiting_to_run == RoguelikeCustomType::CoreCharVoucher)) {
         // 回调插件的失败不会自动传给父任务；不能兜底领取未记录的奖励或继续招募错误职业。
@@ -218,6 +223,42 @@ bool asst::RoguelikeCustomStartTaskPlugin::hijack_squad()
     }
     ProcessTask(*this, { "SwipeToTheLeft" }).run();
     return false;
+}
+
+bool asst::RoguelikeCustomStartTaskPlugin::hijack_cultivation_harvest()
+{
+    const bool collecting = m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection;
+    const std::string task = "BlackFlow@Roguelike@OpeningCultivationHarvest";
+    auto next = Task.get(task)->next;
+    std::erase(next, task);
+    auto current = blackflow::wait_for_opening_cultivation(
+        [&] { return blackflow::inspect_opening_cultivation(ctrler()->get_image()); },
+        [&](int milliseconds) { return sleep(milliseconds); },
+        [&] { return need_exit(); });
+    auto details = blackflow::opening_cultivation_details(current.image);
+    details["observation_index"] = ++m_start_reward_observation_index;
+    return blackflow::claim_opening_cultivation(
+        std::move(current),
+        std::move(details),
+        [&] {
+            auto frame = blackflow::inspect_opening_cultivation(ctrler()->get_image());
+            if (!frame.page_visible && !frame.image.empty()) {
+                PipelineAnalyzer analyzer(frame.image);
+                analyzer.set_tasks(next);
+                frame.next_page_ready = analyzer.analyze().has_value();
+            }
+            return frame;
+        },
+        [&](std::string_view kind, json::object evidence, std::shared_ptr<cv::Mat> image) {
+            if (!collecting) {
+                return true;
+            }
+            return m_blackflow_cultivation_evidence_observer &&
+                   m_blackflow_cultivation_evidence_observer(kind, std::move(evidence), std::move(image));
+        },
+        [&](const Rect& button) { return ctrler()->click(button); },
+        [&](int milliseconds) { return sleep(milliseconds); },
+        [&] { return need_exit(); });
 }
 
 bool asst::RoguelikeCustomStartTaskPlugin::hijack_reward()

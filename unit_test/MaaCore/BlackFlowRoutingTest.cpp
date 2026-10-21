@@ -2552,6 +2552,33 @@ TEST_CASE("BlackFlow revealed controllable moves do not require entered-page ide
     MoveCandidate random_landing = known_target;
     random_landing.controllable = false;
     REQUIRE(move_confirmation_requires_entered_page_classification(random_landing, revealed_preview));
+
+    known_target.movement = MovementKind::M16;
+    REQUIRE(move_confirmation_requires_entered_page_classification(known_target, revealed_preview));
+}
+
+TEST_CASE("BlackFlow inventory stationary layout rejects partial moves and missing names")
+{
+    const std::vector<asst::TextRect> before {
+        { { 600, 257, 140, 22 }, 0.99, "标准引擎" },
+        { { 900, 419, 140, 22 }, 0.99, "标准引擎" },
+        { { 900, 580, 140, 22 }, 0.99, "白模狗" },
+    };
+    auto after = before;
+    std::reverse(after.begin(), after.end());
+    after.front().rect.x += 2;
+    CHECK(inventory_name_layout_unchanged(before, after));
+    for (auto& item : after) {
+        item.rect.x -= 20;
+    }
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+    after = before;
+    after.pop_back();
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+    after = before;
+    after.back().text = "洛伦茨之眼";
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+    CHECK_FALSE(inventory_name_layout_unchanged({}, {}));
 }
 
 TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")

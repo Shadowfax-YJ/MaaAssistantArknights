@@ -1,0 +1,169 @@
+[
+    {
+        "action": "start.cultivation.reward.observed",
+        "details": {
+            "claim_status": "unconfirmed",
+            "items": [
+                {
+                    "amount": 5,
+                    "name": "源石锭"
+                }
+            ],
+            "observation_index": 1,
+            "recognition_scope": "visible_reward_cards",
+            "recognition_status": "recognized",
+            "recognized_texts": [
+                {
+                    "rect": [
+                        601,
+                        341,
+                        76,
+                        29
+                    ],
+                    "score": 0.994751,
+                    "text": "源石锭"
+                },
+                {
+                    "rect": [
+                        592,
+                        389,
+                        84,
+                        61
+                    ],
+                    "score": 0.999859,
+                    "text": "+5"
+                }
+            ],
+            "source": "opening_cultivation"
+        },
+        "elapsed_ms": 1,
+        "floor": 0,
+        "image": {
+            "path": "images/opening-cultivation.jpg"
+        },
+        "level": "INFO",
+        "map_generation": 0,
+        "outcome": "recognized",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 1,
+        "state": {
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-21T06:31:56Z"
+    },
+    {
+        "action": "start.cultivation.reward.confirming",
+        "details": {
+            "claim_status": "pending",
+            "confirmation_attempt": 1,
+            "confirmation_rect": [
+                624,
+                576,
+                32,
+                32
+            ],
+            "items": [
+                {
+                    "amount": 5,
+                    "name": "源石锭"
+                }
+            ],
+            "observation_index": 1,
+            "recognition_scope": "visible_reward_cards",
+            "recognition_status": "recognized",
+            "recognized_texts": [
+                {
+                    "rect": [
+                        601,
+                        341,
+                        76,
+                        29
+                    ],
+                    "score": 0.994751,
+                    "text": "源石锭"
+                },
+                {
+                    "rect": [
+                        592,
+                        389,
+                        84,
+                        61
+                    ],
+                    "score": 0.999859,
+                    "text": "+5"
+                }
+            ],
+            "source": "opening_cultivation"
+        },
+        "elapsed_ms": 2,
+        "floor": 0,
+        "level": "INFO",
+        "map_generation": 0,
+        "outcome": "pending",
+        "phase": "before-click",
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-21T06:31:56Z"
+    },
+    {
+        "action": "start.cultivation.reward.confirmed",
+        "details": {
+            "claim_status": "confirmed",
+            "confirmation_attempt": 1,
+            "confirmation_rect": [
+                624,
+                576,
+                32,
+                32
+            ],
+            "items": [
+                {
+                    "amount": 5,
+                    "name": "源石锭"
+                }
+            ],
+            "observation_index": 1,
+            "recognition_scope": "visible_reward_cards",
+            "recognition_status": "recognized",
+            "recognized_texts": [
+                {
+                    "rect": [
+                        601,
+                        341,
+                        76,
+                        29
+                    ],
+                    "score": 0.994751,
+                    "text": "源石锭"
+                },
+                {
+                    "rect": [
+                        592,
+                        389,
+                        84,
+                        61
+                    ],
+                    "score": 0.999859,
+                    "text": "+5"
+                }
+            ],
+            "source": "opening_cultivation"
+        },
+        "elapsed_ms": 3,
+        "floor": 0,
+        "level": "INFO",
+        "map_generation": 0,
+        "outcome": "confirmed",
+        "phase": "completed",
+        "schema_version": 1,
+        "sequence": 3,
+        "state": {
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-21T06:31:56Z"
+    }
+]

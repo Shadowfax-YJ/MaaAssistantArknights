@@ -102,6 +102,7 @@ private:
         std::optional<MovementKind> loaded_movement;
         std::vector<InventoryItem> items;
         std::vector<InventoryBoundaryItem> type_boundary_items;
+        std::vector<TextRect> visible_names;
         std::vector<std::pair<int, std::shared_ptr<cv::Mat>>> images;
         bool scan_complete = false;
         bool lorentz_eye_found = false;

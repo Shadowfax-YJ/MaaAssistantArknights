@@ -13,6 +13,7 @@
 #include "Task/Roguelike/RoguelikeConfig.h"
 #include "Task/Roguelike/RoguelikeControlTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeCustomStartTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowOpeningCultivation.h"
 #include "Task/Roguelike/RoguelikeDebugTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeFormationTaskPlugin.h"
@@ -206,6 +207,19 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
                 return false;
             }
             return true;
+        });
+    m_custom_ptr->set_blackflow_cultivation_evidence_observer(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
+            std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
+            const auto session = weak_session.lock();
+            const auto port = weak_port.lock();
+            if (!session || !port || session->profile() != "automation_collection") {
+                return false;
+            }
+            const auto event = blackflow::opening_cultivation_event(kind, std::move(details), session->run_log_state());
+            std::string error;
+            return port->record_run_event(session->run_revision(), event, std::move(image), false, &error);
         });
     encounter_plugin->set_blackflow_encounter_context_provider(
         [weak_config = std::weak_ptr<RoguelikeConfig>(m_config_ptr),

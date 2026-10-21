@@ -1,14 +1,10 @@
-黑流树海采集版 v1.1.23
+黑流树海采集版 v1.1.24
 
 ### 本次更新
 
-* 适配内容拓展新增零件和关卡名称，接入紧急逃生座椅、力反馈方向盘、鸣笛、坎诺特特快的移动与路线规划。
-* 支持洛伦茨之眼的全图视野效果，完善零件箱扫描、视野检查和后续路线选择。
-* 更新难度 6 的物品购买、出售、战利品及过载取舍策略，支持无缘果售出后的商店刷新。
-* 新增制图桌、大红按钮和手术祭坛的事件选择处理。
-* 修复事件转入作战时，误把地图上的“先行一步”识别为派遣界面而卡住的问题。
-* 修复开局奖励漏记和来源归属错误，奖励记录失败时停止继续领取，避免采集结果不完整。
-* 改进应急助力页面截图，等待通知消失、画面清晰后再保存并离开。
+* 修复使用坎诺特特快时卡在目的地转换确认、无法进入诡意行商的问题。
+* 修复零件箱扫描受装载光效干扰，已到列表末尾仍反复滑动并停止采集的问题。
+* 修复开局培育成果无法领取的问题，领取前保存成果内容和截图，随后继续开局奖励或招募。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -21,8 +17,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.23/MAA-BlackFlow-Data-Collection-v1.1.23-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.23/MAA-BlackFlow-Data-Collection-v1.1.23-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.24/MAA-BlackFlow-Data-Collection-v1.1.24-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.24/MAA-BlackFlow-Data-Collection-v1.1.24-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

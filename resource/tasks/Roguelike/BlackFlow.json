@@ -2594,6 +2594,7 @@
         "specificRect": [1135, 525, 70, 70],
         "next": [
             "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
+            "BlackFlow@Roguelike@MoveConversionConfirm",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmObserve",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
@@ -2626,6 +2627,7 @@
         "postDelay": 500,
         "next": [
             "#self",
+            "BlackFlow@Roguelike@MoveConversionConfirm",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmObserve",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
@@ -2642,6 +2644,7 @@
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
+            "BlackFlow@Roguelike@MoveConversionConfirm",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "#self",
             "BlackFlow@Roguelike@MovePreviewConfirmAbsentOnce"
@@ -2661,6 +2664,7 @@
         "reduceOtherTimes": ["BlackFlow@Roguelike@MovePreviewConfirmObserve*2"],
         "next": [
             "BlackFlow@Roguelike@MovePreviewConfirm-Loading",
+            "BlackFlow@Roguelike@MoveConversionConfirm",
             "BlackFlow@Roguelike@StageEncounterLeaveConfirm",
             "BlackFlow@Roguelike@MovePreviewConfirmObserve",
             "BlackFlow@Roguelike@MovePreviewConfirmSucceeded"
@@ -2668,6 +2672,49 @@
     },
     "BlackFlow@Roguelike@MovePreviewConfirmSucceeded": {
         "algorithm": "JustReturn"
+    },
+    "BlackFlow@Roguelike@MoveConversionConfirm": {
+        "Doc": "坎诺特特快转换目的地的专用确认；匹配完整说明文字，仅点击右侧确认，不能复用跨区域的确定这么做模板。",
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@MoveConversionConfirm.png",
+        "roi": [250, 294, 780, 52],
+        "templThreshold": 0.85,
+        "action": "ClickRect",
+        "specificRect": [940, 464, 106, 47],
+        "next": [
+            "BlackFlow@Roguelike@MoveConversionConfirmObserve",
+            "BlackFlow@Roguelike@MoveConversionConfirmAbsentOnce"
+        ],
+        "maxTimes": 3,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MoveConversionConfirmObserve*2"]
+    },
+    "BlackFlow@Roguelike@MoveConversionConfirmObserve": {
+        "baseTask": "BlackFlow@Roguelike@MoveConversionConfirm",
+        "template": "BlackFlow@Roguelike@MoveConversionConfirm.png",
+        "action": "DoNothing",
+        "next": ["#self", "BlackFlow@Roguelike@MoveConversionConfirmAbsentOnce"],
+        "maxTimes": 2,
+        "reduceOtherTimes": [],
+        "exceededNext": [
+            "BlackFlow@Roguelike@MoveConversionConfirm",
+            "BlackFlow@Roguelike@MoveConversionConfirmAbsentOnce"
+        ]
+    },
+    "BlackFlow@Roguelike@MoveConversionConfirmAbsentOnce": {
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 500,
+        "next": [
+            "BlackFlow@Roguelike@MoveConversionConfirmObserve",
+            "BlackFlow@Roguelike@MoveConversionConfirmCompleted"
+        ],
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MoveConversionConfirmObserve*2"]
+    },
+    "BlackFlow@Roguelike@MoveConversionConfirmCompleted": {
+        "algorithm": "JustReturn",
+        "postDelay": 600,
+        "reduceOtherTimes": ["BlackFlow@Roguelike@MoveConversionConfirm*3"]
     },
     "BlackFlow@Roguelike@MovePreviewCost": {
         "algorithm": "OcrDetect",
@@ -3918,6 +3965,7 @@
         "Doc": "分队插件点击后可能已经进入奖励页，先重新辨认页面，不能直接拿奖励确认模板当分队按钮。",
         "next": [
             "BlackFlow@Roguelike@LastReward-EnterPoint",
+            "BlackFlow@Roguelike@OpeningCultivationHarvest",
             "BlackFlow@Roguelike@SquadConfirm",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@RecruitMain",
@@ -3934,6 +3982,7 @@
         "sub": ["BlackFlow@Roguelike@SquadConfirmButton"],
         "next": [
             "BlackFlow@Roguelike@LastReward-EnterPoint",
+            "BlackFlow@Roguelike@OpeningCultivationHarvest",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@RecruitMain",
             "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
@@ -3944,6 +3993,35 @@
         "baseTask": "Roguelike@SquadConfirm",
         "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
         "next": []
+    },
+    "BlackFlow@Roguelike@OpeningCultivationHarvest": {
+        "Doc": "开局收获培育成果专用入口；插件记录整页与可见奖励文字后确认，不能用通用勾选按钮替代页面身份。",
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@OpeningCultivationHarvest.png",
+        "roi": [550, 14, 220, 45],
+        "templThreshold": 0.85,
+        "action": "DoNothing",
+        "maxTimes": 8,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "next": [
+            "BlackFlow@Roguelike@OpeningCultivationHarvest",
+            "BlackFlow@Roguelike@LastReward-EnterPoint",
+            "BlackFlow@Roguelike@RolesDefault",
+            "BlackFlow@Roguelike@RecruitMain",
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@Stages#next"
+        ]
+    },
+    "BlackFlow@Roguelike@OpeningCultivationHarvestConfirm": {
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@Confirm.png",
+        "roi": [581, 555, 118, 76],
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@OpeningCultivationHarvestItems": {
+        "algorithm": "OcrDetect",
+        "roi": [100, 280, 1080, 240],
+        "text": []
     },
     "BlackFlow@Roguelike@SquadDefault": {
         "template": "BlackFlow@Roguelike@SquadDefault.png"

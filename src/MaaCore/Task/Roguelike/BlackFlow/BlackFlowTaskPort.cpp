@@ -70,6 +70,7 @@ constexpr std::string_view MovePreviewConfirmTask = "BlackFlow@Roguelike@MovePre
 constexpr std::string_view MovePreviewConfirmSucceededTask = "BlackFlow@Roguelike@MovePreviewConfirmSucceeded";
 constexpr std::string_view MovePreviewConfirmExceededTask = "BlackFlow@Roguelike@MovePreviewConfirmExceeded";
 constexpr std::string_view MovePreviewConfirmCompletedTask = "BlackFlow@Roguelike@MovePreviewConfirmCompleted";
+constexpr std::string_view MoveConversionConfirmCompletedTask = "BlackFlow@Roguelike@MoveConversionConfirmCompleted";
 constexpr std::string_view StageEncounterLeaveConfirmCompletedTask =
     "BlackFlow@Roguelike@StageEncounterLeaveConfirmCompleted";
 constexpr std::string_view MoveConfirmDoorAnimationWaitTask =
@@ -1993,6 +1994,7 @@ MoveConfirmationStatus BlackFlowTaskPort::confirm(
         return MoveConfirmationStatus::NeedsDismiss;
     }
     if (!confirmation_task.ends_with(MovePreviewConfirmSucceededTask) &&
+        !confirmation_task.ends_with(MoveConversionConfirmCompletedTask) &&
         !confirmation_task.ends_with(StageEncounterLeaveConfirmCompletedTask)) {
         set_error(error, "move preview confirmation ended at an unexpected task: " + confirmation_task);
         return MoveConfirmationStatus::Failed;
@@ -2028,7 +2030,7 @@ MoveConfirmationStatus BlackFlowTaskPort::confirm(
             *transaction.preview())) {
         return MoveConfirmationStatus::Succeeded;
     }
-    // 随机移动或预览仍隐藏身份时，才从实际进入的页面回写落点身份。
+    // 随机移动、隐藏落点或会转换目标类型的加工品，以实际进入页面回写身份。
     if (!classify_entered_page(confirmed_image, entered_page, error)) {
         return MoveConfirmationStatus::Failed;
     }

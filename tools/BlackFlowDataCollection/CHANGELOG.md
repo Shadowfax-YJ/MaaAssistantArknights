@@ -1,4 +1,4 @@
-## v1.1.23
+## v1.1.24
 
 ### Highlights
 
@@ -44,6 +44,17 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.24 (2026-10-21)</b></summary>
+
+### 修复 | Fix
+
+* 修复使用坎诺特特快时卡在目的地转换确认、无法进入诡意行商的问题。 @Shadowfax-YJ
+* 修复零件箱扫描受装载光效干扰，已到列表末尾仍反复滑动并停止采集的问题。 @Shadowfax-YJ
+* 修复开局培育成果无法领取的问题，领取前保存成果内容和截图，随后继续开局奖励或招募。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.23 (2026-10-21)</b></summary>
 
 ### 新增 | New
