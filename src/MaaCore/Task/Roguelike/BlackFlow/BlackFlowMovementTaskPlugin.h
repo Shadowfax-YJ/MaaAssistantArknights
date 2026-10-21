@@ -106,6 +106,7 @@ private:
         std::vector<std::pair<int, std::shared_ptr<cv::Mat>>> images;
         bool scan_complete = false;
         bool lorentz_eye_found = false;
+        bool has_empty_slot = false;
         bool has_clipped_item = false;
         bool page_lost = false;
     };

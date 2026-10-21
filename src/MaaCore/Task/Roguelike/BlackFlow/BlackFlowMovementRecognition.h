@@ -128,7 +128,8 @@ struct InventoryColumnItem
 };
 
 // 装载卡片的循环高亮会穿过名称行，像素差不能证明列表仍在滚动。
-// 比较完整可见名称及其位置；允许 OCR 小幅抖动，但不能把同名列的局部移动当成到头。
+// 比较完整可见名称及文字中心；框的宽高会随 OCR 抖动，不能作为列表位移。
+// 中心最多偏移 3px，仍拒绝同名列的局部滚动；两倍坐标保留半像素精度。
 [[nodiscard]] inline bool inventory_name_layout_unchanged(
     std::span<const TextRect> previous,
     std::span<const TextRect> current) noexcept
@@ -138,10 +139,11 @@ struct InventoryColumnItem
     }
     return std::ranges::all_of(previous, [&](const TextRect& before) {
         return std::ranges::any_of(current, [&](const TextRect& after) {
-            return before.text == after.text && std::abs(before.rect.x - after.rect.x) <= 3 &&
-                   std::abs(before.rect.y - after.rect.y) <= 3 &&
-                   std::abs(before.rect.width - after.rect.width) <= 4 &&
-                   std::abs(before.rect.height - after.rect.height) <= 4;
+            const int center_delta_x =
+                (2 * before.rect.x + before.rect.width) - (2 * after.rect.x + after.rect.width);
+            const int center_delta_y =
+                (2 * before.rect.y + before.rect.height) - (2 * after.rect.y + after.rect.height);
+            return before.text == after.text && std::abs(center_delta_x) <= 6 && std::abs(center_delta_y) <= 6;
         });
     });
 }

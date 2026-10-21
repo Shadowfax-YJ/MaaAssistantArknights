@@ -59,6 +59,15 @@ struct BlackFlowStoreReplayAccess
 
 struct BlackFlowMovementReplayAccess
 {
+    static std::pair<bool, std::size_t> empty_slot(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
+    {
+        BlackFlowMovementTaskPlugin::InventoryFrame frame;
+        std::string error;
+        require(p.analyze_inventory_frame(image, frame, 0, &error) ==
+                    BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
+                "captured inventory frame not recognized");
+        return { frame.has_empty_slot, frame.items.size() };
+    }
     static std::vector<TextRect> names(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
     {
         BlackFlowMovementTaskPlugin::InventoryFrame frame;
@@ -298,4 +307,24 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
             previous_names = current_names;
         });
     }
+    const auto empty_fixtures = repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261021-instance002";
+    test("captured 002 inventory first page recognizes empty slots beside two movements", [&] {
+        const auto image = MAA_NS::imread(empty_fixtures / "first-page.jpg");
+        require(!image.empty(), "captured first inventory page missing");
+        const auto [empty, movements] = BlackFlowMovementReplayAccess::empty_slot(movement, image);
+        require(empty && movements == 2, "empty terminal or same-page movements were not recognized");
+    });
+    test("captured 002 empty tail recognizes an explicit terminal", [&] {
+        const auto image = MAA_NS::imread(empty_fixtures / "empty-tail.jpg");
+        require(!image.empty(), "captured empty tail missing");
+        const auto [empty, movements] = BlackFlowMovementReplayAccess::empty_slot(movement, image);
+        require(empty && movements == 0, "empty tail not recognized");
+    });
+    test("removing the captured empty labels removes the explicit terminal", [&] {
+        auto image = MAA_NS::imread(empty_fixtures / "first-page.jpg");
+        require(!image.empty(), "captured first inventory page missing");
+        image(cv::Rect(930, 365, 175, 215)).setTo(cv::Scalar(25, 25, 25));
+        const auto [empty, movements] = BlackFlowMovementReplayAccess::empty_slot(movement, image);
+        require(!empty && movements == 2, "missing empty labels became terminal evidence");
+    });
 }

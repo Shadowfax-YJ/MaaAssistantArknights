@@ -1,4 +1,4 @@
-## v1.1.24
+## v1.1.25
 
 ### Highlights
 
@@ -44,6 +44,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.25 (2026-10-21)</b></summary>
+
+### 修复 | Fix
+
+* 修复零件箱已出现“待收集零件”后仍反复滑动并停止采集的问题，收齐当前屏幕有效物品后结束扫描。 @Shadowfax-YJ
+* 修复零件箱扫描受文字识别框抖动影响，无法确认列表起点或末尾的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.24 (2026-10-21)</b></summary>
 
 ### 修复 | Fix

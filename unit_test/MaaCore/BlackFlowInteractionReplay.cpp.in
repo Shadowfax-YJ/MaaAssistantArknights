@@ -281,6 +281,7 @@ struct BlackFlowMovementTaskPlugin {
 namespace whole_inventory_replay {
 constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
 constexpr std::string_view LoadedText="装载中";
+constexpr std::string_view InventoryEmptySlotText="待收集零件";
 constexpr int MaxFrameRecognitionAttempts=2, RecognitionRetryDelay=200, InventoryNewRightColumnMinimumX=760;
 constexpr int InventoryLoadedMarkerMaximumVerticalGap=32;
 constexpr double InventoryUnchangedFrameMaximumDifference=3.0;
@@ -289,10 +290,16 @@ struct { template<class T> std::shared_ptr<T> get(std::string) const{return std:
 struct OCRer {
     cv::Mat image;
     inline static std::vector<std::vector<TextRect>> pages;
+    inline static bool jitter_names=false;
+    inline static int reads=0;
     explicit OCRer(const cv::Mat& value):image(value){}
     void set_task_info(std::shared_ptr<OcrTaskInfo>){}
     void set_required(std::vector<std::string>){}
-    std::optional<std::vector<TextRect>> analyze(){return pages.at(image.at<cv::Vec3b>(0,0)[0]/20);}
+    std::optional<std::vector<TextRect>> analyze(){
+        auto names=pages.at(image.at<cv::Vec3b>(0,0)[0]/20);
+        if(jitter_names&&(++reads%2))for(auto& name:names){name.rect.y-=3;name.rect.height+=5;}
+        return names;
+    }
 };
 bool movement_inventory_page_visible(const cv::Mat& image){return !image.empty()&&image.at<cv::Vec3b>(0,0)[2]==0;}
 std::optional<std::string_view> inventory_boundary_label(std::string_view name){
@@ -307,7 +314,9 @@ recognize_movement_inventory_remaining_uses(const cv::Mat&,const Rect&,int count
 /*INVENTORY_NAMES_UNCHANGED*/
 struct Controller {
     int page=0, last_page=0;
+    int forward_swipes=0;
     bool animate_loaded=false;
+    bool jitter_after_forward=false;
     int reads=0;
     cv::Mat get_image(){
         cv::Mat image(720,1280,CV_8UC3,cv::Scalar(page*20,0,0));
@@ -330,7 +339,7 @@ struct BlackFlowMovementTaskPlugin {
         std::vector<InventoryBoundaryItem> type_boundary_items;
         std::vector<TextRect> visible_names;
         std::vector<std::pair<int,std::shared_ptr<cv::Mat>>> images;
-        bool scan_complete=false,lorentz_eye_found=false,has_clipped_item=false,page_lost=false;
+        bool scan_complete=false,lorentz_eye_found=false,has_empty_slot=false,has_clipped_item=false,page_lost=false;
     };
     Controller controller;
     bool cancelled=false;
@@ -339,6 +348,10 @@ struct BlackFlowMovementTaskPlugin {
     bool sleep(int){return !cancelled;}
     bool run_fixed_task(std::string_view task){
         if(cancelled)return false;
+        if(task==InventorySwipeTask){
+            ++controller.forward_swipes;
+            if(controller.jitter_after_forward)OCRer::jitter_names=true;
+        }
         controller.page=task==InventorySwipeToStartTask?std::max(0,controller.page-1):std::min(controller.last_page,controller.page+1);
         return true;
     }
@@ -354,7 +367,8 @@ struct BlackFlowMovementTaskPlugin {
 /*INVENTORY_ANALYZE*/
 TextRect title(std::string text,int x=900){return {{x,258,140,24},0.99,std::move(text)};}
 void configure(BlackFlowMovementTaskPlugin& plugin,std::vector<std::vector<TextRect>> pages){
-    OCRer::pages=std::move(pages);plugin.controller.last_page=int(OCRer::pages.size())-1;
+    OCRer::pages=std::move(pages);OCRer::jitter_names=false;OCRer::reads=0;
+    plugin.controller.last_page=int(OCRer::pages.size())-1;
     plugin.controller.page=plugin.controller.last_page;
 }
 }
@@ -382,6 +396,75 @@ int main(int argc,char** argv) {
         whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
         check(p.scan_inventory_frame(frame,&error)&&frame.scan_complete&&!frame.lorentz_eye_found,"no-eye full inventory was not recognized");
     });
+    test("whole inventory stops at a complete empty slot after collecting the same page",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座",400),title("洛伦茨之眼",800),title("待收集零件",1050)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.lorentz_eye_found&&frame.movement_instances.size()==1,
+              "empty terminal discarded a valid item or eye on the same page");
+        check(p.controller.forward_swipes==0,"explicit empty terminal still required scrolling");
+    });
+    test("whole inventory stops on the captured 002 OCR before its jittering empty tail",[&]{
+        using namespace whole_inventory_replay;
+        const auto fixture=std::filesystem::path(argv[1]).parent_path()/"blackflow-inventory/20261021-instance002/runtime-ocr-layouts.json";
+        const auto data=json::open(fixture);
+        check(data.has_value(),"captured runtime OCR fixture missing");
+        std::vector<std::vector<TextRect>> pages;
+        for(const auto& page:data->as_array()){
+            std::vector<TextRect> names;
+            for(const auto& name:page.at("names").as_array()){
+                const auto& r=name.at("rect").as_array();
+                names.emplace_back(TextRect{{r[0].as_integer(),r[1].as_integer(),r[2].as_integer(),r[3].as_integer()},
+                                            name.at("score").as_double(),name.at("text").as_string()});
+            }
+            pages.emplace_back(std::move(names));
+        }
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,std::move(pages));
+        // 这是已经完成回到起点后的前向观测序列；重复末帧不是不同的物理列。
+        p.controller.page=0;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.movement_instances.size()==2,"captured initial-page movements lost");
+        check(p.controller.forward_swipes==0,"captured explicit empty slots were ignored");
+    });
+    test("whole inventory empty terminal keeps the newly exposed right column and left eye",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座")},
+                     {title("洛伦茨之眼",600),title("标准引擎",900),title("待收集零件",1100)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.lorentz_eye_found&&frame.movement_instances.size()==2,
+              "empty terminal skipped the final right-column movement or left eye");
+        check(p.controller.forward_swipes==1,"empty final column was scrolled again");
+    });
+    test("whole inventory empty terminal does not duplicate a partially shifted column",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座",900)},
+                     {title("洛伦茨之眼",600),title("气垫底座",870),title("待收集零件",1100)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(frame.scan_complete&&frame.lorentz_eye_found&&frame.movement_instances.size()==1,
+              "partial terminal scroll duplicated a movement or discarded eye evidence");
+        check(p.controller.forward_swipes==1,"partial empty terminal required another swipe");
+    });
+    test("whole inventory clipped empty text cannot prove completion",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座",400),title("待收集零件",1240)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"clipped empty slot accepted as terminal");
+    });
+    test("whole inventory empty slot does not hide an unresolved clipped movement",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座",1240),title("待收集零件",900)}});
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(!p.scan_inventory_frame(frame,&error)&&!frame.scan_complete,"empty slot hid an unreadable movement");
+    });
     test("whole inventory completes with a flashing loaded highlight at the tail",[]{
         using namespace whole_inventory_replay;
         whole_inventory_replay::BlackFlowMovementTaskPlugin p;configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
@@ -390,6 +473,27 @@ int main(int argc,char** argv) {
         const bool complete=p.scan_inventory_frame(frame,&error);
         check(complete,error.c_str());
         check(frame.scan_complete&&frame.movement_instances.size()==1,"highlight prevented full scan or duplicated a movement");
+    });
+    test("whole inventory reset tolerates changing OCR box heights",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
+        OCRer::jitter_names=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        const bool complete=p.scan_inventory_frame(frame,&error);
+        check(complete,error.c_str());
+        check(frame.scan_complete&&frame.movement_instances.size()==1,"reset jitter lost or duplicated inventory");
+    });
+    test("whole inventory without empty slots completes despite OCR box height jitter",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("气垫底座")},{title("板藤")},{title("白模狗")}});
+        p.controller.jitter_after_forward=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        const bool complete=p.scan_inventory_frame(frame,&error);
+        check(complete,error.c_str());
+        check(frame.scan_complete&&frame.movement_instances.size()==1&&!frame.lorentz_eye_found,
+              "nonempty-tail jitter prevented complete inventory or changed resources");
     });
     test("whole inventory rejects an unreadable last page",[]{
         using namespace whole_inventory_replay;

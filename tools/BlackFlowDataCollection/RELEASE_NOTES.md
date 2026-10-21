@@ -1,10 +1,9 @@
-黑流树海采集版 v1.1.24
+黑流树海采集版 v1.1.25
 
 ### 本次更新
 
-* 修复使用坎诺特特快时卡在目的地转换确认、无法进入诡意行商的问题。
-* 修复零件箱扫描受装载光效干扰，已到列表末尾仍反复滑动并停止采集的问题。
-* 修复开局培育成果无法领取的问题，领取前保存成果内容和截图，随后继续开局奖励或招募。
+* 修复零件箱已出现“待收集零件”后仍反复滑动并停止采集的问题，收齐当前屏幕有效物品后结束扫描。
+* 修复零件箱扫描受文字识别框抖动影响，无法确认列表起点或末尾的问题。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -17,8 +16,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.24/MAA-BlackFlow-Data-Collection-v1.1.24-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.24/MAA-BlackFlow-Data-Collection-v1.1.24-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.25/MAA-BlackFlow-Data-Collection-v1.1.25-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.25/MAA-BlackFlow-Data-Collection-v1.1.25-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

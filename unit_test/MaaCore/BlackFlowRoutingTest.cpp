@@ -2581,6 +2581,27 @@ TEST_CASE("BlackFlow inventory stationary layout rejects partial moves and missi
     CHECK_FALSE(inventory_name_layout_unchanged({}, {}));
 }
 
+TEST_CASE("BlackFlow inventory stationary layout follows text centers through OCR box jitter")
+{
+    const std::vector<asst::TextRect> before {
+        { { 981, 225, 93, 23 }, 0.999838, "待收集零件" },
+    };
+    auto after = before;
+    // MAA-002 原始 OCR：框高变化 5px，实际文字中心只变化 0.5px。
+    after.front().rect = { 979, 222, 96, 28 };
+    CHECK(inventory_name_layout_unchanged(before, after));
+    after.front().rect.x -= 4;
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+    after = before;
+    after.front().rect.y += 4;
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+    after = before;
+    after.front().rect.x += 3;
+    CHECK(inventory_name_layout_unchanged(before, after));
+    ++after.front().rect.width;
+    CHECK_FALSE(inventory_name_layout_unchanged(before, after));
+}
+
 TEST_CASE("BlackFlow transition clicks wait passively for settled destinations")
 {
     const std::filesystem::path repository_root =

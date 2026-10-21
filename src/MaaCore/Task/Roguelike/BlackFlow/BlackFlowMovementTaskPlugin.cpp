@@ -472,6 +472,11 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         // 存在性不按新右列去重。末尾回弹/不足一列的移动也可能第一次完整露出洛眼标题。
         frame.lorentz_eye_found = frame.lorentz_eye_found || page.lorentz_eye_found;
         if (scan_page > 0 && (stationary_frames > 0 || partial_scroll)) {
+            if (page.has_empty_slot && !page.has_clipped_item) {
+                // 本列只是前一屏的重叠，不重复记账；完整空槽已证明物品列表结束。
+                reached_end = true;
+                break;
+            }
             Log.info("BlackFlow inventory column has not advanced completely; continuing scan", scan_page);
             continue;
         }
@@ -493,6 +498,11 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
         for (InventoryBoundaryItem& item : page.type_boundary_items) {
             item.scan_page = scan_page;
             frame.type_boundary_items.emplace_back(std::move(item));
+        }
+        if (page.has_empty_slot && !page.has_clipped_item) {
+            // 先收齐同屏有效物品，再按明确空槽结束；不要求再滑动两次证明静止。
+            reached_end = true;
+            break;
         }
     }
     frame.scan_complete = reached_end;
@@ -536,6 +546,10 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
             readable_inventory_name = true;
             // 在右列去重之前保留整屏布局；左列同样可以证明是否发生了局部滚动。
             frame.visible_names.emplace_back(result);
+        }
+        if (result.text == InventoryEmptySlotText && complete_name) {
+            // 空槽是列表末尾的肯定证据；须在右列去重前保留，截断文字不作数。
+            frame.has_empty_slot = true;
         }
         if (result.text == "洛伦茨之眼" && complete_name) {
             // PASSIVE没有加工品星标；只从完整标题识别当前存在性，不读取静态buffStack。
