@@ -1,6 +1,24 @@
 # BlackFlow 采集契约与下游联动
 
-## 零件箱明确空槽结束条件（未发布，2026-10-21）
+## v1.1.25 发布与兼容性核验（2026-10-21）
+
+用户授权的 Windows、macOS 独立采集版发布已完成，流水线
+[`39612092787`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/39612092787)
+全部成功，构建提交为 `f80a752cceaa4a86136ed61fa4cb17030ce41cd8`，Release 为
+[`blackflow-v1.1.25`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.25)。
+GitHub、国内 CDN 自动更新清单均为 v1.1.25；普通版 Latest 仍为 v15.0.1。
+
+Windows 包、更新流程及全部采集回归检查通过；macOS 应用/核心版本、双架构、
+资源加载、ad-hoc 签名与 DMG 完整性检查通过。发布后从国内 CDN 下载两个
+完整包，其 SHA-256 与 GitHub 资产 digest 及两份清单一致；GitHub、CDN 两份
+macOS Ed25519 更新签名、Windows ZIP CRC、更新身份、配置隔离及资源一致性
+独立核验通过。记录为 `build/diagnostics/20261021/v1.1.25-public-verification/verification.json`。
+
+以下空槽和 OCR 框抖动修复均已随本版发布。原始 schema、签名格式、验证器
+bundle、消费者及宿主协议不变，不重写历史归档、缓存、人工审核或统计。
+未替换运行中的实例，无本版完整实机对局验证。
+
+## 零件箱明确空槽结束条件（v1.1.25，2026-10-21）
 
 按用户确认的语义，完整识别到「待收集零件」即已到达有效物品列表末尾。
 此前虽识别并保存空槽文字，但仍要求连续两次滑动后的名称框完全静止，导致
@@ -24,7 +42,7 @@ MAA-002 的 v1.1.24 对局 `run-20261021-212020-353628` 在空槽框高度抖动
 空槽文字的真实图像对照。另覆盖无空槽时首尾框高抖动、真实位置变化和半像素
 边界。原始九帧 OCR 的生产判定回放修复前失败，修复后第六帧确认末尾；JPEG
 重新 OCR 会改变框尺寸，原始 OCR 序列单独保留。
-本次未发版、未替换运行实例，无整局实机验证。
+上述本地验证后已完成 v1.1.25 发布和公开下载核验，未替换运行实例，无整局实机验证。
 
 ## v1.1.24 发布与兼容性核验（2026-10-21）
 
