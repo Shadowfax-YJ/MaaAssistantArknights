@@ -16,6 +16,61 @@ inline constexpr int LightRevealRadius = 3;
 inline constexpr int InitialLightRevealRadius = 2;
 inline constexpr int TransientRevealObservationMaximumAttempts = 4;
 
+struct RevealVisibility
+{
+    bool diffused_mist = false;
+    bool domain_confirmed = false;
+    bool expired = false;
+    std::vector<GridPosition> domain;
+
+    [[nodiscard]] bool uncertain() const noexcept { return diffused_mist && !domain_confirmed && !expired; }
+};
+
+// This is a prediction-only copy. An unknown domain must not be serialized as a
+// confirmed fog mask or credited as guaranteed natural visibility by the planner.
+[[nodiscard]] inline MapSnapshot
+    reveal_visibility_map(const MapSnapshot& map, const RevealVisibility& visibility, bool conservative = true)
+{
+    MapSnapshot result = map;
+    if (!visibility.diffused_mist && !visibility.expired) {
+        return result;
+    }
+    for (const auto& [id, node] : map.nodes()) {
+        Node projected = node;
+        projected.natural_reveal_suppressed =
+            !visibility.expired && (visibility.domain_confirmed
+                                        ? std::ranges::find(visibility.domain, node.position) != visibility.domain.end()
+                                        : conservative && !node.identity_revealed && node.type != NodeType::Empty);
+        (void)result.upsert_node(std::move(projected));
+    }
+    return result;
+}
+
+struct RevealExpectation
+{
+    std::unordered_set<NodeId> required;
+    std::unordered_set<NodeId> possible;
+
+    [[nodiscard]] std::unordered_set<NodeId> uncertain_nodes() const
+    {
+        auto result = possible;
+        for (const NodeId id : required) {
+            result.erase(id);
+        }
+        return result;
+    }
+};
+
+template <typename Predict>
+[[nodiscard]] RevealExpectation
+    make_reveal_expectation(const MapSnapshot& map, const RevealVisibility& visibility, Predict&& predict)
+{
+    RevealExpectation result;
+    result.required = predict(reveal_visibility_map(map, visibility));
+    result.possible = visibility.uncertain() ? predict(reveal_visibility_map(map, visibility, false)) : result.required;
+    return result;
+}
+
 [[nodiscard]] inline bool lorentz_eye_activates(bool available, MovementKind movement, NodeType landing_type)
 {
     return available && movement != MovementKind::Walk && landing_type == NodeType::Light;
@@ -120,7 +175,9 @@ expected_initial_natural_reveals(const MapSnapshot& map, NodeId entrance)
                 continue;
             }
             const bool baseline_visible = initially_visible_without_reveal(*node);
-            if (node->natural_reveal_suppressed && !baseline_visible) {
+            const bool known_empty = node->type == NodeType::Empty && node->identity_revealed &&
+                                     node->identity_source != "map_topology_no_ocr_empty";
+            if (node->natural_reveal_suppressed && !baseline_visible && !known_empty) {
                 continue;
             }
             result.emplace(neighbor);
@@ -314,6 +371,27 @@ observed_move_reveals(const MapSnapshot& before, const RunState& run, const MapS
     return result;
 }
 
+// A completed linked event is independently witnessed by its page lifecycle.
+// Accept that one origin even when its now-empty map slot has no OCR text;
+// unrelated topology-only empty slots remain excluded by observed_move_reveals.
+inline bool add_completed_linked_event_reveal(
+    const MapSnapshot& before,
+    const RunState& run,
+    const MapSnapshot& after,
+    NodeId event_node,
+    bool incident_completed,
+    std::unordered_set<NodeId>& observed)
+{
+    const Node* original = before.find_node(event_node);
+    const Node* completed = after.find_node(event_node);
+    if (!incident_completed || !initially_unknown_for_reveal(before, run, event_node) || original == nullptr ||
+        node_has_roaming_resident_marker(*original) || completed == nullptr || completed->type != NodeType::Empty ||
+        !completed->identity_revealed || completed->visually_hidden || completed->identity_unrecoverable) {
+        return false;
+    }
+    return observed.emplace(event_node).second;
+}
+
 inline void add_observed_random_reveal_expectations(
     const MapSnapshot& before,
     const RunState& run,
@@ -430,6 +508,14 @@ unexpected_merchant_reveals(const MapSnapshot& observed_map, const std::vector<N
     }
     std::ranges::sort(result.missing);
     std::ranges::sort(result.unexpected);
+    return result;
+}
+
+[[nodiscard]] inline RevealConsistencyResult
+    compare_reveal_expectation(const RevealExpectation& expectation, const std::unordered_set<NodeId>& observed)
+{
+    auto result = compare_move_reveals(expectation.required, observed);
+    std::erase_if(result.unexpected, [&](NodeId id) { return expectation.possible.contains(id); });
     return result;
 }
 

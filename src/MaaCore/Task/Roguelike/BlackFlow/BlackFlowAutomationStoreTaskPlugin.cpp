@@ -253,6 +253,7 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_shop_goods.clear();
     m_shop_entry_processing_items.clear();
     m_shop_refresh_count = 0;
+    m_shop_paid_refresh_count = 0;
     m_shop_sale_refresh_pending = false;
     m_shop_refresh_wallet_before.reset();
     m_shop_refresh_diagnostics.clear();
@@ -523,6 +524,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_shop_entry_processing_items = projected_entry_processing_items();
         m_active_shop_identity = current_store_identity(AutomationStoreKind::Eerie);
         m_shop_refresh_count = m_refresh_ledger.refresh_count(*m_active_shop_identity);
+        m_shop_paid_refresh_count = m_refresh_ledger.paid_refresh_count(*m_active_shop_identity);
         m_shop_sale_refresh_pending = false;
         m_shop_sold_in_cycle = false;
         m_shop_shelf_page = ShelfPage::Top;
@@ -676,7 +678,7 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         }
 
         const int wallet = read_number(image, std::string(ShopWalletTask));
-        if (automation_store_can_refresh(m_shop_refresh_count, wallet, ShopRefreshReserve)) {
+        if (automation_store_can_refresh(m_shop_refresh_count, m_shop_paid_refresh_count, wallet, ShopRefreshReserve)) {
             Task.set_task_base(std::string(ShopSellAction), std::string(ShopRefreshPrepare));
         }
         else {
@@ -692,7 +694,9 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
             const bool exhausted = automation_store_refresh_exhausted(before);
             if (!exhausted) {
                 m_shop_refresh_count = m_active_shop_identity.has_value()
-                                           ? m_refresh_ledger.record_refresh(*m_active_shop_identity)
+                                           ? m_refresh_ledger.record_refresh(
+                                                 *m_active_shop_identity,
+                                                 AutomationStoreRefreshSource::ItemSale)
                                            : before + 1;
                 clear_pending_purchase();
                 m_shop_purchased.clear();
@@ -793,6 +797,9 @@ bool BlackFlowAutomationStoreTaskPlugin::_run()
         m_shop_refresh_count = m_active_shop_identity.has_value()
                                    ? m_refresh_ledger.record_refresh(*m_active_shop_identity)
                                    : std::min(m_shop_refresh_count + 1, AutomationStoreMaxRefreshTimes);
+        m_shop_paid_refresh_count = m_active_shop_identity.has_value()
+                                        ? m_refresh_ledger.paid_refresh_count(*m_active_shop_identity)
+                                        : m_shop_paid_refresh_count + 1;
         clear_pending_purchase();
         m_shop_purchased.clear();
         m_shop_attempted.clear();
@@ -1501,7 +1508,8 @@ bool BlackFlowAutomationStoreTaskPlugin::verify_shop_refresh_receipt()
     if (!m_shop_refresh_wallet_before.has_value()) {
         return false;
     }
-    const int expected_wallet = *m_shop_refresh_wallet_before - automation_store_refresh_price(m_shop_refresh_count);
+    // 无缘果消耗货架刷新机会，但不推进付费刷新价格；两种次数都按同一商店身份保留。
+    const int expected_wallet = *m_shop_refresh_wallet_before - automation_store_refresh_price(m_shop_paid_refresh_count);
     m_shop_refresh_diagnostics = {
         { "wallet_before", *m_shop_refresh_wallet_before },
         { "expected_wallet", expected_wallet },

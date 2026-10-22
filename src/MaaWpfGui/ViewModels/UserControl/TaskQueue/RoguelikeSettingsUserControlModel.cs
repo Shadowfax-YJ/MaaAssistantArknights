@@ -1292,6 +1292,12 @@ public class RoguelikeSettingsUserControlModel : TaskSettingsViewModel, Roguelik
                             LocalizationHelper.GetStringFormat("BlackFlowWarningUnknownCode", warningCode),
                         _ => LocalizationHelper.GetString("BlackFlowWarningUnknown"),
                     };
+                    if (warningCode == "reveal_consistency_mismatch" &&
+                        subTaskDetails?["possible_duck_pressure_board_nodes"] is JArray { Count: > 0 })
+                    {
+                        warning += "\n" + LocalizationHelper.GetString("BlackFlowWarningPossibleDuckPressureBoard");
+                    }
+
                     Instances.TaskQueueViewModel.AddLog(warning, UiLogColor.Warning);
                     break;
                 }

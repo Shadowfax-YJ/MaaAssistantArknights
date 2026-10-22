@@ -114,6 +114,7 @@ void store_identity_regressions(const std::filesystem::path& repo, Test&& test)
             require(before == after, "same outer shop was assigned a new identity");
             const int count = BlackFlowStoreReplayAccess::refresh_count(s.store, AutomationStoreKind::Eerie);
             require(count == prior_count, "store entry lost paid refreshes");
+            require(BlackFlowStoreReplayAccess::paid_refresh_count(s.store) == prior_count, "paid count lost");
             require(
                 BlackFlowStoreReplayAccess::queued_refresh_index(s.store) == prior_count,
                 "capture lost refresh index");
@@ -121,6 +122,36 @@ void store_identity_regressions(const std::filesystem::path& repo, Test&& test)
                 automation_store_can_refresh(count, 46, 12) == (prior_count == 1),
                 "wrong refresh budget after return");
             require(automation_store_refresh_price(count) == 4 * (prior_count + 1), "wrong payment expectation");
+        });
+    }
+    for (const int prior_paid : { 0, 1 }) {
+        const auto name = "fruit and " + std::to_string(prior_paid) + " paid refreshes survive store re-entry";
+        test(name.c_str(), [&] {
+            StoreIdentityScenario s;
+            s.prior_refreshes(AutomationStoreKind::Eerie, prior_paid);
+            require(BlackFlowStoreReplayAccess::confirm_fruit_sale(s.store), "fruit sale callback");
+            require(
+                BlackFlowStoreReplayAccess::refresh_count(s.store, AutomationStoreKind::Eerie) == prior_paid + 1,
+                "fruit must advance the shelf");
+            s.enter_tree_hole();
+            s.return_to_shop();
+            const int total = BlackFlowStoreReplayAccess::refresh_count(s.store, AutomationStoreKind::Eerie);
+            const int paid = BlackFlowStoreReplayAccess::paid_refresh_count(s.store);
+            require(total == prior_paid + 1 && paid == prior_paid, "re-entry conflated free and paid refreshes");
+            require(BlackFlowStoreReplayAccess::queued_refresh_index(s.store) == total, "capture index changed");
+            require(automation_store_refresh_price(paid) == (prior_paid == 0 ? 4 : 8), "wrong paid price");
+            require(
+                automation_store_can_refresh(total, paid, 12, 8) == (prior_paid == 0),
+                "free refresh must preserve price without expanding the strategy budget");
+            s.session->reset_run();
+            s.store.reset_in_run_variables();
+            require(s.session->set_current_floor(5), "new-run floor");
+            s.observe(0);
+            s.enter_store();
+            require(BlackFlowStoreReplayAccess::paid_refresh_count(s.store) == 0, "new run inherited paid count");
+            require(
+                BlackFlowStoreReplayAccess::refresh_count(s.store, AutomationStoreKind::Eerie) == 0,
+                "new run inherited total count");
         });
     }
     test("secret merchant retains refreshes after a tree-hole return", [&] {

@@ -1,0 +1,431 @@
+[
+    {
+        "action": "telemetry.BlackFlowInitialRevealConsistency",
+        "details": {
+            "consistency": "未确定",
+            "correction": "",
+            "entrance": 1125899940397064,
+            "expected_revealed_nodes": [
+                1125899906842632,
+                1125899940397066,
+                1125899973951492,
+                1125899906842628,
+                1125899940397062,
+                1125899973951498,
+                1125899940397056
+            ],
+            "floor": 4,
+            "floor_four_remembrance": false,
+            "initial_light_manhattan_radius": 2,
+            "map_generation": 1,
+            "missing_revealed_nodes": [
+            ],
+            "observed_revealed_nodes": [
+                1125899940397066,
+                1125899906842632,
+                1125899973951492,
+                1125899906842628,
+                1125899940397062,
+                1125899973951498,
+                1125899940397056
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125899906842632,
+                1125899973951492,
+                1125899940397066,
+                1125899906842628,
+                1125899940397062,
+                1125899973951498,
+                1125900007505928,
+                1125899940397056
+            ],
+            "scope": "floor_entry",
+            "start_rewards": [
+            ],
+            "swaddled_eagle_full_reveal": false,
+            "uncertain_revealed_nodes": [
+                1125900007505928
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 1,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 1,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900007505928,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "未确定",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+                1125900007505928
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "walk",
+            "movement_name": "徒步跋涉",
+            "observed_page_contents": [
+            ],
+            "observed_revealed_nodes": [
+                1125900007505928
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125900007505928,
+                1125900007505926,
+                1125900041060360
+            ],
+            "selected_target": 1125900007505928,
+            "source": 1125899940397064,
+            "uncertain_revealed_nodes": [
+                1125900041060360,
+                1125900007505926
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 2,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 2,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900007505926,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "未确定",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+                1125900007505926
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "walk",
+            "movement_name": "徒步跋涉",
+            "observed_page_contents": [
+                "未涉足之树"
+            ],
+            "observed_revealed_nodes": [
+                1125900007505926
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125900007505926,
+                1125900041060358
+            ],
+            "selected_target": 1125900007505926,
+            "source": 1125900007505928,
+            "uncertain_revealed_nodes": [
+                1125900041060358
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 3,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 3,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900007505928,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "未确定",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "walk",
+            "movement_name": "徒步跋涉",
+            "observed_page_contents": [
+            ],
+            "observed_revealed_nodes": [
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125900041060360,
+                1125900041060358
+            ],
+            "selected_target": 1125900007505928,
+            "source": 1125900007505926,
+            "uncertain_revealed_nodes": [
+                1125900041060360,
+                1125900041060358
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 4,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 4,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900007505928,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "一致",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "rogue_6_scrap_M_03",
+            "movement_name": "标准引擎",
+            "observed_page_contents": [
+            ],
+            "observed_revealed_nodes": [
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+            ],
+            "selected_target": 1125900007505928,
+            "source": 1125900007505928,
+            "uncertain_revealed_nodes": [
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 5,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 5,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900041060358,
+            "completed_event_reveal_confirmed": true,
+            "consistency": "一致",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 1125899906842628,
+            "expected_revealed_nodes": [
+                1125899906842628
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "rogue_6_scrap_M_03",
+            "movement_name": "标准引擎",
+            "observed_page_contents": [
+                "和平守卫者",
+                "和平守卫者-2"
+            ],
+            "observed_revealed_nodes": [
+                1125899906842628
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125899906842628
+            ],
+            "selected_target": 1125899906842628,
+            "source": 1125899940397060,
+            "uncertain_revealed_nodes": [
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 6,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 6,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1407374917107730,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "一致",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+                1407374917107730
+            ],
+            "floor": 5,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "rogue_6_scrap_M_09",
+            "movement_name": "老妈妈的融雪",
+            "observed_page_contents": [
+                "黑诞"
+            ],
+            "observed_revealed_nodes": [
+                1407374917107730
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1407374917107730
+            ],
+            "selected_target": 1407374917107730,
+            "source": 1407374950662150,
+            "uncertain_revealed_nodes": [
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 7,
+        "floor": 5,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 7,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125900007505926,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "未确定",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "walk",
+            "movement_name": "徒步跋涉",
+            "observed_page_contents": [
+                "湖中仙女"
+            ],
+            "observed_revealed_nodes": [
+                1125899973951494
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125899973951494,
+                1125900007505930
+            ],
+            "selected_target": 1125900007505926,
+            "source": 1125900041060358,
+            "uncertain_revealed_nodes": [
+                1125899973951494,
+                1125900007505930
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 8,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 8,
+        "timestamp": "2026-10-22T00:00:00Z"
+    },
+    {
+        "action": "telemetry.BlackFlowRevealConsistency",
+        "details": {
+            "actual_landing": 1125899973951494,
+            "completed_event_reveal_confirmed": false,
+            "consistency": "一致",
+            "correction": "",
+            "endpoint_observation_available": true,
+            "entered_event_node": 18446744073709551615,
+            "expected_revealed_nodes": [
+                1125899940397062,
+                1125899973951496
+            ],
+            "floor": 4,
+            "missing_revealed_nodes": [
+            ],
+            "movement": "walk",
+            "movement_name": "徒步跋涉",
+            "observed_page_contents": [
+                "未涉足之树"
+            ],
+            "observed_revealed_nodes": [
+                1125899973951496,
+                1125899940397062
+            ],
+            "possible_duck_pressure_board_nodes": [
+            ],
+            "possible_explanation": "",
+            "possible_revealed_nodes": [
+                1125899973951496,
+                1125899940397062
+            ],
+            "selected_target": 1125899973951494,
+            "source": 1125900007505926,
+            "uncertain_revealed_nodes": [
+            ],
+            "unexpected_revealed_nodes": [
+            ]
+        },
+        "elapsed_ms": 9,
+        "floor": 4,
+        "level": "INFO",
+        "outcome": "recorded",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 9,
+        "timestamp": "2026-10-22T00:00:00Z"
+    }
+]

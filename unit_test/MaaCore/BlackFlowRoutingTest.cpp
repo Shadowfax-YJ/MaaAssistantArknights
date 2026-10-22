@@ -11285,21 +11285,31 @@ TEST_CASE("BlackFlow fruit sale uses the game refresh limit rather than the paid
     AutomationStoreRefreshLedger ledger;
     const AutomationStoreIdentity shop { 9, 42, AutomationStoreKind::Eerie };
     const AutomationStoreIdentity secret { 9, 42, AutomationStoreKind::Secret };
-    REQUIRE(ledger.record_refresh(shop) == 1);
-    REQUIRE(automation_store_can_refresh(ledger.refresh_count(shop), 100, 8));
-    REQUIRE(automation_store_refresh_price(ledger.refresh_count(shop)) == 8);
-    REQUIRE(ledger.record_refresh(shop) == 2);
+    REQUIRE(ledger.record_refresh(shop, AutomationStoreRefreshSource::ItemSale) == 1);
+    REQUIRE(ledger.paid_refresh_count(shop) == 0);
+    REQUIRE(automation_store_can_refresh(ledger.refresh_count(shop), ledger.paid_refresh_count(shop), 12, 8));
+    REQUIRE_FALSE(automation_store_can_refresh(ledger.refresh_count(shop), ledger.paid_refresh_count(shop), 11, 8));
+    REQUIRE(automation_store_refresh_price(ledger.paid_refresh_count(shop)) == 4);
+    REQUIRE(ledger.record_refresh(shop, AutomationStoreRefreshSource::ItemSale) == 2);
     REQUIRE_FALSE(automation_store_can_refresh(ledger.refresh_count(shop), 100, 8));
     REQUIRE_FALSE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
-    REQUIRE(ledger.record_refresh(shop) == 3);
+    REQUIRE(ledger.record_refresh(shop, AutomationStoreRefreshSource::ItemSale) == 3);
     REQUIRE_FALSE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
-    REQUIRE(ledger.record_refresh(shop) == 4);
+    REQUIRE(ledger.record_refresh(shop, AutomationStoreRefreshSource::ItemSale) == 4);
     REQUIRE(automation_store_refresh_exhausted(ledger.refresh_count(shop)));
     REQUIRE(ledger.record_refresh(shop) == 4);
+    REQUIRE(ledger.paid_refresh_count(shop) == 0);
     REQUIRE(ledger.refresh_count(secret) == 0);
+    REQUIRE(ledger.paid_refresh_count(secret) == 0);
     ledger.clear();
     REQUIRE(ledger.refresh_count(shop) == 0);
+    REQUIRE(ledger.paid_refresh_count(shop) == 0);
     REQUIRE(ledger.record_refresh(shop) == 1);
+    REQUIRE(ledger.paid_refresh_count(shop) == 1);
+    REQUIRE(automation_store_refresh_price(ledger.paid_refresh_count(shop)) == 8);
     REQUIRE(ledger.record_refresh(shop) == 2);
+    REQUIRE(ledger.paid_refresh_count(shop) == 2);
     REQUIRE(ledger.record_refresh(shop) == 3);
 }
+
+#include "BlackFlowRevealRegressionTest.h"

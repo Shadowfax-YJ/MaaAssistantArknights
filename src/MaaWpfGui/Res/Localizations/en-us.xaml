@@ -1456,6 +1456,7 @@ Right-click to clear inactive jobs</system:String>
     <system:String x:Key="BlackFlowWarningPostMoveMismatch">Post-move node or AP state is inconsistent</system:String>
     <system:String x:Key="BlackFlowWarningIdentityConflict">The previewed node identity conflicts with the current map</system:String>
     <system:String x:Key="BlackFlowWarningRevealConsistencyMismatch">The revealed nodes differ from the planned result; using the current observation and replanning</system:String>
+    <system:String x:Key="BlackFlowWarningPossibleDuckPressureBoard">The additional merchant nodes may have been revealed by Duck Pressure Board; ownership is unconfirmed</system:String>
     <system:String x:Key="BlackFlowWarningForbiddenLanding">The previewed landing violates this floor's restrictions; cancelling the move and replanning</system:String>
     <system:String x:Key="BlackFlowWarningPreviewNoSafeRoute">No confirmed safe route remains after the previewed landing; cancelling the move and replanning</system:String>
     <system:String x:Key="BlackFlowWarningEnteredPageIdentityConflict">The entered page conflicts with the recorded map identity; updating from the current page</system:String>

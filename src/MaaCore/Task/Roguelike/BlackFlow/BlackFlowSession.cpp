@@ -1721,6 +1721,7 @@ void BlackFlowSession::append_map_visualization(json::object& details) const
     details["utopia_reason"] = m_utopia_reason;
     details["utopia_ideology"] = m_utopia_ideology;
     details["utopia_policy"] = m_utopia_policy;
+    details["reveal_expectation_uncertain"] = reveal_visibility().uncertain();
     details["ideal_source_score_margin"] = m_ideal_source_score_margin;
     details["ideal_source_heads_agree"] = m_ideal_source_heads_agree;
     const auto serialize_positions = [](const std::vector<GridPosition>& positions) {
@@ -2526,12 +2527,15 @@ bool BlackFlowSession::merge_perception(
          *m_initial_reveal_checked_generation != m_map_generation)) {
         const bool swaddled_eagle_full_reveal = has_start_reward("襁褓骏鹰") &&
                                                 normalized->map.floor >= 1 && normalized->map.floor <= 2;
-        const auto expected = expected_initial_floor_reveals(
-            m_map.snapshot(),
-            normalized->current_node,
-            swaddled_eagle_full_reveal);
+        const auto expectation = make_reveal_expectation(
+            m_map.snapshot(), reveal_visibility(), [&](const MapSnapshot& visibility_map) {
+                return expected_initial_floor_reveals(
+                    visibility_map, normalized->current_node, swaddled_eagle_full_reveal);
+            });
+        const auto& expected = expectation.required;
+        const auto uncertain = expectation.uncertain_nodes();
         const auto observed = observed_initial_floor_reveals(m_map.snapshot(), normalized->current_node);
-        const RevealConsistencyResult consistency = compare_move_reveals(expected, observed);
+        const RevealConsistencyResult consistency = compare_reveal_expectation(expectation, observed);
         const auto extra_merchants = unexpected_merchant_reveals(m_map.snapshot(), consistency.unexpected);
         const std::string possible_explanation = extra_merchants.empty()
                                                      ? ""
@@ -2554,12 +2558,14 @@ bool BlackFlowSession::merge_perception(
             { "swaddled_eagle_full_reveal", swaddled_eagle_full_reveal },
             { "initial_light_manhattan_radius", InitialLightRevealRadius },
             { "expected_revealed_nodes", serialize_ids(expected) },
+            { "possible_revealed_nodes", serialize_ids(expectation.possible) },
+            { "uncertain_revealed_nodes", serialize_ids(uncertain) },
             { "observed_revealed_nodes", serialize_ids(observed) },
             { "missing_revealed_nodes", serialize_ids(consistency.missing) },
             { "unexpected_revealed_nodes", serialize_ids(consistency.unexpected) },
             { "possible_duck_pressure_board_nodes", serialize_ids(extra_merchants) },
             { "possible_explanation", possible_explanation },
-            { "consistency", consistency.consistent() ? "一致" : "不一致" },
+            { "consistency", !consistency.consistent() ? "不一致" : uncertain.empty() ? "一致" : "未确定" },
             { "correction", "" },
         };
         m_initial_reveal_checked_generation = m_map_generation;
@@ -3217,34 +3223,54 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             // current-map snapshot. The page context retains the identity that produced this move's reveal.
             entered_landing_type = m_page_context->node_type;
         }
-        auto expected = linked_return.has_value()
-                            ? expected_linked_encounter_return_reveals(
-                                  map_before_move,
-                                  run_before_move,
-                                  committed_move,
-                                  linked_return->event_node,
-                                  observation.current_node,
-                                  true,
-                                  endpoint_available)
-                            : expected_move_reveals(
-                                  map_before_move,
-                                  run_before_move,
-                                  committed_move,
-                                  observation.current_node,
-                                  endpoint_available,
-                                  observed_page_contents,
-                                  entered_landing_type);
-        add_observed_event_reveal_expectations(
-            map_before_move,
-            run_before_move,
-            m_map.snapshot(),
-            observed_page_contents,
-            m_page_context.has_value() && m_page_context->node_type == NodeType::Incident,
-            expected);
-        add_observed_random_reveal_expectations(
-            map_before_move, run_before_move, m_map.snapshot(), committed_move, endpoint_available, expected);
-        const auto observed = observed_move_reveals(map_before_move, run_before_move, m_map.snapshot());
-        const RevealConsistencyResult consistency = compare_move_reveals(expected, observed);
+        const auto expectation =
+            make_reveal_expectation(map_before_move, reveal_visibility(), [&](const MapSnapshot& visibility_map) {
+                auto expected = linked_return.has_value() ? expected_linked_encounter_return_reveals(
+                                                                visibility_map,
+                                                                run_before_move,
+                                                                committed_move,
+                                                                linked_return->event_node,
+                                                                observation.current_node,
+                                                                true,
+                                                                endpoint_available)
+                                                          : expected_move_reveals(
+                                                                visibility_map,
+                                                                run_before_move,
+                                                                committed_move,
+                                                                observation.current_node,
+                                                                endpoint_available,
+                                                                observed_page_contents,
+                                                                entered_landing_type);
+                add_observed_event_reveal_expectations(
+                    map_before_move,
+                    run_before_move,
+                    m_map.snapshot(),
+                    observed_page_contents,
+                    m_page_context.has_value() && m_page_context->node_type == NodeType::Incident,
+                    expected);
+                add_observed_random_reveal_expectations(
+                    map_before_move,
+                    run_before_move,
+                    m_map.snapshot(),
+                    committed_move,
+                    endpoint_available,
+                    expected);
+                return expected;
+            });
+        const auto& expected = expectation.required;
+        const auto uncertain = expectation.uncertain_nodes();
+        auto observed = observed_move_reveals(map_before_move, run_before_move, m_map.snapshot());
+        const bool completed_event_reveal =
+            linked_return.has_value() &&
+            add_completed_linked_event_reveal(
+                map_before_move,
+                run_before_move,
+                m_map.snapshot(),
+                linked_return->event_node,
+                m_page_context.has_value() && m_page_context->stage == PageExecutionStage::Resolved &&
+                    m_page_context->node_type == NodeType::Incident,
+                observed);
+        const RevealConsistencyResult consistency = compare_reveal_expectation(expectation, observed);
         const auto extra_merchants = unexpected_merchant_reveals(m_map.snapshot(), consistency.unexpected);
         const std::string possible_explanation = extra_merchants.empty()
                                                      ? ""
@@ -3274,13 +3300,19 @@ bool BlackFlowSession::reconcile_committed_move(const BlackFlowPerceptionSnapsho
             { "movement_name", movement == nullptr ? std::string {} : std::string(movement->name) },
             { "endpoint_observation_available", endpoint_available },
             { "expected_revealed_nodes", serialize_ids(expected) },
+            { "possible_revealed_nodes", serialize_ids(expectation.possible) },
+            { "uncertain_revealed_nodes", serialize_ids(uncertain) },
+            { "completed_event_reveal_confirmed", completed_event_reveal },
             { "observed_revealed_nodes", serialize_ids(observed) },
             { "missing_revealed_nodes", serialize_ids(consistency.missing) },
             { "unexpected_revealed_nodes", serialize_ids(consistency.unexpected) },
             { "observed_page_contents", json::array(std::move(contents)) },
             { "possible_duck_pressure_board_nodes", serialize_ids(extra_merchants) },
             { "possible_explanation", possible_explanation },
-            { "consistency", consistency.consistent() ? "一致" : "不一致" },
+            { "consistency",
+              !consistency.consistent() ? "不一致"
+              : uncertain.empty()       ? "一致"
+                                        : "未确定" },
             { "correction", "" },
         };
         m_last_reveal_consistency = consistency_details;
@@ -3569,8 +3601,33 @@ bool BlackFlowSession::report_movement_unavailable(MovementKind target, std::str
     return true;
 }
 
-bool BlackFlowSession::should_retry_initial_reveal_observation(
-    const BlackFlowPerceptionSnapshot& snapshot) const
+RevealVisibility BlackFlowSession::reveal_visibility(const BlackFlowMapObservation* pending) const
+{
+    RevealVisibility result;
+    const bool same_map = pending == nullptr || pending->floor == m_map.floor();
+    const bool source_completed = m_page_context.has_value() && m_page_context->stage == PageExecutionStage::Resolved &&
+        utopia_effect_expires_after_node_completion(
+            true, m_utopia_ideology, m_ideal_source, m_map.floor(), m_ideal_source_generation,
+            m_page_context->node, m_map_generation);
+    result.expired = same_map && (m_utopia_effect_expired || source_completed);
+    if (result.expired) {
+        return result;
+    }
+    const bool cached = same_map && m_ideal_source.has_value() && m_ideal_source_generation == m_map_generation;
+    result.diffused_mist = (cached || pending == nullptr) ? m_utopia_ideology == "diffused-mist"
+                                                       : pending->utopia_ideology == "diffused-mist";
+    if (cached) {
+        result.domain_confirmed = true;
+        result.domain = m_ideal_domain;
+    }
+    else if (pending != nullptr && pending->utopia_status == "recognized" && pending->ideal_source.has_value()) {
+        result.domain_confirmed = true;
+        result.domain = pending->ideal_domain;
+    }
+    return result;
+}
+
+bool BlackFlowSession::should_retry_initial_reveal_observation(const BlackFlowPerceptionSnapshot& snapshot) const
 {
     if (in_tree_hole()) {
         return false;
@@ -3590,12 +3647,23 @@ bool BlackFlowSession::should_retry_initial_reveal_observation(
     if (!observed_map.merge(normalized->map, MapMergePurpose::CurrentObservation, &normalization_error)) {
         return false;
     }
-    const bool swaddled_eagle_full_reveal = has_start_reward("襁褓骏鹰") &&
-                                            normalized->map.floor >= 1 && normalized->map.floor <= 2;
-    return initial_floor_reveal_observation_needs_ocr_retry(
+    const bool swaddled_eagle_full_reveal =
+        has_start_reward("襁褓骏鹰") && normalized->map.floor >= 1 && normalized->map.floor <= 2;
+    const auto expectation = make_reveal_expectation(
         observed_map.snapshot(),
-        normalized->current_node,
-        swaddled_eagle_full_reveal);
+        reveal_visibility(&snapshot.observation),
+        [&](const MapSnapshot& visibility_map) {
+            return expected_initial_floor_reveals(visibility_map, normalized->current_node, swaddled_eagle_full_reveal);
+        });
+    if (compare_reveal_expectation(
+            expectation,
+            observed_initial_floor_reveals(observed_map.snapshot(), normalized->current_node))
+            .consistent()) {
+        return false;
+    }
+    return std::ranges::any_of(observed_map.snapshot().nodes(), [](const auto& entry) {
+        return entry.second.identity_source == "map_topology_no_ocr_empty";
+    });
 }
 
 bool BlackFlowSession::should_retry_post_move_reveal_observation(
@@ -3658,8 +3726,9 @@ bool BlackFlowSession::should_retry_post_move_reveal_observation(
         m_page_context->node == normalized->current_node) {
         entered_landing_type = m_page_context->node_type;
     }
+    const auto visibility_map = reveal_visibility_map(m_map.snapshot(), reveal_visibility(&snapshot.observation));
     auto expected = expected_move_reveals(
-        m_map.snapshot(),
+        visibility_map,
         m_run,
         committed_move,
         normalized->current_node,
@@ -3758,7 +3827,8 @@ BlackFlowPlan BlackFlowSession::plan_internal(
                 }
             }
         }
-        request.map = &m_map.snapshot();
+        const auto visibility_map = reveal_visibility_map(m_map.snapshot(), reveal_visibility());
+        request.map = &visibility_map;
         request.run = planning_run.has_value() ? &*planning_run : &m_run;
         request.policy = &*m_policy;
         request.facts = &merged;
@@ -4283,7 +4353,8 @@ PreviewDisposition BlackFlowSession::accept_preview(MovePreview preview, std::st
     if (proposal.requires_preview_verification) {
         const FactStore merged = m_facts.merged();
         BlackFlowPlanRequest request;
-        request.map = &m_map.snapshot();
+        const auto visibility_map = reveal_visibility_map(m_map.snapshot(), reveal_visibility());
+        request.map = &visibility_map;
         request.run = &m_run;
         request.policy = &*m_policy;
         request.facts = &merged;

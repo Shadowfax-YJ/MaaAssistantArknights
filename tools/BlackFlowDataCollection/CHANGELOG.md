@@ -1,4 +1,4 @@
-## v1.1.26
+## v1.1.27
 
 ### Highlights
 
@@ -44,6 +44,21 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.27 (2026-10-22)</b></summary>
+
+### 修复 | Fix
+
+* 修复出售无缘果后，付费刷新商店已成功却因扣款校验错误而停止采集的问题。 @Shadowfax-YJ
+* 修复弥散虚雾范围未确认时高估视野收益、范围确认后仍误报视野预期不符的问题。 @Shadowfax-YJ
+* 修复和平守卫者传送并完成作战后，误报原事件节点未揭示的问题。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 额外点亮行商节点的警告增加“疑似由鸭力板导致，尚未确认持有”的提示。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.26 (2026-10-22)</b></summary>
 
 ### 修复 | Fix

@@ -18,6 +18,7 @@
 
 namespace asst::blackflow
 {
+struct RevealVisibility;
 enum class CultivatedAnimalType
 {
     Cat,
@@ -368,6 +369,7 @@ private:
         bool reconcile_move,
         std::string* error);
     bool reconcile_committed_move(const BlackFlowPerceptionSnapshot& snapshot, std::string* error);
+    [[nodiscard]] RevealVisibility reveal_visibility(const BlackFlowMapObservation* pending = nullptr) const;
     [[nodiscard]] Node resolve_entered_node_identity(const PageExecutionContext& context) const;
     void finalize_entered_node(const PageExecutionContext& context, bool page_completed);
     void finalize_linked_encounter_landing(const LinkedEncounterReturnResolution& resolution);

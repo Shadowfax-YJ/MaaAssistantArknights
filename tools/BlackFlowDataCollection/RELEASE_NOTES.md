@@ -1,10 +1,11 @@
-黑流树海采集版 v1.1.26
+黑流树海采集版 v1.1.27
 
 ### 本次更新
 
-* 修复零件箱列表回弹时反复滑动、无法确认起点而停止采集的问题，并增加收起重开恢复。
-* 修复基础保密等级识别失败，导致开局无法切换至目标难度的问题。
-* 完善“独活”事件选择：本层应急助力或未知的诡秘上存在流窜居民时，不再选择传送。
+* 修复出售无缘果后，付费刷新商店已成功却因扣款校验错误而停止采集的问题。
+* 修复弥散虚雾范围未确认时高估视野收益、范围确认后仍误报视野预期不符的问题。
+* 修复和平守卫者传送并完成作战后，误报原事件节点未揭示的问题。
+* 额外点亮行商节点的警告增加“疑似由鸭力板导致，尚未确认持有”的提示。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -17,8 +18,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.26/MAA-BlackFlow-Data-Collection-v1.1.26-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.26/MAA-BlackFlow-Data-Collection-v1.1.26-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.27/MAA-BlackFlow-Data-Collection-v1.1.27-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.27/MAA-BlackFlow-Data-Collection-v1.1.27-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

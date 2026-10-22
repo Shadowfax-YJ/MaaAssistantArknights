@@ -1456,6 +1456,7 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowWarningPostMoveMismatch">移动后的节点或行动力状态不一致</system:String>
     <system:String x:Key="BlackFlowWarningIdentityConflict">预览显示的节点类型与当前地图不一致</system:String>
     <system:String x:Key="BlackFlowWarningRevealConsistencyMismatch">实际揭示的节点与路线规划预期不一致，已采用当前观测并重新规划</system:String>
+    <system:String x:Key="BlackFlowWarningPossibleDuckPressureBoard">额外点亮的行商节点疑似由鸭力板导致，尚未确认持有</system:String>
     <system:String x:Key="BlackFlowWarningForbiddenLanding">预览落点触发当前层的禁止规则，已取消本次移动并重新规划</system:String>
     <system:String x:Key="BlackFlowWarningPreviewNoSafeRoute">预览落点之后没有确认可行的安全路线，已取消本次移动并重新规划</system:String>
     <system:String x:Key="BlackFlowWarningEnteredPageIdentityConflict">进入节点后的页面类型与地图记录不一致，已按当前页面修正</system:String>

@@ -136,6 +136,7 @@ private:
     std::vector<CachedShopGood> m_shop_goods;
     std::vector<RunResources::MovementInstance> m_shop_entry_processing_items;
     int m_shop_refresh_count = 0;
+    int m_shop_paid_refresh_count = 0;
     std::optional<int> m_shop_refresh_wallet_before;
     json::object m_shop_refresh_diagnostics;
     std::size_t m_shop_collectibles_purchased_in_run = 0;

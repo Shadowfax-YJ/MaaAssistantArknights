@@ -43,7 +43,7 @@ public:
     Controller controller;
     std::optional<int> m_shop_refresh_wallet_before=25;
     json::object m_shop_refresh_diagnostics;
-    int m_shop_refresh_count=0, snapshots=0;
+    int m_shop_refresh_count=0, m_shop_paid_refresh_count=0, snapshots=0;
     bool stopped=false, cancel=false;
     int cancel_after_reads=0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
@@ -82,7 +82,8 @@ int main(){
         p.controller.frames=std::move(frames);
         if(!baseline)p.m_shop_refresh_wallet_before.reset();
         p.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
-        bool ok=p.m_shop_refresh_count==int(success) && p.snapshots==int(success) && p.stopped==!success;
+        bool ok=p.m_shop_refresh_count==int(success) && p.m_shop_paid_refresh_count==int(success) &&
+                p.snapshots==int(success) && p.stopped==!success;
         std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl; failed+=!ok; ++total;
     };
     test("paid refresh advances exactly once",{frame(1,21)},true);
@@ -145,6 +146,7 @@ int main(){
         fruit.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
         for(int i=0;i<prior;++i)fruit.m_refresh_ledger.record_refresh(*fruit.m_active_shop_identity);
         fruit.m_shop_refresh_count=prior;
+        fruit.m_shop_paid_refresh_count=prior;
         fruit.m_pending_sale_name="无缘果";
         fruit.m_pending_sale=Rect{400,200,100,30};
         fruit.m_shop_purchased={1}; fruit.m_shop_goods={2}; fruit.m_shop_attempted={3};
@@ -154,6 +156,7 @@ int main(){
         const bool refreshed=prior<4;
         const int expected=refreshed?prior+1:prior;
         ok=fruit.m_shop_refresh_count==expected && fruit.m_refresh_ledger.refresh_count(*fruit.m_active_shop_identity)==expected &&
+           fruit.m_shop_paid_refresh_count==prior && fruit.m_refresh_ledger.paid_refresh_count(*fruit.m_active_shop_identity)==prior &&
            fruit.snapshots==int(refreshed) && fruit.m_shop_sale_refresh_pending==refreshed &&
            fruit.m_shop_purchased.empty()==refreshed && fruit.m_shop_goods.empty()==refreshed &&
            fruit.m_shop_attempted.empty()==refreshed && fruit.m_shop_attempted_names.empty()==refreshed &&
@@ -174,11 +177,45 @@ int main(){
     mixed.m_pending_sale_name="无缘果";
     mixed.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
     mixed.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
-    mixed.m_shop_refresh_wallet_before=25;
-    mixed.controller.frames={frame(1,17)};
+    mixed.m_shop_refresh_wallet_before=37;
+    mixed.controller.frames={frame(1,33)};
     mixed.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
-    ok=!mixed.stopped && mixed.m_shop_refresh_count==2 && mixed.snapshots==2 && mixed.capture_index==2;
-    std::cout<<(ok?"PASS ":"FAIL ")<<"paid refresh after a fruit uses the second-cycle price and shared ledger"<<std::endl;failed+=!ok;++total;
+    ok=!mixed.stopped && mixed.m_shop_refresh_count==2 && mixed.snapshots==2 && mixed.capture_index==2 &&
+       mixed.m_shop_paid_refresh_count==1 && mixed.m_refresh_ledger.paid_refresh_count(*mixed.m_active_shop_identity)==1;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"003 fruit refresh then paid refresh accepts captured wallet 37 -> 33"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin wrong_fruit_debit;
+    wrong_fruit_debit.m_pending_sale_name="无缘果";
+    wrong_fruit_debit.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
+    wrong_fruit_debit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+    wrong_fruit_debit.m_shop_refresh_wallet_before=37;
+    wrong_fruit_debit.controller.frames={frame(1,29)};
+    wrong_fruit_debit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=wrong_fruit_debit.stopped && wrong_fruit_debit.m_shop_refresh_count==1 && wrong_fruit_debit.snapshots==1 &&
+       wrong_fruit_debit.m_shop_paid_refresh_count==0 &&
+       wrong_fruit_debit.m_refresh_ledger.paid_refresh_count(*wrong_fruit_debit.m_active_shop_identity)==0;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"fruit does not authorize an eight-ingot first paid refresh"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin paid_then_fruit;
+    paid_then_fruit.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
+    paid_then_fruit.controller.frames={frame(1,21)};
+    paid_then_fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    paid_then_fruit.m_pending_sale_name="无缘果";
+    paid_then_fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+    paid_then_fruit.m_shop_refresh_wallet_before=37;
+    paid_then_fruit.controller.frames={frame(1,29)};
+    paid_then_fruit.controller.reads=0;
+    paid_then_fruit.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopRefreshCompleted);
+    ok=!paid_then_fruit.stopped && paid_then_fruit.m_shop_refresh_count==3 && paid_then_fruit.m_shop_paid_refresh_count==2 &&
+       paid_then_fruit.snapshots==3 && paid_then_fruit.m_refresh_ledger.paid_refresh_count(*paid_then_fruit.m_active_shop_identity)==2;
+    std::cout<<(ok?"PASS ":"FAIL ")<<"receipt after paid then fruit counts only prior payments for price"<<std::endl;failed+=!ok;++total;
+    BlackFlowAutomationStoreTaskPlugin two_fruits;
+    two_fruits.m_active_shop_identity=AutomationStoreIdentity{4,42,AutomationStoreKind::Eerie};
+    for(int i=0;i<2;++i){
+        two_fruits.m_pending_sale_name="无缘果";
+        two_fruits.run(BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed);
+    }
+    ok=two_fruits.m_shop_refresh_count==2 && two_fruits.m_shop_paid_refresh_count==0 &&
+       !automation_store_can_refresh(two_fruits.m_shop_refresh_count,two_fruits.m_shop_paid_refresh_count,100,8);
+    std::cout<<(ok?"PASS ":"FAIL ")<<"two free refreshes still exhaust the existing strategy budget"<<std::endl;failed+=!ok;++total;
     BlackFlowAutomationStoreTaskPlugin ordinary;
     ordinary.m_pending_sale_name="生逝";
     ordinary.m_shop_goods={1};

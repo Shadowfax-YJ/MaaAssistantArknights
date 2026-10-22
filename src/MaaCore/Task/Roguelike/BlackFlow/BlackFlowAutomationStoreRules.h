@@ -229,17 +229,31 @@ inline constexpr int N6StoreRefreshLimit = 4;
     return completed_refreshes >= N6StoreRefreshLimit;
 }
 
-[[nodiscard]] inline constexpr int automation_store_refresh_price(int completed_refreshes) noexcept
+[[nodiscard]] inline constexpr int automation_store_refresh_price(int completed_paid_refreshes) noexcept
 {
-    return AutomationStoreRefreshPriceStep * (completed_refreshes + 1);
+    return AutomationStoreRefreshPriceStep * (completed_paid_refreshes + 1);
 }
 
 [[nodiscard]] inline constexpr bool
-    automation_store_can_refresh(int completed_refreshes, int wallet, int reserve) noexcept
+    automation_store_can_refresh(int completed_refreshes, int completed_paid_refreshes, int wallet, int reserve) noexcept
 {
     return completed_refreshes >= 0 && completed_refreshes < AutomationStoreMaxRefreshTimes &&
-           wallet >= automation_store_refresh_price(completed_refreshes) + reserve;
+           completed_paid_refreshes >= 0 && completed_paid_refreshes <= completed_refreshes &&
+           wallet >= automation_store_refresh_price(completed_paid_refreshes) + reserve;
 }
+
+// 没有出售触发刷新的商店，总轮次与付费次数相同。
+[[nodiscard]] inline constexpr bool
+    automation_store_can_refresh(int completed_refreshes, int wallet, int reserve) noexcept
+{
+    return automation_store_can_refresh(completed_refreshes, completed_refreshes, wallet, reserve);
+}
+
+enum class AutomationStoreRefreshSource
+{
+    Paid,
+    ItemSale,
+};
 
 class AutomationStoreRefreshLedger
 {
@@ -247,20 +261,36 @@ public:
     [[nodiscard]] int refresh_count(const AutomationStoreIdentity& identity) const noexcept
     {
         const auto iter = m_counts.find(identity);
-        return iter == m_counts.end() ? 0 : iter->second;
+        return iter == m_counts.end() ? 0 : iter->second.total;
     }
 
-    int record_refresh(const AutomationStoreIdentity& identity)
+    [[nodiscard]] int paid_refresh_count(const AutomationStoreIdentity& identity) const noexcept
     {
-        int& count = m_counts[identity];
-        count = std::min(count + 1, N6StoreRefreshLimit);
-        return count;
+        const auto iter = m_counts.find(identity);
+        return iter == m_counts.end() ? 0 : iter->second.paid;
+    }
+
+    int record_refresh(
+        const AutomationStoreIdentity& identity,
+        AutomationStoreRefreshSource source = AutomationStoreRefreshSource::Paid)
+    {
+        auto& count = m_counts[identity];
+        if (!automation_store_refresh_exhausted(count.total)) {
+            ++count.total;
+            count.paid += source == AutomationStoreRefreshSource::Paid;
+        }
+        return count.total;
     }
 
     void clear() noexcept { m_counts.clear(); }
 
 private:
-    std::unordered_map<AutomationStoreIdentity, int, AutomationStoreIdentityHash> m_counts;
+    struct Counts
+    {
+        int total = 0;
+        int paid = 0;
+    };
+    std::unordered_map<AutomationStoreIdentity, Counts, AutomationStoreIdentityHash> m_counts;
 };
 
 [[nodiscard]] inline constexpr bool merchant_sale_may_refresh(AutomationStoreKind kind, std::string_view name) noexcept

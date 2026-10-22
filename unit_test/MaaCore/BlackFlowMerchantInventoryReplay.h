@@ -26,6 +26,18 @@ struct BlackFlowStoreReplayAccess
         return kind == AutomationStoreKind::Eerie ? p.m_shop_refresh_count : p.m_scrap_shop_refresh_count;
     }
 
+    static int paid_refresh_count(const BlackFlowAutomationStoreTaskPlugin& p)
+    {
+        return p.m_shop_paid_refresh_count;
+    }
+
+    static bool confirm_fruit_sale(BlackFlowAutomationStoreTaskPlugin& p)
+    {
+        p.m_pending_sale_name = "无缘果";
+        p.m_pending = BlackFlowAutomationStoreTaskPlugin::PendingWork::ShopSellConfirmed;
+        return p.run();
+    }
+
     static int queued_refresh_index(const BlackFlowAutomationStoreTaskPlugin& p)
     {
         return p.m_pending_eerie_store_snapshot.has_value() ? p.m_pending_eerie_store_snapshot->second : -1;
