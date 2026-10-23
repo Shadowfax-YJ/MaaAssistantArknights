@@ -1,5 +1,31 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.29 发布与兼容性核验（2026-10-24）
+
+Windows、macOS 独立采集版及 GitHub/国内自动更新源已发布为
+[`blackflow-v1.1.29`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.29)。
+构建提交为 `a01799faee6d1c47da3150a9e7df2e305aca8b95`，流水线
+[`40032178756`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40032178756)
+全部成功。首次流水线被回放外壳编译错误拦截，修正记录见发布准备节；没有跳过检查。
+普通版 Latest 保持 v15.0.1。
+
+本版包含下述零件箱回图/预览取消、事件退出误开箱、扫描与商店缓存优化、秘境短商品名
+识别及先行一步/货从口出/失与得证据修复。Windows 更新、招募、难度和全部回放检查通过，
+包括 67 项交互、39 项页面转换、41 项刷新、30 项购买、61 项狭路相逢、105 项事件、
+300 项恢复及 369 项路由/归档；macOS 双架构、GUI/Core 版本及 DMG 检查通过。
+
+从国内 CDN 完整下载两个包，SHA-256 与 GitHub 资产 digest 及两份更新清单一致；
+GitHub/CDN 两份 macOS Ed25519 更新签名、Windows ZIP CRC、包身份、文件清单、
+配置隔离、新资源与核心标记全部核验通过。核验记录保存于
+`build/diagnostics/20261024/v1.1.29-public-verification/verification.json`。
+
+原始/图片/签名 schema、capabilities 和验证器 bundle 保持。发布前本机实际加载的
+analysis `blackflow-events-1.1.8` / `task-families-5` 通过六项共享契约与 59 项整理/处理检查，
+兼容新旧输入；宿主及业务插件协议未变。本次未部署远程中心，新整理能力需使用兼容模块。
+缺失旧字段仍未知，不改写历史原件、OCR 缓存、人工审核或冻结结果，专题分子分母不变。
+未手工替换或重启运行实例，尚无本版完整实机整局验证。
+以下各次源码修改保留当时的验证与发布状态，最终发布范围以本节为准。
+
 ## v1.1.29 发布准备与消费者兼容（2026-10-24）
 
 用户确认发布 Windows、macOS 独立采集版及 GitHub/CDN 自动更新源。
