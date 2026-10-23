@@ -34,7 +34,7 @@ bool recognize(const cv::Mat& image, std::string_view suffix)
 
 std::size_t random_index(std::size_t size)
 {
-    static std::mt19937 random(std::random_device {}());
+    static std::mt19937 random(std::random_device { }());
     return std::uniform_int_distribution<std::size_t>(0, size - 1)(random);
 }
 }
@@ -43,28 +43,50 @@ bool asst::RoguelikeStageEncounterTaskPlugin::refresh_sacrifice_context()
 {
     const auto context = m_sacrifice_context_provider ? m_sacrifice_context_provider() : std::nullopt;
     if (context != m_sacrifice.context) {
-        m_sacrifice = {};
+        m_sacrifice = { };
         m_sacrifice.context = context;
     }
     return context.has_value();
 }
 
-void asst::RoguelikeStageEncounterTaskPlugin::report_sacrifice(
+bool asst::RoguelikeStageEncounterTaskPlugin::report_sacrifice(
     std::string_view phase,
     json::object details,
     const cv::Mat& image)
 {
-    details["exchange_round"] = m_sacrifice.exchanges + 1;
+    if (m_sacrifice.evidence_failed || !m_sacrifice.context) {
+        return false;
+    }
+    const auto& context = *m_sacrifice.context;
+    if (!details.contains("exchange_round")) {
+        details["exchange_round"] = m_sacrifice.exchanges + 1;
+    }
+    details["sacrifice_id"] =
+        "sacrifice-" + std::to_string(context.run_revision) + "-" + std::to_string(context.page_revision);
+    details["run_revision"] = context.run_revision;
+    details["page_revision"] = context.page_revision;
+    details["evidence_sequence"] = ++m_sacrifice.evidence_sequence;
+    details["sacrifice_phase"] = std::string(phase);
     details["capture_kind"] = "sacrifice";
     Log.info("BlackFlow sacrifice", phase, details);
-    if (m_event_detail_observer) {
-        m_event_detail_observer(blackflow::SacrificeEventName, phase, std::move(details), image);
+    if (!m_event_detail_observer ||
+        !m_event_detail_observer(blackflow::SacrificeEventName, phase, std::move(details), image)) {
+        m_sacrifice.evidence_failed = true;
+        if (m_task_ptr) {
+            m_task_ptr->set_enable(false);
+        }
+        Log.error("BlackFlow sacrifice evidence persistence failed", phase);
+        return false;
     }
+    return true;
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
 {
     using blackflow::SacrificePhase;
+    if (m_sacrifice.evidence_failed || m_encounter_choice.failed) {
+        return false;
+    }
     // 等待服务器换页时不能把仍停留的主事件当成第二轮，也不能重复提交换出。
     if (m_sacrifice.phase == SacrificePhase::AwaitPicker) {
         sleep(500);
@@ -75,16 +97,30 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
             sleep(500);
             return true;
         }
-        report_sacrifice(
-            "exchange-reward",
-            json::object { { "selected_name", m_sacrifice.selected_name },
-                           { "reward_option", m_option_list.front().text } },
-            ctrler()->get_image());
+        if (!report_sacrifice(
+                "exchange-reward",
+                json::object { { "selected_name", m_sacrifice.selected_name },
+                               { "reward_option", m_option_list.front().text } },
+                ctrler()->get_image())) {
+            return false;
+        }
+        if (!report_sacrifice(
+                "reward-claim-attempt",
+                { { "selected_name", m_sacrifice.selected_name }, { "reward_option", m_option_list.front().text } },
+                ctrler()->get_image())) {
+            return false;
+        }
         if (select_analyzed_option(0)) {
+            if (!report_sacrifice(
+                    "reward-claim-click-issued",
+                    { { "selected_name", m_sacrifice.selected_name }, { "reward_option", m_option_list.front().text } },
+                    ctrler()->get_image())) {
+                return false;
+            }
             ++m_sacrifice.exchanges;
             m_sacrifice.phase = SacrificePhase::AwaitRepeat;
             m_sacrifice.selected_card.reset();
-            m_sacrifice.picker_attempts = {};
+            m_sacrifice.picker_attempts = { };
             m_sacrifice.selected_name.clear();
             m_sacrifice.initial_choice.reset();
             // 奖励后的第二轮仍是同一事件，复用通用链式事件的文字快进。
@@ -134,10 +170,20 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
     if (index >= m_option_list.size() || !m_option_list[index].enabled) {
         return leave();
     }
-    report_sacrifice(
-        "event-choice",
-        json::object { { "option", m_option_list[index].text }, { "option_index", index + 1 } },
-        ctrler()->get_image());
+    if (!prepare_encounter_choice(blackflow::SacrificeEventName, m_sacrifice.exchanges + 1, m_option_list_image) ||
+        !plan_encounter_choice(
+            index,
+            civilization                ? "restore_civilization"
+            : m_sacrifice.exchanges > 0 ? "first_option_second_round"
+                                        : "uniform_enabled_first_two")) {
+        return false;
+    }
+    if (!report_sacrifice(
+            "event-choice",
+            json::object { { "option", m_option_list[index].text }, { "option_index", index + 1 } },
+            ctrler()->get_image())) {
+        return false;
+    }
     if (!select_analyzed_option(index)) {
         return false;
     }
@@ -171,13 +217,21 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
     if (!refresh_sacrifice_context() || m_sacrifice.phase == SacrificePhase::Finished) {
         return leave_picker();
     }
+    if (m_sacrifice.evidence_failed || m_encounter_choice.failed) {
+        return false;
+    }
+    const auto picker_image = ctrler()->get_image();
+    if (recognize(picker_image, "SacrificePicker") && !confirm_encounter_choice(picker_image, "sacrifice_picker")) {
+        return false;
+    }
     if (!m_sacrifice.picker_attempts.begin()) {
         Log.warn("BlackFlow sacrifice picker retry limit reached; leaving the exchange");
-        report_sacrifice(
-            "picker-recovery",
-            json::object { { "reason", "retry_limit_reached" },
-                           { "attempts", m_sacrifice.picker_attempts.count } },
-            ctrler()->get_image());
+        if (!report_sacrifice(
+                "picker-recovery",
+                json::object { { "reason", "retry_limit_reached" }, { "attempts", m_sacrifice.picker_attempts.count } },
+                ctrler()->get_image())) {
+            return false;
+        }
         m_sacrifice.phase = SacrificePhase::Finished;
         return leave_picker();
     }
@@ -222,7 +276,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
             previous = name;
             continue;
         }
-        report_sacrifice("item-selected", json::object { { "selected_name", name } }, image);
+        if (!report_sacrifice("item-selected", json::object { { "selected_name", name } }, image)) {
+            return false;
+        }
         ProcessTask confirm(*this, { std::string(Prefix) + "SacrificeConfirm" });
         confirm.set_retry_times(0);
         if (confirm.run()) {
@@ -273,7 +329,7 @@ std::optional<std::vector<std::string>>
     // 重新展开必定位于首屏；全过程只做局部单步操作，不调用地图移动或丢弃零件流程。
     if (!set_panel(false) || !set_panel(true)) {
         (void)set_panel(false);
-        report_sacrifice(phase, json::object { { "inventory_status", "open_failed" } }, ctrler()->get_image());
+        (void)report_sacrifice(phase, json::object { { "inventory_status", "open_failed" } }, ctrler()->get_image());
         return std::nullopt;
     }
     const auto scan = [&]() -> std::optional<std::vector<std::string>> {
@@ -362,13 +418,15 @@ std::optional<std::vector<std::string>>
                     naturals.push_back(name);
                 }
             }
-            report_sacrifice(
-                phase,
-                json::object { { "scan_page", page },
-                               { "inventory_count", *count },
-                               { "observed_count", observed },
-                               { "natural_items", json::array(naturals) } },
-                image);
+            if (!report_sacrifice(
+                    phase,
+                    json::object { { "scan_page", page },
+                                   { "inventory_count", *count },
+                                   { "observed_count", observed },
+                                   { "natural_items", json::array(naturals) } },
+                    image)) {
+                return std::nullopt;
+            }
             if (observed == *count) {
                 return naturals;
             }
@@ -379,29 +437,43 @@ std::optional<std::vector<std::string>>
         return std::nullopt;
     };
     auto result = scan();
+    if (m_sacrifice.evidence_failed) {
+        return std::nullopt;
+    }
     const bool closed = set_panel(false);
     if (!closed) {
         result.reset();
     }
-    report_sacrifice(
-        phase,
-        json::object {
-            { "inventory_status", result.has_value() ? "complete" : "incomplete" },
-            { "panel_closed", closed },
-            { "natural_items", result.has_value() ? json::value(json::array(*result)) : json::value(nullptr) } },
-        ctrler()->get_image());
+    if (m_sacrifice.evidence_failed) {
+        return std::nullopt;
+    }
+    if (!report_sacrifice(
+            phase,
+            json::object {
+                { "inventory_status", result.has_value() ? "complete" : "incomplete" },
+                { "panel_closed", closed },
+                { "natural_items", result.has_value() ? json::value(json::array(*result)) : json::value(nullptr) } },
+            ctrler()->get_image())) {
+        return std::nullopt;
+    }
     return result;
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
 {
     using blackflow::SacrificePhase;
+    if (m_sacrifice.evidence_failed || m_encounter_choice.failed) {
+        return false;
+    }
     const auto continue_later = [&] {
         Task.set_task_base(std::string(Prefix) + "StageEncounterResult", std::string(Prefix) + "SacrificeContinuation");
         return !need_exit();
     };
     if (m_sacrifice.phase == SacrificePhase::BeforeCivilization) {
         m_sacrifice.naturals_before = scan_sacrifice_natural_items("civilization-before");
+        if (m_sacrifice.evidence_failed) {
+            return false;
+        }
         if (recognize(ctrler()->get_image(), "SacrificeInventoryExpanded")) {
             return continue_later();
         }
@@ -418,7 +490,10 @@ bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
         for (const auto suffix : { "SacrificePopupClose", "SacrificePopupContinue" }) {
             if (recognize(image, suffix)) {
                 m_sacrifice.civilization_transition_seen = true;
-                report_sacrifice("civilization-popup", {}, image);
+                if (!confirm_encounter_choice(image, "civilization_popup") ||
+                    !report_sacrifice("civilization-popup", { }, image)) {
+                    return false;
+                }
                 ProcessTask close(*this, { std::string(Prefix) + suffix });
                 close.set_retry_times(0);
                 (void)close.run();
@@ -442,7 +517,13 @@ bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
         if (!m_sacrifice.civilization_transition_seen) {
             continue;
         }
+        if (!confirm_encounter_choice(image, map ? "map_after_civilization" : "civilization_options_changed")) {
+            return false;
+        }
         auto after = scan_sacrifice_natural_items("civilization-after");
+        if (m_sacrifice.evidence_failed) {
+            return false;
+        }
         if (recognize(ctrler()->get_image(), "SacrificeInventoryExpanded")) {
             return continue_later();
         }
@@ -461,7 +542,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
             details["comparison_status"] =
                 removed.size() == 2 && added.empty() ? "confirmed_two" : "unexpected_difference";
         }
-        report_sacrifice("civilization-consumed", std::move(details), ctrler()->get_image());
+        if (!report_sacrifice("civilization-consumed", std::move(details), ctrler()->get_image())) {
+            return false;
+        }
         m_sacrifice.phase = SacrificePhase::Finished;
         return true;
     }

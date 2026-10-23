@@ -1,4 +1,4 @@
-## v1.1.28
+## v1.1.29
 
 ### Highlights
 
@@ -44,6 +44,22 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.29 (2026-10-24)</b></summary>
+
+### 改进 | Improved
+
+* 减少零件箱回到列表起点时的多余滑动，以及商店未变化时的重复扫描和识别等待。 @Shadowfax-YJ
+* 完善“先行一步”“货从口出”“失与得”的候选、实际选择和后续确认记录，补齐对应节点截图。 @Shadowfax-YJ
+
+### 修复 | Fix
+
+* 修复零件箱收起后已回到地图或节点预览，仍长时间等待、反复恢复的问题。 @Shadowfax-YJ
+* 修复事件结束时重复点击退出按钮，误开零件箱后停止采集的问题。 @Shadowfax-YJ
+* 修复秘境行商将“血蕈”“种荚”误认成购买目标的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.28 (2026-10-23)</b></summary>
 
 ### 改进 | Improved

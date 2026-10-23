@@ -19,24 +19,19 @@ public:
     using AbstractRoguelikeTaskPlugin::AbstractRoguelikeTaskPlugin;
     virtual ~RoguelikeStageEncounterTaskPlugin() override = default;
 
-    void set_event_observer(std::function<void(std::string_view)> observer)
-    {
-        m_event_observer = std::move(observer);
-    }
+    void set_event_observer(std::function<void(std::string_view)> observer) { m_event_observer = std::move(observer); }
 
     void set_event_capture_observer(std::function<void(std::string_view, const cv::Mat&)> observer)
     {
         m_event_capture_observer = std::move(observer);
     }
 
-    void set_blackflow_encounter_context_provider(
-        std::function<std::optional<blackflow::LakeFairyContext>()> provider)
+    void set_blackflow_encounter_context_provider(std::function<std::optional<blackflow::LakeFairyContext>()> provider)
     {
         m_blackflow_encounter_context_provider = std::move(provider);
     }
 
-    void set_blackflow_encounter_choice_provider(
-        std::function<std::optional<std::size_t>(std::string_view)> provider)
+    void set_blackflow_encounter_choice_provider(std::function<std::optional<std::size_t>(std::string_view)> provider)
     {
         m_blackflow_encounter_choice_provider = std::move(provider);
     }
@@ -60,6 +55,12 @@ public:
         m_expedition_dispatch_observer = std::move(observer);
     }
 
+    void set_blackflow_expedition_evidence_observer(
+        std::function<bool(std::string_view, json::object, const cv::Mat&)> observer)
+    {
+        m_expedition_evidence_observer = std::move(observer);
+    }
+
     virtual void reset_in_run_variables() override;
 
     void set_blackflow_sacrifice_context_provider(std::function<std::optional<blackflow::SacrificeContext>()> provider)
@@ -68,7 +69,7 @@ public:
     }
 
     void set_event_detail_observer(
-        std::function<void(std::string_view, std::string_view, json::object, const cv::Mat&)> observer)
+        std::function<bool(std::string_view, std::string_view, json::object, const cv::Mat&)> observer)
     {
         m_event_detail_observer = std::move(observer);
     }
@@ -96,11 +97,21 @@ private:
     bool handle_sacrifice_picker();
     bool finish_sacrifice_civilization();
     std::optional<std::vector<std::string>> scan_sacrifice_natural_items(std::string_view phase);
-    void report_sacrifice(std::string_view phase, json::object details, const cv::Mat& image);
+    bool report_sacrifice(std::string_view phase, json::object details, const cv::Mat& image);
+    bool prepare_encounter_choice(std::string_view event_name, int round, const cv::Mat& image);
+    bool plan_encounter_choice(size_t index, std::string_view policy);
+    bool randomize_encounter_choice_order(std::vector<size_t>& order);
+    bool report_encounter_choice(std::string_view phase, json::object details = { }, const cv::Mat& image = { });
+    bool confirm_encounter_choice(const cv::Mat& image, std::string_view basis);
+    bool confirm_cargo_choice();
     void refresh_expedition_context();
+    bool capture_expedition_candidates(const cv::Mat& image);
+    bool handle_expedition_choice();
+    bool report_expedition(std::string_view phase, json::object details = { }, const cv::Mat& image = { });
+    bool abort_expedition(std::string_view reason);
     bool wait_for_secondary_event(std::string_view picker_task);
     bool handle_expedition_picker();
-    void confirm_expedition_dispatch();
+    bool confirm_expedition_dispatch(const cv::Mat& image, std::string_view basis);
     bool update_option_list(std::string_view event_name);
     bool select_analyzed_option(size_t index);
     std::optional<Rect> wait_for_analyzed_option_stable(size_t index);
@@ -120,6 +131,7 @@ private:
     std::function<std::optional<std::size_t>(const std::vector<std::string>&)> m_portal_choice;
     std::function<void(std::string)> m_portal_selected;
     OptionAnalyzer::Result m_option_list;
+    cv::Mat m_option_list_image;
     size_t m_view_begin = 0;
     size_t m_view_end = 0;
     std::vector<int> m_option_y_in_view;
@@ -139,9 +151,40 @@ private:
     std::string m_expedition_pending_operator;
     bool m_expedition_finished = false;
     std::optional<size_t> m_expedition_initial_choice;
+    std::function<bool(std::string_view, json::object, const cv::Mat&)> m_expedition_evidence_observer;
+
+    struct ExpeditionEvidence
+    {
+        json::object details;
+        int sequence = 0;
+        int choice_attempt = 0;
+        int dispatch_attempt = 0;
+        bool candidates_saved = false;
+        bool choice_clicked = false;
+        bool choice_confirmed = false;
+        bool failed = false;
+        cv::Mat confirmation_image;
+        std::string confirmation_basis;
+    } m_expedition_evidence;
 
     std::function<std::optional<blackflow::SacrificeContext>()> m_sacrifice_context_provider;
-    std::function<void(std::string_view, std::string_view, json::object, const cv::Mat&)> m_event_detail_observer;
+    std::function<bool(std::string_view, std::string_view, json::object, const cv::Mat&)> m_event_detail_observer;
+
+    struct EncounterChoiceEvidence
+    {
+        std::optional<blackflow::SacrificeContext> context;
+        std::string event_name;
+        int round = 0;
+        int sequence = 0;
+        int attempt = 0;
+        bool failed = false;
+        bool clicked = false;
+        bool confirmed = false;
+        bool capture_clicks = false;
+        std::optional<size_t> selected;
+        std::vector<size_t> order;
+        json::object details;
+    } m_encounter_choice;
 
     struct SacrificeState
     {
@@ -155,6 +198,8 @@ private:
         std::optional<std::vector<std::string>> naturals_before;
         bool civilization_inventory_scanned = false;
         bool civilization_transition_seen = false;
+        bool evidence_failed = false;
+        int evidence_sequence = 0;
     } m_sacrifice;
 
     static constexpr size_t MAX_SWIPE_TIMES = 1;

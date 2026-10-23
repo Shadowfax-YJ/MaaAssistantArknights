@@ -9,11 +9,13 @@
 
 // ------------------ 通用配置及插件 ------------------
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEncounterEvidence.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionEvidence.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowOpeningCultivation.h"
 #include "Task/Roguelike/RoguelikeBattleTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeConfig.h"
 #include "Task/Roguelike/RoguelikeControlTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeCustomStartTaskPlugin.h"
-#include "Task/Roguelike/BlackFlow/BlackFlowOpeningCultivation.h"
 #include "Task/Roguelike/RoguelikeDebugTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeFormationTaskPlugin.h"
@@ -48,8 +50,8 @@
 #include "Task/Roguelike/JieGarden/RoguelikeCoppersTaskPlugin.h"
 
 // ------------------ 黑流树海主题专用配置及插件 ------------------
-#include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopupTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCultivationTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowDuelPreparationEvidence.h"
@@ -86,8 +88,7 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_custom_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeCustomStartTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeShoppingTaskPlugin>(m_config_ptr, m_control_ptr)->set_retry_times(0);
 
-    auto battle_plugin =
-        m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr);
+    auto battle_plugin = m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr);
     battle_plugin->set_retry_times(0).set_ignore_error(true);
     auto recruit_plugin =
         m_roguelike_task_ptr->register_plugin<RoguelikeRecruitTaskPlugin>(m_config_ptr, m_control_ptr);
@@ -160,17 +161,24 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             return blackflow::SacrificeContext { session->run_revision(), session->page_context()->page_revision };
         });
     encounter_plugin->set_event_detail_observer(
-        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
+        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr),
+         weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
             std::string_view event,
             std::string_view phase,
             json::object details,
             const cv::Mat& image) {
-            if (const auto port = weak_port.lock(); port != nullptr) {
-                std::string error;
-                if (!port->capture_event_detail(event, phase, std::move(details), image, &error)) {
-                    Log.warn("BlackFlow encounter detail capture failed", event, phase, error);
-                }
+            const auto port = weak_port.lock();
+            const auto session = weak_session.lock();
+            if (port == nullptr || session == nullptr) {
+                return false;
             }
+            std::string error;
+            const bool saved =
+                blackflow::record_encounter_evidence(*session, *port, event, phase, std::move(details), image, &error);
+            if (!saved) {
+                Log.error("BlackFlow encounter evidence failed", event, phase, error);
+            }
+            return saved;
         });
     m_custom_ptr->set_blackflow_start_reward_observer(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view reward) {
@@ -180,8 +188,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         });
     m_custom_ptr->set_blackflow_start_reward_evidence_observer(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
-         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
-            std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
             const auto session = weak_session.lock();
             const auto port = weak_port.lock();
             if (session == nullptr || port == nullptr || session->profile() != "automation_collection") {
@@ -193,11 +201,13 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             const blackflow::RunLogEvent event {
                 .level = failed ? blackflow::RunLogLevel::Warning : blackflow::RunLogLevel::Info,
                 .action = "start.reward." + std::string(kind),
-                .phase = confirming ? "before-click" : selected || failed ? "completed" : "observed",
-                .outcome = selected ? "confirmed" :
-                           failed ? "failed" :
-                           confirming ? "pending" :
-                                        details.get("recognition_status", std::string()),
+                .phase = confirming           ? "before-click"
+                         : selected || failed ? "completed"
+                                              : "observed",
+                .outcome = selected     ? "confirmed"
+                           : failed     ? "failed"
+                           : confirming ? "pending"
+                                        : details.get("recognition_status", std::string()),
                 .task = "RoguelikeCustomStartTaskPlugin",
                 .state = session->run_log_state(),
                 .details = std::move(details),
@@ -211,8 +221,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         });
     m_custom_ptr->set_blackflow_cultivation_evidence_observer(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
-         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
-            std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
             const auto session = weak_session.lock();
             const auto port = weak_port.lock();
             if (!session || !port || session->profile() != "automation_collection") {
@@ -224,8 +234,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         });
     encounter_plugin->set_blackflow_encounter_context_provider(
         [weak_config = std::weak_ptr<RoguelikeConfig>(m_config_ptr),
-         weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)]()
-            -> std::optional<blackflow::LakeFairyContext> {
+         weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+             m_blackflow_session_ptr)]() -> std::optional<blackflow::LakeFairyContext> {
             const auto config = weak_config.lock();
             const auto session = weak_session.lock();
             if (config == nullptr || session == nullptr) {
@@ -278,6 +288,21 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
                 battle_free_exit);
             return context;
         });
+    encounter_plugin->set_blackflow_expedition_evidence_observer(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view phase, json::object details, const cv::Mat& image) {
+            const auto session = weak_session.lock();
+            const auto port = weak_port.lock();
+            std::string error;
+            const bool saved =
+                session && port &&
+                blackflow::record_expedition_evidence(*session, *port, phase, std::move(details), image, &error);
+            if (!saved) {
+                Log.error("BlackFlow expedition archive evidence failed", phase, error);
+            }
+            return saved;
+        });
     encounter_plugin->set_blackflow_expedition_dispatch_observer(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view name) {
             if (const auto session = weak_session.lock(); session != nullptr) {
@@ -291,10 +316,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             return session == nullptr ? std::nullopt : session->preferred_encounter_choice_order(event_name);
         });
     const auto observe_blackflow_page_content =
-        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
-            std::string_view content,
-            std::string_view source,
-            bool expect_combat) {
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+             m_blackflow_session_ptr)](std::string_view content, std::string_view source, bool expect_combat) {
             const auto session = weak_session.lock();
             if (session == nullptr || !session->page_context().has_value() ||
                 session->page_context()->stage != blackflow::PageExecutionStage::Running ||
@@ -306,14 +329,12 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
                 Log.warn("BlackFlow direct page content observation ignored", error);
             }
         };
-    encounter_plugin->set_event_observer(
-        [observe_blackflow_page_content](std::string_view content) {
-            observe_blackflow_page_content(content, "RoguelikeEvent", false);
-        });
+    encounter_plugin->set_event_observer([observe_blackflow_page_content](std::string_view content) {
+        observe_blackflow_page_content(content, "RoguelikeEvent", false);
+    });
     encounter_plugin->set_event_capture_observer(
-        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
-            std::string_view event_name,
-            const cv::Mat& stitched_image) {
+        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view event_name, const cv::Mat& stitched_image) {
             const auto port = weak_port.lock();
             if (port == nullptr) {
                 return;
@@ -324,8 +345,7 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             }
         });
     battle_plugin->set_stage_observer(
-        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
-            std::string_view content) {
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](std::string_view content) {
             const auto session = weak_session.lock();
             if (session == nullptr) {
                 return;
@@ -353,9 +373,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             return saved;
         });
     battle_plugin->set_battle_result_observer(
-        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
-            std::string_view stage_name,
-            int total_kills) {
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+             m_blackflow_session_ptr)](std::string_view stage_name, int total_kills) {
             const auto session = weak_session.lock();
             if (session == nullptr) {
                 return;
@@ -365,18 +384,16 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
                 Log.warn("BlackFlow battle total-kills observation ignored", error);
             }
         });
-    battle_plugin->set_virtual_auto_skill_observer(
-        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](
-            std::string_view device_name) {
-            const auto session = weak_session.lock();
-            if (session != nullptr) {
-                session->record_virtual_auto_skill_activation(device_name);
-            }
-        });
+    battle_plugin->set_virtual_auto_skill_observer([weak_session = std::weak_ptr<blackflow::BlackFlowSession>(
+                                                        m_blackflow_session_ptr)](std::string_view device_name) {
+        const auto session = weak_session.lock();
+        if (session != nullptr) {
+            session->record_virtual_auto_skill_activation(device_name);
+        }
+    });
     m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>(
-        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
-            std::string_view task,
-            std::string* error) {
+        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view task, std::string* error) {
             const auto port = weak_port.lock();
             return port == nullptr ? true : port->capture_collection_popup(task, error);
         });
@@ -385,10 +402,8 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr,
-        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(m_blackflow_port_ptr)](
-            std::string_view task,
-            std::optional<Rect> selected_button,
-            std::string* error) {
+        [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view task, std::optional<Rect> selected_button, std::string* error) {
             const auto port = weak_port.lock();
             if (port != nullptr && task == "BlackFlow@Roguelike@GetDropSelectRecruit") {
                 return port->select_recruitment_voucher(error);
@@ -483,11 +498,15 @@ bool asst::RoguelikeTask::run()
                         .task = "RoguelikeTask",
                         .transaction_id = state.get("transaction_id", std::string()),
                         .state = std::move(state),
-                        .details = {},
+                        .details = { },
                     };
                     std::string ignored_error;
                     m_blackflow_port_ptr->record_run_event(
-                        m_blackflow_session_ptr->run_revision(), event, nullptr, true, &ignored_error);
+                        m_blackflow_session_ptr->run_revision(),
+                        event,
+                        nullptr,
+                        true,
+                        &ignored_error);
                 }
             }
             catch (...) {
@@ -545,11 +564,12 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     const auto& theme = m_config_ptr->get_theme();
     const auto& mode = m_config_ptr->get_mode();
 
-    m_roguelike_task_ptr->set_tasks({
-        theme == RoguelikeTheme::BlackFlow
-            ? std::string(blackflow::initial_collection_task(mode == RoguelikeMode::BlackFlowAutomationCollection))
-            : theme + "@Roguelike@Begin",
-    });
+    m_roguelike_task_ptr->set_tasks(
+        {
+            theme == RoguelikeTheme::BlackFlow
+                ? std::string(blackflow::initial_collection_task(mode == RoguelikeMode::BlackFlowAutomationCollection))
+                : theme + "@Roguelike@Begin",
+        });
 
     if (mode == RoguelikeMode::Investment) {
         // 刷源石锭模式是否进入第二层
@@ -609,9 +629,7 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     const bool automation_collection =
         theme == RoguelikeTheme::BlackFlow && mode == RoguelikeMode::BlackFlowAutomationCollection;
     m_roguelike_task_ptr->set_passive_task_delay(
-        automation_collection
-            ? std::optional<int> { blackflow::AutomationCollectionPassiveTaskDelay }
-            : std::nullopt);
+        automation_collection ? std::optional<int> { blackflow::AutomationCollectionPassiveTaskDelay } : std::nullopt);
     m_roguelike_task_ptr->set_times_limit(
         theme + "@Roguelike@StartExplore",
         automation_collection ? INT_MAX : params.get("starts_count", INT_MAX));

@@ -51,11 +51,13 @@ bool asst::RoguelikeStageEncounterTaskPlugin::verify(AsstMsg msg, const json::va
 
 void asst::RoguelikeStageEncounterTaskPlugin::reset_in_run_variables()
 {
-    m_sacrifice = {};
+    m_sacrifice = { };
+    m_encounter_choice = { };
     m_expedition_context.reset();
     m_expedition_pending_operator.clear();
     m_expedition_finished = false;
     m_expedition_initial_choice.reset();
+    m_expedition_evidence = { };
     m_lake_fairy_plan.reset();
     m_lake_fairy_initial_choice_index = 0;
     m_lake_fairy_unique_choice_selected = false;
@@ -64,11 +66,19 @@ void asst::RoguelikeStageEncounterTaskPlugin::reset_in_run_variables()
 void asst::RoguelikeStageEncounterTaskPlugin::refresh_expedition_context()
 {
     const auto context = m_expedition_context_provider ? m_expedition_context_provider() : std::nullopt;
-    if (!context.has_value()) {
+    if (!m_expedition_pending_operator.empty() &&
+        (!context.has_value() || context->floor != 2 || !m_expedition_context.has_value() ||
+         context->run_revision != m_expedition_context->run_revision ||
+         context->page_revision != m_expedition_context->page_revision)) {
+        (void)abort_expedition("dispatch_context_changed");
+        return;
+    }
+    if (!context.has_value() || context->floor != 2) {
         m_expedition_context.reset();
         m_expedition_pending_operator.clear();
         m_expedition_finished = false;
         m_expedition_initial_choice.reset();
+        m_expedition_evidence = { };
         return;
     }
     if (!m_expedition_context.has_value() || context->run_revision != m_expedition_context->run_revision ||
@@ -76,9 +86,10 @@ void asst::RoguelikeStageEncounterTaskPlugin::refresh_expedition_context()
         m_expedition_pending_operator.clear();
         m_expedition_finished = false;
         m_expedition_initial_choice.reset();
+        m_expedition_evidence = { };
         m_expedition_context = context;
         // 每个事件在古米/伊桑组与天猫之间各以 50% 抽签；识别重试沿用同一次结果。
-        std::mt19937 random(std::random_device {}());
+        std::mt19937 random(std::random_device { }());
         m_expedition_context->operators =
             blackflow::grouped_expedition_operator_order(m_expedition_context->operators, [&](int total) {
                 return std::uniform_int_distribution<int>(0, total - 1)(random);
@@ -89,11 +100,342 @@ void asst::RoguelikeStageEncounterTaskPlugin::refresh_expedition_context()
     }
 }
 
-void asst::RoguelikeStageEncounterTaskPlugin::confirm_expedition_dispatch()
+bool asst::RoguelikeStageEncounterTaskPlugin::report_expedition(
+    std::string_view phase,
+    json::object details,
+    const cv::Mat& image)
+{
+    if (m_expedition_evidence.failed || !m_expedition_context.has_value()) {
+        return false;
+    }
+    auto payload = m_expedition_evidence.details;
+    for (const auto& [key, value] : details) {
+        payload[key] = value;
+    }
+    const auto& context = *m_expedition_context;
+    const std::string id =
+        "expedition-" + std::to_string(context.run_revision) + "-" + std::to_string(context.page_revision);
+    payload["expedition_id"] = id;
+    payload["run_revision"] = context.run_revision;
+    payload["page_revision"] = context.page_revision;
+    payload["expedition_phase"] = std::string(phase);
+    payload["evidence_sequence"] = ++m_expedition_evidence.sequence;
+    payload["choice_attempt"] = m_expedition_evidence.choice_attempt;
+    payload["dispatch_attempt"] = m_expedition_evidence.dispatch_attempt;
+    if (!image.empty()) {
+        const auto capture_id = id + ":" + std::to_string(m_expedition_evidence.sequence);
+        payload["capture_id"] = capture_id;
+        if (phase == "candidates" || phase == "dispatch_prepared") {
+            const std::string key = phase == "candidates" ? "candidate_capture_id" : "preparation_capture_id";
+            payload[key] = capture_id;
+            m_expedition_evidence.details[key] = capture_id;
+        }
+    }
+    if (!m_expedition_evidence_observer || !m_expedition_evidence_observer(phase, payload, image)) {
+        Log.error("BlackFlow expedition evidence persistence failed", phase, id);
+        m_expedition_evidence.failed = true;
+        m_task_ptr->set_enable(false);
+        return false;
+    }
+    Log.info("BlackFlow expedition evidence", phase, json::value(std::move(payload)));
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::abort_expedition(std::string_view reason)
+{
+    (void)report_expedition("unresolved", { { "reason", std::string(reason) } });
+    m_expedition_evidence.failed = true;
+    m_task_ptr->set_enable(false);
+    return false;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::report_encounter_choice(
+    std::string_view phase,
+    json::object details,
+    const cv::Mat& image)
+{
+    auto& choice = m_encounter_choice;
+    if (choice.failed || !choice.context) {
+        return false;
+    }
+    auto payload = choice.details;
+    for (const auto& [key, value] : details) {
+        payload[key] = value;
+    }
+    const auto& context = *choice.context;
+    payload["choice_id"] = "choice-" + std::to_string(context.run_revision) + "-" +
+                           std::to_string(context.page_revision) + "-" + std::to_string(choice.round);
+    if (!image.empty()) {
+        const std::string capture_id =
+            payload.get("choice_id", std::string()) + ":" + std::to_string(choice.sequence + 1);
+        payload["capture_id"] = capture_id;
+        if (phase == "candidates") {
+            choice.details["candidate_capture_id"] = capture_id;
+            payload["candidate_capture_id"] = capture_id;
+        }
+    }
+    payload["run_revision"] = context.run_revision;
+    payload["page_revision"] = context.page_revision;
+    payload["exchange_round"] = choice.round;
+    payload["choice_phase"] = std::string(phase);
+    payload["capture_kind"] = "encounter_choice";
+    payload["evidence_sequence"] = ++choice.sequence;
+    payload["choice_attempt"] = choice.attempt;
+    if (!m_event_detail_observer || !m_event_detail_observer(choice.event_name, phase, payload, image)) {
+        choice.failed = true;
+        if (m_task_ptr) {
+            m_task_ptr->set_enable(false);
+        }
+        Log.error("BlackFlow encounter choice evidence persistence failed", choice.event_name, phase);
+        return false;
+    }
+    if (phase == "unresolved") {
+        choice.failed = true;
+        if (m_task_ptr) {
+            m_task_ptr->set_enable(false);
+        }
+        return false;
+    }
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::prepare_encounter_choice(
+    std::string_view event_name,
+    int round,
+    const cv::Mat& image)
+{
+    const auto context = m_sacrifice_context_provider ? m_sacrifice_context_provider() : std::nullopt;
+    if (!context) {
+        return true; // Other BlackFlow modes retain their existing flow.
+    }
+    auto& choice = m_encounter_choice;
+    if (choice.context == context && choice.event_name == event_name && choice.round == round) {
+        return !choice.failed;
+    }
+    choice = { };
+    choice.context = context;
+    choice.event_name = event_name;
+    choice.round = round;
+    json::array candidates;
+    for (size_t i = 0; i < m_option_list.size(); ++i) {
+        const auto& option = m_option_list[i];
+        candidates.emplace_back(
+            json::object {
+                { "option_index", i + 1 },
+                { "option", option.text },
+                { "enabled", option.enabled },
+                { "red_description", option.red_description },
+            });
+    }
+    choice.details["candidates"] = std::move(candidates);
+    return report_encounter_choice("candidates", { }, image);
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::plan_encounter_choice(size_t index, std::string_view policy)
+{
+    auto& choice = m_encounter_choice;
+    if (!choice.context || choice.confirmed) {
+        return true;
+    }
+    if (choice.failed || index >= m_option_list.size()) {
+        return false;
+    }
+    if (choice.selected && choice.selected != index && choice.clicked) {
+        return report_encounter_choice("unresolved", { { "reason", "prior_choice_input_unresolved" } });
+    }
+    choice.selected = index;
+    choice.clicked = false;
+    choice.capture_clicks = true;
+    choice.details["option_index"] = index + 1;
+    choice.details["option"] = m_option_list[index].text;
+    choice.details["selection_policy"] = std::string(policy);
+    return report_encounter_choice("planned");
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::randomize_encounter_choice_order(std::vector<size_t>& order)
+{
+    auto& choice = m_encounter_choice;
+    if (choice.context && !choice.confirmed && !choice.order.empty()) {
+        order = choice.order;
+        return !choice.failed;
+    }
+    static thread_local std::mt19937 random_engine(std::random_device { }());
+    std::shuffle(order.begin(), order.end(), random_engine);
+    if (!choice.context || choice.confirmed) {
+        return true;
+    }
+    choice.order = order;
+    choice.details["randomized_option_order"] = json::array(order);
+    return report_encounter_choice("order");
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::confirm_encounter_choice(const cv::Mat& image, std::string_view basis)
+{
+    auto& choice = m_encounter_choice;
+    if (!choice.context || choice.confirmed || !choice.selected || !choice.clicked) {
+        return true;
+    }
+    if (!report_encounter_choice("confirmed", { { "confirmation_basis", std::string(basis) } }, image)) {
+        return false;
+    }
+    choice.confirmed = true;
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::confirm_cargo_choice()
+{
+    if (!m_encounter_choice.context || m_encounter_choice.confirmed) {
+        return true;
+    }
+    std::vector<std::string> previous;
+    int reward_frames = 0;
+    for (int sample = 0; sample < 12 && !need_exit(); ++sample) {
+        sleep(350);
+        const auto image = ctrler()->get_image();
+        if (image.empty()) {
+            continue;
+        }
+        OCRer loading(image);
+        loading.set_task_info("LoadingText");
+        OCRer syncing(image);
+        syncing.set_task_info("BlackFlow@Roguelike@DataSyncConfirm");
+        if (loading.analyze() || syncing.analyze()) {
+            reward_frames = 0;
+            continue;
+        }
+        Matcher reward(image);
+        reward.set_task_info("BlackFlow@Roguelike@CloseCollection");
+        reward_frames = reward.analyze() ? reward_frames + 1 : 0;
+        if (reward_frames >= 2) {
+            return confirm_encounter_choice(image, "reward_popup_after_choice");
+        }
+        bool map = false;
+        for (const auto task : { "BlackFlow@Roguelike@MapPrepare-Ready", "BlackFlow@Roguelike@MapPrepare-ZoomOut" }) {
+            Matcher matcher(image);
+            matcher.set_task_info(task);
+            if (matcher.analyze()) {
+                map = true;
+            }
+        }
+        if (map) {
+            return confirm_encounter_choice(image, "map_after_choice");
+        }
+        OptionAnalyzer options(image);
+        options.set_theme(std::string(RoguelikeTheme::BlackFlow));
+        std::vector<std::string> current;
+        if (options.analyze()) {
+            for (const auto& option : options.get_result()) {
+                current.push_back(option.text);
+            }
+        }
+        std::vector<std::string> original;
+        for (const auto& option : m_option_list) {
+            original.push_back(option.text);
+        }
+        const bool new_option = std::ranges::any_of(current, [&](const auto& text) {
+            return std::ranges::find(original, text) == original.end();
+        });
+        if (new_option && current == previous) {
+            return confirm_encounter_choice(image, "changed_options_stable_twice");
+        }
+        previous = std::move(current);
+        // Passive observation only: never advance through an unarchived reward.
+    }
+    return report_encounter_choice("unresolved", { { "reason", "cargo_choice_transition_not_confirmed" } });
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::capture_expedition_candidates(const cv::Mat& image)
+{
+    if (m_expedition_evidence.candidates_saved) {
+        return true;
+    }
+    json::array candidates;
+    for (size_t index = 0; index < m_option_list.size(); ++index) {
+        const auto& option = m_option_list[index];
+        candidates.emplace_back(
+            json::object { { "option_index_from_top", static_cast<int>(index + 1) },
+                           { "enabled", option.enabled },
+                           { "text", option.text },
+                           { "red_description", option.red_description } });
+    }
+    if (image.empty()) {
+        return abort_expedition("candidate_capture_empty");
+    }
+    if (!report_expedition("candidates", { { "candidates", std::move(candidates) } }, image)) {
+        return false;
+    }
+    m_expedition_evidence.candidates_saved = true;
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::handle_expedition_choice()
+{
+    if (!m_expedition_evidence.candidates_saved) {
+        return abort_expedition("initial_candidates_not_saved");
+    }
+    if (m_expedition_context->operators.empty()) {
+        m_expedition_finished = true;
+        return report_expedition(
+            "cancelled",
+            { { "reason", "no_eligible_expedition_operator" }, { "dispatch_was_attempted", false } });
+    }
+    if (!m_expedition_initial_choice.has_value()) {
+        std::vector<size_t> available;
+        for (size_t i = 0; i < std::min(size_t(2), m_option_list.size()); ++i) {
+            if (m_option_list[i].enabled) {
+                available.emplace_back(i);
+            }
+        }
+        if (available.empty()) {
+            m_expedition_finished = true;
+            return report_expedition(
+                "cancelled",
+                { { "reason", "no_enabled_expedition_option" }, { "dispatch_was_attempted", false } });
+        }
+        static std::mt19937 random(std::random_device { }());
+        m_expedition_initial_choice = available[std::uniform_int_distribution<size_t>(0, available.size() - 1)(random)];
+        const auto index = *m_expedition_initial_choice;
+        m_expedition_evidence.details["selected_option_index_from_top"] = static_cast<int>(index + 1);
+        m_expedition_evidence.details["selected_option_text"] = m_option_list[index].text;
+        m_expedition_evidence.details["selected_option_red_description"] = m_option_list[index].red_description;
+        // Preserve the actual OCR text. The branch label is a text-backed mapping, not an index assumption.
+        const auto& text = m_option_list[index].text;
+        const bool interior = text.find("内部") != std::string::npos;
+        const bool source = text.find("源头") != std::string::npos;
+        m_expedition_evidence.details["selected_branch"] =
+            interior == source ? json::value(nullptr) : json::value(interior ? "interior" : "source");
+        m_expedition_evidence.details["selection_policy"] = "uniform_enabled_first_two";
+        m_expedition_evidence.details["operator_preference_order"] = json::array(m_expedition_context->operators);
+        if (!report_expedition("choice_planned")) {
+            return false;
+        }
+    }
+    const auto selected_index = *m_expedition_initial_choice;
+    if (selected_index >= m_option_list.size() || !m_option_list[selected_index].enabled ||
+        m_option_list[selected_index].text !=
+            m_expedition_evidence.details.get("selected_option_text", std::string())) {
+        return abort_expedition("planned_choice_changed_before_click");
+    }
+    if (!select_analyzed_option(*m_expedition_initial_choice)) {
+        return abort_expedition(need_exit() ? "user_stopped_during_choice" : "choice_click_not_accepted");
+    }
+    // Only the actual picker will confirm this choice; the leave-confirm task is not a dispatch receipt.
+    return true;
+}
+
+bool asst::RoguelikeStageEncounterTaskPlugin::confirm_expedition_dispatch(const cv::Mat& image, std::string_view basis)
 {
     if (m_expedition_pending_operator.empty()) {
-        return;
+        return true;
     }
+    if (!m_expedition_evidence.choice_confirmed || image.empty() ||
+        (basis != "secondary_event" && basis != "map_after_depart")) {
+        return abort_expedition("dispatch_confirmation_missing");
+    }
+    if (!report_expedition("dispatch_confirmed", { { "confirmation_basis", std::string(basis) } }, image)) {
+        return false;
+    }
+    // Persist the immutable pre-dispatch snapshot before the existing rule-based promotion updates runtime state.
     Log.info("BlackFlow expedition dispatch confirmed", m_expedition_pending_operator);
     auto& operators = m_config->status().opers;
     if (const auto dispatched = operators.find(m_expedition_pending_operator); dispatched != operators.end()) {
@@ -111,6 +453,7 @@ void asst::RoguelikeStageEncounterTaskPlugin::confirm_expedition_dispatch()
     }
     m_expedition_pending_operator.clear();
     m_expedition_finished = true;
+    return true;
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::string_view picker_task)
@@ -118,9 +461,44 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
     for (int attempt = 0; attempt < 20 && !need_exit(); ++attempt) {
         sleep(400);
         const cv::Mat image = ctrler()->get_image();
+        const bool expedition = picker_task == "BlackFlow@Roguelike@ExpeditionPicker";
+        if (image.empty()) {
+            continue;
+        }
+        if (expedition) {
+            // A still-open picker or network overlay takes precedence over background event/map matches.
+            Matcher still_picking(image);
+            still_picking.set_task_info(std::string(picker_task));
+            OCRer waiting(image);
+            waiting.set_task_info("LoadingText");
+            if (still_picking.analyze() || waiting.analyze()) {
+                continue;
+            }
+            OCRer syncing(image);
+            syncing.set_task_info("BlackFlow@Roguelike@DataSyncConfirm");
+            if (syncing.analyze()) {
+                if (!report_expedition(
+                        "transition_before_advance",
+                        { { "reason", "data_sync_popup" }, { "advance_was_attempted", false } },
+                        image)) {
+                    return false;
+                }
+                return abort_expedition("data_sync_interrupted_dispatch");
+            }
+        }
         OCRer event(image);
         event.set_task_info("BlackFlow@Roguelike@StageEncounterOcr");
         if (event.analyze()) {
+            if (expedition) {
+                if (event.get_result().empty() || event.get_result().front().text != blackflow::ExpeditionEventName) {
+                    continue;
+                }
+                if (!report_expedition("secondary_event", { }, image)) {
+                    return false;
+                }
+                m_expedition_evidence.confirmation_image = image.clone();
+                m_expedition_evidence.confirmation_basis = "secondary_event";
+            }
             return true;
         }
         for (const std::string task :
@@ -128,6 +506,10 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
             Matcher map(image);
             map.set_task_info(task);
             if (map.analyze()) {
+                if (expedition) {
+                    m_expedition_evidence.confirmation_image = image.clone();
+                    m_expedition_evidence.confirmation_basis = "map_after_depart";
+                }
                 return true;
             }
         }
@@ -138,11 +520,25 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
         if (picker.analyze() || loading.analyze()) {
             continue;
         }
+        // Keep the bounded fast-forward recovery, but save every screen BEFORE it can be left.
+        // An unidentified transition is evidence only, never a secondary-event or dispatch confirmation.
+        if (expedition) {
+            if (!report_expedition("transition_before_advance", { }, image) || need_exit()) {
+                return false;
+            }
+            // next_event may issue several clicks internally. One click per captured frame prevents
+            // it from passing a newly appeared story page without preserving that page first.
+            if (!ctrler()->click(Task.get("Roguelike@StageEncounterJudgeClick")->specific_rect)) {
+                return abort_expedition("transition_advance_input_failed");
+            }
+            continue;
+        }
         // 派遣/交换页消失后复用通用事件的中央快进动作。不能等标题播放完才开始快进，
         // 也不能再次点击派遣或换出；网络延迟时保持原有待确认状态。
-        (void)next_event(std::string(picker_task == "BlackFlow@Roguelike@ExpeditionPicker"
-                                        ? blackflow::ExpeditionEventName
-                                        : blackflow::SacrificeEventName));
+        (void)next_event(
+            std::string(
+                picker_task == "BlackFlow@Roguelike@ExpeditionPicker" ? blackflow::ExpeditionEventName
+                                                                      : blackflow::SacrificeEventName));
     }
     return false;
 }
@@ -151,20 +547,41 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_expedition_picker()
 {
     const auto await_dispatch = [&]() {
         if (wait_for_secondary_event("BlackFlow@Roguelike@ExpeditionPicker")) {
-            confirm_expedition_dispatch();
+            return confirm_expedition_dispatch(
+                m_expedition_evidence.confirmation_image,
+                m_expedition_evidence.confirmation_basis);
         }
-        return !need_exit();
+        return abort_expedition(need_exit() ? "user_stopped_after_depart" : "dispatch_confirmation_timeout");
     };
+    if (m_expedition_evidence.failed) {
+        return false;
+    }
     if (!m_expedition_pending_operator.empty()) {
         return await_dispatch();
     }
     if (m_expedition_context.has_value() && m_expedition_context->floor == 2 && !m_expedition_finished) {
+        if (!m_expedition_initial_choice.has_value() || !m_expedition_evidence.choice_clicked) {
+            return abort_expedition("picker_without_recorded_choice");
+        }
+        if (!m_expedition_evidence.choice_confirmed) {
+            if (!report_expedition("choice_confirmed", { { "confirmation_basis", "expedition_picker" } })) {
+                return false;
+            }
+            m_expedition_evidence.choice_confirmed = true;
+        }
         for (const std::string& candidate : m_expedition_context->operators) {
             for (int slot = 0; slot < 5 && !need_exit(); ++slot) {
-                Matcher picker(ctrler()->get_image());
+                const cv::Mat picker_image = ctrler()->get_image();
+                if (picker_image.empty()) {
+                    return abort_expedition("picker_image_empty");
+                }
+                Matcher picker(picker_image);
                 picker.set_task_info("BlackFlow@Roguelike@ExpeditionPicker");
                 if (!picker.analyze()) {
-                    return true;
+                    m_expedition_finished = true;
+                    return report_expedition(
+                        "cancelled",
+                        { { "reason", "picker_closed_before_depart" }, { "dispatch_was_attempted", false } });
                 }
                 const auto portrait = Task.get("BlackFlow@Roguelike@ExpeditionFirstOper")->specific_rect;
                 Rect click = portrait;
@@ -175,7 +592,8 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_expedition_picker()
                 std::string previous;
                 for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
                     sleep(350);
-                    OCRer description(ctrler()->get_image());
+                    const cv::Mat selected_image = ctrler()->get_image();
+                    OCRer description(selected_image);
                     description.set_task_info("BlackFlow@Roguelike@ExpeditionOperDescription");
                     std::string name;
                     if (description.analyze()) {
@@ -195,25 +613,64 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_expedition_picker()
                     }
                     // 两帧姓名一致且命中本次抽中的干员，再单独识别右下角按钮。
                     Log.info("BlackFlow expedition operator verified", name, "slot", slot + 1);
+                    Matcher selected_picker(selected_image);
+                    selected_picker.set_task_info("BlackFlow@Roguelike@ExpeditionPicker");
+                    if (selected_image.empty() || !selected_picker.analyze()) {
+                        return abort_expedition("selected_picker_disappeared");
+                    }
+                    auto& evidence = m_expedition_evidence.details;
+                    evidence["operator_name"] = name;
+                    evidence["operator_slot_index_from_left"] = slot + 1;
+                    json::array description_text;
+                    for (const auto& result : description.get_result()) {
+                        description_text.emplace_back(result.text);
+                    }
+                    evidence["operator_description_text"] = std::move(description_text);
+                    const auto oper = m_config->status().opers.find(name);
+                    const int elite = oper == m_config->status().opers.end() ? -1 : oper->second.elite;
+                    evidence["elite_before"] = elite >= 0 && elite <= 2 ? json::value(elite) : json::value(nullptr);
+                    evidence["elite_before_source"] = elite >= 0 && elite <= 2 ? "runtime_status" : "unknown";
+                    evidence["elite_image_confirmed"] = nullptr;
+                    evidence["rule_predicted_elite_after"] =
+                        elite >= 0 && elite <= 2
+                            ? json::value(
+                                  blackflow::confirmed_expedition_core_elite(m_expedition_initial_choice, name, elite))
+                            : json::value(nullptr);
+                    ++m_expedition_evidence.dispatch_attempt;
+                    if (!report_expedition("dispatch_prepared", { }, selected_image) ||
+                        !report_expedition("dispatch_attempt")) {
+                        return false;
+                    }
                     ProcessTask depart(*this, { "BlackFlow@Roguelike@ExpeditionDepart" });
                     depart.set_retry_times(0);
                     if (!depart.run()) {
-                        return true;
+                        return abort_expedition("depart_action_failed");
                     }
                     m_expedition_pending_operator = std::move(name);
+                    if (!report_expedition("dispatch_click_issued")) {
+                        return false;
+                    }
                     return await_dispatch();
                 }
             }
         }
     }
     if (need_exit()) {
-        return false;
+        return abort_expedition("user_stopped_in_picker");
     }
     // 没找到允许派遣的干员时返回事件，按默认选项离开；不能派其他干员兜底。
+    if (m_expedition_context.has_value() && !m_expedition_finished) {
+        if (!report_expedition(
+                "cancelled",
+                { { "reason", "no_eligible_operator_verified" }, { "dispatch_was_attempted", false } })) {
+            return false;
+        }
+    }
     m_expedition_finished = true;
     ProcessTask back(*this, { "BlackFlow@Roguelike@ExpeditionBack" });
     back.set_retry_times(2);
-    return back.run();
+    const bool returned = back.run();
+    return returned || (m_expedition_context.has_value() ? abort_expedition("picker_back_failed") : false);
 }
 
 bool asst::RoguelikeStageEncounterTaskPlugin::_run()
@@ -286,7 +743,11 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
 
     if (theme == RoguelikeTheme::BlackFlow && !m_expedition_pending_operator.empty()) {
         // 已从干员选择页进入二级事件，至此才提交派遣事实；此后同名事件只走默认离开。
-        confirm_expedition_dispatch();
+        refresh_expedition_context();
+        if (current_event_name != blackflow::ExpeditionEventName ||
+            !confirm_expedition_dispatch(image, "secondary_event")) {
+            return abort_expedition("unexpected_event_after_depart");
+        }
     }
 
     // 处理主事件及其链式 next_event
@@ -341,8 +802,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     size_t choose_option = process_task(event, special_val);
     std::optional<std::vector<std::string>> planned_choice_order;
     if (theme == RoguelikeTheme::BlackFlow && m_blackflow_encounter_choice_provider) {
-        if (const auto planned_choice = m_blackflow_encounter_choice_provider(event.name);
-            planned_choice.has_value()) {
+        if (const auto planned_choice = m_blackflow_encounter_choice_provider(event.name); planned_choice.has_value()) {
             choose_option = *planned_choice;
         }
     }
@@ -415,7 +875,11 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     // 界园与黑流树海通过识别实际选项列表选择事件选项。
     if (theme == RoguelikeTheme::JieGarden || theme == RoguelikeTheme::BlackFlow) {
         reset_option_list_and_view_data();
-        if (update_option_list(event.name)) {
+        const bool options_ready = update_option_list(event.name);
+        if (m_expedition_evidence.failed || m_encounter_choice.failed || m_sacrifice.evidence_failed) {
+            return std::nullopt;
+        }
+        if (options_ready) {
             if (theme == RoguelikeTheme::BlackFlow && event.name == "溯源" && m_portal_choice) {
                 std::vector<std::string> prices;
                 for (const auto& option : m_option_list) {
@@ -437,24 +901,9 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 return std::nullopt;
             }
             if (theme == RoguelikeTheme::BlackFlow && event.name == blackflow::ExpeditionEventName &&
-                m_expedition_context.has_value() && !m_expedition_finished &&
-                !m_expedition_context->operators.empty()) {
-                if (!m_expedition_initial_choice.has_value()) {
-                    std::vector<size_t> available;
-                    for (size_t i = 0; i < std::min(size_t(2), m_option_list.size()); ++i) {
-                        if (m_option_list[i].enabled) {
-                            available.emplace_back(i);
-                        }
-                    }
-                    if (!available.empty()) {
-                        static std::mt19937 random(std::random_device {}());
-                        m_expedition_initial_choice =
-                            available[std::uniform_int_distribution<size_t>(0, available.size() - 1)(random)];
-                    }
-                }
-                if (m_expedition_initial_choice.has_value()) {
-                    Log.info("BlackFlow expedition initial option", *m_expedition_initial_choice + 1);
-                    (void)select_analyzed_option(*m_expedition_initial_choice);
+                m_expedition_context.has_value() && !m_expedition_finished) {
+                const bool selected = handle_expedition_choice();
+                if (!selected || m_expedition_initial_choice.has_value()) {
                     // 选择页交给独立识别入口；不要用 next_event 的通用点击穿过干员列表。
                     return std::nullopt;
                 }
@@ -474,9 +923,9 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                 }
                 const auto resolve_grouped_choice = [&](int configured_choice) -> std::optional<size_t> {
                     const auto option_count = static_cast<std::int64_t>(m_option_list.size());
-                    const std::int64_t resolved_choice = configured_choice > 0
-                        ? static_cast<std::int64_t>(configured_choice)
-                        : option_count + static_cast<std::int64_t>(configured_choice) + 1;
+                    const std::int64_t resolved_choice =
+                        configured_choice > 0 ? static_cast<std::int64_t>(configured_choice)
+                                              : option_count + static_cast<std::int64_t>(configured_choice) + 1;
                     if (resolved_choice <= 0 || resolved_choice > option_count) {
                         return std::nullopt;
                     }
@@ -628,30 +1077,32 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     }
 
                     if (group.random) {
-                        static thread_local std::mt19937 random_engine(std::random_device {}());
-                        std::shuffle(resolved_group_choices.begin(), resolved_group_choices.end(), random_engine);
+                        if (theme == RoguelikeTheme::BlackFlow && event.name == "货从口出") {
+                            if (!randomize_encounter_choice_order(resolved_group_choices)) {
+                                return std::nullopt;
+                            }
+                        }
+                        else {
+                            static thread_local std::mt19937 random_engine(std::random_device { }());
+                            std::shuffle(resolved_group_choices.begin(), resolved_group_choices.end(), random_engine);
+                        }
                     }
 
-                    if (theme == RoguelikeTheme::BlackFlow &&
-                        event.name == blackflow::GoldStasisEventName) {
+                    if (theme == RoguelikeTheme::BlackFlow && event.name == blackflow::GoldStasisEventName) {
                         const auto context = m_blackflow_encounter_context_provider
                                                  ? m_blackflow_encounter_context_provider()
                                                  : std::nullopt;
-                        const bool core_operator_elite_two =
-                            context.has_value() && context->core_operator_elite_two;
-                        std::ranges::stable_sort(
-                            resolved_group_choices,
-                            [&](size_t lhs, size_t rhs) {
-                                return blackflow::gold_stasis_choice_priority_bucket(
-                                           m_option_list[lhs - 1].text,
-                                           core_operator_elite_two) <
-                                       blackflow::gold_stasis_choice_priority_bucket(
-                                           m_option_list[rhs - 1].text,
-                                           core_operator_elite_two);
-                            });
+                        const bool core_operator_elite_two = context.has_value() && context->core_operator_elite_two;
+                        std::ranges::stable_sort(resolved_group_choices, [&](size_t lhs, size_t rhs) {
+                            return blackflow::gold_stasis_choice_priority_bucket(
+                                       m_option_list[lhs - 1].text,
+                                       core_operator_elite_two) <
+                                   blackflow::gold_stasis_choice_priority_bucket(
+                                       m_option_list[rhs - 1].text,
+                                       core_operator_elite_two);
+                        });
                         if (core_operator_elite_two) {
-                            Log.info(
-                                "Event: 金色凝滞 | defer 查看无人机 and 向泉水许愿 behind all other choices");
+                            Log.info("Event: 金色凝滞 | defer 查看无人机 and 向泉水许愿 behind all other choices");
                         }
                     }
 
@@ -660,8 +1111,18 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                             Log.info("Event:", event.name, "Grouped choice", grouped_choice, "is disabled");
                             continue;
                         }
+                        if (event.name == "货从口出" &&
+                            !plan_encounter_choice(grouped_choice - 1, "random_group_order")) {
+                            return std::nullopt;
+                        }
                         if (!select_analyzed_option(grouped_choice - 1)) {
+                            if (m_encounter_choice.failed) {
+                                return std::nullopt;
+                            }
                             continue;
+                        }
+                        if (event.name == "货从口出" && !confirm_cargo_choice()) {
+                            return std::nullopt;
                         }
 
                         if (theme == RoguelikeTheme::BlackFlow) {
@@ -684,8 +1145,18 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
                     if (grouped_choices.contains(fallback_choice) || !m_option_list[fallback_choice - 1].enabled) {
                         continue;
                     }
+                    if (event.name == "货从口出" &&
+                        !plan_encounter_choice(fallback_choice - 1, "configured_fallback")) {
+                        return std::nullopt;
+                    }
                     if (!select_analyzed_option(fallback_choice - 1)) {
+                        if (m_encounter_choice.failed) {
+                            return std::nullopt;
+                        }
                         continue;
+                    }
+                    if (event.name == "货从口出" && !confirm_cargo_choice()) {
+                        return std::nullopt;
                     }
                     if (theme == RoguelikeTheme::BlackFlow) {
                         Task.set_task_base(
@@ -848,8 +1319,8 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_singl
     return event.next_event.empty() ? std::nullopt : std::optional { event.next_event };
 }
 
-std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_blackflow_lake_fairy(
-    const Config::RoguelikeEvent& event)
+std::optional<std::string>
+    asst::RoguelikeStageEncounterTaskPlugin::handle_blackflow_lake_fairy(const Config::RoguelikeEvent& event)
 {
     // 新事件从开场重新建立计划；EncounterReward 对中途页面的续办保留已完成进度。
     if (std::ranges::any_of(m_option_list, [](const auto& option) { return option.text == "上前看看"; })) {
@@ -863,7 +1334,7 @@ std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::handle_black
         if (!context.has_value()) {
             Log.warn("Event: 湖中仙女 | encounter context unavailable; use the conservative branch");
         }
-        blackflow::LakeFairyContext resolved_context = context.value_or(blackflow::LakeFairyContext {});
+        blackflow::LakeFairyContext resolved_context = context.value_or(blackflow::LakeFairyContext { });
         const auto current_ingots = blackflow::perception::recognize_ingots(ctrler()->get_image());
         // 事件内的付费决策必须读取当前 HUD，识别失败也不能沿用旧地图金额。
         resolved_context.ingots = current_ingots.value_or(0);
@@ -1008,8 +1479,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list(std::string_vie
     RoguelikeEncounterOptionAnalyzer analyzer(image);
     analyzer.set_theme(theme);
     analyzer.set_analyze_red_description(event_name == "溯源");
-    const size_t max_swipe_times =
-        theme == RoguelikeTheme::BlackFlow ? BLACKFLOW_MAX_SWIPE_TIMES : MAX_SWIPE_TIMES;
+    const size_t max_swipe_times = theme == RoguelikeTheme::BlackFlow ? BLACKFLOW_MAX_SWIPE_TIMES : MAX_SWIPE_TIMES;
     for (size_t swipe_times = 0; swipe_times < max_swipe_times && !need_exit(); ++swipe_times) {
         move_forward();
         image = ctrler()->get_image();
@@ -1026,11 +1496,24 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list(std::string_vie
         return false;
     }
 
-    if (m_event_capture_observer && !analyzer.get_stitched_image().empty()) {
+    m_option_list = analyzer.get_result();
+    m_option_list_image = analyzer.get_stitched_image().clone();
+    if (theme == RoguelikeTheme::BlackFlow && event_name == "货从口出" &&
+        !prepare_encounter_choice(event_name, 0, analyzer.get_stitched_image())) {
+        return false;
+    }
+    const bool expedition_candidates = event_name == blackflow::ExpeditionEventName &&
+                                       m_expedition_context.has_value() && !m_expedition_finished &&
+                                       !m_expedition_evidence.candidates_saved;
+    if (expedition_candidates) {
+        if (!capture_expedition_candidates(analyzer.get_stitched_image())) {
+            return false;
+        }
+    }
+    else if (m_event_capture_observer && !analyzer.get_stitched_image().empty()) {
         m_event_capture_observer(event_name, analyzer.get_stitched_image());
     }
 
-    m_option_list = analyzer.get_result();
     report_analyzed_options();
 
     update_view(image);
@@ -1041,6 +1524,10 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list(std::string_vie
 bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t index)
 {
     LogTraceFunction;
+    // Consume the explicit plan: a later leave/reward click may reuse this index.
+    const bool encounter_choice = m_encounter_choice.capture_clicks && m_encounter_choice.context &&
+                                  !m_encounter_choice.confirmed && m_encounter_choice.selected == index;
+    m_encounter_choice.capture_clicks = false;
 
     // sanity check
     if (index >= m_option_list.size()) [[unlikely]] {
@@ -1068,10 +1555,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
             if (!stable_header.has_value()) {
                 Log.warn(
                     __FUNCTION__,
-                    std::format(
-                        "| Option {} did not settle before click attempt {}",
-                        index + 1,
-                        attempt));
+                    std::format("| Option {} did not settle before click attempt {}", index + 1, attempt));
                 continue;
             }
 
@@ -1086,7 +1570,47 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
                 stable_header->x + stable_header->width / 2 + 100,
                 stable_header->y + stable_header->height / 2,
             };
-            ctrler()->click(click_point);
+            const bool expedition_choice =
+                m_expedition_context.has_value() && !m_expedition_finished && m_expedition_initial_choice == index;
+            if (encounter_choice) {
+                ++m_encounter_choice.attempt;
+                if (!report_encounter_choice(
+                        "attempt",
+                        { { "click_point", json::array { click_point.x, click_point.y } } },
+                        ctrler()->get_image())) {
+                    return false;
+                }
+            }
+            if (expedition_choice) {
+                ++m_expedition_evidence.choice_attempt;
+                if (!report_expedition(
+                        "choice_attempt",
+                        { { "click_point", json::array { click_point.x, click_point.y } } })) {
+                    return false;
+                }
+            }
+            const bool click_issued = ctrler()->click(click_point);
+            if (encounter_choice) {
+                m_encounter_choice.clicked |= click_issued;
+                if (!report_encounter_choice(click_issued ? "click_issued" : "input_failed")) {
+                    return false;
+                }
+                if (!click_issued) {
+                    continue;
+                }
+            }
+            if (expedition_choice) {
+                if (!click_issued) {
+                    if (!report_expedition("choice_input_failed")) {
+                        return false;
+                    }
+                    continue;
+                }
+                m_expedition_evidence.choice_clicked = true;
+                if (!report_expedition("choice_click_issued")) {
+                    return false;
+                }
+            }
             sleep(300);
             if (ProcessTask(*this, { "BlackFlow@Roguelike@StageEncounterLeaveConfirm" })
                     .set_retry_times(ConfirmationRecognitionRetries)
@@ -1127,8 +1651,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t inde
     return false;
 }
 
-std::optional<asst::Rect>
-    asst::RoguelikeStageEncounterTaskPlugin::wait_for_analyzed_option_stable(size_t index)
+std::optional<asst::Rect> asst::RoguelikeStageEncounterTaskPlugin::wait_for_analyzed_option_stable(size_t index)
 {
     constexpr int ObservationAttempts = 15;
     constexpr int ObservationDelay = 120;
@@ -1274,10 +1797,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::move_to_analyzed_option(size_t ind
 
     Log.error(
         __FUNCTION__,
-        std::format(
-            "| Failed to bring option {} into view after {} attempts",
-            index + 1,
-            completed_attempts));
+        std::format("| Failed to bring option {} into view after {} attempts", index + 1, completed_attempts));
     return false;
 }
 
@@ -1302,8 +1822,7 @@ void asst::RoguelikeStageEncounterTaskPlugin::move_backward()
     ProcessTask(*this, { m_config->get_theme() + "@RoguelikeEncounter-MoveUp" }).run();
 }
 
-std::optional<std::string>
-    asst::RoguelikeStageEncounterTaskPlugin::next_event(const std::string& next_event_name)
+std::optional<std::string> asst::RoguelikeStageEncounterTaskPlugin::next_event(const std::string& next_event_name)
 {
     LogTraceFunction;
 
@@ -1320,7 +1839,7 @@ std::optional<std::string>
             for (const std::string_view map_task : {
                      std::string_view { "BlackFlow@Roguelike@MapPrepare-Ready" },
                      std::string_view { "BlackFlow@Roguelike@MapPrepare-ZoomOut" },
-                }) {
+                 }) {
                 Matcher map_matcher(image);
                 map_matcher.set_task_info(std::string { map_task });
                 if (map_matcher.analyze().has_value()) {

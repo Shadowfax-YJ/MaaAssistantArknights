@@ -1,0 +1,53 @@
+[
+    {
+        "action": "recovery.inventory_close",
+        "details": {
+            "attempt": 1,
+            "max_attempts": 3,
+            "resume_task": "BlackFlow@Roguelike@MovementInventoryClose-Enter",
+            "task": "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        },
+        "level": "WARN",
+        "outcome": "recheck_page",
+        "phase": "failed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowLifecycle"
+    },
+    {
+        "action": "recovery.inventory_close",
+        "details": {
+            "attempt": 2,
+            "max_attempts": 3,
+            "resume_task": "BlackFlow@Roguelike@MovementInventoryClose-Enter",
+            "task": "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        },
+        "level": "WARN",
+        "outcome": "recheck_page",
+        "phase": "failed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowLifecycle"
+    },
+    {
+        "action": "recovery.inventory_close",
+        "details": {
+            "attempt": 3,
+            "max_attempts": 3,
+            "resume_task": "BlackFlow@Roguelike@MovementInventoryClose-Enter",
+            "task": "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
+        },
+        "level": "ERROR",
+        "outcome": "stop_task",
+        "phase": "failed",
+        "schema_version": 1,
+        "state": {
+            "floor": 0
+        },
+        "task": "BlackFlowLifecycle"
+    }
+]

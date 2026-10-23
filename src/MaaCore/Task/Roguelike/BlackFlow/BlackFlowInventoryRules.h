@@ -82,7 +82,7 @@ template <typename Swipe, typename Unchanged, typename Reopen>
             return false;
         }
         stationary_swipes = unchanged() ? stationary_swipes + 1 : 0;
-        if (attempt + 1 >= InventoryMaximumSwipes && stationary_swipes >= 2) {
+        if (stationary_swipes >= 2) {
             return true;
         }
     }

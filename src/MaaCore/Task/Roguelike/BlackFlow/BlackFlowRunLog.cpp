@@ -52,7 +52,7 @@ void set_error(std::string* error, std::string message)
 std::string utc_timestamp(std::chrono::system_clock::time_point now = std::chrono::system_clock::now())
 {
     const std::time_t wall_clock = std::chrono::system_clock::to_time_t(now);
-    std::tm utc {};
+    std::tm utc { };
 #ifdef _WIN32
     gmtime_s(&utc, &wall_clock);
 #else
@@ -69,7 +69,7 @@ std::string utc_timestamp(std::chrono::system_clock::time_point now = std::chron
 std::string directory_timestamp(std::chrono::system_clock::time_point now = std::chrono::system_clock::now())
 {
     const std::time_t wall_clock = std::chrono::system_clock::to_time_t(now);
-    std::tm local {};
+    std::tm local { };
 #ifdef _WIN32
     localtime_s(&local, &wall_clock);
 #else
@@ -186,7 +186,7 @@ bool BlackFlowRunLog::ensure_started(
     m_run_directory.clear();
     m_sequence = 0;
     m_last_image.reset();
-    m_last_image_details = {};
+    m_last_image_details = { };
     m_last_image_state.clear();
     m_last_image_action.clear();
     m_last_image_sequence = 0;
@@ -346,7 +346,7 @@ bool BlackFlowRunLog::ensure_node_attribution_file(const std::filesystem::path& 
     if (std::filesystem::exists(m_run_directory / relative_directory / BlackFlowNodeAttributionFileName)) {
         return true;
     }
-    return update_node_attribution_file(relative_directory, {}, std::nullopt, error);
+    return update_node_attribution_file(relative_directory, { }, std::nullopt, error);
 }
 
 bool BlackFlowRunLog::update_node_attribution_file(
@@ -535,7 +535,7 @@ bool BlackFlowRunLog::append_node_attribution(
             set_error(error, "BlackFlow node attribution directory is not a valid node path");
             return false;
         }
-        return update_node_attribution_file(relative_directory, {}, attribution, error);
+        return update_node_attribution_file(relative_directory, { }, attribution, error);
     }
     catch (const std::exception& exception) {
         set_error(error, "failed to append BlackFlow node attribution: " + std::string(exception.what()));
@@ -699,6 +699,31 @@ bool BlackFlowRunLog::record(
         if (!event.transaction_id.empty()) {
             text_line << " transaction=" << event.transaction_id;
         }
+        if (event.action.starts_with("node.expedition.") || event.action.starts_with("node.encounter.choice.") ||
+            event.action.starts_with("node.sacrifice.")) {
+            for (const auto key : {
+                     "expedition_id",
+                     "choice_id",
+                     "sacrifice_id",
+                     "exchange_round",
+                     "option_index",
+                     "option",
+                     "selected_name",
+                     "reward_option",
+                     "selected_option_index_from_top",
+                     "selected_option_text",
+                     "selected_branch",
+                     "operator_name",
+                     "elite_before",
+                     "elite_before_source",
+                     "confirmation_basis",
+                     "reason",
+                 }) {
+                if (const auto* value = event.details.find_value(key); value != nullptr) {
+                    text_line << ' ' << key << '=' << value->to_string();
+                }
+            }
+        }
         if (!image_details.empty()) {
             text_line << " image=" << image_details.get("path", std::string());
         }
@@ -746,7 +771,7 @@ std::filesystem::path BlackFlowRunLog::close_current_run() noexcept
     }
     m_run_directory.clear();
     m_last_image.reset();
-    m_last_image_details = {};
+    m_last_image_details = { };
     m_last_image_state.clear();
     m_last_image_action.clear();
     m_last_image_sequence = 0;

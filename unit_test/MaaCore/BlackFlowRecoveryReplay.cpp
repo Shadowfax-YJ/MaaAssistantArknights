@@ -2,17 +2,17 @@
 #include "Config/ResourceLoader.h"
 #include "Config/TaskData.h"
 #include "MaaUtils/ImageIo.h"
-#include "Vision/Miscellaneous/PipelineAnalyzer.h"
-#include "Vision/Matcher.h"
-#include "Vision/OCRer.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowLifecycleTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPluginBase.h"
+#include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
+#include "Vision/Matcher.h"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
+#include "Vision/OCRer.h"
+#include <array>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
-#include <fstream>
-#include <array>
-#include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
 
 using namespace asst;
 using namespace asst::blackflow;
@@ -107,7 +107,7 @@ struct Port : IBlackFlowTaskPort
 
     MoveConfirmationStatus confirm(const MoveTransaction&, EnteredPageObservation&, std::string*) override
     {
-        return {};
+        return { };
     }
 
     bool cleanup_open_inventory_if_overloaded(bool&, std::string*) override { return false; }
@@ -123,8 +123,12 @@ struct Port : IBlackFlowTaskPort
         return succeeds;
     }
 
-    bool record_run_event(std::uint64_t, const RunLogEvent& event, std::shared_ptr<cv::Mat> image, bool capture, std::string*)
-        override
+    bool record_run_event(
+        std::uint64_t,
+        const RunLogEvent& event,
+        std::shared_ptr<cv::Mat> image,
+        bool capture,
+        std::string*) override
     {
         events.push_back(event);
         captures.push_back(capture);
@@ -133,25 +137,28 @@ struct Port : IBlackFlowTaskPort
     }
 };
 
-#include "BlackFlowMerchantInventoryReplay.h"
-#include "BlackFlowStoreIdentityReplay.h"
-#include "BlackFlowMovePreviewReplay.h"
-#include "BlackFlowEmployReplay.h"
-#include "BlackFlowExpeditionPickerReplay.h"
-#include "BlackFlowOpeningCultivationReplay.h"
-#include "BlackFlowLinkedEncounterReplay.h"
-#include "BlackFlowRevealReplay.h"
 #include "BlackFlowDifficultyPanelReplay.h"
 #include "BlackFlowDuelPreparationReplay.h"
+#include "BlackFlowEmployReplay.h"
+#include "BlackFlowEncounterEvidenceReplay.h"
+#include "BlackFlowExpeditionEvidenceReplay.h"
+#include "BlackFlowExpeditionPickerReplay.h"
+#include "BlackFlowLinkedEncounterReplay.h"
+#include "BlackFlowMerchantInventoryReplay.h"
+#include "BlackFlowMovePreviewReplay.h"
+#include "BlackFlowOpeningCultivationReplay.h"
+#include "BlackFlowRevealReplay.h"
+#include "BlackFlowStoreIdentityReplay.h"
 
 int main(int argc, char** argv)
 {
-    if (argc != 2) {
+    if (argc != 2 && argc != 3) {
         return 2;
     }
     require(ResourceLoader::get_instance().load(std::filesystem::path(argv[1]) / "resource"), "resources");
     int passed = 0, failed = 0;
     auto test = [&](const char* name, auto fn) {
+        if (argc == 3 && std::string_view(name).find(argv[2]) == std::string_view::npos) { return; }
         try {
             fn();
             ++passed;
@@ -162,12 +169,14 @@ int main(int argc, char** argv)
             std::cout << "FAIL " << name << ": " << e.what() << std::endl;
         }
     };
+
     struct DlcMovementImage
     {
         MovementKind movement;
         const char* filename;
         const char* task;
     };
+
     const std::array dlc_movement_images {
         DlcMovementImage { MovementKind::M13, "m13.png", "BlackFlow@Roguelike@MovementLoaded-M13" },
         DlcMovementImage { MovementKind::M14, "m14.png", "BlackFlow@Roguelike@MovementLoaded-M14" },
@@ -199,8 +208,8 @@ int main(int argc, char** argv)
     require(config->verify_and_load_params(json::object { { "theme", "BlackFlow" }, { "mode", 30002 } }), "config");
     auto session = std::make_shared<BlackFlowSession>();
     auto port = std::make_shared<Port>();
-    ProcessTask parent({}, nullptr, "Roguelike");
-    BlackFlowLifecycleTaskPlugin plugin({}, nullptr, "Roguelike", config, nullptr, session, port);
+    ProcessTask parent({ }, nullptr, "Roguelike");
+    BlackFlowLifecycleTaskPlugin plugin({ }, nullptr, "Roguelike", config, nullptr, session, port);
     plugin.set_task_ptr(&parent);
     auto emit = [&](std::string task, AsstMsg message = AsstMsg::SubTaskStart, std::string previous = "") {
         require(
@@ -223,7 +232,7 @@ int main(int argc, char** argv)
         NodeTaskResult result;
         result.kind = NodeTaskResultKind::PageCompleted;
         result.succeeded = true;
-        require(session->apply_node_task_result(result, json::object {}), "portal completion");
+        require(session->apply_node_task_result(result, json::object { }), "portal completion");
         require(session->set_current_floor(6), "tree hole");
         emit("BlackFlow@Roguelike@TreeHoleLeaveConfirm", AsstMsg::SubTaskCompleted);
         port->attempts = 0;
@@ -273,6 +282,182 @@ int main(int argc, char** argv)
         emit("BlackFlow@Roguelike@TreeHoleReturnResumeRetry");
         require(!session->terminated(), "previous return failures leaked into new return");
     });
+    test("post-event expanded inventory has a close route before node settlement", [&] {
+        const auto image = MAA_NS::imread(std::filesystem::path(argv[1]) /
+            "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/post-event-inventory.jpg");
+        require(!image.empty() && movement_inventory_page_visible(image), "expanded inventory fixture missing");
+        PipelineAnalyzer analyzer(image);
+        analyzer.set_tasks(Task.get("BlackFlow@Roguelike@Stages")->next);
+        const auto hit = analyzer.analyze();
+        require(hit.has_value() && hit->task_ptr->name == "BlackFlow@Roguelike@MovementInventoryCloseAfterNode",
+                "expanded inventory has no post-event recovery route");
+        require(hit->task_ptr->action == ProcessTaskAction::ClickSelf, "inventory was not closed");
+        const auto returned_map = MAA_NS::imread(std::filesystem::path(argv[1]) /
+            "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/post-event-map.jpg");
+        require(!returned_map.empty(), "returned map fixture missing");
+        const auto close = Task.get("BlackFlow@Roguelike@CloseEventAfterEncounter");
+        PipelineAnalyzer exit(returned_map); exit.set_tasks(close->next);
+        const auto map_hit = exit.analyze();
+        require(map_hit.has_value() && map_hit->task_ptr->name == "BlackFlow@Roguelike@Stages-MapReady" &&
+                    map_hit->task_ptr->action == ProcessTaskAction::DoNothing,
+                "returned map takes another event exit click");
+        const auto observe = Task.get("BlackFlow@Roguelike@CloseEventAfterEncounterObserve");
+        require(observe->action == ProcessTaskAction::DoNothing && observe->max_times == 4 &&
+                    observe->reduce_other_times.empty(), "passive exit observation repeats clicks or resets itself");
+        require(close->max_times == 3, "event exit clicks are unbounded");
+        require(hit->task_ptr->next == std::vector<std::string> { "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter" },
+                "inventory recovery bypasses node completion");
+
+        require(Task.get("BlackFlow@Roguelike@Stages-MapReady")->next.front() ==
+                    "BlackFlow@Roguelike@NodeCompletionAction", "inventory recovery bypasses node settlement");
+        require(recovery_retry_task("BlackFlow@Roguelike@MovementInventoryCloseAfterNodeWait") ==
+                    "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter", "recovery loses node settlement");
+    });
+    for (const char* file : {"walk-preview.jpg", "walk-preview-next.jpg", "processed-preview.png",
+                             "legacy-preview.jpg", "battle-intel-preview.jpg", "zero-cost/charged-preview.jpg"}) {
+        const auto name = std::string("inventory close resumes from actual node preview ") + file;
+        test(name.c_str(), [&] {
+            const auto preview = MAA_NS::imread(std::filesystem::path(argv[1]) /
+                "unit_test/MaaCore/fixtures/blackflow-move-preview/20261009" / file);
+            const auto map = MAA_NS::imread(std::filesystem::path(argv[1]) /
+                "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/inventory-close-map.jpg");
+            const auto expanded = MAA_NS::imread(std::filesystem::path(argv[1]) /
+                "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/inventory-close-expanded.jpg");
+            require(!preview.empty() && !map.empty() && !expanded.empty(), "return fixtures missing");
+            // Real resource graph and image matching. Only the game response to
+            // a dispatched click is supplied; this is not an original post-close recording.
+            for (const bool after_node : {false, true}) {
+                for (const int initial_state : {0, 1, 2}) { // map, preview, expanded box
+                    for (const bool first_cancel_missed : {false, true}) {
+                        std::string current = after_node ? "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter"
+                                                         : "BlackFlow@Roguelike@MovementInventoryClose-Enter";
+                        int state = initial_state, cancel_clicks = 0, collapse_clicks = 0;
+                        bool reached_map = false;
+                        for (int step = 0; step < 16; ++step) {
+                            PipelineAnalyzer analyzer(state == 0 ? map : state == 1 ? preview : expanded);
+                            analyzer.set_tasks(Task.get(current)->next);
+                            const auto hit = analyzer.analyze();
+                            require(hit.has_value(), "inventory return cannot classify an existing page");
+                            const auto& task = hit->task_ptr;
+                            require(task->name.find("RecoveryFailed") == std::string::npos &&
+                                        task->name.find("RecoveryRetry") == std::string::npos,
+                                    "recoverable preview waits a minute or stops the task");
+                            if (task->action == ProcessTaskAction::ClickRect) {
+                                require(state == 1 && task->specific_rect.x < 60 &&
+                                            task->specific_rect.x + task->specific_rect.width < 100,
+                                        "recovery clicked depart, inventory toggle or abandon");
+                                if (++cancel_clicks > 1 || !first_cancel_missed) state = 0;
+                            }
+                            else if (task->action == ProcessTaskAction::ClickSelf) {
+                                require(state == 2 && task->name.find("MovementInventoryClose") != std::string::npos,
+                                        "recovery clicks after the box has closed");
+                                ++collapse_clicks; state = 1;
+                            }
+                            if (task->name == "BlackFlow@Roguelike@MapPrepare-Ready" ||
+                                task->name == "BlackFlow@Roguelike@Stages-MapReady") {
+                                require(state == 0 && cancel_clicks == (initial_state == 0 ? 0 : first_cancel_missed ? 2 : 1) &&
+                                            collapse_clicks == (initial_state == 2 ? 1 : 0),
+                                        "recovery repeated a click after returning to the map");
+                                require(task->next.front() == (after_node ? "BlackFlow@Roguelike@NodeCompletionAction"
+                                                                         : "BlackFlow@Roguelike@Routing"),
+                                        "recovery lost its original continuation");
+                                reached_map = true; break;
+                            }
+                            current = task->name;
+                        }
+                        require(reached_map, "close-to-map loop only waits on node preview");
+                    }
+                }
+            }
+        });
+    }
+    test("after-node inventory return retains delayed collection popup handling", [&] {
+        const auto image = MAA_NS::imread(std::filesystem::path(argv[1]) /
+            "unit_test/MaaCore/fixtures/blackflow-encounter/20261024/cargo-reward.jpg");
+        require(!image.empty(), "collection popup fixture missing");
+        PipelineAnalyzer analyzer(image);
+        analyzer.set_tasks(Task.get("BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter")->next);
+        const auto hit = analyzer.analyze();
+        require(hit.has_value() && hit->task_ptr->name.find("CloseCollection") != std::string::npos &&
+                    hit->task_ptr->action == ProcessTaskAction::ClickSelf,
+                "inventory return discarded the existing delayed reward popup route");
+    });
+    test("inventory preview return invalidates the preserved viewport before resuming", [&] {
+        require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
+        require(session->set_current_floor(2) && session->update(map_frame(2, 1, 0)), "map");
+        session->mark_map_preserved_after_inventory();
+        require(session->consume_map_preserved_after_inventory(), "preserved map baseline missing");
+        const auto revision = session->map().snapshot().revision;
+        for (const char* task : {"BlackFlow@Roguelike@MovementInventoryClosePreview",
+                                 "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview"}) {
+            session->mark_map_preserved_after_inventory();
+            emit(task);
+            require(!session->consume_map_preserved_after_inventory(), "unexpected preview reused old map coordinates");
+            require(session->map().snapshot().revision == revision && !session->terminated(),
+                    "closing a preview changed map facts or terminated the run");
+        }
+    });
+    test("inventory close recovery rechecks the page and stops after three failures", [&] {
+        port->events.clear(); port->captures.clear(); port->images.clear();
+        parent.set_enable(true);
+        require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
+        for (int i = 0; i < 3; ++i) {
+            emit("BlackFlow@Roguelike@RecoveryFailed", AsstMsg::SubTaskStart,
+                 "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait");
+            if (i < 2) {
+                require(Task.get("BlackFlow@Roguelike@RecoveryRetryAction")->next.front() ==
+                            "BlackFlow@Roguelike@MovementInventoryClose-Enter", "recovery repeats a passive wait");
+                require(!session->terminated(), "recovery stopped before its budget");
+                // Successful passive wait callbacks must never refill the budget.
+                (void)plugin.verify(AsstMsg::SubTaskCompleted, json::object {
+                    { "subtask", "ProcessTask" }, { "details", json::object {
+                        { "task", "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait" } } } });
+            }
+        }
+        require(session->terminated() && session->result()->outcome == "inventory_close_recovery_exhausted",
+                "inventory close still recovers indefinitely");
+        require(!parent.get_enable(), "exhausted recovery did not stop the task");
+        require(port->events.back().action == "recovery.inventory_close" && port->captures.back(),
+                "close failure screenshot was not requested");
+        require(run_log_image_capture_mode("recovery.inventory_close", "failed", false, true) ==
+                    RunLogImageCaptureMode::ImmediateSnapshot, "failure capture waits for a stable screen");
+        json::array events;
+        for (const auto& event : port->events) {
+            if (event.action != "recovery.inventory_close") continue;
+            events.emplace_back(json::object {
+                { "schema_version", 1 }, { "level", std::string(to_string(event.level)) },
+                { "action", event.action }, { "phase", event.phase }, { "outcome", event.outcome },
+                { "task", event.task }, { "state", json::object { { "floor", 0 } } }, { "details", event.details },
+            });
+        }
+        require(events.size() == 3, "failure diagnostic sequence is incomplete");
+        std::ofstream("inventory-close-events.json") << json::value(events).format();
+        const auto expected = json::open(std::filesystem::path(argv[1]) /
+            "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/inventory-close-events.json");
+        require(expected.has_value() && *expected == json::value(events), "shared recovery diagnostic sample drifted");
+
+    });
+    test("inventory close budget resets only after recognized map progress or a new run", [&] {
+        const auto fail_close = [&](std::string task) {
+            emit("BlackFlow@Roguelike@RecoveryFailed", AsstMsg::SubTaskStart, std::move(task));
+        };
+        parent.set_enable(true);
+        require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
+        for (int cycle = 0; cycle < 2; ++cycle) {
+            for (int i = 0; i < 2; ++i) fail_close("BlackFlow@Roguelike@MovementInventoryClose");
+            require(!session->terminated(), "prior successful close consumed this episode budget");
+            (void)plugin.verify(AsstMsg::SubTaskCompleted, json::object {
+                { "subtask", "ProcessTask" }, { "details", json::object {
+                    { "task", "BlackFlow@Roguelike@Stages-MapReady" } } } });
+        }
+        for (int i = 0; i < 2; ++i) fail_close("BlackFlow@Roguelike@MovementInventoryCloseAfterNode");
+        require(!session->terminated(), "after-node close inherited old episode budget");
+        require(Task.get("BlackFlow@Roguelike@RecoveryRetryAction")->next.front() ==
+                    "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter", "after-node retry bypassed completion");
+        require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "new run");
+        fail_close("BlackFlow@Roguelike@MovementInventoryCloseTransitionWait");
+        require(!session->terminated(), "new run inherited old failures");
+    });
     test("refresh retries opening the dialog and has a finite failure route", [&] {
         const auto refresh = Task.get("BlackFlow@Roguelike@AutomationShopRefresh");
         require(refresh->next.size() == 2 && refresh->next.back() == refresh->name, "missed opening has no retry");
@@ -301,12 +486,14 @@ int main(int argc, char** argv)
         wallet.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
         wallet.set_use_char_model(true);
         const auto amounts = wallet.analyze();
-        require(amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "25"; }),
-                "captured wallet is not read as 25");
+        require(
+            amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "25"; }),
+            "captured wallet is not read as 25");
     });
     test("captured 002 pending refresh is recognized as network loading", [&] {
         const auto image = MAA_NS::imread(
-            std::filesystem::path(argv[1]) / "unit_test/MaaCore/fixtures/blackflow-recovery/shop-refresh-network-pending.jpg");
+            std::filesystem::path(argv[1]) /
+            "unit_test/MaaCore/fixtures/blackflow-recovery/shop-refresh-network-pending.jpg");
         require(!image.empty(), "pending refresh fixture is missing");
         OCRer loading(image);
         loading.set_task_info("LoadingText");
@@ -319,8 +506,9 @@ int main(int argc, char** argv)
         wallet.set_replace(Task.get<OcrTaskInfo>("NumberOcrReplace")->replace_map);
         wallet.set_use_char_model(true);
         const auto amounts = wallet.analyze();
-        require(amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "31"; }),
-                "captured pending wallet is not read as 31");
+        require(
+            amounts.has_value() && std::ranges::any_of(*amounts, [](const auto& row) { return row.text == "31"; }),
+            "captured pending wallet is not read as 31");
     });
     test("captured ordinary shop does not trigger network loading wait", [&] {
         const auto image = MAA_NS::imread(
@@ -333,7 +521,9 @@ int main(int argc, char** argv)
     test("initial core failure is recorded as an incomplete run", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");
         plugin.initial_core_recruitment_failed();
-        require(session->terminated() && session->result()->next_action == "stop_task", "core failure was not terminal");
+        require(
+            session->terminated() && session->result()->next_action == "stop_task",
+            "core failure was not terminal");
         require(session->result()->outcome == "initial_core_recruitment_failed", "incorrect result");
         require(port->events.back().action == "recovery.initial_core_recruitment", "failure log missing");
     });
@@ -343,7 +533,7 @@ int main(int argc, char** argv)
                 std::filesystem::path(argv[1]) /
                 ("unit_test/MaaCore/fixtures/blackflow-difficulty/home-" + std::to_string(difficulty) + ".jpg"));
             require(!image.empty(), "difficulty screenshot missing");
-            DifficultyProbe selection({}, nullptr, "Roguelike", config, nullptr);
+            DifficultyProbe selection({ }, nullptr, "Roguelike", config, nullptr);
             require(selection.detect_blackflow_home_difficulty(image) == difficulty, "wrong applied difficulty");
         });
     }
@@ -397,9 +587,11 @@ int main(int argc, char** argv)
     });
     merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
     store_identity_regressions(std::filesystem::path(argv[1]), test);
+    encounter_evidence_regressions(std::filesystem::path(argv[1]), test);
     move_preview_regressions(std::filesystem::path(argv[1]), test);
     employ_capture_regressions(std::filesystem::path(argv[1]), test);
     expedition_picker_regressions(std::filesystem::path(argv[1]), test);
+    expedition_evidence_regressions(std::filesystem::path(argv[1]), test);
     opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
     linked_encounter_regressions(std::filesystem::path(argv[1]), test);
     reveal_session_regressions(std::filesystem::path(argv[1]), test);

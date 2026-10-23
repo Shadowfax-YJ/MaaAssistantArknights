@@ -422,8 +422,61 @@
         "postDelay": 600,
         "next": [
             "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@Stages-MapReady",
+            "BlackFlow@Roguelike@Stages-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode",
+            "BlackFlow@Roguelike@CloseEventAfterEncounterObserve",
+            "BlackFlow@Roguelike@Stages"
+        ],
+        "Doc": "事件退出后先分流地图和意外展开的零件箱；持续看到结束按钮才有界重试。",
+        "maxTimes": 3,
+        "exceededNext": [
+            "BlackFlow@Roguelike@Stages"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@CloseEventAfterEncounterObserve*4"
+        ]
+    },
+    "BlackFlow@Roguelike@CloseEventAfterEncounterObserve": {
+        "baseTask": "BlackFlow@Roguelike@CloseEventAfterEncounter",
+        "template": "BlackFlow@Roguelike@CloseEvent.png",
+        "action": "DoNothing",
+        "reduceOtherTimes": [],
+        "postDelay": 300,
+        "maxTimes": 4,
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@Stages-MapReady",
+            "BlackFlow@Roguelike@Stages-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode",
             "#self",
             "BlackFlow@Roguelike@Stages"
+        ],
+        "exceededNext": [
+            "BlackFlow@Roguelike@CloseEventAfterEncounter",
+            "BlackFlow@Roguelike@Stages"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseAfterNode": {
+        "Doc": "只在展开标志阳性时收起；回图仍交给 Stages 完成当前节点，不能直接进入 Routing。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryResetCollapse",
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+        "postDelay": 1000,
+        "maxTimes": 3,
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter"
+        ],
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "BlackFlow@Roguelike@NodeSettlementPopups#next",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview",
+            "BlackFlow@Roguelike@Stages_default#next",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodeTransitionWait"
         ]
     },
     "BlackFlow@Roguelike@CloseInterview": {
@@ -2569,7 +2622,10 @@
         "reduceOtherTimes": [
             "BlackFlow@Roguelike@NextLevel*30",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut*3",
-            "BlackFlow@Roguelike@MovementInventoryClose*3"
+            "BlackFlow@Roguelike@MovementInventoryClose*3",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodeTransitionWait*20"
         ]
     },
     "BlackFlow@Roguelike@MapPrepare-ZoomOut": {
@@ -2812,6 +2868,7 @@
             "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
         ],
         "maxTimes": 3,
@@ -2830,11 +2887,13 @@
             "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
         ],
         "maxTimes": 2,
         "exceededNext": [
             "BlackFlow@Roguelike@MovementInventoryClose",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
         ]
     },
@@ -2848,6 +2907,7 @@
             "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview",
             "#self"
         ],
         "maxTimes": 20,
@@ -2872,8 +2932,43 @@
             "BlackFlow@Roguelike@MovementInventoryCloseDestinationHunted",
             "BlackFlow@Roguelike@MapPrepare-Ready",
             "BlackFlow@Roguelike@MapPrepare-ZoomOut",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview",
             "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait"
         ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryClosePreview": {
+        "Doc": "收起零件箱后若露出节点预览，只点击左侧空白处关闭；每次重新识别地图，禁止点击前往或退出探索。",
+        "baseTask": "BlackFlow@Roguelike@MovePreviewEnter",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
+        "action": "ClickRect",
+        "specificRect": [1, 154, 45, 261],
+        "postDelay": 300,
+        "maxTimes": 3,
+        "next": ["BlackFlow@Roguelike@MovementInventoryClose-Enter"],
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"],
+        "reduceOtherTimes": []
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview": {
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryClosePreview",
+        "template": [
+            "BlackFlow@Roguelike@MovePreviewEnter.png",
+            "BlackFlow@Roguelike@MovePreviewWalkEnter.png",
+            "BlackFlow@Roguelike@MovePreviewProcessedEnter.png"
+        ],
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter"
+        ]
+    },
+    "BlackFlow@Roguelike@MovementInventoryCloseAfterNodeTransitionWait": {
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait",
+        "next": [
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter"
+        ],
+        "reduceOtherTimes": []
     },
     "BlackFlow@Roguelike@MovementInventoryContents": {
         "algorithm": "OcrDetect",
@@ -4759,7 +4854,13 @@
             "BlackFlow@Roguelike@Stages-ZoomOut*3",
             "BlackFlow@Roguelike@MovementInventoryClose*3",
             "BlackFlow@Roguelike@Page-Door-Wait*50",
-            "BlackFlow@Roguelike@EmployLeave*3"
+            "BlackFlow@Roguelike@EmployLeave*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode*3",
+            "BlackFlow@Roguelike@CloseEventAfterEncounter*3",
+            "BlackFlow@Roguelike@CloseEventAfterEncounterObserve*4",
+            "BlackFlow@Roguelike@MovementInventoryClosePreview*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview*3",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNodeTransitionWait*20"
         ]
     },
     "BlackFlow@Roguelike@Stages-ZoomOut": {
@@ -4776,6 +4877,7 @@
             "BlackFlow@Roguelike@SacrificePicker",
             "BlackFlow@Roguelike@Stages@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@Stages@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@MovementInventoryCloseAfterNode",
             "BlackFlow@Roguelike@Stages-MapReady",
             "BlackFlow@Roguelike@Stages-ZoomOut"
         ]

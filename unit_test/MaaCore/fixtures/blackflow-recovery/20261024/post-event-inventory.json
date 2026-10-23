@@ -1,0 +1,13 @@
+{
+  "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261024-041014-376565\\images\\003420-task-finished-completed.jpg",
+  "sha256": "3641592e89a7d7aad80a020eba1a85ed4fa43b9d1e258b9312f20e608a61c161",
+  "run": "run-20261024-041014-376565",
+  "sequence": 3420,
+  "event": "好奇心之死",
+  "observed": "After two CloseEventAfterEncounter clicks the final page is the expanded inventory; no intermediate closing frames were retained.",
+  "map_negative": {
+    "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261024-041014-376565\\floor-5\\BF-A1-177.evidence-1.jpg",
+    "sha256": "19e10274abaf0e5cdb4a7ed19e57be550da4e35221a205c3ad2b849a9caf28dc",
+    "observation": "map frame before this event, used to prove that returned maps take precedence over repeated exit clicks"
+  }
+}

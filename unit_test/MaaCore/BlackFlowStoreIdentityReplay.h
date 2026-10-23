@@ -100,6 +100,17 @@ void store_identity_regressions(const std::filesystem::path& repo, Test&& test)
 {
     using namespace asst;
     using namespace asst::blackflow;
+    test("store re-entry and fruit sale invalidate the shelf cache", [&] {
+        StoreIdentityScenario s;
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/eerie-shelf.jpg");
+        BlackFlowStoreReplayAccess::cache_shelf(s.store, image);
+        s.enter_store();
+        require(!BlackFlowStoreReplayAccess::cache_valid(s.store), "store re-entry kept old shelf");
+        BlackFlowStoreReplayAccess::cache_shelf(s.store, image);
+        require(BlackFlowStoreReplayAccess::confirm_fruit_sale(s.store), "fruit sale");
+        require(!BlackFlowStoreReplayAccess::cache_valid(s.store), "sale-triggered refresh kept old shelf");
+        require(BlackFlowStoreReplayAccess::queued_refresh_index(s.store) == 1, "refresh lost full shelf capture");
+    });
     for (const int prior_count : { 1, 2 }) {
         const auto name = "outer shop retains " + std::to_string(prior_count) + " refreshes after a tree-hole return";
         test(name.c_str(), [&] {

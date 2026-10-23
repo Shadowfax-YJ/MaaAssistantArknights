@@ -377,6 +377,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
     std::string reset_error;
     const auto reset_to_start = [&] {
         bool observation_failed = false;
+        int reset_swipes = 0;
         return scroll_inventory_to_start(
             [&] {
                 if (observation_failed || need_exit()) {
@@ -390,6 +391,8 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
                 return !input_failed;
             },
             [&] {
+                ++reset_swipes;
+                const cv::Mat previous_reset_image = reset_image;
                 InventoryFrame current;
                 if (!wait_for_inventory_stability(current, reset_image, &reset_error)) {
                     frame.page_lost = current.page_lost;
@@ -397,8 +400,14 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
                     return false;
                 }
                 const bool unchanged = inventory_name_layout_unchanged(reset_frame.visible_names, current.visible_names);
+                const bool early_confirmation = inventory_reset_can_confirm_early(
+                    previous_reset_image,
+                    reset_image,
+                    reset_frame.visible_names,
+                    current.visible_names);
                 reset_frame = std::move(current);
-                return unchanged;
+                // Ambiguous/repeated cards keep the old four-gesture lower bound.
+                return unchanged && (early_confirmation || reset_swipes >= InventoryMaximumSwipes - 1);
             });
     };
     bool reset = reset_to_start();

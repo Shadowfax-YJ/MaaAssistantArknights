@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$CoreBuildDirectory, [string]$OutputDirectory)
+param([Parameter(Mandatory=$true)][string]$CoreBuildDirectory, [string]$OutputDirectory, [string]$Filter)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $core = (Resolve-Path $CoreBuildDirectory).Path
@@ -46,7 +46,8 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $env:PATH = $core+'\bin\RelWithDebInfo;'+$dep+'\bin;'+$env:PATH
 Push-Location $out
 try {
-    & ($out+'\replay.exe') $repo > replay-output.txt
+    if ($Filter) { & ($out+'\replay.exe') $repo $Filter > replay-output.txt }
+    else { & ($out+'\replay.exe') $repo > replay-output.txt }
     $result = $LASTEXITCODE
     Get-Content replay-output.txt | Where-Object { $_ -match '^(PASS|FAIL|[0-9]+ passed)' }
     exit $result

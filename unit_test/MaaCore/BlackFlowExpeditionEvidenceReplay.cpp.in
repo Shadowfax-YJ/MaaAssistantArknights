@@ -1,0 +1,765 @@
+// Actual producer methods. Recognition/controller/archive boundaries are controlled; no device input.
+#include "Common/AsstTypes.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
+#include <algorithm>
+#include <format>
+#include <fstream>
+#include <filesystem>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <opencv2/core.hpp>
+#include <optional>
+#include <random>
+#include <stdexcept>
+#define LogTraceFunction
+using namespace asst;
+
+struct
+{
+    template <class... T>
+    void info(T&&...)
+    {
+    }
+
+    template <class... T>
+    void warn(T&&...)
+    {
+    }
+
+    template <class... T>
+    void error(T&&...)
+    {
+    }
+} Log;
+
+struct
+{
+    struct Info
+    {
+        Rect specific_rect { 685, 185, 85, 80 };
+    } info;
+
+    Info* get(const std::string& name)
+    {
+        info.specific_rect =
+            name.ends_with("StageEncounterJudgeClick") ? Rect { 600, 350, 80, 60 } : Rect { 685, 185, 85, 80 };
+        return &info;
+    }
+    void set_task_base(const std::string&, const std::string&) {}
+} Task;
+
+namespace asst
+{
+enum class AsstMsg { SubTaskError };
+namespace RoguelikeTheme
+{
+inline const std::string BlackFlow = "BlackFlow";
+}
+
+struct ReplayConfig
+{
+    struct Oper
+    {
+        int elite = 1;
+    };
+
+    struct Status
+    {
+        std::map<std::string, Oper> opers;
+    } value;
+
+    std::string theme = "BlackFlow";
+
+    auto& status() { return value; }
+
+    auto& get_theme() { return theme; }
+};
+
+struct ReplayParent
+{
+    bool enabled = true;
+
+    void set_enable(bool value) { enabled = value; }
+};
+
+struct ReplayController
+{
+    int page = 1, selected_slot = -1, choice_clicks = 0, depart_clicks = 0, back_clicks = 0, advances = 0;
+    bool input_ok = true, choice_effective = true, depart_ok = true, back_ok = true, stopped = false;
+    bool unstable_names = false, empty = false, stop_on_depart = false, advance_ok = true;
+    std::vector<int> after_depart { 3 };
+    size_t next_frame = 0;
+    std::vector<std::string> names { "古米", "伊桑", "凯尔希·思衡托" };
+
+    cv::Mat get_image()
+    {
+        if (empty) {
+            return { };
+        }
+        if (depart_clicks && next_frame < after_depart.size()) {
+            page = after_depart[next_frame++];
+        }
+        cv::Mat im(720, 1280, CV_8UC3, cv::Scalar());
+        im.at<cv::Vec3b>(0, 0)[0] = page;
+        im.at<cv::Vec3b>(0, 0)[1] = selected_slot + 1;
+        return im;
+    }
+
+    bool click(const Point&)
+    {
+        ++choice_clicks;
+        if (input_ok && choice_effective) {
+            page = 2;
+        }
+        return input_ok;
+    }
+
+    bool click(const Rect& rect)
+    {
+        if (rect.x == 600) {
+            if (!advance_ok) {
+                return false;
+            }
+            ++advances;
+            return true;
+        }
+        if (!input_ok) {
+            return false;
+        }
+        selected_slot = (rect.x - 685) / 113;
+        return true;
+    }
+};
+
+inline ReplayController* active;
+constexpr std::string_view Prefix = "BlackFlow@Roguelike@";
+inline size_t random_index(size_t) { return 0; }
+inline bool recognize(const cv::Mat& image, std::string_view suffix) {
+    const int page = image.empty() ? 0 : image.at<cv::Vec3b>(0, 0)[0];
+    return (suffix == "SacrificePicker" && page == 2) || (suffix.starts_with("MapPrepare-") && page == 4) ||
+           (suffix == "SacrificePopupClose" && page == 12);
+}
+namespace blackflow::perception {
+inline std::vector<Rect> sacrifice_visible_items(const cv::Mat&) { return {{685,185,85,80}}; }
+inline bool sacrifice_item_selected(const cv::Mat&, const Rect&) { return true; }
+inline std::string sacrifice_selected_name(const cv::Mat&) { return "种子"; }
+}
+
+struct OCRer
+{
+    struct Result
+    {
+        std::string text;
+    };
+
+    std::vector<Result> result;
+    cv::Mat im;
+    std::string task;
+
+    OCRer(const cv::Mat& image) :
+        im(image)
+    {
+    }
+
+    void set_task_info(std::string_view value) { task = value; }
+
+    bool analyze()
+    {
+        result.clear();
+        if (im.empty()) {
+            return false;
+        }
+        auto page = im.at<cv::Vec3b>(0, 0)[0];
+        if (task.ends_with("ExpeditionOperDescription") && page == 2) {
+            int slot = int(im.at<cv::Vec3b>(0, 0)[1]) - 1;
+            if (slot >= 0 && slot < int(active->names.size())) {
+                static int sample = 0;
+                result.push_back(
+                    { "干员" + (active->unstable_names && ++sample % 2 ? "未确认" : active->names[slot]) +
+                      "将会在本区域探索" });
+            }
+        }
+        else if (task.ends_with("StageEncounterOcr") && (page == 3 || page == 7 || page == 8 || page == 10)) {
+            result.push_back({ page == 7 ? "其他事件" : "未涉足之树" });
+        }
+        else if (task == "LoadingText" && (page == 5 || page == 9)) {
+            result.push_back({ "Loading" });
+        }
+        else if (task.ends_with("DataSyncConfirm") && (page == 10 || page == 11)) {
+            result.push_back({ "数据已更新" });
+        }
+        return !result.empty();
+    }
+
+    const auto& get_result() const { return result; }
+};
+
+struct Matcher
+{
+    cv::Mat im;
+    std::string task;
+
+    Matcher(const cv::Mat& image) :
+        im(image)
+    {
+    }
+
+    void set_task_info(const std::string& value) { task = value; }
+
+    bool analyze() const
+    {
+        if (im.empty()) {
+            return false;
+        }
+        int page = im.at<cv::Vec3b>(0, 0)[0];
+        return (task.ends_with("CloseCollection") && page == 13) ||
+               (task.ends_with("ExpeditionPicker") && (page == 2 || page == 8)) ||
+               ((task.ends_with("MapPrepare-Ready") || task.ends_with("MapPrepare-ZoomOut")) &&
+                (page == 4 || page == 9 || page == 11));
+    }
+};
+
+struct PipelineAnalyzer : Matcher
+{
+    using Matcher::Matcher;
+
+    void set_tasks(std::initializer_list<std::string> tasks) { task = *tasks.begin(); }
+};
+class RoguelikeStageEncounterTaskPlugin;
+
+struct ProcessTask
+{
+    RoguelikeStageEncounterTaskPlugin& plugin;
+    std::string task;
+
+    ProcessTask(RoguelikeStageEncounterTaskPlugin& p, std::initializer_list<std::string> tasks) :
+        plugin(p),
+        task(*tasks.begin())
+    {
+    }
+
+    auto& set_retry_times(int) { return *this; }
+
+    bool run();
+};
+
+class RoguelikeStageEncounterTaskPlugin
+{
+public:
+    ReplayConfig config;
+    ReplayConfig* m_config = &config;
+    ReplayParent parent;
+    ReplayParent* m_task_ptr = &parent;
+    ReplayController controller;
+
+    struct Option
+    {
+        bool enabled = true;
+        cv::Mat templ;
+        std::string text, red_description;
+    };
+
+    std::vector<Option> m_option_list { { true, { }, "尝试探索树的内部", "" },
+                                        { false, { }, "尝试探索树的源头", "" },
+                                        { true, { }, "离开", "" } };
+    std::vector<int> m_option_y_in_view { 100, 200, 300 };
+    cv::Mat m_option_list_image;
+    std::optional<blackflow::ExpeditionContext> m_expedition_context;
+    std::function<std::optional<blackflow::ExpeditionContext>()> m_expedition_context_provider;
+    std::function<void(std::string_view)> m_expedition_dispatch_observer;
+    std::function<bool(std::string_view, json::object, const cv::Mat&)> m_expedition_evidence_observer;
+    std::string m_expedition_pending_operator;
+    bool m_expedition_finished = false;
+    std::optional<size_t> m_expedition_initial_choice;
+
+    struct ExpeditionEvidence
+    {
+        json::object details;
+        int sequence = 0, choice_attempt = 0, dispatch_attempt = 0;
+        bool candidates_saved = false, choice_clicked = false, choice_confirmed = false, failed = false;
+        cv::Mat confirmation_image;
+        std::string confirmation_basis;
+    } m_expedition_evidence;
+
+    /*m_sacrifice*/
+    /*m_encounter_choice*/
+    std::function<std::optional<blackflow::SacrificeContext>()> m_sacrifice_context_provider;
+    std::function<bool(std::string_view, std::string_view, json::object, const cv::Mat&)> m_event_detail_observer;
+    int m_lake_fairy_initial_choice_index = 0;
+    std::optional<int> m_lake_fairy_plan;
+    bool m_lake_fairy_unique_choice_selected = false;
+
+    bool need_exit() const { return controller.stopped; }
+
+    void sleep(int) { }
+
+    auto* ctrler()
+    {
+        active = &controller;
+        return &controller;
+    }
+
+    bool move_to_analyzed_option(size_t) { return true; }
+
+    std::optional<Rect> wait_for_analyzed_option_stable(size_t) { return Rect { 100, 100, 100, 30 }; }
+
+    int hp(const cv::Mat&) { return -1; }
+
+    static bool save_img(const cv::Mat&, std::string_view) { return true; }
+
+    std::optional<std::string> next_event(const std::string&)
+    {
+        ++controller.advances;
+        return std::nullopt;
+    }
+
+    void refresh_expedition_context();
+    bool capture_expedition_candidates(const cv::Mat&);
+    bool report_expedition(std::string_view, json::object = { }, const cv::Mat& = { });
+    bool abort_expedition(std::string_view);
+    bool handle_expedition_choice();
+    bool confirm_expedition_dispatch(const cv::Mat&, std::string_view);
+    bool wait_for_secondary_event(std::string_view);
+    bool handle_expedition_picker();
+    bool select_analyzed_option(size_t);
+    void reset_in_run_variables();
+    bool report_encounter_choice(std::string_view, json::object = {}, const cv::Mat& = {});
+    bool prepare_encounter_choice(std::string_view, int, const cv::Mat&);
+    bool plan_encounter_choice(size_t, std::string_view);
+    bool randomize_encounter_choice_order(std::vector<size_t>&);
+    bool confirm_encounter_choice(const cv::Mat&, std::string_view);
+    bool confirm_cargo_choice();
+    bool refresh_sacrifice_context();
+    bool report_sacrifice(std::string_view, json::object, const cv::Mat&);
+    bool handle_sacrifice_event();
+    bool handle_sacrifice_picker();
+    bool finish_sacrifice_civilization();
+    std::optional<std::vector<std::string>> scan_sacrifice_natural_items(std::string_view) { return std::vector<std::string>{"种子"}; }
+    json::object basic_info_with_what(const char*) { return {}; }
+    void callback(AsstMsg, json::object) {}
+    struct OptionAnalyzer {
+        cv::Mat image;
+        std::vector<Option> options;
+        OptionAnalyzer(const cv::Mat& im):image(im){}
+        void set_theme(const std::string&) {}
+        bool analyze() {
+            if (image.empty()) return false;
+            int page=image.at<cv::Vec3b>(0,0)[0];
+            options = page == 2 ? std::vector<Option>{{true,{},"领取奖励",""}} : std::vector<Option>{{true,{},"原始选项",""}};
+            return true;
+        }
+        const auto& get_result() const {return options;}
+    };
+};
+
+bool ProcessTask::run()
+{
+    auto& c = plugin.controller;
+    if (plugin.need_exit()) {
+        return false;
+    }
+    if (task.ends_with("ExpeditionDepart")) {
+        if (!c.depart_ok) {
+            return false;
+        }
+        ++c.depart_clicks;
+        if (c.stop_on_depart) {
+            c.stopped = true;
+        }
+        return true;
+    }
+    if (task.ends_with("ExpeditionBack")) {
+        ++c.back_clicks;
+        return c.back_ok;
+    }
+    if (task.ends_with("StageEncounterLeaveConfirm")) {
+        return c.page == 2;
+    }
+    if (task.ends_with("SacrificeConfirm")) c.page = 3;
+    return true;
+}
+}
+
+/*refresh_expedition_context*/
+/*report_expedition*/
+/*abort_expedition*/
+/*capture_expedition_candidates*/
+/*handle_expedition_choice*/
+/*confirm_expedition_dispatch*/
+/*wait_for_secondary_event*/
+/*handle_expedition_picker*/
+/*select_analyzed_option*/
+/*reset_in_run_variables*/
+/*report_encounter_choice*/
+/*prepare_encounter_choice*/
+/*plan_encounter_choice*/
+/*randomize_encounter_choice_order*/
+/*confirm_encounter_choice*/
+/*confirm_cargo_choice*/
+/*refresh_sacrifice_context*/
+/*report_sacrifice*/
+/*handle_sacrifice_event*/
+/*handle_sacrifice_picker*/
+/*finish_sacrifice_civilization*/
+void require(bool value, const char* message)
+{
+    if (!value) {
+        throw std::runtime_error(message);
+    }
+}
+
+struct Scenario
+{
+    RoguelikeStageEncounterTaskPlugin plugin;
+    json::array events;
+    std::string fail_phase;
+    int route_updates = 0;
+
+    Scenario(std::string name = "古米", int elite = 1, int choice = 0, int destination = 3)
+    {
+        static std::uint64_t page_revision = 0;
+        plugin.m_expedition_context = blackflow::ExpeditionContext { 1, ++page_revision, 2, { name } };
+        plugin.config.value.opers[name].elite = elite;
+        plugin.m_option_list[0].enabled = choice == 0;
+        plugin.m_option_list[1].enabled = choice == 1;
+        plugin.controller.after_depart = { destination };
+        plugin.m_expedition_dispatch_observer = [&](auto) {
+            ++route_updates;
+        };
+        plugin.m_expedition_evidence_observer = [&](auto phase, json::object details, const cv::Mat& im) {
+            if (phase == fail_phase) {
+                return false;
+            }
+            events.emplace_back(
+                json::object { { "phase", std::string(phase) },
+                               { "details", std::move(details) },
+                               { "has_image", !im.empty() } });
+            return true;
+        };
+        require(plugin.capture_expedition_candidates(plugin.ctrler()->get_image()), "candidate save");
+    }
+
+    bool choose() { return plugin.handle_expedition_choice(); }
+
+    bool dispatch() { return plugin.handle_expedition_picker(); }
+
+    int count(std::string_view phase) const
+    {
+        int n = 0;
+        for (const auto& e : events) {
+            n += e.get("phase", std::string()) == phase;
+        }
+        return n;
+    }
+};
+
+int main(int argc, char** argv)
+{
+    int passed = 0, failed = 0;
+    json::array fixtures;
+    const auto test = [&](const std::string& name, auto&& body) {
+        try {
+            body();
+            ++passed;
+        }
+        catch (const std::exception& e) {
+            ++failed;
+            std::cerr << "FAIL " << name << ": " << e.what() << '\n';
+        }
+    };
+    for (auto name : { "古米", "伊桑", "凯尔希·思衡托" }) {
+        for (int elite : { -1, 1, 2 }) {
+            for (int choice : { 0, 1 }) {
+                for (int page : { 3, 4 }) {
+                    test(
+                        std::string(name) + std::to_string(elite) + std::to_string(choice) + std::to_string(page),
+                        [&] {
+                            Scenario s(name, elite, choice, page);
+                            require(s.choose(), "choice rejected");
+                            require(s.dispatch(), "dispatch failed");
+                            require(
+                                s.count("choice_confirmed") == 1 && s.count("dispatch_confirmed") == 1 &&
+                                    s.route_updates == 1,
+                                "missing/duplicate archive dispatch");
+                            require(s.plugin.controller.depart_clicks == 1, "depart duplicated");
+                            const auto& details = s.events.at(s.events.size() - 1).at("details");
+                            require(details.get("operator_name", std::string()) == name, "wrong actual name");
+                            require(
+                                details.get("selected_option_index_from_top", 0) == choice + 1,
+                                "wrong choice base");
+                            require(
+                                elite < 0 ? details.at("elite_before").is_null()
+                                          : details.get("elite_before", -1) == elite,
+                                "pre-dispatch elite mutated");
+                            require(
+                                s.plugin.confirm_expedition_dispatch(
+                                    s.plugin.controller.get_image(),
+                                    "map_after_depart"),
+                                "idempotence rejected");
+                            require(
+                                s.count("dispatch_confirmed") == 1 && s.route_updates == 1,
+                                "duplicate callback counted twice");
+                            if (std::string_view(name) == "凯尔希·思衡托" && elite == 1) {
+                                require(
+                                    s.plugin.config.value.opers[name].elite == (choice == 0 ? 2 : 1),
+                                    "core promotion behavior changed");
+                            }
+                            if (elite == 1) {
+                                for (const auto& e : s.events) {
+                                    fixtures.emplace_back(e);
+                                }
+                            }
+                        });
+                }
+            }
+        }
+    }
+    for (const auto phase : { "choice_planned",
+                              "choice_attempt",
+                              "choice_click_issued",
+                              "choice_confirmed",
+                              "dispatch_prepared",
+                              "dispatch_attempt",
+                              "dispatch_click_issued",
+                              "secondary_event",
+                              "dispatch_confirmed" }) {
+        test(std::string("persistence failure ") + phase, [&] {
+            Scenario s;
+            s.fail_phase = phase;
+            if (s.choose()) {
+                (void)s.dispatch();
+            }
+            require(!s.plugin.parent.enabled, "failure did not stop parent");
+            require(s.count("dispatch_confirmed") == 0 && !s.route_updates, "failed persistence committed dispatch");
+            if (std::string_view(phase) == "dispatch_prepared") {
+                require(!s.plugin.controller.depart_clicks, "depart before saved image");
+            }
+        });
+    }
+    test("ineffective option clicks", [&] {
+        Scenario s;
+        s.plugin.controller.choice_effective = false;
+        require(!s.choose(), "ineffective choice accepted");
+        require(s.plugin.controller.choice_clicks == 3 && !s.count("choice_confirmed"), "choice retry/receipt wrong");
+    });
+    test("input rejection", [&] {
+        Scenario s;
+        s.plugin.controller.input_ok = false;
+        require(!s.choose(), "input rejection ignored");
+        require(!s.count("choice_confirmed") && s.count("choice_input_failed") == 3, "failed input confirmed");
+    });
+    test("departure rejection", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.depart_ok = false;
+        require(!s.dispatch(), "failed departure accepted");
+        require(!s.count("dispatch_confirmed") && !s.route_updates, "departure failure fact");
+    });
+    for (int page : { 2, 5, 7, 8, 9, 10, 11 }) {
+        test("bounded unconfirmed page " + std::to_string(page), [&] {
+            Scenario s("古米", 1, 0, page);
+            require(s.choose(), "choice");
+            require(!s.dispatch(), "unconfirmed page accepted");
+            require(!s.plugin.parent.enabled && !s.count("dispatch_confirmed"), "timeout did not stop");
+        });
+    }
+    test("transition saved before advance", [&] {
+        Scenario s;
+        s.plugin.controller.after_depart = { 6, 5, 3 };
+        require(s.choose() && s.dispatch(), "transition failed");
+        require(
+            s.count("transition_before_advance") == 1 && s.plugin.controller.advances == 1,
+            "transition evidence gap");
+    });
+    test("transition save failure prevents advance", [&] {
+        Scenario s;
+        s.fail_phase = "transition_before_advance";
+        s.plugin.controller.after_depart = { 6 };
+        require(s.choose(), "choice");
+        require(!s.dispatch() && !s.plugin.controller.advances, "advanced past failed image");
+    });
+    test("unstable OCR cannot dispatch", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.unstable_names = true;
+        (void)s.dispatch();
+        require(!s.plugin.controller.depart_clicks && !s.count("dispatch_confirmed"), "unstable name dispatched");
+    });
+    test("unavailable operators cancel", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.names = { "其他干员" };
+        require(s.dispatch(), "cancel failed");
+        require(s.count("cancelled") == 1 && !s.count("dispatch_confirmed"), "cancel became success");
+    });
+    test("cancel back failure stops", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.names = { };
+        s.plugin.controller.back_ok = false;
+        require(!s.dispatch() && !s.plugin.parent.enabled, "back failure not stopped");
+    });
+    test("user stop is unresolved", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.stopped = true;
+        require(!s.dispatch() && !s.count("dispatch_confirmed"), "user stop dispatch");
+    });
+    test("empty frames do not confirm", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.empty = true;
+        require(!s.dispatch() && !s.count("dispatch_confirmed"), "empty confirmed");
+    });
+    test("no candidate archive no choice input", [&] {
+        Scenario s;
+        s.plugin.m_expedition_evidence.candidates_saved = false;
+        require(!s.choose() && !s.plugin.controller.choice_clicks, "choice without candidates");
+    });
+    test("no choice receipt no dispatch", [&] {
+        Scenario s;
+        s.plugin.controller.page = 2;
+        require(!s.dispatch() && !s.plugin.controller.depart_clicks, "untracked picker dispatched");
+    });
+    test("run reset clears pending evidence", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.m_expedition_pending_operator = "古米";
+        s.plugin.reset_in_run_variables();
+        require(
+            !s.plugin.m_expedition_initial_choice && s.plugin.m_expedition_pending_operator.empty() &&
+                !s.plugin.m_expedition_evidence.candidates_saved,
+            "state leaked into new run");
+    });
+    test("new event resets selection", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.m_expedition_context_provider = [] {
+            return std::optional(blackflow::ExpeditionContext { 1, 3, 2, { "伊桑" } });
+        };
+        s.plugin.refresh_expedition_context();
+        require(
+            !s.plugin.m_expedition_initial_choice && !s.plugin.m_expedition_evidence.candidates_saved,
+            "selection leaked into next node");
+    });
+    test("context switch cannot confirm pending dispatch", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.m_expedition_pending_operator = "古米";
+        s.plugin.m_expedition_context_provider = [] {
+            return std::optional(blackflow::ExpeditionContext { 2, 3, 2, { "伊桑" } });
+        };
+        s.plugin.refresh_expedition_context();
+        require(!s.plugin.parent.enabled && !s.route_updates, "stale dispatch committed");
+    });
+    test("ordinary mode still returns from picker", [&] {
+        Scenario s;
+        s.plugin.m_expedition_context.reset();
+        s.events.clear();
+        require(s.dispatch() && s.plugin.controller.back_clicks == 1 && s.events.empty(), "ordinary picker changed");
+    });
+    test("choice text change does not reuse old planned identity", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        const auto clicks = s.plugin.controller.choice_clicks;
+        s.plugin.m_option_list[0].text = "其他选项";
+        require(!s.choose() && s.plugin.controller.choice_clicks == clicks, "clicked changed choice");
+    });
+    test("ambiguous branch text stays unknown", [&] {
+        Scenario s;
+        s.plugin.m_option_list[0].text = "探索内部或源头";
+        require(s.choose() && s.dispatch(), "dispatch");
+        require(
+            s.events.at(s.events.size() - 1).at("details").at("selected_branch").is_null(),
+            "ambiguous text inferred");
+    });
+    test("stop immediately after departure is unresolved", [&] {
+        Scenario s;
+        require(s.choose(), "choice");
+        s.plugin.controller.stop_on_depart = true;
+        require(!s.dispatch() && !s.count("dispatch_confirmed") && !s.route_updates, "stop became confirmation");
+    });
+    test("failed final persistence precedes predicted elite mutation", [&] {
+        Scenario s("凯尔希·思衡托");
+        s.fail_phase = "dispatch_confirmed";
+        require(s.choose() && !s.dispatch(), "save failure ignored");
+        require(
+            s.plugin.config.value.opers["凯尔希·思衡托"].elite == 1 && !s.route_updates,
+            "predicted upgrade committed before evidence");
+    });
+    test("each animation advance has its own saved frame", [&] {
+        Scenario s;
+        s.plugin.controller.after_depart = { 6, 6, 6, 3 };
+        require(s.choose() && s.dispatch(), "transition failed");
+        require(s.count("transition_before_advance") == 3 && s.plugin.controller.advances == 3, "uncaptured advance");
+    });
+    test("failed advance input is unresolved", [&] {
+        Scenario s;
+        s.plugin.controller.after_depart = { 6 };
+        s.plugin.controller.advance_ok = false;
+        require(s.choose() && !s.dispatch() && !s.count("dispatch_confirmed"), "failed advance confirmed");
+    });
+    test("unavailable choices leave without dispatch", [&] {
+        Scenario s;
+        s.plugin.m_option_list[0].enabled = false;
+        require(
+            s.choose() && s.count("cancelled") == 1 && !s.plugin.controller.choice_clicks,
+            "no enabled choice unrecorded");
+    });
+    test("no eligible operator leaves a cancellation reason before any choice", [&] {
+        Scenario s;
+        s.plugin.m_expedition_context->operators.clear();
+        require(
+            s.choose() && s.count("cancelled") == 1 && !s.plugin.controller.choice_clicks,
+            "no eligible operator unrecorded");
+    });
+    test("candidate arrays are produced once from the recognized options", [&] {
+        Scenario s;
+        require(s.plugin.capture_expedition_candidates(s.plugin.controller.get_image()), "repeat candidates");
+        require(
+            s.count("candidates") == 1 && s.events[0].at("details").at("candidates").as_array().size() == 3,
+            "candidate list missing or duplicated");
+    });
+    test("candidate write failure stops before any choice", [&] {
+        Scenario s;
+        s.plugin.m_expedition_evidence.candidates_saved = false;
+        s.fail_phase = "candidates";
+        require(
+            !s.plugin.capture_expedition_candidates(s.plugin.controller.get_image()) && !s.plugin.parent.enabled &&
+                !s.plugin.controller.choice_clicks,
+            "candidate save failure ignored");
+    });
+    test("empty candidate frame is unresolved", [&] {
+        Scenario s;
+        s.plugin.m_expedition_evidence.candidates_saved = false;
+        require(
+            !s.plugin.capture_expedition_candidates({ }) && !s.plugin.parent.enabled &&
+                !s.plugin.controller.choice_clicks,
+            "empty candidates accepted");
+    });
+    test("outside floor two keeps the ordinary expedition leave behavior", [&] {
+        Scenario s;
+        s.events.clear();
+        s.plugin.m_expedition_context_provider = [] {
+            return std::optional(blackflow::ExpeditionContext { 1, 9, 3, { } });
+        };
+        s.plugin.refresh_expedition_context();
+        require(
+            !s.plugin.m_expedition_context && s.dispatch() && s.plugin.parent.enabled && s.events.empty(),
+            "non-target floor acquired collection guards");
+    });
+    /*encounter_tests*/
+    if (argc > 2) {
+        test("shared payload fixture matches actual producer methods", [&] {
+            require(json::open(argv[2]).value() == json::value(fixtures), "producer payload fixture drifted");
+        });
+    }
+    if (argc > 1) {
+        std::ofstream stream(argv[1]);
+        stream << json::value(std::move(fixtures)).to_string();
+    }
+    std::cout << passed << " passed, " << failed << " failed\n";
+    return failed ? 1 : 0;
+}

@@ -27,6 +27,7 @@ private:
     {
         None,
         PrepareRecoveryRetry,
+        InvalidateInventoryMap,
         RecordCurrentFloor,
         RetryTreeHoleReturn,
         ResolveHuntedAction,
@@ -43,5 +44,6 @@ private:
     bool m_stop_after_abandon = false;
     bool m_start_explore_seen = false;
     int m_tree_hole_return_failures = 0;
+    mutable int m_inventory_close_failures = 0;
 };
 } // namespace asst::blackflow

@@ -9,9 +9,20 @@ namespace asst::blackflow
     return automation_collection ? "BlackFlow@Roguelike@CollectionBegin" : "BlackFlow@Roguelike@Begin";
 }
 
+[[nodiscard]] constexpr bool is_inventory_close_recovery(std::string_view task) noexcept
+{
+    return task.starts_with("BlackFlow@Roguelike@MovementInventoryClose");
+}
+
 // 地图恢复的等待可能跨越移动转场，重试时先识别实际页面；其他动作保留原位重试。
 [[nodiscard]] constexpr std::string_view recovery_retry_task(std::string_view failed_task) noexcept
 {
+    if (failed_task.starts_with("BlackFlow@Roguelike@MovementInventoryCloseAfterNode")) {
+        return "BlackFlow@Roguelike@MovementInventoryCloseAfterNode-Enter";
+    }
+    if (is_inventory_close_recovery(failed_task)) {
+        return "BlackFlow@Roguelike@MovementInventoryClose-Enter";
+    }
     if (failed_task == "BlackFlow@Roguelike@GetDropConfirmedAction") {
         return "BlackFlow@Roguelike@GetDropConfirmedContinue";
     }

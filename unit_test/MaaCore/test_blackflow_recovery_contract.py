@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def diagnostics():
     events = json.loads((ROOT / 'unit_test/MaaCore/fixtures/blackflow-recovery/diagnostics.json').read_text('utf-8'))
+    events += json.loads((ROOT / 'unit_test/MaaCore/fixtures/blackflow-recovery/20261024/inventory-close-events.json').read_text('utf-8'))
     for sequence, event in enumerate(events, 1):
         event.update(sequence=sequence, elapsed_ms=sequence, timestamp='2026-09-23T00:00:00Z')
     return events
@@ -42,6 +43,7 @@ def test_consumer_does_not_treat_recovery_as_business_evidence():
     analysis = os.environ.get('BLACKFLOW_ANALYSIS_ROOT')
     if not analysis:
         pytest.skip('Set BLACKFLOW_ANALYSIS_ROOT to the mapped analysis workspace')
+    assert (Path(analysis) / 'tests/fixtures/blackflow-inventory-close-events.json').read_bytes() == (ROOT / 'unit_test/MaaCore/fixtures/blackflow-recovery/20261024/inventory-close-events.json').read_bytes()
     sys.path.insert(0, str(Path(analysis) / 'src'))
     from lubiao_pipeline.normalize import normalize, Unsupported
     from lubiao_pipeline.processing import plan

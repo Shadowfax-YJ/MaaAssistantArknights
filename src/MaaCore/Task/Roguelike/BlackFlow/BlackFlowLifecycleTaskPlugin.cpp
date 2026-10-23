@@ -20,6 +20,7 @@ constexpr std::string_view RecoveryRetryWaitTask = "BlackFlow@Roguelike@Recovery
 constexpr std::string_view RecoveryRetryActionTask = "BlackFlow@Roguelike@RecoveryRetryAction";
 constexpr std::string_view StrategyTerminatedTask = "BlackFlow@Roguelike@StrategyTerminated";
 constexpr int MaxTreeHoleReturnFailures = 3;
+constexpr int MaxInventoryCloseFailures = 3;
 
 bool is_retryable_recovery_target(std::string_view task)
 {
@@ -38,7 +39,18 @@ bool configure_recovery_retry_action(const std::string& target)
             return false;
         }
         successor = recovery_retry_task(target);
-        if (task->max_times > 0 && task->max_times < std::numeric_limits<int>::max()) {
+        if (is_inventory_close_recovery(target)) {
+            reduce_other_times = {
+                "BlackFlow@Roguelike@MovementInventoryCloseAfterNode*3",
+                "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview*3",
+                "BlackFlow@Roguelike@MovementInventoryCloseAfterNodeTransitionWait*20",
+                "BlackFlow@Roguelike@MovementInventoryClosePreview*3",
+                "BlackFlow@Roguelike@MovementInventoryClose*3",
+                "BlackFlow@Roguelike@MovementInventoryCloseObserve*2",
+                "BlackFlow@Roguelike@MovementInventoryCloseTransitionWait*20",
+            };
+        }
+        else if (task->max_times > 0 && task->max_times < std::numeric_limits<int>::max()) {
             reduce_other_times.emplace_back(target + "*" + std::to_string(task->max_times));
         }
     }
@@ -70,6 +82,7 @@ bool BlackFlowLifecycleTaskPlugin::load_params(const json::value& params)
     }
     m_start_explore_seen = false;
     m_tree_hole_return_failures = 0;
+    m_inventory_close_failures = 0;
 
     std::string profile = params.get("blackflow_strategy", std::string {});
     if (profile.empty()) {
@@ -156,9 +169,21 @@ bool BlackFlowLifecycleTaskPlugin::verify(AsstMsg msg, const json::value& detail
     }
 
     const std::string task = details.get("details", "task", "");
+    // Only a recognized destination clears the close budget. Passive waits and
+    // successful close clicks do not prove that the inventory actually closed.
+    if (msg == AsstMsg::SubTaskCompleted &&
+        (task == "BlackFlow@Roguelike@Stages-MapReady" || task == "BlackFlow@Roguelike@MapPrepare-Ready" ||
+         task == "BlackFlow@Roguelike@MapPrepare-ZoomOut" || task == "BlackFlow@Roguelike@HuntedConfirmCompleted")) {
+        m_inventory_close_failures = 0;
+    }
+    if (msg == AsstMsg::SubTaskStart && (task == "BlackFlow@Roguelike@MovementInventoryClosePreview" ||
+                                         task == "BlackFlow@Roguelike@MovementInventoryCloseAfterNodePreview")) {
+        m_pending = PendingWork::InvalidateInventoryMap;
+        return true;
+    }
     if (msg == AsstMsg::SubTaskStart && (task == RecoveryFailedTask || task == RecoverMapFailedTask)) {
         m_pending = PendingWork::PrepareRecoveryRetry;
-        m_pending_details = {};
+        m_pending_details = { };
         m_recovery_retry_target = details.get("pre_task", "");
         m_terminal_trigger.clear();
         m_terminal_pre_task.clear();
@@ -223,6 +248,7 @@ bool BlackFlowLifecycleTaskPlugin::verify(AsstMsg msg, const json::value& detail
 void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
 {
     m_tree_hole_return_failures = 0;
+    m_inventory_close_failures = 0;
     const bool run_has_progress =
         m_session != nullptr &&
         (m_session->current_floor().has_value() || m_session->run().floor > 0 || m_session->result().has_value());
@@ -251,6 +277,7 @@ void BlackFlowLifecycleTaskPlugin::reset_in_run_variables()
 void BlackFlowLifecycleTaskPlugin::finish_current_run(bool start_next_run)
 {
     m_tree_hole_return_failures = 0;
+    m_inventory_close_failures = 0;
     m_pending = PendingWork::None;
     m_pending_details = {};
     m_recovery_retry_target.clear();
@@ -407,6 +434,14 @@ bool BlackFlowLifecycleTaskPlugin::_run()
     m_terminal_trigger.clear();
     m_terminal_pre_task.clear();
 
+    if (work == PendingWork::InvalidateInventoryMap) {
+        // An unexpected preview may have panned the viewport. Keep map facts,
+        // but require the normal routing refresh before using old coordinates.
+        if (m_session != nullptr) {
+            (void)m_session->consume_map_preserved_after_inventory();
+        }
+        return true;
+    }
     if (work == PendingWork::BeginTreeHoleReturn) {
         m_tree_hole_return_failures = 0;
         // 停在离开弹窗时重启 MAA 也要回主菜单，不能依赖本进程曾经识别过树洞地图。
@@ -417,16 +452,46 @@ bool BlackFlowLifecycleTaskPlugin::_run()
     }
     if (work == PendingWork::PrepareRecoveryRetry) {
         if (m_session != nullptr && m_session->terminated()) {
-            configure_recovery_retry_action({});
+            configure_recovery_retry_action({ });
             Log.info(
                 "BlackFlow recovery retry skipped because the strategy already has a terminal result",
                 recovery_retry_target);
             return true;
         }
         if (!is_retryable_recovery_target(recovery_retry_target)) {
-            configure_recovery_retry_action({});
+            configure_recovery_retry_action({ });
             Log.error("BlackFlow recovery retry has no valid failed action", recovery_retry_target);
             return true;
+        }
+        if (is_inventory_close_recovery(recovery_retry_target)) {
+            (void)m_session->consume_map_preserved_after_inventory();
+            const bool exhausted = ++m_inventory_close_failures >= MaxInventoryCloseFailures;
+            record_run_event(
+                exhausted ? RunLogLevel::Error : RunLogLevel::Warning,
+                "recovery.inventory_close",
+                "failed",
+                exhausted ? "stop_task" : "recheck_page",
+                json::object {
+                    { "task", recovery_retry_target },
+                    { "resume_task", std::string(recovery_retry_task(recovery_retry_target)) },
+                    { "attempt", m_inventory_close_failures },
+                    { "max_attempts", MaxInventoryCloseFailures },
+                },
+                "BlackFlowLifecycle",
+                nullptr,
+                true);
+            if (exhausted) {
+                configure_recovery_retry_action({ });
+                m_session->fail(
+                    "inventory_close_recovery_exhausted",
+                    "inventory close did not reach a recognized destination after three failures",
+                    FailureDisposition::StopTask);
+                report_outputs();
+                if (m_task_ptr != nullptr) {
+                    m_task_ptr->set_enable(false);
+                }
+                return true;
+            }
         }
         if (!configure_recovery_retry_action(recovery_retry_target)) {
             configure_recovery_retry_action({});

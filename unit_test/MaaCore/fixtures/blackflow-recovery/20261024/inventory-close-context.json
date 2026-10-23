@@ -1,0 +1,16 @@
+{
+  "run": "run-20261024-025758-350107",
+  "context": "user confirms that the failed close had already returned to map or node preview; no actual post-close frame was retained",
+  "frames": [
+    {
+      "fixture": "inventory-close-map.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261024-025758-350107\\floor-4\\BF-A1-152.captured.jpg",
+      "sha256": "995b16ee342e9a36f1de73c352ab21de80e4e122187c395bcde695ea4d075b46"
+    },
+    {
+      "fixture": "inventory-close-expanded.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261024-025758-350107\\floor-4\\BF-A1-153.evidence-1.jpg",
+      "sha256": "0a6ee8ef0163c3afee256286cd82646557020d08f44c622ca5d53f37de9a6db2"
+    }
+  ]
+}

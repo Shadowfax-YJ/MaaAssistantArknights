@@ -278,6 +278,9 @@ struct BlackFlowMovementTaskPlugin {
 
 // The scan loop and title-analysis method below are extracted from production.
 // Only controller frames, OCR results and movement-star I/O are injected.
+namespace asst::blackflow {
+/*INVENTORY_RESET_EARLY*/
+}
 namespace whole_inventory_replay {
 constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
 constexpr std::string_view InventoryResetCollapseTask="reset-collapse", InventoryScanResetExpandTask="reset-expand";

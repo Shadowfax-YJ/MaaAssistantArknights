@@ -6,6 +6,7 @@
 #include <opencv2/imgproc.hpp>
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRecruitmentEvidence.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 using namespace asst;
@@ -14,6 +15,9 @@ using namespace asst::blackflow;
 void check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 std::string_view normalized_good_name(std::string_view name) { return name; }
 constexpr std::string_view ScrapShopBuyGoodsTask = "secret";
+constexpr std::string_view ShopGoodsTask = "top-goods", ShopGoodsBottomTask = "bottom-goods";
+constexpr std::string_view ShopCaptureAnchorsTask = "capture-anchors";
+constexpr std::string_view ShopGoodsSwipeToTopTask = "to-top", ShopGoodsSwipeToBottomTask = "to-bottom";
 constexpr std::string_view ShopWalletTask = "wallet", ScrapShopWalletTask = "secret-wallet";
 struct Session {
     RecruitmentEvidenceScope scope { 4, 1, 5, 1, "BF-T4-5", 42 };
@@ -21,6 +25,7 @@ struct Session {
     json::object run_log_state() const { return {}; }
 };
 
+struct { template<class T> std::shared_ptr<T> get(std::string) { auto result = std::make_shared<T>(); result->roi = Rect {395, 159, 857, 401}; return result; } } Task;
 struct Frame {
     int y = 405, x = 431, price = 12, wallet = 21;
     bool shop = true, present = true, duplicate = false;
@@ -40,6 +45,12 @@ struct Controller {
             if (f.present && f.shop) {
                 f.image(store_card_evidence_roi(f.x, f.y, f.image)).setTo(cv::Scalar(140, 80, 50));
             }
+            if (f.present && f.shop) {
+                const auto price = merchant_price_roi(Rect {f.x, f.y, 102, 24});
+                f.image(cv::Rect(price.x, price.y, price.width, price.height) & cv::Rect(0, 0, 1280, 720))
+                    .setTo(cv::Scalar(f.price, 80, 50));
+            }
+            if (f.duplicate) f.image(cv::Rect(f.x + 210, f.y, 102, 24)).setTo(cv::Scalar(255, 255, 255));
             if (f.title_changed) f.image(cv::Rect(f.x, f.y, 20, 10)).setTo(cv::Scalar(255, 255, 255));
             f.image.at<cv::Vec3b>(0, 0)[0] = static_cast<unsigned char>(i);
         }
@@ -59,6 +70,23 @@ struct ReceiptPort {
 };
 struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} } Log;
 struct BlackFlowAutomationStoreTaskPlugin {
+    enum class ShelfPage { Top, Bottom };
+    struct CachedShopGood { TextRect good; ShelfPage page; std::optional<int> price; std::optional<bool> buyable_when_scanned; };
+    std::vector<CachedShopGood> m_shop_goods;
+    std::array<std::shared_ptr<cv::Mat>, 2> m_shop_goods_images {};
+    bool m_shop_goods_scanned = false;
+    ShelfPage m_shop_shelf_page = ShelfPage::Top;
+    std::optional<int> m_pending_eerie_store_snapshot = 0;
+    int swipe_count = 0, complete_shelf_captures = 0;
+    bool run_goods_swipe(std::string_view) { ++swipe_count; return true; }
+    void capture_pending_eerie_store_snapshot(const cv::Mat& top, const cv::Mat& bottom,
+            const std::vector<TextRect>& top_anchors, const std::vector<TextRect>& bottom_anchors) {
+        check(!top.empty() && !bottom.empty(), "complete shelf images missing");
+        if (controller.state(top).present) check(!top_anchors.empty() && !bottom_anchors.empty(), "complete shelf anchors missing");
+        ++complete_shelf_captures;
+    }
+    void invalidate_shop_goods();
+    bool scan_shop_goods();
     struct StoreSelection {
         TextRect good { Rect {431, 327, 102, 24}, 1.0, "book" };
         std::optional<int> ingots_before, price;
@@ -76,18 +104,19 @@ struct BlackFlowAutomationStoreTaskPlugin {
     bool m_pending_purchase_confirmed = false, m_scrap_shop_cultivation_requested = false;
     std::vector<int> m_shop_purchased, m_shop_attempted, m_scrap_shop_purchased, m_scrap_shop_buy_attempted;
     std::vector<std::string> m_shop_purchased_names, m_shop_attempted_names, m_scrap_shop_purchased_names, m_scrap_shop_buy_attempted_names;
-    int m_shop_collectibles_purchased_in_run = 0, wallet_reads = 0;
+    int m_shop_collectibles_purchased_in_run = 0, wallet_reads = 0, name_reads = 0, price_reads = 0;
     Controller* ctrler() { return &controller; }
     bool sleep(int) { return true; }
     bool purchase_wallet_page(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).shop; }
     std::vector<TextRect> recognize(const cv::Mat& im, std::string) {
+        ++name_reads;
         const auto& f = controller.state(im);
         if (!f.present) return {};
         std::vector<TextRect> result { TextRect {Rect { f.x, f.y, 102, 24 }, 1.0, "book"} };
         if (f.duplicate) result.emplace_back(Rect { f.x + 210, f.y, 102, 24 }, 1.0, "book");
         return result;
     }
-    std::optional<int> read_good_price(const cv::Mat& im, Rect) { return controller.state(im).price; }
+    std::optional<int> read_good_price(const cv::Mat& im, Rect) { ++price_reads; return controller.state(im).price; }
     std::optional<bool> shop_good_is_buyable(const cv::Mat& im, Rect) { return !controller.state(im).sold_out; }
     std::optional<int> read_optional_number(const cv::Mat& im, std::string) { ++wallet_reads; return controller.state(im).wallet; }
     bool purchased_good_sold_out(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).sold_out; }
@@ -96,6 +125,8 @@ struct BlackFlowAutomationStoreTaskPlugin {
     void finalize_pending_purchase(AutomationStoreKind);
     void clear_pending_purchase() noexcept;
 };
+/*INVALIDATE_SHOP*/
+/*SCAN_SHOP*/
 /*RELOCATE*/
 /*CLICK*/
 /*FINALIZE*/
@@ -169,17 +200,48 @@ int main() try {
         }
         std::cout << "PASS " << name << '\n'; ++passed;
     };
+    {
+        BlackFlowAutomationStoreTaskPlugin p;
+        p.controller.load({Frame{}});
+        BlackFlowAutomationStoreTaskPlugin::StoreSelection selection;
+        check(p.relocate_selection(selection, "eerie"), "stationary shelf relocation");
+        check(p.name_reads == 1 && p.price_reads == 1, "unchanged stable shelf repeats full OCR");
+        check(p.wallet_reads == 3 && p.controller.reads == 3, "stability or wallet observations were removed");
+        std::cout << "PASS unchanged shelf reuses OCR while preserving three observations\n"; ++passed;
+    }
+    {
+        int swipes = 0;
+        check(scroll_inventory_to_start([&] { ++swipes; return true; }, [] { return true; }), "origin confirmation");
+        check(swipes == 2, "already stationary inventory still performs four reset swipes");
+        std::cout << "PASS inventory stops after two confirmed stationary swipes\n"; ++passed;
+    }
+    for (const bool present : {true, false}) {
+        BlackFlowAutomationStoreTaskPlugin p; Frame frame; frame.present = present;
+        p.controller.load({frame});
+        check(p.scan_shop_goods(), "full shelf scan");
+        check(p.m_shop_goods_scanned && p.m_shop_goods.empty() != present, "empty shelf was not cached");
+        check(p.price_reads == 0, "bright cards incur redundant ranking price OCR");
+        check(p.swipe_count == 2 && p.complete_shelf_captures == 1, "optimization removed complete shelf evidence");
+        check(p.m_shop_goods_images[0] && p.m_shop_goods_images[1], "both shelf frames required");
+        p.invalidate_shop_goods();
+        check(!p.m_shop_goods_scanned && p.m_shop_goods.empty() && !p.m_shop_goods_images[0] && !p.m_shop_goods_images[1],
+              "refresh invalidation retained stale goods or images");
+        std::cout << "PASS full shelf capture and empty/bright shelf cache " << present << '\n'; ++passed;
+    }
     Frame normal, old; old.y = 327;
     Frame gone = normal; gone.present = false;
     Frame transition = normal; transition.shop = false;
     Frame duplicate = normal; duplicate.duplicate = true;
     Frame edge = normal; edge.x = 1110;
+    Frame repriced = normal; repriced.price = 23;
     Frame renamed = normal; renamed.title_changed = true;
     Frame sold = normal; sold.sold_out = true;
     store("old frame then lower shelf settles", {old, normal, normal, normal, normal}, true, 405);
     store("upper shelf settles", {normal, old, old, old, old}, true, 327);
     store("refresh transition then stable goods", {old, transition, gone, normal, normal, normal, normal}, true, 405);
     store("moving shelf times out", {old, normal, old, normal, old, normal, old, normal}, false, 0);
+    store("price changes before stable confirmation", {normal, normal, repriced, repriced, repriced, repriced}, false, 0);
+    store("new duplicate target invalidates cached OCR", {normal, duplicate, duplicate, duplicate}, false, 0);
     store("target disappeared", {gone}, false, 0);
     store("already sold out cannot establish a new purchase", {sold}, false, 0);
     store("duplicate names cannot select an identity", {duplicate}, false, 0);

@@ -1,4 +1,5 @@
 #include "BlackFlowMovementRecognition.h"
+#include "BlackFlowEvidenceFrame.h"
 
 #include <algorithm>
 #include <array>
@@ -26,6 +27,36 @@ bool movement_inventory_page_visible(const cv::Mat& image)
     OCRer contents(image);
     contents.set_task_info("BlackFlow@Roguelike@MovementInventoryContents");
     return contents.analyze().has_value();
+}
+
+bool inventory_reset_can_confirm_early(
+    const cv::Mat& previous,
+    const cv::Mat& current,
+    std::span<const TextRect> previous_names,
+    std::span<const TextRect> current_names)
+{
+    if (!inventory_name_layout_unchanged(previous_names, current_names)) {
+        return false;
+    }
+    bool has_item_anchor = false;
+    for (const auto& name : current_names) {
+        if (name.text == "待收集零件") {
+            continue;
+        }
+        has_item_anchor = true;
+        if (!inventory_name_is_complete(name.rect, current.cols, current.rows) ||
+            std::ranges::count_if(current_names, [&](const TextRect& other) { return other.text == name.text; }) != 1) {
+            return false;
+        }
+    }
+    // Exclude the animated box and HUD, but include the entire scrolling list:
+    // matching only names would miss a different item instance with the same label.
+    const cv::Rect list(
+        current.cols * 360 / 1280,
+        current.rows * 140 / 720,
+        current.cols * 860 / 1280,
+        current.rows * 475 / 720);
+    return has_item_anchor && evidence_frames_match(previous, current, list, 1.0);
 }
 
 std::optional<std::pair<int, std::vector<MovementInventoryStarSlot>>>

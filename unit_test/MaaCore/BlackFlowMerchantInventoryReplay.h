@@ -7,6 +7,27 @@ namespace asst::blackflow
 {
 struct BlackFlowStoreReplayAccess
 {
+    static auto goods(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image, const std::string& task)
+    {
+        return p.recognize(image, task);
+    }
+
+    static void cache_shelf(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image)
+    {
+        p.invalidate_shop_goods();
+        p.m_shop_shelf_page = BlackFlowAutomationStoreTaskPlugin::ShelfPage::Top;
+        p.m_shop_goods_scanned = true;
+        p.m_shop_goods_images[0] = std::make_shared<cv::Mat>(image.clone());
+        for (const auto& good : p.recognize(image, "BlackFlow@Roguelike@AutomationShopGoods")) {
+            p.m_shop_goods.push_back({good, BlackFlowAutomationStoreTaskPlugin::ShelfPage::Top, 12, true});
+        }
+        require(!p.m_shop_goods.empty(), "captured shelf has no cacheable name anchors");
+    }
+    static bool cache_matches(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image)
+    { return p.shop_goods_cache_matches(image); }
+    static bool cache_valid(const BlackFlowAutomationStoreTaskPlugin& p) { return p.m_shop_goods_scanned; }
+    static Rect first_cached_name(const BlackFlowAutomationStoreTaskPlugin& p) { return p.m_shop_goods.front().good.rect; }
+
     static auto identity(BlackFlowAutomationStoreTaskPlugin& p, AutomationStoreKind kind)
     {
         return p.current_store_identity(kind);
@@ -26,10 +47,7 @@ struct BlackFlowStoreReplayAccess
         return kind == AutomationStoreKind::Eerie ? p.m_shop_refresh_count : p.m_scrap_shop_refresh_count;
     }
 
-    static int paid_refresh_count(const BlackFlowAutomationStoreTaskPlugin& p)
-    {
-        return p.m_shop_paid_refresh_count;
-    }
+    static int paid_refresh_count(const BlackFlowAutomationStoreTaskPlugin& p) { return p.m_shop_paid_refresh_count; }
 
     static bool confirm_fruit_sale(BlackFlowAutomationStoreTaskPlugin& p)
     {
@@ -75,20 +93,24 @@ struct BlackFlowMovementReplayAccess
     {
         BlackFlowMovementTaskPlugin::InventoryFrame frame;
         std::string error;
-        require(p.analyze_inventory_frame(image, frame, 0, &error) ==
-                    BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
-                "captured inventory frame not recognized");
+        require(
+            p.analyze_inventory_frame(image, frame, 0, &error) ==
+                BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
+            "captured inventory frame not recognized");
         return { frame.has_empty_slot, frame.items.size() };
     }
+
     static std::vector<TextRect> names(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
     {
         BlackFlowMovementTaskPlugin::InventoryFrame frame;
         std::string error;
-        require(p.analyze_inventory_frame(image, frame, 0, &error) ==
-                    BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
-                error.empty() ? "inventory names not recognized" : error);
+        require(
+            p.analyze_inventory_frame(image, frame, 0, &error) ==
+                BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome::Recognized,
+            error.empty() ? "inventory names not recognized" : error);
         return frame.visible_names;
     }
+
     static bool rejects_map(BlackFlowMovementTaskPlugin& p, const cv::Mat& image)
     {
         BlackFlowMovementTaskPlugin::InventoryFrame frame;
@@ -103,6 +125,83 @@ template <class Test>
 void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& test)
 {
     using namespace asst;
+    test("merchant cache survives a stationary rejected target and invalidates on shelf changes", [&] {
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/eerie-shelf.jpg");
+        auto config = std::make_shared<RoguelikeConfig>();
+        blackflow::BlackFlowAutomationStoreTaskPlugin store { {}, nullptr, "Roguelike", config, nullptr, nullptr, nullptr };
+        using A = blackflow::BlackFlowStoreReplayAccess;
+        A::cache_shelf(store, image);
+        require(A::cache_matches(store, image), "stationary shelf always forces another full scan");
+        auto hud_changed = image.clone();
+        hud_changed(cv::Rect(0, 0, 100, 70)).setTo(cv::Scalar::all(0));
+        require(A::cache_matches(store, hud_changed), "unrelated HUD invalidates shelf");
+        auto renamed = image.clone(); const auto name = A::first_cached_name(store);
+        renamed(cv::Rect(name.x, name.y, name.width, name.height)).setTo(cv::Scalar::all(0));
+        require(!A::cache_matches(store, renamed), "changed item retained old shelf");
+        auto repriced = image.clone(); const auto price = blackflow::merchant_price_roi(name);
+        repriced(cv::Rect(price.x, price.y, price.width, price.height)).setTo(cv::Scalar::all(0));
+        require(!A::cache_matches(store, repriced), "changed price retained old shelf");
+        auto new_card = image.clone();
+        new_card(cv::Rect(1100, 170, 30, 20)).setTo(cv::Scalar(255, 0, 255));
+        require(!A::cache_matches(store, new_card), "changed unrecognized region retained shelf");
+        store.reset_in_run_variables();
+        require(!A::cache_valid(store) && !A::cache_matches(store, image), "new run retained shelf");
+    });
+    test("inventory early reset rejects duplicate anchors, motion and missing observations", [&] {
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/post-event-inventory.jpg");
+        auto config = std::make_shared<RoguelikeConfig>();
+        blackflow::BlackFlowMovementTaskPlugin movement { {}, nullptr, "Roguelike", config, nullptr, nullptr, nullptr };
+        const auto names = blackflow::BlackFlowMovementReplayAccess::names(movement, image);
+        require(blackflow::inventory_reset_can_confirm_early(image, image, names, names), "unique stationary real inventory cannot confirm origin early");
+        auto repeated = names; repeated.push_back(names.front());
+        require(!blackflow::inventory_reset_can_confirm_early(image, image, repeated, repeated), "duplicate item names can hide a moving column");
+        auto shifted = names; shifted.front().rect.x += 10;
+        require(!blackflow::inventory_reset_can_confirm_early(image, image, names, shifted), "partial swipe mistaken for origin");
+        auto changed = image.clone(); changed(cv::Rect(360, 140, 430, 150)).setTo(cv::Scalar::all(0));
+        require(!blackflow::inventory_reset_can_confirm_early(image, changed, names, names), "unchanged names conceal changed cards");
+        require(!blackflow::inventory_reset_can_confirm_early({}, image, names, names), "missing image confirms origin");
+        require(!blackflow::inventory_reset_can_confirm_early(image, image, {}, {}), "empty OCR confirms origin");
+    });
+    test("complete shelf anchors include goods outside the purchase vocabulary", [&] {
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/shop-refresh-not-open.jpg");
+        auto config = std::make_shared<RoguelikeConfig>();
+        blackflow::BlackFlowAutomationStoreTaskPlugin store { {}, nullptr, "Roguelike", config, nullptr, nullptr, nullptr };
+        const auto anchors = blackflow::BlackFlowStoreReplayAccess::goods(
+            store, image, "BlackFlow@Roguelike@AutomationShopCaptureAnchors");
+        require(!anchors.empty() && std::ranges::any_of(anchors, [](const TextRect& row) { return row.text.find("价格") != std::string::npos; }),
+                "purchase identity filtering discarded the complete-shelf anchors");
+    });
+    test("captured secret shelf keeps one real seed and rejects blood mushroom and seed pod aliases", [&] {
+        const auto image =
+            MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-merchant/20261024/secret-shelf.jpg");
+        require(!image.empty(), "secret shelf fixture missing");
+        auto config = std::make_shared<RoguelikeConfig>();
+        blackflow::BlackFlowAutomationStoreTaskPlugin store { { },     nullptr, "Roguelike", config,
+                                                              nullptr, nullptr, nullptr };
+        const auto goods = blackflow::BlackFlowStoreReplayAccess::goods(
+            store,
+            image,
+            "BlackFlow@Roguelike@AutomationCultivateBuyItems");
+        int seeds = 0;
+        for (const auto& item : goods) {
+            require(
+                item.text != "血橙" && item.text != "种荚" && item.text != "血蕈",
+                "non-buyable item became a purchase");
+            if (item.text == "种子") {
+                ++seeds;
+                require(item.rect.x >= 1000 && item.rect.y < 300, "seed moved to pod card");
+            }
+        }
+        require(seeds == 1, "actual seed missing or duplicated by fuzzy alias");
+        OCRer legacy(image);
+        legacy.set_task_info("BlackFlow@Roguelike@AutomationCultivateBuyItems");
+        require(legacy.analyze().has_value(), "fixture no longer reproduces original recognition");
+        const auto old = legacy.get_result();
+        require(
+            std::ranges::count_if(old, [](const auto& item) { return item.text == "种子"; }) == 2 &&
+                std::ranges::any_of(old, [](const auto& item) { return item.text == "血橙"; }),
+            "fixture no longer reproduces original alias");
+    });
     using namespace asst::blackflow;
     const auto fixtures = repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20260926";
     auto read = [&](const char* name) {
@@ -112,8 +211,8 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
     };
     auto config = std::make_shared<RoguelikeConfig>();
     auto session = std::make_shared<BlackFlowSession>();
-    BlackFlowAutomationStoreTaskPlugin store({}, nullptr, "Roguelike", config, nullptr, session, nullptr);
-    BlackFlowMovementTaskPlugin movement({}, nullptr, "Roguelike", config, nullptr, session, nullptr);
+    BlackFlowAutomationStoreTaskPlugin store({ }, nullptr, "Roguelike", config, nullptr, session, nullptr);
+    BlackFlowMovementTaskPlugin movement({ }, nullptr, "Roguelike", config, nullptr, session, nullptr);
     const auto refresh_fixtures = repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20260929";
     auto refresh_frame = [&](const char* name) {
         auto image = MAA_NS::imread(refresh_fixtures / name);
@@ -315,8 +414,9 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
     int stationary = 0;
     for (int index = 1; index <= 9; ++index) {
         test(("captured inventory scan with loaded highlight page " + std::to_string(index)).c_str(), [&] {
-            const auto frame = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261021" /
-                                            ("page-" + std::to_string(index) + ".jpg"));
+            const auto frame = MAA_NS::imread(
+                repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261021" /
+                ("page-" + std::to_string(index) + ".jpg"));
             require(!frame.empty(), "captured inventory frame missing");
             const auto current_names = BlackFlowMovementReplayAccess::names(movement, frame);
             const bool unchanged = inventory_name_layout_unchanged(previous_names, current_names);

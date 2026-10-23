@@ -21,6 +21,14 @@ namespace asst::blackflow
 // A collapse icon alone may be caught during the closing animation.
 [[nodiscard]] bool movement_inventory_page_visible(const cv::Mat& image);
 
+// Early reset confirmation needs pixel evidence as well as unique complete name
+// anchors. Repeated names can hide a whole-column move and use the conservative path.
+[[nodiscard]] bool inventory_reset_can_confirm_early(
+    const cv::Mat& previous,
+    const cv::Mat& current,
+    std::span<const TextRect> previous_names,
+    std::span<const TextRect> current_names);
+
 enum class MovementPanelScanAction
 {
     ResetTowardStart,

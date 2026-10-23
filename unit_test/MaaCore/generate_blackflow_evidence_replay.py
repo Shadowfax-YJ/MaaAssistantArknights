@@ -26,6 +26,8 @@ if __name__ == '__main__':
     core = here.parents[1] / 'src/MaaCore/Task/Roguelike/BlackFlow'
     source = (here / 'BlackFlowEvidenceReplay.cpp.in').read_text(encoding='utf-8')
     for marker, file, signature in (
+        ('INVALIDATE_SHOP', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'void BlackFlowAutomationStoreTaskPlugin::invalidate_shop_goods('),
+        ('SCAN_SHOP', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods('),
         ('RELOCATE', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::relocate_selection('),
         ('CLICK', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::click_verified_selection('),
         ('FINALIZE', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase('),

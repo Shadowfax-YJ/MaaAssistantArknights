@@ -23,6 +23,7 @@ if __name__ == '__main__':
     core = Path('src/MaaCore/Task/Roguelike/BlackFlow')
     result = (here / 'BlackFlowInteractionReplay.cpp.in').read_text('utf-8')
     for marker, file, signature in (
+        ('INVENTORY_RESET_EARLY', 'BlackFlowMovementRecognition.cpp', 'bool inventory_reset_can_confirm_early('),
         ('SELECT', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::SelectionOutcome\n'),
         ('WALK', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::verify_walking_on_map('),
         ('CLOSE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::close_panel('),

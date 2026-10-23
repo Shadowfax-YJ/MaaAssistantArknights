@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -92,6 +93,8 @@ private:
     [[nodiscard]] bool already_recorded(std::string_view name, const std::vector<std::string>& recorded) const;
     [[nodiscard]] std::optional<bool> shop_good_is_buyable(const cv::Mat& image, const Rect& name_rect) const;
     [[nodiscard]] std::optional<int> read_good_price(const cv::Mat& image, const Rect& name_rect) const;
+    void invalidate_shop_goods();
+    [[nodiscard]] bool shop_goods_cache_matches(const cv::Mat& image) const;
     [[nodiscard]] bool scan_shop_goods();
     [[nodiscard]] bool select_shop_good(std::optional<StoreSelection>& selected);
     [[nodiscard]] bool select_scrap_shop_good(std::optional<StoreSelection>& selected);
@@ -134,6 +137,8 @@ private:
     std::vector<std::string> m_shop_attempted_names;
     std::vector<Rect> m_shop_sell_attempted;
     std::vector<CachedShopGood> m_shop_goods;
+    std::array<std::shared_ptr<cv::Mat>, 2> m_shop_goods_images { };
+    bool m_shop_goods_scanned = false;
     std::vector<RunResources::MovementInstance> m_shop_entry_processing_items;
     int m_shop_refresh_count = 0;
     int m_shop_paid_refresh_count = 0;
