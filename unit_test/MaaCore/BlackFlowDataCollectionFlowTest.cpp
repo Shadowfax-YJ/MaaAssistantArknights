@@ -85,7 +85,11 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     check_next_contains(flow, "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@ChoosePioneerSquad");
     check_next_contains(flow, "MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@SwipeToPioneerSquad");
     const auto& squad_swipe = flow.at("MiniGame@BlackFlow@SwipeToPioneerSquad");
-    CHECK(squad_swipe.at("baseTask").as_string() == "SwipeToTheRight");
+    CHECK(squad_swipe.at("baseTask").as_string() == "Roguelike@SquadSlowlySwipeToTheRight");
+    // Detect a blocking server dialog, then search visible names before every swipe.
+    CHECK(start_explore.at("next").as_array().at(0).as_string() == "MiniGame@BlackFlow@NetworkDisconnected");
+    CHECK(start_explore.at("next").as_array().at(1).as_string() == "MiniGame@BlackFlow@ChoosePioneerSquad");
+    CHECK(squad_swipe.at("next").as_array().at(1).as_string() == "MiniGame@BlackFlow@ChoosePioneerSquad");
     check_next_contains(flow, "MiniGame@BlackFlow@SwipeToPioneerSquad", "MiniGame@BlackFlow@ChoosePioneerSquad");
     check_next_contains(flow, "MiniGame@BlackFlow@ChoosePioneerSquad", "MiniGame@BlackFlow@ConfirmPioneerSquad");
     const auto& squad_confirm = flow.at("MiniGame@BlackFlow@ConfirmPioneerSquad");
@@ -103,6 +107,13 @@ TEST_CASE("BlackFlow collection follows the recorded pioneer-squad opening")
     CHECK_FALSE(squad_confirm.contains("specificRect"));
 
     const auto base_tasks = task_file("tasks/Roguelike/base.json");
+    const auto& squad_ocr = base_tasks.at("RoguelikeCustom-HijackSquad");
+    CHECK(squad.at("roi").to_string() == squad_ocr.at("roi").to_string());
+    // The main roguelike flow waits after both the swipe and the failed OCR attempt.
+    const auto& slow_swipe = base_tasks.at("Roguelike@SquadSlowlySwipeToTheRight");
+    CHECK(
+        squad_swipe.at("postDelay").as_integer() >=
+        slow_swipe.at("postDelay").as_integer() + squad_ocr.at("postDelay").as_integer());
     const auto& base_squad_confirm = base_tasks.at("Roguelike@SquadConfirm");
     CHECK(base_squad_confirm.at("action").as_string() == "ClickSelf");
     CHECK_FALSE(base_squad_confirm.contains("specificRect"));

@@ -1,0 +1,15 @@
+MAA 开拓者开局零件采集 · recovery-v4 · macOS 通用版
+
+支持 Apple Silicon 和 Intel。macOS 版本要求以应用信息及随包验证结果为准。
+
+1. 将 MAAPioneer.app 拖入 Applications 后运行。在“MAA 开拓者 → 设置”中配置 PlayCover 或 ADB 连接。
+2. 游戏先进入黑流树海探索入口，完成必要解锁并激活所需的开拓者分队等级。
+3. 点击“开始采集”。程序会放弃已有探索，反复进入开局、拍摄加工品弹窗和第一层背包，再结束探索。请先结束需要保留的个人对局。
+4. 点击“停止”结束采集。“打开采集目录”可直接查看图片。
+5. 数据独立保存于 ~/Library/Application Support/MAAPioneer/debug/roguelike/black_flow/opening_cycles/，每局一个目录，保留 processing-item 和 parts-box 原图。不要删除缺图目录或自行跨局配对。
+6. 失败现场位于同级 opening_failures。网络断线需要恢复游戏连接后再开始，程序不会代为重新登录。
+7. 更新应用只需替换 Applications 内的 MAAPioneer.app；数据和连接配置位于应用外。专项版固定随包资源，自动更新已关闭。
+
+该包为本地 ad-hoc 签名，未经过 Apple 公证。首次启动如被拦截，可在 Finder 中右键应用选择“打开”，或在系统“隐私与安全性”中允许打开。
+
+本包沿用 Windows recovery-v4 已实机验证的核心采集流程。macOS 构建验证包含双架构、资源加载和任务注册；CI 无连接游戏，不能替代 Mac 上的完整实机跑局。

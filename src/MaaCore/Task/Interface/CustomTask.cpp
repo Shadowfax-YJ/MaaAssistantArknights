@@ -13,7 +13,19 @@ asst::CustomTask::CustomTask(const AsstCallback& callback, Assistant* inst) :
 {
     LogTraceFunction;
     m_custom_task_ptr->register_plugin<ScreenshotTaskPlugin>();
-    m_custom_task_ptr->register_plugin<BlackFlowDataCollectionTaskPlugin>()->set_retry_times(0);
+    m_black_flow_collection = m_custom_task_ptr->register_plugin<BlackFlowDataCollectionTaskPlugin>();
+    m_black_flow_collection->set_retry_times(0);
+}
+
+bool asst::CustomTask::run()
+{
+    const bool completed = InterfaceTask::run();
+    // ProcessTask's Stop action reports success. An exhausted opening recovery is a failure instead.
+    if (completed && m_black_flow_collection->failed()) {
+        callback(AsstMsg::SubTaskError, basic_info_with_what("BlackFlowOpeningFailed"));
+        return false;
+    }
+    return completed;
 }
 
 bool asst::CustomTask::set_params(const json::value& params)

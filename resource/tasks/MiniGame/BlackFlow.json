@@ -1,11 +1,14 @@
 {
     "MiniGame@BlackFlow@Begin": {
-        "doc": "黑流树海开拓者分队数据收集入口；可从开始探索、第一层地图或探索总览恢复",
+        "doc": "开局专项采集入口；可从探索入口、分队选择、第一层地图或探索总览恢复",
         "algorithm": "JustReturn",
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
             "MiniGame@BlackFlow@StartExplore",
             "MiniGame@BlackFlow@ExitExploration",
-            "MiniGame@BlackFlow@Abandon"
+            "MiniGame@BlackFlow@Abandon",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "MiniGame@BlackFlow@SwipeToPioneerSquad"
         ]
     },
     "MiniGame@BlackFlow@StartExplore": {
@@ -14,24 +17,37 @@
         "action": "ClickSelf",
         "text": ["开始探索"],
         "roi": [1000, 560, 200, 100],
+        "postDelay": 1500,
         "reduceOtherTimes": [
             "MiniGame@BlackFlow@WaitForExploreRestart*20",
-            "MiniGame@BlackFlow@SwipeToPioneerSquad*20",
+            "MiniGame@BlackFlow@SwipeToPioneerSquad*12",
+            "MiniGame@BlackFlow@SwipeBackToPioneerSquad*12",
+            "MiniGame@BlackFlow@WaitForSquadPage*40",
+            "MiniGame@BlackFlow@WaitForSquadPageBack*40",
+            "MiniGame@BlackFlow@WaitForRecruitment*30",
+            "MiniGame@BlackFlow@ChooseRecruitCombination*4",
+            "MiniGame@BlackFlow@ConfirmRecruitCombination*3",
             "MiniGame@BlackFlow@WaitForFirstLayer*20"
         ],
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
             "MiniGame@BlackFlow@ChoosePioneerSquad",
             "MiniGame@BlackFlow@SwipeToPioneerSquad",
-            "#self"
+            "MiniGame@BlackFlow@WaitForSquadPage"
         ]
     },
     "MiniGame@BlackFlow@ChoosePioneerSquad": {
-        "doc": "选择开拓者分队；加工品弹窗出现前重复检查本界面",
+        "doc": "按当前肉鸽自定义开局的分队名称区域识别开拓者分队；找到即点击，不依赖最右侧位置",
         "algorithm": "OcrDetect",
         "action": "ClickSelf",
         "text": ["开拓者分队"],
-        "roi": [0, 320, 1280, 190],
+        "fullMatch": true,
+        "ocrReplace": [
+            ["^[斤午]拓者分队$", "开拓者分队"]
+        ],
+        "roi": [0, 383, 1280, 142],
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
             "MiniGame@BlackFlow@ConfirmPioneerSquad",
             "MiniGame@BlackFlow@ProcessingItemReady",
             "#self"
@@ -43,6 +59,7 @@
         "template": "MiniGame@BlackFlow@PioneerSquadConfirm.png",
         "postDelay": 1500,
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
             "MiniGame@BlackFlow@ProcessingItemReady",
             "MiniGame@BlackFlow@ChooseRecruitCombination",
             "MiniGame@BlackFlow@ChoosePioneerSquad",
@@ -50,12 +67,61 @@
         ]
     },
     "MiniGame@BlackFlow@SwipeToPioneerSquad": {
-        "doc": "复用通用横向滑动，直到开拓者分队进入可见区域",
-        "baseTask": "SwipeToTheRight",
-        "postDelay": 500,
-        "maxTimes": 20,
-        "exceededNext": ["Stop"],
-        "next": ["MiniGame@BlackFlow@ChoosePioneerSquad", "#self"]
+        "doc": "只在分队名可见时搜索；插件从识别到的卡片内起滑，避开固定起点落入卡片间隙",
+        "baseTask": "Roguelike@SquadSlowlySwipeToTheRight",
+        "algorithm": "OcrDetect",
+        "text": ["分队"],
+        "roi": [650, 440, 550, 55],
+        "postDelay": 1200,
+        "maxTimes": 12,
+        "exceededNext": ["MiniGame@BlackFlow@SwipeBackToPioneerSquad", "MiniGame@BlackFlow@WaitForSquadPageBack"],
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "#self",
+            "MiniGame@BlackFlow@WaitForSquadPage"
+        ],
+        "action": "DoNothing",
+        "cache": false
+    },
+    "MiniGame@BlackFlow@SwipeBackToPioneerSquad": {
+        "baseTask": "MiniGame@BlackFlow@SwipeToPioneerSquad",
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "#self",
+            "MiniGame@BlackFlow@WaitForSquadPageBack"
+        ],
+        "roi": [80, 440, 550, 55]
+    },
+    "MiniGame@BlackFlow@WaitForSquadPage": {
+        "doc": "进入分队页前只等待，不把加载画面或遮挡弹窗当成分队页滑动",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 1000,
+        "maxTimes": 40,
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "MiniGame@BlackFlow@SwipeToPioneerSquad",
+            "#self"
+        ]
+    },
+    "MiniGame@BlackFlow@WaitForSquadPageBack": {
+        "baseTask": "MiniGame@BlackFlow@WaitForSquadPage",
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@ChoosePioneerSquad",
+            "MiniGame@BlackFlow@SwipeBackToPioneerSquad",
+            "#self"
+        ]
+    },
+    "MiniGame@BlackFlow@OpeningFailed": {
+        "doc": "插件保存独立故障截图并让 Custom 任务返回失败，避免上限停止被报告为完成",
+        "algorithm": "JustReturn",
+        "action": "Stop"
     },
     "MiniGame@BlackFlow@ProcessingItemReady": {
         "doc": "只识别加工品弹窗；BlackFlowDataCollectionTaskPlugin 在此保存完整截图",
@@ -64,7 +130,7 @@
         "text": ["加工品"],
         "roi": [400, 180, 220, 100],
         "preDelay": 1000,
-        "next": ["MiniGame@BlackFlow@CloseProcessingItem"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@CloseProcessingItem"]
     },
     "MiniGame@BlackFlow@CloseProcessingItem": {
         "doc": "点击已确认存在的加工品弹窗关闭按钮",
@@ -72,7 +138,7 @@
         "action": "ClickRect",
         "specificRect": [640, 550, 1, 1],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@ChooseRecruitCombination"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@ChooseRecruitCombination"]
     },
     "MiniGame@BlackFlow@ChooseRecruitCombination": {
         "doc": "选择录屏及已有黑流流程使用的稳扎稳打招募组合",
@@ -80,8 +146,13 @@
         "action": "ClickSelf",
         "text": ["稳扎稳打"],
         "roi": [0, 330, 1280, 210],
+        "maxTimes": 4,
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
             "MiniGame@BlackFlow@ProcessingItemReady",
+            "MiniGame@BlackFlow@GiveUpRecruit1",
+            "MiniGame@BlackFlow@RecruitVoucher1",
             "MiniGame@BlackFlow@ConfirmRecruitCombination",
             "#self"
         ]
@@ -93,10 +164,29 @@
         "text": ["你确定要这么做"],
         "roi": [380, 535, 150, 30],
         "specificRect": [455, 595, 1, 1],
-        "postDelay": 1000,
+        "postDelay": 2000,
+        "maxTimes": 3,
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
         "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@GiveUpRecruit1",
             "MiniGame@BlackFlow@RecruitVoucher1",
-            "MiniGame@BlackFlow@ChooseRecruitCombination",
+            "#self",
+            "MiniGame@BlackFlow@WaitForRecruitment"
+        ]
+    },
+    "MiniGame@BlackFlow@WaitForRecruitment": {
+        "doc": "确认组合后保持在招募阶段，优先恢复已打开的干员列表，不回点旧组合标题",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 1000,
+        "maxTimes": 30,
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@GiveUpRecruit1",
+            "MiniGame@BlackFlow@RecruitVoucher1",
+            "MiniGame@BlackFlow@ConfirmRecruitCombination",
             "#self"
         ]
     },
@@ -107,7 +197,7 @@
         "text": ["招募"],
         "fullMatch": true,
         "roi": [0, 500, 1280, 180],
-        "next": ["MiniGame@BlackFlow@GiveUpRecruit1", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruit1", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruit1": {
         "doc": "在干员列表底部点击放弃",
@@ -116,7 +206,7 @@
         "text": ["放弃"],
         "fullMatch": true,
         "roi": [850, 580, 200, 140],
-        "next": ["MiniGame@BlackFlow@GiveUpRecruitConfirm1", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruitConfirm1", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruitConfirm1": {
         "doc": "复用肉鸽放弃招募确认模板",
@@ -125,33 +215,33 @@
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
         "roi": [613, 410, 424, 171],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@RecruitVoucher2", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@RecruitVoucher2", "#self"]
     },
     "MiniGame@BlackFlow@RecruitVoucher2": {
         "baseTask": "MiniGame@BlackFlow@RecruitVoucher1",
-        "next": ["MiniGame@BlackFlow@GiveUpRecruit2", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruit2", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruit2": {
         "baseTask": "MiniGame@BlackFlow@GiveUpRecruit1",
-        "next": ["MiniGame@BlackFlow@GiveUpRecruitConfirm2", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruitConfirm2", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruitConfirm2": {
         "baseTask": "MiniGame@BlackFlow@GiveUpRecruitConfirm1",
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
-        "next": ["MiniGame@BlackFlow@RecruitVoucher3", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@RecruitVoucher3", "#self"]
     },
     "MiniGame@BlackFlow@RecruitVoucher3": {
         "baseTask": "MiniGame@BlackFlow@RecruitVoucher1",
-        "next": ["MiniGame@BlackFlow@GiveUpRecruit3", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruit3", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruit3": {
         "baseTask": "MiniGame@BlackFlow@GiveUpRecruit1",
-        "next": ["MiniGame@BlackFlow@GiveUpRecruitConfirm3", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@GiveUpRecruitConfirm3", "#self"]
     },
     "MiniGame@BlackFlow@GiveUpRecruitConfirm3": {
         "baseTask": "MiniGame@BlackFlow@GiveUpRecruitConfirm1",
         "template": "Roguelike@StageEncounterGiveUpRecruitConfirm.png",
-        "next": ["MiniGame@BlackFlow@ChooseTreeSea", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@ChooseTreeSea", "#self"]
     },
     "MiniGame@BlackFlow@ChooseTreeSea": {
         "doc": "复用已有黑流流程，识别并点击沉沦于树海以开始探索",
@@ -160,7 +250,7 @@
         "text": ["沉沦于树海"],
         "roi": [1060, 395, 160, 55],
         "postDelay": 5000,
-        "next": ["MiniGame@BlackFlow@WaitForFirstLayer", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@WaitForFirstLayer", "#self"]
     },
     "MiniGame@BlackFlow@WaitForFirstLayer": {
         "doc": "点击沉沦于树海后等待第一层地图加载",
@@ -168,8 +258,8 @@
         "action": "DoNothing",
         "postDelay": 1000,
         "maxTimes": 20,
-        "exceededNext": ["Stop"],
-        "next": ["MiniGame@BlackFlow@OpenPartsBox", "#self"]
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@OpenPartsBox", "#self"]
     },
     "MiniGame@BlackFlow@OpenPartsBox": {
         "doc": "用行动力标识确认地图加载完成，再点击底部零件箱",
@@ -179,7 +269,7 @@
         "roi": [1000, 50, 230, 120],
         "specificRect": [710, 650, 1, 1],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@PartsBoxReady", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@PartsBoxReady", "#self"]
     },
     "MiniGame@BlackFlow@PartsBoxReady": {
         "doc": "只识别零件箱；BlackFlowDataCollectionTaskPlugin 在此保存完整截图",
@@ -188,7 +278,7 @@
         "text": ["零件箱容量"],
         "roi": [0, 300, 400, 170],
         "preDelay": 1000,
-        "next": ["MiniGame@BlackFlow@ClosePartsBox"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@ClosePartsBox"]
     },
     "MiniGame@BlackFlow@ClosePartsBox": {
         "doc": "点击底部收起按钮关闭零件箱",
@@ -196,7 +286,7 @@
         "action": "ClickRect",
         "specificRect": [640, 660, 1, 1],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@ExitExploration", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@ExitExploration", "#self"]
     },
     "MiniGame@BlackFlow@ExitExploration": {
         "doc": "复用肉鸽退出探索模板返回探索总览",
@@ -205,7 +295,7 @@
         "template": "Roguelike@ExitThenAbandon.png",
         "roi": [0, 0, 90, 90],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@Abandon", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@Abandon", "#self"]
     },
     "MiniGame@BlackFlow@Abandon": {
         "doc": "识别探索总览中的放弃本次探索入口",
@@ -214,14 +304,14 @@
         "text": ["放弃本次探索"],
         "roi": [950, 270, 310, 130],
         "postDelay": 500,
-        "next": ["MiniGame@BlackFlow@AbandonConfirm", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@AbandonConfirm", "#self"]
     },
     "MiniGame@BlackFlow@AbandonConfirm": {
         "doc": "复用肉鸽放弃探索确认动作",
         "baseTask": "Roguelike@AbandonConfirm",
         "template": "Roguelike@AbandonConfirm.png",
         "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@WaitForExploreRestart", "#self"]
+        "next": ["MiniGame@BlackFlow@NetworkDisconnected", "MiniGame@BlackFlow@WaitForExploreRestart", "#self"]
     },
     "MiniGame@BlackFlow@WaitForExploreRestart": {
         "doc": "推进结算弹窗，直到再次识别到开始探索，一个采集周期结束",
@@ -230,8 +320,13 @@
         "specificRect": [600, 610, 1, 1],
         "postDelay": 1500,
         "maxTimes": 20,
-        "exceededNext": ["Stop"],
-        "next": ["MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@WaitInitializing", "#self"]
+        "exceededNext": ["MiniGame@BlackFlow@OpeningFailed"],
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@StartExplore",
+            "MiniGame@BlackFlow@WaitInitializing",
+            "#self"
+        ]
     },
     "MiniGame@BlackFlow@WaitInitializing": {
         "doc": "初始化期间只等待，不额外点击",
@@ -240,6 +335,18 @@
         "text": ["正在初始化"],
         "roi": [1075, 590, 150, 60],
         "postDelay": 1000,
-        "next": ["MiniGame@BlackFlow@StartExplore", "MiniGame@BlackFlow@WaitForExploreRestart"]
+        "next": [
+            "MiniGame@BlackFlow@NetworkDisconnected",
+            "MiniGame@BlackFlow@StartExplore",
+            "MiniGame@BlackFlow@WaitForExploreRestart"
+        ]
+    },
+    "MiniGame@BlackFlow@NetworkDisconnected": {
+        "doc": "明确识别游戏断连弹窗，保存独立诊断并报错；等待游戏重新连接后再启动，不作为分队识别失败",
+        "algorithm": "OcrDetect",
+        "text": ["神经网络"],
+        "roi": [420, 285, 440, 50],
+        "action": "Stop",
+        "cache": false
     }
 }
