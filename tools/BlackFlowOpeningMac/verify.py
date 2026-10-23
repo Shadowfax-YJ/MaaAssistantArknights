@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import subprocess
 import tempfile
 
@@ -24,8 +25,15 @@ executable = app / 'Contents/MacOS' / info['CFBundleExecutable']
 libraries = list(app.rglob('libMaaCore.dylib'))
 assert len(libraries) == 1, libraries
 library = libraries[0]
-for path in [executable, library, *app.rglob('libMaaUtils.dylib')]:
+deployment_targets = {}
+for path in [executable, *app.rglob('*.dylib')]:
     subprocess.run(['lipo', str(path), '-verify_arch', 'arm64', 'x86_64'], check=True)
+    commands = subprocess.check_output(['otool', '-l', str(path)], text=True)
+    minimums = re.findall(r'cmd LC_(?:BUILD_VERSION|VERSION_MIN_MACOSX).*?\b(?:minos|version) ([0-9.]+)', commands, flags=re.S)
+    assert minimums, f'No macOS deployment target found: {path}'
+    deployment_targets[str(path.relative_to(app))] = minimums
+minimum_macos = max([info['LSMinimumSystemVersion'], *[v for values in deployment_targets.values() for v in values]],
+                    key=lambda value: tuple(map(int, value.split('.'))))
 resources = app / 'Contents/Resources'
 metadata = json.loads((resources / 'build-info-opening-macos.json').read_bytes())
 task_path = resources / 'resource/tasks/MiniGame/BlackFlow.json'
@@ -55,5 +63,7 @@ with tempfile.TemporaryDirectory(prefix='maa-pioneer-smoke-') as directory:
 result = {'passed': True, 'version': args.version, 'architectures': ['arm64', 'x86_64'],
           'resourceLoad': True, 'openingTaskRegistration': task_id, 'gameStarted': False,
           'bundleIdentifier': info['CFBundleIdentifier'], 'dataContractChanged': False}
+result['minimumMacOS'] = minimum_macos
+result['deploymentTargets'] = deployment_targets
 output.write_bytes((json.dumps(result, indent=2)+'\n').encode())
 print(json.dumps(result))
