@@ -1,5 +1,7 @@
 #include <functional>
+#include <array>
 #include <chrono>
+#include <memory>
 #include <stdexcept>
 #include <iostream>
 #include <optional>
@@ -49,6 +51,8 @@ public:
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     AutomationStoreRefreshLedger m_refresh_ledger;
     std::vector<int> m_shop_purchased,m_shop_attempted,m_shop_attempted_names,m_shop_sell_attempted,m_shop_goods;
+    std::array<std::shared_ptr<cv::Mat>, 2> m_shop_goods_images {};
+    bool m_shop_goods_scanned = false;
     std::vector<std::string> m_shop_purchased_names;
     std::optional<Rect> m_pending_sale;
     std::optional<std::string> m_pending_sale_name;
@@ -68,12 +72,14 @@ public:
     template<class... T> void record_run_event(T&&...){}
     void stop_unverified_shop_refresh(std::string){stopped=true;}
     bool verify_shop_refresh_receipt();
+    void invalidate_shop_goods();
     bool run(PendingWork work){
 /*DISPATCH*/
         return true;
     }
 };
 /*RECEIPT*/
+/*INVALIDATE_SHOP*/
 }
 int main(){
     int failed=0, total=0;
