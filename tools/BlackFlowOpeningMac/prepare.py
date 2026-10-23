@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -38,6 +39,9 @@ def prepare(gui, version):
     text = text.replace('        try await MAAProvider.shared.setUserDirectory(path: Self.userDirectory.path)',
                         '        try FileManager.default.createDirectory(at: Self.userDirectory, withIntermediateDirectories: true)\n'
                         '        try await MAAProvider.shared.setUserDirectory(path: Self.userDirectory.path)')
+    text = text.replace('            fileLogger = try FileLogger(',
+                        '            try FileManager.default.createDirectory(at: Self.userDirectory.appendingPathComponent("debug"), withIntermediateDirectories: true)\n'
+                        '            fileLogger = try FileLogger(')
     model.write_bytes(text.encode())
     log_view = app / 'Main Menu/OpenLogFileView.swift'
     text = subprocess.check_output(['git', '-C', str(gui), 'show', f'{GUI_COMMIT}:MeoAsstMac/Main Menu/OpenLogFileView.swift']).decode()
@@ -63,6 +67,7 @@ def prepare(gui, version):
                 'platform': 'macos-universal', 'architectures': ['arm64', 'x86_64'],
                 'baseCommit': BASE_COMMIT, 'guiCommit': GUI_COMMIT,
                 'buildCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+                'coreBuildCommit': os.environ.get('CORE_BUILD_COMMIT') or subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                 'criticalSourceSha256': hashes,
                 'captureContract': {'changed': False, 'relativeDirectory': 'debug/roguelike/black_flow/opening_cycles/<cycle-id>',
                                     'images': ['processing-item', 'parts-box'],

@@ -3,8 +3,14 @@ on:
   push:
     branches: [build/blackflow-opening-macos-20261024]
   workflow_dispatch:
+    inputs:
+      core_run_id:
+        description: Reuse a verified run with identical native sources
+        required: false
+        type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: pioneer-macos-${{ github.ref }}
   cancel-in-progress: false
@@ -12,6 +18,7 @@ env:
   OPENING_VERSION: v6.0.0-opening.recovery4.20261024
 jobs:
   core:
+    if: inputs.core_run_id == ''
     name: Core (${{ matrix.arch }})
     runs-on: macos-26-intel
     strategy:
@@ -50,21 +57,37 @@ jobs:
   package:
     name: Universal GUI and DMG
     needs: core
+    if: always() && !cancelled() && (needs.core.result == 'success' || (needs.core.result == 'skipped' && inputs.core_run_id != ''))
     runs-on: macos-26-intel
     steps:
       - uses: actions/checkout@v7
         with:
           show-progress: false
+          fetch-depth: 0
+      - name: Verify reused Core source
+        if: inputs.core_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CORE_RUN_ID: ${{ inputs.core_run_id }}
+        run: |
+          [[ "$CORE_RUN_ID" =~ ^[0-9]+$ ]]
+          source_commit=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CORE_RUN_ID" --jq .head_sha)
+          git diff --exit-code "$source_commit" HEAD -- CMakeLists.txt CMakePresets.json cmake include src/MaaCore src/MaaUtils resource tools/maadeps-download.py .gitmodules
+          echo "CORE_BUILD_COMMIT=$source_commit" >> "$GITHUB_ENV"
       - name: Fetch pinned GUI
         run: git submodule update --init --depth 1 src/MaaMacGui
       - uses: actions/download-artifact@v8
         with:
           name: opening-core-arm64
           path: install-arm64
+          run-id: ${{ inputs.core_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
         with:
           name: opening-core-x86_64
           path: install-x86_64
+          run-id: ${{ inputs.core_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Assemble universal frameworks
         run: |
           mkdir -p build release
