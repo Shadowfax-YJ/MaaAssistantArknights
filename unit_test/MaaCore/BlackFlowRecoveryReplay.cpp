@@ -82,7 +82,7 @@ void commit_move(BlackFlowSession& s, int floor, bool random = false)
     require(s.commit(entered, &error), error);
 }
 
-struct Port final : IBlackFlowTaskPort
+struct Port : IBlackFlowTaskPort
 {
     bool succeeds = false;
     int attempts = 0;
@@ -142,6 +142,7 @@ struct Port final : IBlackFlowTaskPort
 #include "BlackFlowLinkedEncounterReplay.h"
 #include "BlackFlowRevealReplay.h"
 #include "BlackFlowDifficultyPanelReplay.h"
+#include "BlackFlowDuelPreparationReplay.h"
 
 int main(int argc, char** argv)
 {
@@ -402,6 +403,7 @@ int main(int argc, char** argv)
     opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
     linked_encounter_regressions(std::filesystem::path(argv[1]), test);
     reveal_session_regressions(std::filesystem::path(argv[1]), test);
+    duel_preparation_regressions(std::filesystem::path(argv[1]), test);
     difficulty_panel_regressions(std::filesystem::path(argv[1]), config, test);
     test("split title updates lifecycle attribution from floor two to three", [&] {
         require(plugin.load_params(json::object { { "blackflow_strategy", "automation_collection" } }), "initialize");

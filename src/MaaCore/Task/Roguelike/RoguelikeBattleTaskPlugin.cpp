@@ -4,6 +4,7 @@
 #include <format>
 #include <future>
 #include <ranges>
+#include <random>
 #include <vector>
 
 #include "Config/GeneralConfig.h"
@@ -368,6 +369,15 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
     }
 
     Log.info("Run battle preparation phase", m_stage_name);
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow &&
+        m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection &&
+        blackflow::has_duel_preparation_tiers(m_stage_name) && !m_duel_preparation_tier.has_value()) {
+        static thread_local std::mt19937 random_engine(std::random_device { }());
+        const int index = std::uniform_int_distribution<int>(0, 2)(random_engine);
+        if (!select_duel_preparation_tier(index)) {
+            return false;
+        }
+    }
     if (!update_deployment(true)) {
         Log.error("Failed to update deployment during battle preparation");
         return false;
@@ -426,6 +436,29 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
     }
 
     const std::string start_task = m_config->get_theme() + "@Roguelike@BattlePreparationStart";
+    if (m_duel_preparation_tier.has_value()) {
+        // The provided frame must still show the completed preparation, before
+        // ProcessTask is allowed to send the start click.
+        const cv::Mat image = ctrler()->get_image();
+        OCRer start(image);
+        start.set_task_info(start_task);
+        OCRer counter(image);
+        counter.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCount");
+        OCRer cancel(image);
+        cancel.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCancel");
+        if (image.empty() || !start.analyze() || !counter.analyze() || counter.get_result().size() != 1 ||
+            cancel.analyze()) {
+            Log.error("Duel preparation evidence is not a completed preparation page", m_stage_name);
+            return false;
+        }
+        const auto count = blackflow::parse_preparation_deployment_count(counter.get_result().front().text);
+        const int expected = static_cast<int>(target_locations.size());
+        if (!count.has_value() || count->first != expected || count->second != expected ||
+            !record_duel_preparation("before-start", image)) {
+            Log.error("Failed to preserve duel preparation before starting", m_stage_name);
+            return false;
+        }
+    }
     if (!ProcessTask(*this, { start_task }).set_task_delay(0).set_retry_times(5).run()) {
         Log.error("Failed to click the battle preparation start button", m_stage_name);
         return false;
@@ -496,6 +529,70 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
         m_battle_camera_shift.first,
         m_battle_camera_shift.second);
     return true;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::select_duel_preparation_tier(int index)
+{
+    if (m_duel_preparation_tier.has_value()) {
+        return *m_duel_preparation_tier == index;
+    }
+    if (index < 0 || index >= static_cast<int>(blackflow::DuelPreparationTiers.size()) ||
+        !blackflow::has_duel_preparation_tiers(m_stage_name)) {
+        return false;
+    }
+    const auto& tier = blackflow::DuelPreparationTiers[index];
+    // TilePack: solo [1,3]/[4,3]/[7,3]; co-op also uses the next tile to the right.
+    // Only preparation selection moves; the post-start combat plan and camera stay unchanged.
+    for (auto& plans : m_preparation_deploy_plan | std::views::values) {
+        for (auto& plan : plans) {
+            plan.location.x += tier.offset_x;
+        }
+    }
+    m_duel_preparation_tier = index;
+    Log.info("BlackFlow duel preparation tier selected", m_stage_name, tier.label, tier.position);
+    return record_duel_preparation("selected");
+}
+
+bool asst::RoguelikeBattleTaskPlugin::record_duel_preparation(std::string_view phase, const cv::Mat& image)
+{
+    if (!m_duel_preparation_tier.has_value() || !m_duel_preparation_observer) {
+        return false;
+    }
+    const int index = *m_duel_preparation_tier;
+    const auto& tier = blackflow::DuelPreparationTiers[index];
+    json::array plans;
+    for (const auto& [group, entries] : m_preparation_deploy_plan) {
+        for (const auto& entry : entries) {
+            plans.emplace_back(
+                json::object {
+                    { "operator_group", group },
+                    { "location", json::array { entry.location.x, entry.location.y } },
+                });
+        }
+    }
+    json::array deployed;
+    if (phase == "before-start") {
+        for (const auto& [location, oper] : m_used_tiles) {
+            deployed.emplace_back(
+                json::object {
+                    { "operator_name", oper.name },
+                    { "location", json::array { location.x, location.y } },
+                });
+        }
+    }
+    return m_duel_preparation_observer(
+        phase,
+        json::object {
+            { "stage_name", m_stage_name },
+            { "selection_policy", "uniform_random" },
+            { "selected_tier", std::string(tier.position) },
+            { "selected_tier_name", std::string(tier.label) },
+            { "selected_tier_index_from_left", index + 1 },
+            { "preparation_plan", std::move(plans) },
+            { "deployed_operators", std::move(deployed) },
+            { "deployment_verification", phase == "before-start" ? "preparation_counter" : "not_deployed" },
+        },
+        image);
 }
 
 std::optional<bool> asst::RoguelikeBattleTaskPlugin::confirm_preparation_deployment(const DeployPlanInfo& deploy_plan)
@@ -1371,6 +1468,7 @@ void asst::RoguelikeBattleTaskPlugin::clear()
     m_urgent_home_index = decltype(m_urgent_home_index)();
     m_need_clear_tiles = decltype(m_need_clear_tiles)();
     m_preparation_deploy_plan.clear();
+    m_duel_preparation_tier.reset();
     m_battle_camera_shift = { 0., 0. };
     m_deploy_plan_only = false;
     m_virtual_auto_skill_devices.clear();

@@ -52,6 +52,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopupTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCultivationTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowDuelPreparationEvidence.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowLifecycleTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMapObservationSource.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementTaskPlugin.h"
@@ -333,6 +334,23 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             if (!session->observe_battle_stage_name(std::string(content), &error)) {
                 Log.warn("BlackFlow battle stage observation ignored", error);
             }
+        });
+    battle_plugin->set_duel_preparation_observer(
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
+         weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
+             m_blackflow_port_ptr)](std::string_view phase, json::object details, const cv::Mat& image) {
+            const auto session = weak_session.lock();
+            const auto port = weak_port.lock();
+            if (session == nullptr || port == nullptr) {
+                return false;
+            }
+            std::string error;
+            const bool saved =
+                blackflow::record_duel_preparation_evidence(*session, *port, phase, std::move(details), image, &error);
+            if (!saved) {
+                Log.error("BlackFlow duel preparation evidence could not be saved", phase, error);
+            }
+            return saved;
         });
     battle_plugin->set_battle_result_observer(
         [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr)](

@@ -1,11 +1,9 @@
-黑流树海采集版 v1.1.27
+黑流树海采集版 v1.1.28
 
 ### 本次更新
 
-* 修复出售无缘果后，付费刷新商店已成功却因扣款校验错误而停止采集的问题。
-* 修复弥散虚雾范围未确认时高估视野收益、范围确认后仍误报视野预期不符的问题。
-* 修复和平守卫者传送并完成作战后，误报原事件节点未揭示的问题。
-* 额外点亮行商节点的警告增加“疑似由鸭力板导致，尚未确认持有”的提示。
+* 狭路相逢的“搏杀”“共斗”改为每场随机选择左、中、右档，按所选档位部署干员，并记录选择结果。
+* 部署完成后、开始战斗前保存截图到对应节点目录，便于核对选档和部署情况。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -18,8 +16,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.27/MAA-BlackFlow-Data-Collection-v1.1.27-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.27/MAA-BlackFlow-Data-Collection-v1.1.27-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.28/MAA-BlackFlow-Data-Collection-v1.1.28-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.28/MAA-BlackFlow-Data-Collection-v1.1.28-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

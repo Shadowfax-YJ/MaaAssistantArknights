@@ -1,4 +1,4 @@
-## v1.1.27
+## v1.1.28
 
 ### Highlights
 
@@ -44,6 +44,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.28 (2026-10-23)</b></summary>
+
+### 改进 | Improved
+
+* 狭路相逢的“搏杀”“共斗”改为每场随机选择左、中、右档，按所选档位部署干员，并记录选择结果。 @Shadowfax-YJ
+* 部署完成后、开始战斗前保存截图到对应节点目录，便于核对选档和部署情况。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.27 (2026-10-22)</b></summary>
 
 ### 修复 | Fix

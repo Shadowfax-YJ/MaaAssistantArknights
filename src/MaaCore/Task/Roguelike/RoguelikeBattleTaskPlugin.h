@@ -16,6 +16,8 @@ namespace asst
 {
 class RoguelikeBattleTaskPlugin : public AbstractRoguelikeTaskPlugin, private BattleHelper
 {
+    friend struct DuelPreparationReplayAccess;
+
     using Time_Point = std::chrono::time_point<std::chrono::system_clock>;
 
     inline static const std::unordered_set<std::string> DiceSet = { "骰子", "8面骰子", "12面骰子" };
@@ -42,6 +44,11 @@ public:
     void set_virtual_auto_skill_observer(std::function<void(std::string_view)> observer)
     {
         m_virtual_auto_skill_observer = std::move(observer);
+    }
+
+    void set_duel_preparation_observer(std::function<bool(std::string_view, json::object, const cv::Mat&)> observer)
+    {
+        m_duel_preparation_observer = std::move(observer);
     }
 
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
@@ -74,6 +81,8 @@ protected:
     bool do_best_deploy(bool wait_for_confirmation = false);
     bool calc_stage_info();
     bool run_preparation_phase();
+    bool select_duel_preparation_tier(int index);
+    bool record_duel_preparation(std::string_view phase, const cv::Mat& image = { });
     std::optional<bool> confirm_preparation_deployment(const DeployPlanInfo& deploy_plan);
     bool register_virtual_auto_skill_devices();
     void stop_planned_skills();
@@ -195,6 +204,8 @@ protected:
     std::function<void(std::string_view)> m_stage_observer;
     std::function<void(std::string_view, int)> m_battle_result_observer;
     std::function<void(std::string_view)> m_virtual_auto_skill_observer;
+    std::function<bool(std::string_view, json::object, const cv::Mat&)> m_duel_preparation_observer;
+    std::optional<int> m_duel_preparation_tier;
     blackflow::BattleTotalKillsAggregator m_total_kills_aggregator;
 
     // 缓存干员精英

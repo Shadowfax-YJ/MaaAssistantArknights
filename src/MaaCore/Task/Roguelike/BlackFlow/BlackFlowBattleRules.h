@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cstddef>
 #include <optional>
@@ -16,6 +17,24 @@
 namespace asst::blackflow
 {
 inline constexpr std::size_t PreparationCombatSettleDelayMs = 1500;
+
+struct DuelPreparationTier
+{
+    std::string_view position;
+    std::string_view label;
+    int offset_x;
+};
+
+inline constexpr std::array<DuelPreparationTier, 3> DuelPreparationTiers {
+    DuelPreparationTier { "left", "左档", -3 },
+    DuelPreparationTier { "middle", "中档", 0 },
+    DuelPreparationTier { "right", "右档", 3 },
+};
+
+[[nodiscard]] inline constexpr bool has_duel_preparation_tiers(std::string_view stage) noexcept
+{
+    return stage == "搏杀" || stage == "共斗";
+}
 
 [[nodiscard]] inline std::optional<std::string> resolve_battle_intel_stage_name(
     std::string_view captured, const std::vector<std::string>& known_stage_names)

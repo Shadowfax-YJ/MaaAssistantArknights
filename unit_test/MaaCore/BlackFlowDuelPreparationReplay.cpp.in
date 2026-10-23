@@ -1,0 +1,393 @@
+// Production preparation methods; only controller, recognition and persistence boundaries are supplied.
+#include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <map>
+#include <queue>
+#include <random>
+#include <ranges>
+#include <stdexcept>
+#include <unordered_set>
+#include <opencv2/core.hpp>
+#include "Common/AsstBattleDef.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowBattleRules.h"
+using namespace asst;
+using namespace asst::battle;
+using namespace asst::battle::roguelike;
+
+void require(bool ok, const char* text)
+{
+    if (!ok) {
+        throw std::runtime_error(text);
+    }
+}
+
+struct
+{
+    template <class... A>
+    void info(A&&...)
+    {
+    }
+
+    template <class... A>
+    void error(A&&...)
+    {
+    }
+} Log;
+
+struct
+{
+    struct Options
+    {
+        int battle_start_timeout_seconds = 3;
+    } options;
+
+    auto& get_options() { return options; }
+} Config;
+
+struct
+{
+    int value = 0;
+
+    const int* get(const std::string&) { return &value; }
+} Task;
+
+namespace asst
+{
+enum class RoguelikeMode
+{
+    BlackFlowAutomationCollection,
+    Other
+};
+
+namespace RoguelikeTheme
+{
+inline const std::string BlackFlow = "BlackFlow";
+}
+
+struct ReplayConfig
+{
+    std::string theme = "BlackFlow";
+    RoguelikeMode mode = RoguelikeMode::BlackFlowAutomationCollection;
+
+    std::string get_theme() const { return theme; }
+
+    RoguelikeMode get_mode() const { return mode; }
+};
+
+struct ReplayController
+{
+    bool started = false, wrong_page = false, wrong_count = false, cancel = false, empty = false, stopped = false;
+    int count = 0, total = 1, starts = 0, ticks = 0;
+    std::vector<std::string> operations;
+
+    cv::Mat get_image()
+    {
+        if (empty) {
+            return { };
+        }
+        cv::Mat image(720, 1280, CV_8UC3, cv::Scalar());
+        image.at<cv::Vec3b>(0, 0) = cv::Vec3b(!started && !wrong_page, wrong_count ? 0 : count, total);
+        image.at<cv::Vec3b>(0, 1)[0] = cancel;
+        return image;
+    }
+};
+
+struct OCRer
+{
+    cv::Mat image;
+    std::string task;
+
+    struct Result
+    {
+        std::string text;
+    };
+
+    std::vector<Result> result;
+
+    OCRer(const cv::Mat& frame) :
+        image(frame)
+    {
+    }
+
+    template <class T>
+    void set_task_info(T&& value)
+    {
+        if constexpr (std::is_convertible_v<T, std::string>) {
+            task = value;
+        }
+        else {
+            task = "BattlePreparationStart";
+        }
+    }
+
+    bool analyze()
+    {
+        result.clear();
+        if (image.empty() || !image.at<cv::Vec3b>(0, 0)[0]) {
+            return false;
+        }
+        if (task.ends_with("DeployCount")) {
+            auto pixel = image.at<cv::Vec3b>(0, 0);
+            result.push_back({ std::to_string(pixel[1]) + "/" + std::to_string(pixel[2]) });
+        }
+        else if (task.ends_with("DeployCancel")) {
+            if (image.at<cv::Vec3b>(0, 1)[0]) {
+                result.push_back({ "cancel" });
+            }
+        }
+        else {
+            result.push_back({ "start" });
+        }
+        return !result.empty();
+    }
+
+    const auto& get_result() const { return result; }
+};
+
+struct TilePack
+{
+    struct Result
+    {
+        std::unordered_map<Point, int> normal_tile_info, side_tile_info;
+        Point retreat_button, skill_button;
+        bool has_multi_stages = false;
+    };
+
+    static Result calc(int, double, double) { return { }; }
+};
+class RoguelikeBattleTaskPlugin;
+
+struct ProcessTask
+{
+    RoguelikeBattleTaskPlugin& plugin;
+
+    ProcessTask(RoguelikeBattleTaskPlugin& p, std::initializer_list<std::string>) :
+        plugin(p)
+    {
+    }
+
+    auto& set_task_delay(int) { return *this; }
+
+    auto& set_retry_times(int) { return *this; }
+
+    bool run();
+};
+
+class RoguelikeBattleTaskPlugin
+{
+public:
+    using Plan = std::unordered_map<std::string, std::vector<DeployInfoWithRank>>;
+    ReplayConfig config;
+    ReplayConfig* m_config = &config;
+    ReplayController controller;
+    std::string m_stage_name;
+    Plan m_preparation_deploy_plan, m_deploy_plan;
+    std::vector<DeployInfoWithRank> m_retreat_plan;
+    std::optional<int> m_duel_preparation_tier;
+    std::function<bool(std::string_view, json::object, const cv::Mat&)> m_duel_preparation_observer;
+    std::unordered_map<Point, OperNameTag> m_used_tiles;
+    std::vector<int> m_cur_deployment_opers, m_battlefield_opers, m_skill_usage, m_skill_times, m_skill_error_count,
+        m_last_use_skill_time, m_deployed_time;
+    std::queue<int> m_need_clear_tiles;
+    bool m_in_battle = false, m_first_deploy = true, m_has_multi_stages = false,
+         m_direct_ready_skill_confirmation = false;
+    int m_kills = 0, m_total_kills = 0, m_map_data = 0;
+    std::pair<double, double> m_camera_shift, m_battle_camera_shift = { 9, 0 };
+    std::unordered_map<Point, int> m_normal_tile_info, m_side_tile_info;
+    Point m_retreat_button_pos, m_skill_button_pos;
+    int retry_deployments = 0;
+
+    ReplayController* ctrler() { return &controller; }
+
+    bool need_exit() { return controller.stopped; }
+
+    bool sleep(int)
+    {
+        if (++controller.ticks > 40) {
+            controller.stopped = true;
+        }
+        return !need_exit();
+    }
+
+    bool update_deployment(bool) { return true; }
+
+    bool do_best_deploy(bool confirmed)
+    {
+        require(confirmed, "preparation must use deployment confirmation");
+        controller.operations.push_back("deploy");
+        if (retry_deployments-- > 0) {
+            return true;
+        }
+        for (const auto& [group, plans] : m_deploy_plan) {
+            for (const auto& plan : plans) {
+                if (!m_used_tiles.contains(plan.location)) {
+                    m_used_tiles.emplace(plan.location, OperNameTag { Role::Medic, group });
+                    ++controller.count;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool run_preparation_phase();
+    bool select_duel_preparation_tier(int);
+    bool record_duel_preparation(std::string_view, const cv::Mat& = { });
+};
+
+bool ProcessTask::run()
+{
+    plugin.controller.operations.push_back("start");
+    plugin.controller.started = true;
+    ++plugin.controller.starts;
+    return true;
+}
+}
+
+/*SELECT_TIER*/
+/*RECORD*/
+/*PREPARE*/
+
+int main(int argc, char** argv)
+{
+    require(argc == 3, "expected repository and contract output");
+    const std::filesystem::path repo(argv[1]);
+    int passed = 0, failed = 0;
+    json::array samples;
+    auto test = [&](const std::string& name, auto function) {
+        try {
+            function();
+            ++passed;
+            std::cout << "PASS " << name << '\n';
+        }
+        catch (const std::exception& error) {
+            ++failed;
+            std::cout << "FAIL " << name << ": " << error.what() << '\n';
+        }
+    };
+    for (const std::string stage : { "搏杀", "共斗" }) {
+        for (int tier = 0; tier < 3; ++tier) {
+            const auto document =
+                json::open(repo / "resource/roguelike/BlackFlow/autopilot" / std::filesystem::u8path(stage + ".json"))
+                    .value();
+            auto make = [&]() {
+                RoguelikeBattleTaskPlugin p;
+                p.m_stage_name = stage;
+                for (const auto& row : document.at("preparation").at("deploy_plan").as_array()) {
+                    DeployInfoWithRank plan;
+                    plan.location = { row.at("location")[0].as_integer(), row.at("location")[1].as_integer() };
+                    for (const auto& group : row.at("groups").as_array()) {
+                        p.m_preparation_deploy_plan[group.as_string()].push_back(plan);
+                    }
+                }
+                p.m_deploy_plan["combat"] = { { Point { 13, 3 } } };
+                p.controller.total = stage == "搏杀" ? 1 : 2;
+                return p;
+            };
+            for (const std::string mode : { "success",
+                                            "retry",
+                                            "record-fails",
+                                            "capture-fails",
+                                            "empty",
+                                            "wrong-page",
+                                            "wrong-count",
+                                            "pending-direction",
+                                            "stop" }) {
+                test(stage + "/" + std::to_string(tier) + "/" + mode, [&]() {
+                    auto p = make();
+                    json::object selected, before;
+                    p.m_duel_preparation_observer =
+                        [&](std::string_view phase, json::object details, const cv::Mat& image) {
+                            require(
+                                details.at("selected_tier_index_from_left").as_integer() == tier + 1,
+                                "tier changed during retry");
+                            p.controller.operations.emplace_back(phase);
+                            if (phase == "selected") {
+                                selected = details;
+                                return mode != "record-fails";
+                            }
+                            require(!image.empty() && !p.controller.started, "screenshot must precede start");
+                            require(
+                                image.at<cv::Vec3b>(0, 0)[1] == p.controller.total,
+                                "screenshot must show full deployment");
+                            require(
+                                details.at("deployed_operators").as_array().size() == p.controller.total,
+                                "missing deployed operators");
+                            before = details;
+                            return mode != "capture-fails";
+                        };
+                    const bool selected_ok = p.select_duel_preparation_tier(tier);
+                    if (mode == "record-fails") {
+                        require(!selected_ok && p.controller.starts == 0, "failed selection must stop");
+                        return;
+                    }
+                    require(selected_ok, "selection failed");
+                    const int x = 1 + tier * 3;
+                    std::unordered_set<Point> destinations;
+                    for (const auto& [group, entries] : p.m_preparation_deploy_plan) {
+                        for (const auto& entry : entries) {
+                            destinations.insert(entry.location);
+                        }
+                    }
+                    require(destinations.contains({ x, 3 }), "wrong first preparation tile");
+                    if (stage == "共斗") {
+                        require(destinations.contains({ x + 1, 3 }), "co-op operators must share the tier");
+                    }
+                    require(p.select_duel_preparation_tier(tier), "repeat selection rejected");
+                    if (mode == "retry") {
+                        p.retry_deployments = 2;
+                    }
+                    p.controller.empty = mode == "empty";
+                    p.controller.wrong_page = mode == "wrong-page";
+                    p.controller.wrong_count = mode == "wrong-count";
+                    p.controller.cancel = mode == "pending-direction";
+                    p.controller.stopped = mode == "stop";
+                    const bool success = p.run_preparation_phase();
+                    const bool expected = mode == "success" || mode == "retry";
+                    require(success == expected, "unexpected preparation result");
+                    require(p.controller.starts == int(expected), "unsafe or missing start click");
+                    require(
+                        p.m_deploy_plan.at("combat").front().location == Point { 13, 3 },
+                        "combat plan was shifted");
+                    require(p.m_battle_camera_shift == std::pair<double, double> { 9, 0 }, "camera shift changed");
+                    if (expected) {
+                        require(
+                            p.controller.operations.front() == "selected",
+                            "selection not recorded before deployment");
+                        const auto saved = std::ranges::find(p.controller.operations, "before-start");
+                        const auto started = std::ranges::find(p.controller.operations, "start");
+                        require(saved < started, "start click preceded evidence persistence");
+                        if (mode == "success") {
+                            samples.emplace_back(json::object { { "phase", "selected" }, { "details", selected } });
+                            samples.emplace_back(json::object { { "phase", "before-start" }, { "details", before } });
+                        }
+                    }
+                });
+            }
+            test(stage + "/" + std::to_string(tier) + "/normal-mode", [&]() {
+                auto p = make();
+                p.config.mode = RoguelikeMode::Other;
+                require(p.run_preparation_phase(), "ordinary mode changed");
+                require(!p.m_duel_preparation_tier.has_value() && p.controller.starts == 1, "ordinary mode randomized");
+            });
+        }
+    }
+    test("production random draw stays within three tiers", [&]() {
+        RoguelikeBattleTaskPlugin p;
+        p.m_stage_name = "搏杀";
+        p.m_preparation_deploy_plan["mechanic"] = { { Point { 4, 3 } } };
+        p.m_duel_preparation_observer = [](auto, auto, const auto&) {
+            return true;
+        };
+        require(p.run_preparation_phase(), "random path failed");
+        require(p.m_duel_preparation_tier >= 0 && p.m_duel_preparation_tier < 3, "invalid random index");
+    });
+    std::ofstream output(argv[2]);
+    output << json::value(samples).format();
+    std::cout << passed << " passed, " << failed << " failed\n";
+    return failed != 0;
+}
