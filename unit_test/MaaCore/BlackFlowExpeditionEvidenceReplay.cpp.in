@@ -91,15 +91,22 @@ struct ReplayController
     bool unstable_names = false, empty = false, stop_on_depart = false, advance_ok = true;
     std::vector<int> after_depart { 3 };
     size_t next_frame = 0;
+    int images_read = 0;
+    std::vector<int> frame_pages;
+    size_t frame_index = 0;
     std::vector<std::string> names { "古米", "伊桑", "凯尔希·思衡托" };
 
     cv::Mat get_image()
     {
+        ++images_read;
         if (empty) {
             return { };
         }
         if (depart_clicks && next_frame < after_depart.size()) {
             page = after_depart[next_frame++];
+        }
+        if (!frame_pages.empty()) {
+            page = frame_pages[std::min(frame_index++, frame_pages.size() - 1)];
         }
         cv::Mat im(720, 1280, CV_8UC3, cv::Scalar());
         im.at<cv::Vec3b>(0, 0)[0] = page;
@@ -184,10 +191,10 @@ struct OCRer
         else if (task.ends_with("StageEncounterOcr") && (page == 3 || page == 7 || page == 8 || page == 10)) {
             result.push_back({ page == 7 ? "其他事件" : "未涉足之树" });
         }
-        else if (task == "LoadingText" && (page == 5 || page == 9)) {
+        else if (task == "LoadingText" && (page == 5 || page == 9 || page == 15)) {
             result.push_back({ "Loading" });
         }
-        else if (task.ends_with("DataSyncConfirm") && (page == 10 || page == 11)) {
+        else if (task.ends_with("DataSyncConfirm") && (page == 10 || page == 11 || page == 16)) {
             result.push_back({ "数据已更新" });
         }
         return !result.empty();
@@ -215,6 +222,7 @@ struct Matcher
         }
         int page = im.at<cv::Vec3b>(0, 0)[0];
         return (task.ends_with("CloseCollection") && page == 13) ||
+               (task.ends_with("CloseEventAfterEncounter") && (page == 14 || page == 15 || page == 16)) ||
                (task.ends_with("ExpeditionPicker") && (page == 2 || page == 8)) ||
                ((task.ends_with("MapPrepare-Ready") || task.ends_with("MapPrepare-ZoomOut")) &&
                 (page == 4 || page == 9 || page == 11));
@@ -347,6 +355,7 @@ public:
         bool analyze() {
             if (image.empty()) return false;
             int page=image.at<cv::Vec3b>(0,0)[0];
+            if (page >= 14 && page <= 17) return false;
             options = page == 2 ? std::vector<Option>{{true,{},"领取奖励",""}} : std::vector<Option>{{true,{},"原始选项",""}};
             return true;
         }

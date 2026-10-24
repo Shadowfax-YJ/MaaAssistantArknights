@@ -289,10 +289,14 @@ bool asst::RoguelikeStageEncounterTaskPlugin::confirm_cargo_choice()
     }
     std::vector<std::string> previous;
     int reward_frames = 0;
+    int ending_frames = 0;
+    const bool declined = m_encounter_choice.clicked &&
+                          m_encounter_choice.details.get("option", std::string()) == "没什么想买的";
     for (int sample = 0; sample < 12 && !need_exit(); ++sample) {
         sleep(350);
         const auto image = ctrler()->get_image();
         if (image.empty()) {
+            ending_frames = 0;
             continue;
         }
         OCRer loading(image);
@@ -301,6 +305,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::confirm_cargo_choice()
         syncing.set_task_info("BlackFlow@Roguelike@DataSyncConfirm");
         if (loading.analyze() || syncing.analyze()) {
             reward_frames = 0;
+            ending_frames = 0;
             continue;
         }
         Matcher reward(image);
@@ -308,6 +313,18 @@ bool asst::RoguelikeStageEncounterTaskPlugin::confirm_cargo_choice()
         reward_frames = reward.analyze() ? reward_frames + 1 : 0;
         if (reward_frames >= 2) {
             return confirm_encounter_choice(image, "reward_popup_after_choice");
+        }
+        if (declined) {
+            Matcher ending(image);
+            ending.set_task_info("BlackFlow@Roguelike@CloseEventAfterEncounter");
+            ending_frames = ending.analyze() ? ending_frames + 1 : 0;
+            if (ending_frames >= 2) {
+                return confirm_encounter_choice(image, "event_ending_after_decline");
+            }
+            if (ending_frames != 0) {
+                // Leave the check untouched for the original ending dispatcher.
+                continue;
+            }
         }
         bool map = false;
         for (const auto task : { "BlackFlow@Roguelike@MapPrepare-Ready", "BlackFlow@Roguelike@MapPrepare-ZoomOut" }) {

@@ -423,6 +423,12 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr);
+    m_custom_ptr->set_blackflow_opening_evidence_observer(
+        [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(lifecycle_plugin)](
+            std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {
+            const auto lifecycle = weak_lifecycle.lock();
+            return lifecycle != nullptr && lifecycle->record_opening_evidence(kind, std::move(details), std::move(image));
+        });
     difficulty_plugin->set_difficulty_observer(
         [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(
              lifecycle_plugin)](int target, int observed, bool verified, const cv::Mat& image) {
@@ -484,21 +490,30 @@ bool asst::RoguelikeTask::run()
                             m_blackflow_map_source_ptr != nullptr;
     }
 
-    const auto finish_run = [&]() noexcept {
+    const auto finish_run = [&](bool succeeded) noexcept {
+        const bool cancelled = need_exit();
         if (use_blackflow_map) {
             try {
                 if (m_blackflow_session_ptr != nullptr && m_blackflow_port_ptr != nullptr &&
                     m_blackflow_session_ptr->profile() == "automation_collection") {
                     json::object state = m_blackflow_session_ptr->run_log_state();
                     const blackflow::RunLogEvent event {
-                        .level = blackflow::RunLogLevel::Info,
+                        .level = cancelled ? blackflow::RunLogLevel::Warning
+                                           : succeeded ? blackflow::RunLogLevel::Info : blackflow::RunLogLevel::Error,
                         .action = "task.finished",
-                        .phase = "completed",
-                        .outcome = m_blackflow_session_ptr->terminated() ? "terminated" : "stopped",
+                        .phase = cancelled ? "stopped" : succeeded ? "completed" : "failed",
+                        .outcome = cancelled ? "cancelled" : !succeeded && m_blackflow_session_ptr->result().has_value()
+                                       ? m_blackflow_session_ptr->result()->outcome
+                                       : m_blackflow_session_ptr->terminated() ? "terminated" : "stopped",
                         .task = "RoguelikeTask",
                         .transaction_id = state.get("transaction_id", std::string()),
                         .state = std::move(state),
-                        .details = { },
+                        .details = {
+                            { "task_succeeded", succeeded },
+                            { "strategy_result", m_blackflow_session_ptr->result().has_value()
+                                                     ? json::value(m_blackflow_session_ptr->result()->to_json())
+                                                     : json::value(nullptr) },
+                        },
                     };
                     std::string ignored_error;
                     m_blackflow_port_ptr->record_run_event(
@@ -533,17 +548,37 @@ bool asst::RoguelikeTask::run()
                     callback(AsstMsg::SubTaskExtraInfo, info);
                 }
             }
-            finish_run();
+            finish_run(false);
             return false;
         }
     }
     try {
-        const bool result = InterfaceTask::run();
-        finish_run();
+        bool result = InterfaceTask::run();
+        if (use_blackflow_map && m_blackflow_session_ptr != nullptr) {
+            if (m_custom_ptr != nullptr && m_custom_ptr->blackflow_opening_failed()) {
+                // Persistence can itself fail. The task status must not depend
+                // on the diagnostic observer having written the failure event.
+                m_blackflow_session_ptr->fail(
+                    "opening_selection_failed", "opening_selection_failed", blackflow::FailureDisposition::StopTask);
+                result = false;
+            }
+            const auto& strategy_result = m_blackflow_session_ptr->result();
+            // Callback plugins deliberately disable ProcessTask to stop input.
+            // That is a successful interruption at the pipeline layer, but an
+            // explicit StopTask failure must reach Assistant as TaskChainError.
+            if (strategy_result && !strategy_result->succeeded && strategy_result->next_action == "stop_task") {
+                result = false;
+            }
+            if (!result && !need_exit() && !m_blackflow_session_ptr->terminated()) {
+                m_blackflow_session_ptr->fail(
+                    "task_pipeline_failed", "roguelike task pipeline returned failure", blackflow::FailureDisposition::StopTask);
+            }
+        }
+        finish_run(result);
         return result;
     }
     catch (...) {
-        finish_run();
+        finish_run(false);
         throw;
     }
 }

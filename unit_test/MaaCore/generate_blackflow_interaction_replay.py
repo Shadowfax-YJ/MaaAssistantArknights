@@ -47,4 +47,8 @@ if __name__ == '__main__':
     result = result.replace('/*START_REWARD*/', extract(reward_method, 'if (automation_collection)'))
     failure_method = extract(source, 'bool asst::RoguelikeCustomStartTaskPlugin::on_run_fails()')
     result = result.replace('/*START_REWARD_FAILURE*/', failure_method[failure_method.index('{'):])
+    completion_source = (repo / 'src/MaaCore/Task/Interface/RoguelikeTask.cpp').read_text('utf-8')
+    if args.source_ref:
+        completion_source = subprocess.check_output(['git', 'show', f'{args.source_ref}:src/MaaCore/Task/Interface/RoguelikeTask.cpp'], cwd=repo).decode('utf-8')
+    result = result.replace('/*TASK_COMPLETION*/', extract(completion_source, 'bool asst::RoguelikeTask::run()').replace('bool asst::RoguelikeTask::run()', 'bool RoguelikeTask::run()'))
     args.output.write_text(result, encoding='utf-8')

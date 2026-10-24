@@ -1,4 +1,4 @@
-## v1.1.29
+## v1.1.30
 
 ### Highlights
 
@@ -44,6 +44,21 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.30 (2026-10-24)</b></summary>
+
+### 改进 | Improved
+
+* 补齐开局选择、页面切换与异常停止时的截图和记录，便于排查问题。 @Shadowfax-YJ
+
+### 修复 | Fix
+
+* 修复开局招募组合漏选、错误进入其他职业招募的问题。 @Shadowfax-YJ
+* 修复“货从口出”选择“没什么想买的”后异常停止的问题。 @Shadowfax-YJ
+* 修复异常停止时仍显示“任务完成”的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.29 (2026-10-24)</b></summary>
 
 ### 改进 | Improved

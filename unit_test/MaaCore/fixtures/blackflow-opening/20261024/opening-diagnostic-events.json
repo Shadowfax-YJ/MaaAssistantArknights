@@ -1,0 +1,100 @@
+[
+    {
+        "action": "start.opening.failed",
+        "details": {
+            "candidates": [
+            ],
+            "confirmation_prompt": null,
+            "evidence_scope": "opening_diagnostic",
+            "expected_group": "坚不可摧",
+            "expected_vouchers": [
+                "重装招募券",
+                "术师招募券",
+                "医疗招募券"
+            ],
+            "failure_reason": "roles_selection_bypassed",
+            "voucher_page": true,
+            "vouchers": [
+                {
+                    "rect": [
+                        291,
+                        315,
+                        117,
+                        27
+                    ],
+                    "score": 0.999821,
+                    "text": "近卫招募券"
+                },
+                {
+                    "rect": [
+                        580,
+                        315,
+                        117,
+                        27
+                    ],
+                    "score": 0.999694,
+                    "text": "辅助招募券"
+                },
+                {
+                    "rect": [
+                        870,
+                        316,
+                        115,
+                        26
+                    ],
+                    "score": 0.999882,
+                    "text": "医疗招募券"
+                }
+            ]
+        },
+        "elapsed_ms": 1,
+        "floor": 0,
+        "image": {
+            "path": "images/wrong-vouchers.jpg"
+        },
+        "level": "ERROR",
+        "map_generation": 0,
+        "outcome": "stop_task",
+        "phase": "failed",
+        "schema_version": 1,
+        "sequence": 1,
+        "state": {
+            "action_points": 0,
+            "active_movement": "",
+            "current_node": 18446744073709551615,
+            "decision_id": "",
+            "expedition_core_away": false,
+            "floor": 0,
+            "hope": 0,
+            "ingots": 0,
+            "lorentz_eye_available": false,
+            "map_generation": 0,
+            "map_revision": 0,
+            "movement_instances": [
+            ],
+            "movement_inventory_refresh_required": true,
+            "observation_id": "",
+            "observed_current_node": 18446744073709551615,
+            "painted_liberi": false,
+            "profile": "automation_collection",
+            "random_reveals_on_processing_move": 0,
+            "resources_revision": 0,
+            "revealed_nodes": [
+            ],
+            "run_revision": 1,
+            "seeds": 0,
+            "selected_difficulty": -1,
+            "sellable_scraps": 0,
+            "strategy_terminal": false,
+            "terminated": true,
+            "transaction_id": "",
+            "tree_hole_outer_floor": 0,
+            "viewport_revision": 0,
+            "visited_nodes": [
+            ],
+            "white_model_birds": 0
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-24T04:53:56Z"
+    }
+]

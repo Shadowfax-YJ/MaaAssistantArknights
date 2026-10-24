@@ -1,12 +1,11 @@
-黑流树海采集版 v1.1.29
+黑流树海采集版 v1.1.30
 
 ### 本次更新
 
-* 修复零件箱收起后已回到地图或节点预览，仍长时间等待、反复恢复的问题。
-* 修复事件结束时重复点击退出按钮，误开零件箱后停止采集的问题。
-* 减少零件箱回到列表起点时的多余滑动，以及商店未变化时的重复扫描和识别等待。
-* 修复秘境行商将“血蕈”“种荚”误认成购买目标的问题。
-* 完善“先行一步”“货从口出”“失与得”的候选、实际选择和后续确认记录，补齐对应节点截图。
+* 修复开局招募组合漏选、错误进入其他职业招募的问题。
+* 修复“货从口出”选择“没什么想买的”后异常停止的问题。
+* 修复异常停止时仍显示“任务完成”的问题。
+* 补齐开局选择、页面切换与异常停止时的截图和记录，便于排查问题。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -19,8 +18,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.29/MAA-BlackFlow-Data-Collection-v1.1.29-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.29/MAA-BlackFlow-Data-Collection-v1.1.29-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.30/MAA-BlackFlow-Data-Collection-v1.1.30-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.30/MAA-BlackFlow-Data-Collection-v1.1.30-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

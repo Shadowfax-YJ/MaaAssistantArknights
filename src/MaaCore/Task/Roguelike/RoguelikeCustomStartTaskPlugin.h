@@ -41,6 +41,7 @@ public:
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
     virtual bool load_params([[maybe_unused]] const json::value& params) override;
     void set_custom(RoguelikeCustomType type, std::string custom);
+    bool blackflow_opening_failed() const noexcept { return m_blackflow_opening_failed; }
     void set_blackflow_start_reward_observer(std::function<void(std::string_view)> observer)
     {
         m_blackflow_start_reward_observer = std::move(observer);
@@ -54,6 +55,11 @@ public:
         std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> observer)
     {
         m_blackflow_cultivation_evidence_observer = std::move(observer);
+    }
+    void set_blackflow_opening_evidence_observer(
+        std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> observer)
+    {
+        m_blackflow_opening_evidence_observer = std::move(observer);
     }
 
 protected:
@@ -81,9 +87,12 @@ private:
     std::string m_squad;
     std::string m_collectible_mode_squad;
     bool m_automation_collection_core_char_voucher_selected = false;
+    bool m_blackflow_roles_verified = false;
+    bool m_blackflow_opening_failed = false;
     std::function<void(std::string_view)> m_blackflow_start_reward_observer;
     std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
     std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_cultivation_evidence_observer;
+    std::function<bool(std::string_view, json::object, std::shared_ptr<cv::Mat>)> m_blackflow_opening_evidence_observer;
     std::uint64_t m_start_reward_observation_index = 0;
 };
 }

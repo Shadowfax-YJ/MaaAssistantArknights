@@ -2552,6 +2552,10 @@
         "template": "BlackFlow@Roguelike@LastReward6.png"
     },
     "BlackFlow@Roguelike@LastRewardConfirm": {
+        "baseTask": "BlackFlow@Roguelike@OpeningRewardConfirmLegacy"
+    },
+    "BlackFlow@Roguelike@OpeningRewardConfirmLegacy": {
+        "baseTask": "Roguelike@LastRewardConfirm",
         "Doc": "base 的 next 里裸引用了 CloseCollection，黑流那个是 #next 型的，必须换成 A@(B) 形式。",
         "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
         "next": [
@@ -4046,7 +4050,51 @@
         "template": "BlackFlow@Roguelike@LastRewardConfirm.png"
     },
     "BlackFlow@Roguelike@RolesDefault": {
+        "baseTask": "BlackFlow@Roguelike@OpeningRolesLegacy"
+    },
+    "BlackFlow@Roguelike@OpeningRolesLegacy": {
+        "baseTask": "Roguelike@RolesDefault",
+        "next": ["BlackFlow@Roguelike@RolesConfirm"],
         "template": "BlackFlow@Roguelike@RolesDefault.png"
+    },
+    "BlackFlow@Roguelike@OpeningRoleCandidates": {
+        "algorithm": "OcrDetect",
+        "roi": [54, 356, 1172, 183],
+        "text": ["随心所欲", "先手必胜", "稳扎稳打", "取长补短", "灵活部署", "坚不可摧", "支援作战"],
+        "fullMatch": true,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@AutomationCollectionRolesDefault": {
+        "Doc": "只识别组合名称，不点击默认卡片；插件负责坚不可摧的选择、确认和三张招募券校验。",
+        "baseTask": "BlackFlow@Roguelike@OpeningRoleCandidates",
+        "action": "DoNothing",
+        "next": ["BlackFlow@Roguelike@RecruitMain"]
+    },
+    "BlackFlow@Roguelike@AutomationCollectionRewardConfirm": {
+        "Doc": "采集模式由插件领取奖励。共用的勾选图案只能用于重新分流，禁止点穿招募组合。",
+        "baseTask": "BlackFlow@Roguelike@OpeningRewardConfirmLegacy",
+        "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
+        "action": "DoNothing",
+        "maxTimes": 8,
+        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+    },
+    "BlackFlow@Roguelike@OpeningVoucherPage": {
+        "algorithm": "OcrDetect",
+        "roi": [550, 14, 240, 45],
+        "text": ["初始招募"],
+        "fullMatch": true
+    },
+    "BlackFlow@Roguelike@OpeningVoucherTitles": {
+        "algorithm": "OcrDetect",
+        "roi": [186, 298, 913, 60],
+        "text": ["重装招募券", "术师招募券", "医疗招募券", "近卫招募券", "辅助招募券", "先锋招募券", "狙击招募券", "特种招募券"],
+        "fullMatch": true
+    },
+    "BlackFlow@Roguelike@OpeningSupportPage": {
+        "algorithm": "OcrDetect",
+        "roi": [530, 14, 260, 50],
+        "text": ["选择支援"],
+        "fullMatch": true
     },
     "BlackFlow@Roguelike@Routing": {
         "algorithm": "JustReturn",

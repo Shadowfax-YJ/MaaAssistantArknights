@@ -393,6 +393,33 @@ void BlackFlowLifecycleTaskPlugin::initial_core_recruitment_failed()
     report_outputs();
 }
 
+bool BlackFlowLifecycleTaskPlugin::record_opening_evidence(
+    std::string_view kind,
+    json::object details,
+    std::shared_ptr<cv::Mat> image)
+{
+    const bool failed = kind == "failed";
+    if (failed) {
+        m_session->fail(
+            "opening_selection_failed",
+            details.get("failure_reason", std::string("opening selection could not be verified")),
+            FailureDisposition::StopTask);
+    }
+    const bool saved = record_run_event(
+        failed ? RunLogLevel::Error : RunLogLevel::Info,
+        "start.opening." + std::string(kind),
+        failed ? "failed" : kind.ends_with("selecting") || kind.ends_with("confirming") ? "before-click" : "observed",
+        failed ? "stop_task" : kind.ends_with("verified") ? "verified" : "pending",
+        std::move(details),
+        "RoguelikeCustomStartTaskPlugin",
+        std::move(image),
+        failed);
+    if (failed) {
+        report_outputs();
+    }
+    return saved;
+}
+
 void BlackFlowLifecycleTaskPlugin::tree_hole_return_failed(std::string error)
 {
     ++m_tree_hole_return_failures;

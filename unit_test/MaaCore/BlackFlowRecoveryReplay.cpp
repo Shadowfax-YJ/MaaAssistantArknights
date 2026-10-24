@@ -6,6 +6,7 @@
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowTaskPluginBase.h"
 #include "Task/Roguelike/RoguelikeDifficultySelectionTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCustomStartTaskPlugin.h"
 #include "Vision/Matcher.h"
 #include "Vision/Miscellaneous/PipelineAnalyzer.h"
 #include "Vision/OCRer.h"
@@ -147,6 +148,7 @@ struct Port : IBlackFlowTaskPort
 #include "BlackFlowMerchantInventoryReplay.h"
 #include "BlackFlowMovePreviewReplay.h"
 #include "BlackFlowOpeningCultivationReplay.h"
+#include "BlackFlowOpeningSelectionReplay.h"
 #include "BlackFlowRevealReplay.h"
 #include "BlackFlowStoreIdentityReplay.h"
 
@@ -207,6 +209,24 @@ int main(int argc, char** argv)
     auto config = std::make_shared<RoguelikeConfig>();
     require(config->verify_and_load_params(json::object { { "theme", "BlackFlow" }, { "mode", 30002 } }), "config");
     auto session = std::make_shared<BlackFlowSession>();
+    test("automation opening cannot click a default combo or a shared reward check", [&] {
+        RoguelikeCustomStartTaskPlugin opening({}, nullptr, "Roguelike", config, nullptr);
+        require(opening.load_params(json::object{}), "opening parameters");
+        const auto roles = Task.get("BlackFlow@Roguelike@RolesDefault");
+        require(roles->algorithm == AlgorithmType::OcrDetect && roles->action == ProcessTaskAction::DoNothing,
+                "combo still depends on the default-card template and clicks before verification");
+        require(Task.get("BlackFlow@Roguelike@LastRewardConfirm")->action == ProcessTaskAction::DoNothing,
+                "shared confirmation can still click through a combo page");
+        require(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",0}}), "ordinary mode");
+        require(opening.load_params(json::object{}), "ordinary opening");
+        require(Task.get("BlackFlow@Roguelike@RolesDefault")->action == ProcessTaskAction::ClickSelf &&
+                    Task.get("BlackFlow@Roguelike@LastRewardConfirm")->action == ProcessTaskAction::ClickSelf,
+                "automation guard leaked into an ordinary mode");
+        require(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",30002}}), "restore automation");
+        require(opening.load_params(json::object{}), "restore opening");
+        require(run_log_image_capture_mode("task.finished", "failed", false, true) == RunLogImageCaptureMode::ImmediateSnapshot,
+                "unstable task failure can still lose its only screenshot");
+    });
     auto port = std::make_shared<Port>();
     ProcessTask parent({ }, nullptr, "Roguelike");
     BlackFlowLifecycleTaskPlugin plugin({ }, nullptr, "Roguelike", config, nullptr, session, port);
@@ -593,6 +613,7 @@ int main(int argc, char** argv)
     expedition_picker_regressions(std::filesystem::path(argv[1]), test);
     expedition_evidence_regressions(std::filesystem::path(argv[1]), test);
     opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
+    opening_selection_regressions(std::filesystem::path(argv[1]), test);
     linked_encounter_regressions(std::filesystem::path(argv[1]), test);
     reveal_session_regressions(std::filesystem::path(argv[1]), test);
     duel_preparation_regressions(std::filesystem::path(argv[1]), test);

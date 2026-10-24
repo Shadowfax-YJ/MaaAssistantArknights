@@ -1586,6 +1586,8 @@ Right-click to clear inactive jobs</system:String>
     <system:String x:Key="BlackFlowOutcomeMoveConfirmationStateFailed">State update after movement confirmation failed</system:String>
     <system:String x:Key="BlackFlowOutcomeBattleIntelPreviewFailed">Unable to open the battle stage preview</system:String>
     <system:String x:Key="BlackFlowOutcomeCoreOperatorStatusSyncFailed">凯尔希·思衡托 Elite 2 status synchronization failed</system:String>
+    <system:String x:Key="BlackFlowOutcomeOpeningSelectionFailed">Opening reward or recruitment group verification failed</system:String>
+    <system:String x:Key="BlackFlowOutcomeTaskPipelineFailed">Roguelike task stopped after a failure</system:String>
     <system:String x:Key="BlackFlowOutcomePursuitUnsupported">The pursuit battle on this floor is not supported</system:String>
     <system:String x:Key="BlackFlowOutcomeInternalFailure">Internal state error</system:String>
     <system:String x:Key="BlackFlowOutcomeUnknownCode">Unrecognized roguelike error (code: {0})</system:String>

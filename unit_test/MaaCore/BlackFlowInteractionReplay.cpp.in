@@ -3,10 +3,12 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <stdexcept>
 #include <vector>
 #include <opencv2/imgcodecs.hpp>
+#include "Common/AsstMsg.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
@@ -158,7 +160,7 @@ struct BlackFlowNodeEvidenceTaskPlugin {
 /*REWARD*/
 /*GUARD*/
 namespace start_reward_replay {
-enum class RoguelikeCustomType { Reward, CoreChar, CoreCharVoucher, CultivationHarvest };
+enum class RoguelikeCustomType { Reward, CoreChar, CoreCharVoucher, CultivationHarvest, Roles, Squad };
 enum class RoguelikeTheme { BlackFlow };
 enum class RoguelikeMode { BlackFlowAutomationCollection };
 struct Config {
@@ -193,6 +195,18 @@ struct OCRer {
         return std::nullopt;
     }
 };
+namespace blackflow {
+using namespace asst::blackflow;
+struct OpeningRewardTransition {bool same_reward_page=false,destination_ready=false;};
+inline bool unknown_destination=false, shared_prompt_destination=false;
+OpeningRewardTransition inspect_opening_reward_transition(const cv::Mat& image,std::string_view) {
+    const int stage=image.at<cv::Vec3b>(0,0)[0];
+    return {stage==1,stage==2&&!unknown_destination};
+}
+struct OpeningRolesObservation {cv::Mat image;};
+OpeningRolesObservation inspect_opening_roles(cv::Mat image){return {image};}
+json::object opening_roles_details(const OpeningRolesObservation&){return {};}
+}
 struct Plugin {
     Config config;
     Config* m_config=&config;
@@ -201,12 +215,15 @@ struct Plugin {
     RoguelikeCustomType m_waiting_to_run=RoguelikeCustomType::Reward;
     Controller controller;
     std::uint64_t m_start_reward_observation_index=0;
+    bool m_blackflow_roles_verified=false, m_blackflow_opening_failed=false;
     std::function<void(std::string_view)> m_blackflow_start_reward_observer;
     std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_opening_evidence_observer;
     std::string fail_save;
     std::vector<std::string> confirmed;
     std::vector<json::value> events;
     Plugin() {
+        blackflow::unknown_destination=false;
         OCRer::show_prompt=true;OCRer::title_reads=0;
         OCRer::titles=std::vector<TextRect>{
             {{120,400,140,28},0.99,"调查预付款"}, {{380,400,140,28},0.83,"强裸骏鹰"},
@@ -240,6 +257,54 @@ struct Plugin {
         return false;
     }
 };
+}
+// Execute the complete production RoguelikeTask::run boundary. The underlying
+// package reproduces a callback disabling its parent while returning success.
+namespace completion_replay {
+namespace blackflow {
+using asst::blackflow::RunLogEvent;
+using asst::blackflow::RunLogLevel;
+using ::FailureDisposition;
+}
+enum class RoguelikeTheme { BlackFlow, Other };
+struct Result {
+    bool succeeded=false;
+    std::string next_action="stop_task", outcome="opening_selection_failed", termination_reason="missing tank voucher";
+    json::object to_json() const {return {{"outcome",outcome}};}
+};
+struct CompletionSession {
+    std::optional<Result> value;
+    std::string profile() const{return "automation_collection";}
+    bool terminated()const{return value.has_value();}
+    const std::optional<Result>& result()const{return value;}
+    json::object run_log_state()const{return {};}
+    int run_revision()const{return 9;}
+    void fail(std::string outcome,std::string reason,FailureDisposition){value=Result{false,"stop_task",outcome,reason};}
+    bool claim_result_report(){return false;}
+};
+struct CompletionPort {
+    std::vector<RunLogEvent> events;
+    bool record_run_event(int,const RunLogEvent& e,std::nullptr_t,bool,std::string*){events.push_back(e);return true;}
+};
+struct Source {bool prepare(std::string*){return true;} void release(){}};
+struct Config {RoguelikeTheme theme=RoguelikeTheme::BlackFlow;RoguelikeTheme get_theme(){return theme;}};
+struct InterfaceTask {bool pipeline_success=true;bool run(){return pipeline_success;}};
+struct CustomOpening {bool failed=false;bool blackflow_opening_failed(){return failed;}};
+struct RoguelikeTask:InterfaceTask {
+    bool m_run_started=false, cancelled=false;
+    std::mutex m_run_state_mutex;
+    std::shared_ptr<Config> m_config_ptr=std::make_shared<Config>();
+    std::shared_ptr<CustomOpening> m_custom_ptr=std::make_shared<CustomOpening>();
+    std::shared_ptr<Source> m_blackflow_map_source_ptr=std::make_shared<Source>();
+    std::shared_ptr<CompletionSession> m_blackflow_session_ptr=std::make_shared<CompletionSession>();
+    std::shared_ptr<CompletionPort> m_blackflow_port_ptr=std::make_shared<CompletionPort>();
+    bool get_enable(){return true;}
+    bool need_exit(){return cancelled;}
+    json::value basic_info_with_what(std::string){return json::object{};}
+    void callback(AsstMsg,const json::value&){}
+    bool run();
+};
+/*TASK_COMPLETION*/
 }
 namespace inventory_replay {
 constexpr std::string_view InventoryObservationAction="observe-action", InventoryCloseTask="close", InventoryCheckTask="reopen";
@@ -699,12 +764,47 @@ int main(int argc,char** argv) {
     test("reward disappears during animated progress probes",[&]{BlackFlowNodeEvidenceTaskPlugin p;p.controller.frames={stuck,after};
         Matcher::reward_matches=[&](const cv::Mat& image){return cv::norm(image,after,cv::NORM_INF)!=0;};p.run();
         check(p.controller.clicks==1&&p.outcomes==std::vector<std::string>{"page_changed"},"destination page must count as transition");});
+    test("abnormal BlackFlow stop cannot become successful task completion",[]{completion_replay::RoguelikeTask p;
+        p.m_blackflow_session_ptr->value=completion_replay::Result{};
+        check(!p.run(),"disabled parent was still reported as successful completion");
+        const auto& e=p.m_blackflow_port_ptr->events.back();
+        check(e.phase=="failed"&&e.outcome=="opening_selection_failed","task.finished lost the failure cause");});
+    test("opening failure still reaches task error when diagnostic storage is unavailable",[]{completion_replay::RoguelikeTask p;
+        p.m_custom_ptr->failed=true;
+        check(!p.run()&&p.m_blackflow_session_ptr->result()->outcome=="opening_selection_failed",
+              "task success still depended on successful failure logging");});
+    for (const auto* outcome : {"encounter_choice_unresolved", "encounter_evidence_failed"})
+    test("cargo unresolved choice or failed evidence cannot report task completed",[&]{completion_replay::RoguelikeTask p;
+        p.m_blackflow_session_ptr->value=completion_replay::Result{false,"stop_task",outcome,"cargo choice failed"};
+        check(!p.run(),"cargo stop was still successful at the task boundary");
+        const auto& e=p.m_blackflow_port_ptr->events.back();
+        check(e.phase=="failed"&&e.outcome==outcome,"cargo failure cause was not retained");});
+    test("normal BlackFlow strategy ending stays successful",[]{completion_replay::RoguelikeTask p;
+        p.m_blackflow_session_ptr->value=completion_replay::Result{true,"stop_run","completed","done"};
+        check(p.run(),"normal strategy stop became task error");});
+    test("ordinary themes keep package completion semantics",[]{completion_replay::RoguelikeTask p;
+        p.m_config_ptr->theme=completion_replay::RoguelikeTheme::Other;
+        p.m_blackflow_session_ptr->value=completion_replay::Result{};
+        check(p.run(),"BlackFlow status changed another theme");});
+    test("user stop stays cancelled without inventing a strategy failure",[]{completion_replay::RoguelikeTask p;
+        p.cancelled=true;p.pipeline_success=false;
+        check(!p.run()&&!p.m_blackflow_session_ptr->result(),"manual stop invented a collection failure");
+        check(p.m_blackflow_port_ptr->events.back().phase=="stopped","manual stop was labeled task failure");});
+    test("ordinary pipeline failure retains a failure outcome",[]{completion_replay::RoguelikeTask p;
+        p.pipeline_success=false;
+        check(!p.run()&&p.m_blackflow_session_ptr->result()->outcome=="task_pipeline_failed","pipeline failure was not retained");});
+    test("planned run restart is not a task error",[]{completion_replay::RoguelikeTask p;
+        p.m_blackflow_session_ptr->value=completion_replay::Result{false,"restart_current_run","unsupported_pursuit","restart"};
+        check(p.run(),"planned restart changed task completion semantics");});
     std::vector<json::value> start_reward_events;
     test("opening popup reached through squad task is still a start reward",[]{
         check(collection_popup_source("BlackFlow@Roguelike@SquadConfirm@BlackFlow@Roguelike@CloseCollection")
             ==CollectionPopupSource::StartReward,"task name invented a squad reward source");});
     test("failed start reward plugin prevents parent fallback clicks",[]{start_reward_replay::Plugin p;
-        check(!p.on_run_fails()&&!p.parent.enabled,"failed reward plugin left unrecorded confirmation fallback enabled");});
+        check(!p.on_run_fails()&&!p.parent.enabled&&p.m_blackflow_opening_failed,"failed reward plugin left unrecorded confirmation fallback enabled");});
+    test("failed combo selection stops parent and retains explicit failure without a logger",[]{start_reward_replay::Plugin p;
+        p.m_waiting_to_run=start_reward_replay::RoguelikeCustomType::Roles;
+        check(!p.on_run_fails()&&!p.parent.enabled&&p.m_blackflow_opening_failed,"combo failure disappeared at parent boundary");});
     test("start reward retains every raw OCR candidate and the confirmed selection",[&]{start_reward_replay::Plugin p;
         check(p.run(),"normal reward confirmation failed");check(p.events.size()==3,"candidate, pending and selection events missing");
         const auto& details=p.events[0].at("details");const auto& candidates=details.at("candidates").as_array();
@@ -731,6 +831,10 @@ int main(int argc,char** argv) {
         check(p.events.size()==4&&p.confirmed.empty()&&p.events.back().get("action","")=="start.reward.failed","failed confirmation must keep pending identity and failure");
         check(p.controller.clicks==3,"confirmation retry budget changed");
         start_reward_events.insert(start_reward_events.end(),p.events.begin(),p.events.end());});
+    test("missing prompt on an unknown page cannot confirm a reward",[]{start_reward_replay::Plugin p;
+        start_reward_replay::blackflow::unknown_destination=true;
+        check(!p.run()&&p.confirmed.empty(),"prompt disappearance was still treated as reward receipt");
+        check(p.controller.clicks==2,"old reward coordinate clicked on the destination page");});
     test("missing confirmation prompt does not claim a reward",[]{start_reward_replay::Plugin p;start_reward_replay::OCRer::show_prompt=false;
         check(!p.run()&&p.events.size()==2&&p.confirmed.empty(),"missing prompt must keep candidates and failure");
         check(p.controller.clicks==1,"missing prompt dispatched another click");});

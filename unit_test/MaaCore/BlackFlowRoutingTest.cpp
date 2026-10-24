@@ -2319,7 +2319,11 @@ TEST_CASE("BlackFlow start reward selection is OCR-only and confirms the selecte
     REQUIRE(std::ranges::find(enter_next, "BlackFlow@Roguelike@RecruitMain") != enter_next.end());
     REQUIRE(std::ranges::find(enter_next, "BlackFlow@Roguelike@Stages#next") != enter_next.end());
 
-    const auto confirm_next = tasks->at("BlackFlow@Roguelike@LastRewardConfirm")
+    const auto confirm_base = tasks->at("BlackFlow@Roguelike@LastRewardConfirm").get("baseTask", std::string{});
+    REQUIRE(confirm_base == "BlackFlow@Roguelike@OpeningRewardConfirmLegacy");
+    REQUIRE(tasks->at("BlackFlow@Roguelike@AutomationCollectionRewardConfirm").get("baseTask", std::string{}) == confirm_base);
+    REQUIRE(tasks->at("BlackFlow@Roguelike@AutomationCollectionRewardConfirm").get("action", std::string{}) == "DoNothing");
+    const auto confirm_next = tasks->at(confirm_base)
                                   .get("next", std::vector<std::string> {});
     const auto fallback_popup_close = std::ranges::find(
         confirm_next,

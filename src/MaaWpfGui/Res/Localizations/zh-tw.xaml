@@ -1587,6 +1587,8 @@ C:\\leidian\\LDPlayer9
     <system:String x:Key="BlackFlowOutcomeMoveConfirmationStateFailed">移動確認後的狀態更新失敗</system:String>
     <system:String x:Key="BlackFlowOutcomeBattleIntelPreviewFailed">無法開啟戰鬥關卡預覽</system:String>
     <system:String x:Key="BlackFlowOutcomeCoreOperatorStatusSyncFailed">凱爾希·思衡托精二狀態同步失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomeOpeningSelectionFailed">開局獎勵或招募組合驗證失敗</system:String>
+    <system:String x:Key="BlackFlowOutcomeTaskPipelineFailed">肉鴿流程異常停止</system:String>
     <system:String x:Key="BlackFlowOutcomePursuitUnsupported">當前樓層的追獵戰尚未適配</system:String>
     <system:String x:Key="BlackFlowOutcomeInternalFailure">內部狀態異常</system:String>
     <system:String x:Key="BlackFlowOutcomeUnknownCode">未識別的肉鴿異常（代碼：{0}）</system:String>

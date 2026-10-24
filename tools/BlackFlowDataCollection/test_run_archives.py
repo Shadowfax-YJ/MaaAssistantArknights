@@ -85,6 +85,20 @@ class RunArchiveTests(unittest.TestCase):
     def test_manual_repack_has_no_program_signature(self):
         self.assertEqual(verify_run.verify_archive(self.repack())["status"], "unsigned_or_repacked")
 
+    def test_opening_failure_diagnostic_and_image_remain_v1_compatible(self):
+        spec = importlib.util.spec_from_file_location('opening_contract',
+            ROOT / 'unit_test/MaaCore/test_blackflow_opening_contract.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.test_opening_failure_image_accepts_independent_signed_v1_verifier()
+
+    def test_cargo_decline_receipt_and_images_remain_v1_compatible(self):
+        spec = importlib.util.spec_from_file_location('cargo_decline_contract',
+            ROOT / 'unit_test/MaaCore/test_blackflow_cargo_decline_contract.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.test_actual_decline_frames_accept_independent_signed_v1_verifier()
+
     def test_opening_reward_lifecycle_keeps_v1_archive_compatible(self):
         for name in ('start-reward-events.json', 'start-reward-lifecycle-events.json'):
             with self.subTest(fixture=name):

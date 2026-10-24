@@ -84,6 +84,52 @@
         require(s.p.confirm_cargo_choice() && s.count("confirmed")==1 && !s.p.controller.advances,"reward confirmation blocked or advanced page");
         encounter_fixtures.emplace_back(json::object{{"case","cargo-direct-reward"},{"payloads",s.events}});
     });
+    const auto start_cargo_decline = [&](ChoiceScenario& s) {
+        s.p.m_option_list = {
+            {false,{},"想要一个能节省力气的",""}, {false,{},"想要一个可以保值的",""},
+            {false,{},"想要一个树海特色纪念品",""}, {true,{},"没什么想买的",""}};
+        require(s.begin() && s.p.plan_encounter_choice(3,"configured_fallback") && s.p.select_analyzed_option(3),"decline input");
+        s.p.controller.images_read = 0;
+        s.p.controller.page = 14;
+    };
+    test("002 cargo fourth-option decline confirms the ending without advancing it",[&]{
+        ChoiceScenario s; start_cargo_decline(s);
+        const int clicks=s.p.controller.choice_clicks;
+        require(s.p.confirm_cargo_choice() && s.count("confirmed")==1 && s.p.parent.enabled,"event ending was rejected");
+        require(s.p.controller.images_read==2,"event ending was not confirmed on two consecutive frames");
+        require(s.p.controller.choice_clicks==clicks && !s.p.controller.advances,"passive confirmation clicked the ending");
+        const auto& details=s.events.at(s.events.size()-1).at("details");
+        require(details.get("option_index",0)==4 && details.get("option",std::string())=="没什么想买的" &&
+                    details.get("confirmation_basis",std::string())=="event_ending_after_decline", "wrong decline attribution");
+        require(s.p.confirm_cargo_choice() && s.count("confirmed")==1,"ending duplicated the selected choice");
+        if(argc>1) std::ofstream(std::filesystem::path(argv[1]).parent_path()/"cargo-decline-payloads.json") <<
+            json::object{{"case","cargo-decline-ending"},{"payloads",s.events}}.to_string();
+    });
+    for (int gap : {15,16,17}) test("cargo ending counter resets across overlays and unknown frames",[&]{
+        ChoiceScenario s; start_cargo_decline(s);
+        s.p.controller.frame_pages={14,gap,14,14};
+        require(s.p.confirm_cargo_choice() && s.p.controller.images_read==4,"isolated ending frame survived a recognition gap");
+        require(!s.p.controller.advances,"transition probe clicked a confirmation");
+    });
+    for (int page : {15,16,17}) test("cargo loading syncing and unknown pages cannot confirm a decline",[&]{
+        ChoiceScenario s; start_cargo_decline(s); s.p.controller.page=page;
+        require(!s.p.confirm_cargo_choice() && !s.count("confirmed") && !s.p.parent.enabled,"unknown or covered ending confirmed");
+    });
+    test("cargo single ending frame cannot establish a decline",[&]{
+        ChoiceScenario s; start_cargo_decline(s); s.p.controller.frame_pages={14,17};
+        require(!s.p.confirm_cargo_choice() && !s.count("confirmed"),"one transient check established a completed choice");
+    });
+    test("cargo purchase choice cannot borrow the decline ending anchor",[&]{
+        ChoiceScenario s; require(s.begin() && s.p.plan_encounter_choice(0,"random_group_order") && s.p.select_analyzed_option(0),"purchase input");
+        s.p.controller.page=14;
+        require(!s.p.confirm_cargo_choice() && !s.count("confirmed"),"decline-only anchor accepted a purchase");
+    });
+    test("cargo unsaved ending evidence stops without clicking the ending",[&]{
+        ChoiceScenario s; start_cargo_decline(s); s.fail_phase="confirmed";
+        const int clicks=s.p.controller.choice_clicks;
+        require(!s.p.confirm_cargo_choice() && !s.p.parent.enabled && !s.count("confirmed"),"unsaved decline was confirmed");
+        require(s.p.controller.choice_clicks==clicks && !s.p.controller.advances,"failed save advanced the ending");
+    });
     test("cargo context change resets identity and order",[&]{
         ChoiceScenario s;require(s.begin(),"begin");std::vector<size_t> order{1,2};
         require(s.p.randomize_encounter_choice_order(order),"order");++s.revision;
@@ -125,5 +171,10 @@
     });
     if(argc>3) test("shared encounter payload fixture matches actual producer methods", [&] {
         require(json::open(argv[3]).value()==json::value(encounter_fixtures),"encounter producer payload drifted");
+    });
+    if(argc>3) test("shared decline payload fixture matches actual producer methods", [&] {
+        const auto actual=std::filesystem::path(argv[1]).parent_path()/"cargo-decline-payloads.json";
+        const auto expected=std::filesystem::path(argv[3]).parent_path()/"cargo-decline/choice-payloads.json";
+        require(json::open(actual).value()==json::open(expected).value(),"decline producer payload drifted");
     });
     if(argc>1) std::ofstream(std::filesystem::path(argv[1]).parent_path()/"encounter-payloads.json")<<json::value(encounter_fixtures).to_string();

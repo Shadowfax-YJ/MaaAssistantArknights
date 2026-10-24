@@ -1360,6 +1360,10 @@ public class AsstProxy
 
             case AsstMsg.AllTasksCompleted:
                 bool isMainTaskQueueAllCompleted = false;
+
+                // AllTasksCompleted means the queue drained, including failed
+                // chains. Keep their error notification and suppress success.
+                bool hasTaskErrors = _tasksStatus.Any(t => t.Value.Status == TaskStatus.Error);
                 var taskList = details["finished_tasks"]?.ToObject<AsstTaskId[]>();
                 if (taskList?.Length > 0)
                 {
@@ -1384,6 +1388,11 @@ public class AsstProxy
 
                 Instances.TaskQueueViewModel.ResetAllTemporaryVariable();
                 _runningState.SetIdle(true);
+
+                if (hasTaskErrors)
+                {
+                    break;
+                }
 
                 if (isMainTaskQueueAllCompleted)
                 {
