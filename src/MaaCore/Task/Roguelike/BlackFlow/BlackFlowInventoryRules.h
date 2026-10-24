@@ -70,10 +70,16 @@ enum class InventoryScanAction
 inline constexpr int InventoryMaximumSwipes = 4;
 inline constexpr int InventoryRightEdgeReboundMinimumPixels = 48;
 
-// 固定次数的往返手势并不互相抵消。连续静止可确认回到左端；画面一直变化时，
-// 由调用方收起再展开零件箱恢复首屏。手势执行失败（包括用户停止）不能触发恢复点击。
+// 固定次数的往返手势并不互相抵消。连续静止可确认回到左端。
+// 已等待回弹且有完整列表像素证据的调用方可以一次确认；仅名称行证据仍需连续两次。
+// 画面一直变化时由调用方收起再展开零件箱恢复首屏。
+// 手势执行失败（包括用户停止）不能触发恢复点击。
 template <typename Swipe, typename Unchanged, typename Reopen>
-[[nodiscard]] bool scroll_inventory_to_start(Swipe swipe, Unchanged unchanged, Reopen reopen)
+[[nodiscard]] bool scroll_inventory_to_start(
+    Swipe swipe,
+    Unchanged unchanged,
+    Reopen reopen,
+    int required_stationary_swipes = 2)
 {
     constexpr int MaximumResetSwipes = InventoryMaximumSwipes * 2 + 2;
     int stationary_swipes = 0;
@@ -82,7 +88,7 @@ template <typename Swipe, typename Unchanged, typename Reopen>
             return false;
         }
         stationary_swipes = unchanged() ? stationary_swipes + 1 : 0;
-        if (stationary_swipes >= 2) {
+        if (stationary_swipes >= std::max(1, required_stationary_swipes)) {
             return true;
         }
     }

@@ -516,10 +516,17 @@
         "algorithm": "MatchTemplate",
         "template": "Roguelike@StageTraderLeave.png",
         "templThreshold": 0.75,
-        "roi": [985, 443, 295, 204],
+        "roi": [
+            985,
+            443,
+            295,
+            204
+        ],
         "action": "DoNothing",
         "postDelay": 600,
         "next": [
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettle@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed",
             "BlackFlow@Roguelike@AutomationShopPurchaseWait"
@@ -530,10 +537,21 @@
         "algorithm": "MatchTemplate",
         "template": "Roguelike@StageTraderLeave.png",
         "templThreshold": 0.75,
-        "roi": [985, 443, 295, 204],
+        "roi": [
+            985,
+            443,
+            295,
+            204
+        ],
         "action": "DoNothing",
-        "reduceOtherTimes": ["BlackFlow@Roguelike@AutomationShopPurchaseWait*20"],
-        "next": ["BlackFlow@Roguelike@AutomationShopDecision"]
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait*20"
+        ],
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettleConfirmed@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationShopDecision"
+        ]
     },
     "BlackFlow@Roguelike@AutomationShopPurchaseTransition": {
         "Doc": "由商店插件按已确认购买的商品名动态分流；招募券只能等待实际招募按钮，其他商品才允许用稳定商店页面结算。",
@@ -542,6 +560,8 @@
     "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition": {
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopOrdinaryPurchaseTransition@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@ChooseOperFlag",
             "BlackFlow@Roguelike@AutomationShopPurchaseSettle",
             "BlackFlow@Roguelike@AutomationShopPurchaseWait"
@@ -552,18 +572,33 @@
         "algorithm": "JustReturn",
         "action": "DoNothing",
         "postDelay": 300,
-        "next": ["BlackFlow@Roguelike@ChooseOperFlag", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopRecruitPurchaseWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopRecruitPurchaseWait@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "#self"
+        ],
         "maxTimes": 50,
-        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
     },
     "BlackFlow@Roguelike@AutomationShopPurchaseWait": {
         "Doc": "购买确认后的纯等待门：只接受实际招募按钮或连续稳定的诡意行商页面，不在未知转场帧点击或调用商店插件。",
         "algorithm": "JustReturn",
         "action": "DoNothing",
         "postDelay": 300,
-        "next": ["BlackFlow@Roguelike@ChooseOperFlag", "BlackFlow@Roguelike@AutomationShopPurchaseSettle", "#self"],
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopPurchaseWait@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@ChooseOperFlag",
+            "BlackFlow@Roguelike@AutomationShopPurchaseSettle",
+            "#self"
+        ],
         "maxTimes": 20,
-        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
     },
     "BlackFlow@Roguelike@AutomationShopDecision": {
         "algorithm": "JustReturn",
@@ -759,12 +794,90 @@
     "BlackFlow@Roguelike@AutomationShopSellAction": {
         "baseTask": "BlackFlow@Roguelike@RecoveryFailed"
     },
+    "BlackFlow@Roguelike@AutomationShopSaleSettle": {
+        "Doc": "出售后只观察：有获得类弹窗先保存并关闭；没有弹窗且商店出售页连续可见则继续，不假定出售一定有奖励。未知转场不点击。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 150,
+        "maxTimes": 20,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopSaleSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopSaleSettle@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationShopSaleSettleReady",
+            "#self"
+        ],
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopSaleSettleReady": {
+        "baseTask": "BlackFlow@Roguelike@AutomationShopSellingReady",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "action": "DoNothing",
+        "postDelay": 150,
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopSaleSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationShopSaleSettle@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationShopSaleSettleConfirmed",
+            "BlackFlow@Roguelike@AutomationShopSaleSettle"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationShopSaleSettleConfirmed": {
+        "baseTask": "BlackFlow@Roguelike@AutomationShopSaleSettleReady",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@AutomationShopSellDecision"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@AutomationShopSaleSettle*20"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSaleSettle": {
+        "Doc": "出售后只观察：有获得类弹窗先保存并关闭；没有弹窗且商店出售页连续可见则继续，不假定出售一定有奖励。未知转场不点击。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing",
+        "postDelay": 150,
+        "maxTimes": 20,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettleReady",
+            "#self"
+        ],
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSaleSettleReady": {
+        "baseTask": "BlackFlow@Roguelike@AutomationCultivateSellingReady",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "action": "DoNothing",
+        "postDelay": 150,
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettleConfirmed",
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle"
+        ]
+    },
+    "BlackFlow@Roguelike@AutomationCultivateSaleSettleConfirmed": {
+        "baseTask": "BlackFlow@Roguelike@AutomationCultivateSaleSettleReady",
+        "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateSellDecision"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle*20"
+        ]
+    },
     "BlackFlow@Roguelike@AutomationShopSellConfirm": {
         "baseTask": "BlackFlow@Roguelike@CultivateSellConfirm",
         "template": "BlackFlow@Roguelike@CultivateSellConfirm.png",
         "next": [
             "#self",
-            "BlackFlow@Roguelike@AutomationShopSellDecision"
+            "BlackFlow@Roguelike@AutomationShopSaleSettle"
         ]
     },
     "BlackFlow@Roguelike@AutomationShopSellConfirm-Enter": {
@@ -773,6 +886,9 @@
         "next": [
             "BlackFlow@Roguelike@AutomationShopSellConfirm",
             "BlackFlow@Roguelike@AutomationShopSellMissed"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@AutomationShopSaleSettle*20"
         ]
     },
     "BlackFlow@Roguelike@AutomationShopSellDecision": {
@@ -945,7 +1061,11 @@
         "Doc": "购买成功后等待秘境行商货架完成补位动画，再重新识别商品和坐标。",
         "algorithm": "JustReturn",
         "postDelay": 1200,
-        "next": ["BlackFlow@Roguelike@AutomationCultivateDecision"]
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivatePurchaseSettle@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivatePurchaseSettle@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationCultivateDecision"
+        ]
     },
     "BlackFlow@Roguelike@AutomationCultivateConfirm": {
         "baseTask": "BlackFlow@Roguelike@CultivateConfirm",
@@ -965,11 +1085,15 @@
         "postDelay": 200,
         "maxTimes": 50,
         "next": [
+            "BlackFlow@Roguelike@AutomationCultivateConfirmCompleted@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateConfirmCompleted@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@AutomationCultivateAnimationSkip",
             "BlackFlow@Roguelike@AutomationCultivateHarvestReady",
             "#self"
         ],
-        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
     },
     "BlackFlow@Roguelike@AutomationCultivateDecision": {
         "algorithm": "JustReturn",
@@ -984,19 +1108,27 @@
     "BlackFlow@Roguelike@AutomationCultivateEnsureBuying": {
         "algorithm": "JustReturn",
         "next": [
+            "BlackFlow@Roguelike@AutomationCultivateEnsureBuying@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateEnsureBuying@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@AutomationCultivateSellingFlag",
             "BlackFlow@Roguelike@AutomationCultivateDecision"
         ]
     },
     "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted": {
         "algorithm": "JustReturn",
-        "next": ["BlackFlow@Roguelike@AutomationCultivateEnsureBuying"]
+        "next": [
+            "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@AutomationCultivateEnsureBuying"
+        ]
     },
     "BlackFlow@Roguelike@AutomationCultivateHarvestConfirm": {
         "baseTask": "BlackFlow@Roguelike@CultivateHarvestConfirm",
         "template": "BlackFlow@Roguelike@CultivateConfirm1.png",
         "next": [
             "#self",
+            "BlackFlow@Roguelike@AutomationCultivateHarvestConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@AutomationCultivateHarvestConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@AutomationCultivateHarvestCompleted"
         ]
     },
@@ -1041,7 +1173,7 @@
         "template": "BlackFlow@Roguelike@CultivateSellConfirm.png",
         "next": [
             "#self",
-            "BlackFlow@Roguelike@AutomationCultivateSellDecision"
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle"
         ]
     },
     "BlackFlow@Roguelike@AutomationCultivateSellConfirm-Enter": {
@@ -1050,6 +1182,9 @@
         "next": [
             "BlackFlow@Roguelike@AutomationCultivateSellConfirm",
             "BlackFlow@Roguelike@AutomationCultivateSellMissed"
+        ],
+        "reduceOtherTimes": [
+            "BlackFlow@Roguelike@AutomationCultivateSaleSettle*20"
         ]
     },
     "BlackFlow@Roguelike@AutomationCultivateSellDecision": {
@@ -1189,12 +1324,15 @@
         "postDelay": 200,
         "maxTimes": 50,
         "next": [
+            "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@MoveConfirmDoorAnimationSkip",
             "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@MoveConfirmDoorMapVisible",
             "BlackFlow@Roguelike@MoveConfirmDoorAnimationWait"
         ],
-        "exceededNext": ["BlackFlow@Roguelike@RecoveryFailed"]
+        "exceededNext": [
+            "BlackFlow@Roguelike@RecoveryFailed"
+        ]
     },
     "BlackFlow@Roguelike@CultivateAtMost": {
         "template": "BlackFlow@Roguelike@CultivateAtMost.png",
@@ -1207,9 +1345,19 @@
     },
     "BlackFlow@Roguelike@CultivateBuyConfirm": {
         "template": "BlackFlow@Roguelike@CultivateBuyConfirm.png",
-        "roi": [442, 361, 725, 179],
+        "roi": [
+            442,
+            361,
+            725,
+            179
+        ],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@CultivateBuyDecision"]
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@CultivateBuyConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@CultivateBuyConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@CultivateBuyDecision"
+        ]
     },
     "BlackFlow@Roguelike@CultivateBuyConfirm-Enter": {
         "algorithm": "JustReturn",
@@ -1256,9 +1404,19 @@
     },
     "BlackFlow@Roguelike@CultivateHarvestConfirm": {
         "template": "BlackFlow@Roguelike@CultivateConfirm1.png",
-        "roi": [560, 590, 162, 104],
+        "roi": [
+            560,
+            590,
+            162,
+            104
+        ],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@CultivateHarvestCompleted"]
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@CultivateHarvestConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@CultivateHarvestConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@CultivateHarvestCompleted"
+        ]
     },
     "BlackFlow@Roguelike@CultivateHarvestItems": {
         "algorithm": "OcrDetect",
@@ -1315,9 +1473,19 @@
     },
     "BlackFlow@Roguelike@CultivateSellConfirm": {
         "template": "BlackFlow@Roguelike@CultivateSellConfirm.png",
-        "roi": [442, 361, 725, 179],
+        "roi": [
+            442,
+            361,
+            725,
+            179
+        ],
         "action": "ClickSelf",
-        "next": ["#self", "BlackFlow@Roguelike@CultivateSellDecision"]
+        "next": [
+            "#self",
+            "BlackFlow@Roguelike@CultivateSellConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
+            "BlackFlow@Roguelike@CultivateSellConfirm@(BlackFlow@Roguelike@CloseCollection)",
+            "BlackFlow@Roguelike@CultivateSellDecision"
+        ]
     },
     "BlackFlow@Roguelike@CultivateSellConfirm-Enter": {
         "algorithm": "JustReturn",

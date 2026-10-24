@@ -4,7 +4,9 @@
 
 #include "BlackFlowCollectionPopup.h"
 
+#include "Controller/Controller.h"
 #include "Utils/Logger.hpp"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
 
 namespace asst::blackflow
 {
@@ -12,9 +14,11 @@ BlackFlowCollectionPopupTaskPlugin::BlackFlowCollectionPopupTaskPlugin(
     const AsstCallback& callback,
     Assistant* inst,
     std::string_view task_chain,
-    Capture capture) :
+    Capture capture,
+    Failure failure) :
     AbstractTaskPlugin(callback, inst, task_chain),
-    m_capture(std::move(capture))
+    m_capture(std::move(capture)),
+    m_failure(std::move(failure))
 {
     set_block(true);
     set_may_change_ui(false);
@@ -36,15 +40,53 @@ bool BlackFlowCollectionPopupTaskPlugin::verify(AsstMsg msg, const json::value& 
 
 bool BlackFlowCollectionPopupTaskPlugin::_run()
 {
-    if (!m_capture || m_pending_task.empty()) {
+    if (m_pending_task.empty()) {
         return true;
     }
+    const std::string task = std::exchange(m_pending_task, {});
+    auto* process = dynamic_cast<ProcessTask*>(m_task_ptr);
     std::string error;
-    if (!m_capture(m_pending_task, &error)) {
-        // 采集故障不能把仍可操作的探索界面永久卡死；保留错误日志后仍交回原 ProcessTask 点击。
-        Log.warn("BlackFlow collection popup capture failed", m_pending_task, error);
+    for (int attempt = 0; attempt < 3 && !need_exit(); ++attempt) {
+        if (m_capture && m_capture(task, &error)) {
+            if (process != nullptr) {
+                process->set_skip_current_action(false);
+            }
+            return true;
+        }
+        if (!m_capture) {
+            error = "collection popup capture callback is missing";
+        }
+        // Returning false from a plugin does not veto ProcessTask's action.
+        // Explicitly suppress the old hit until its evidence is safely stored.
+        if (process != nullptr) {
+            process->set_skip_current_action();
+        }
+        const cv::Mat current = ctrler()->get_image();
+        if (!current.empty()) {
+            PipelineAnalyzer popup(current);
+            popup.set_tasks({ task });
+            if (!popup.analyze().has_value()) {
+                Log.info("BlackFlow popup changed before capture; resuming page dispatch", task);
+                return true;
+            }
+        }
+        if (attempt < 2 && !sleep(200)) {
+            break;
+        }
     }
-    m_pending_task.clear();
+    if (process != nullptr) {
+        process->set_skip_current_action();
+    }
+    if (need_exit()) {
+        return true;
+    }
+    Log.error("BlackFlow collection popup capture failed; close input suppressed", task, error);
+    if (m_failure) {
+        m_failure(task, error);
+    }
+    if (m_task_ptr != nullptr) {
+        m_task_ptr->set_enable(false);
+    }
     return true;
 }
 } // namespace asst::blackflow

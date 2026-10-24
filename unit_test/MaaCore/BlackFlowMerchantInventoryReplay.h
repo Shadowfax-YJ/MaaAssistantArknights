@@ -1,4 +1,8 @@
 #pragma once
+
+#include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopupTaskPlugin.h"
+#include "Task/Interface/RoguelikeTask.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreTaskPlugin.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementTaskPlugin.h"
@@ -7,6 +11,10 @@ namespace asst::blackflow
 {
 struct BlackFlowStoreReplayAccess
 {
+    static void sand_table_policy(BlackFlowSession& session, bool disabled)
+    {
+        session.m_sand_table_beta_purchase_disabled = disabled;
+    }
     static auto goods(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image, const std::string& task)
     {
         return p.recognize(image, task);
@@ -125,6 +133,120 @@ template <class Test>
 void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& test)
 {
     using namespace asst;
+    for (const bool disabled : { false, true }) {
+        test(("sand table beta policy is logged and survives merchant resets " + std::to_string(disabled)).c_str(), [&] {
+            auto session = std::make_shared<blackflow::BlackFlowSession>();
+            std::string error; require(session->initialize("automation_collection", &error), error);
+            blackflow::BlackFlowStoreReplayAccess::sand_table_policy(*session, disabled);
+            auto config = std::make_shared<RoguelikeConfig>();
+            blackflow::BlackFlowAutomationStoreTaskPlugin store { {}, nullptr, "Roguelike", config, nullptr, session, nullptr };
+            const auto revision = session->run_revision();
+            for (int visit = 0; visit < 3; ++visit) {
+                store.reset_in_run_variables();
+                require(session->sand_table_beta_purchase_disabled() == disabled && session->run_revision() == revision,
+                        "merchant reset redrew the run purchase policy");
+                const auto state = session->run_log_state();
+                const auto& policy = state.at("store_purchase_policy").at("sand_table_beta");
+                require(policy.at("disabled_for_run").as_boolean() == disabled, "logged policy differs from enforced policy");
+                require(policy.at("disable_probability").as_double() == 0.5, "wrong disable probability");
+                require(disabled ? policy.at("quota_override").as_integer() == 0 : policy.at("quota_override").is_null(),
+                        "default quota was replaced or zero override was lost");
+            }
+            const blackflow::BlackFlowSession copied(*session);
+            require(copied.sand_table_beta_purchase_disabled() == disabled, "session copy lost the run policy");
+            std::ofstream policy_output("sand-table-policy-" + std::to_string(disabled) + ".json");
+            policy_output << session->run_log_state().at("store_purchase_policy").to_string();
+            session->reset_run();
+            require(session->run_revision() == revision + 1, "new run did not reinitialize its policy state");
+            const auto state = session->run_log_state();
+            require(state.at("store_purchase_policy").at("sand_table_beta").at("disabled_for_run").as_boolean() ==
+                        session->sand_table_beta_purchase_disabled(), "new run policy was not recorded");
+        });
+    }
+    test("all declared BlackFlow item close templates have a before-click capture handler", [&] {
+        const auto source = json::open(repo / "resource/tasks/Roguelike/BlackFlow.json");
+        require(source.has_value(), "BlackFlow task resource missing");
+        int checked = 0;
+        for (const auto& [name, value] : source->as_object()) {
+            const auto task = Task.get<MatchTaskInfo>(name);
+            if (task == nullptr || (task->action != ProcessTaskAction::ClickSelf && task->action != ProcessTaskAction::ClickRect)) continue;
+            const bool item_close = std::ranges::any_of(task->templ_names, [](const std::string& path) {
+                return path.ends_with("BlackFlow@Roguelike@CloseCollection.png") ||
+                       path.ends_with("BlackFlow@Roguelike@CloseCollectionContinue.png");
+            });
+            if (!item_close) continue;
+            ++checked;
+            // These two aliases are closed only after the parent has persisted
+            // report_sacrifice("civilization-popup"). Keep that specialized
+            // evidence instead of inventing a second generic item reward.
+            if (name == "BlackFlow@Roguelike@SacrificePopupClose" ||
+                name == "BlackFlow@Roguelike@SacrificePopupContinue") continue;
+            require(blackflow::collection_popup_button(name).has_value(), "unhandled item close: " + name);
+        }
+        require(checked >= 4, "item-close audit did not cover the declared aliases");
+    });
+    test("nested roguelike ProcessTasks inherit the popup evidence guard", [&] {
+        struct Probe : RoguelikeTask {
+            Probe() : RoguelikeTask({}, nullptr) {}
+            std::shared_ptr<AbstractTask> root() const { return m_subtasks.at(0); }
+        } task;
+        const auto root = task.root();
+        require(root->find_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>() != nullptr, "root popup observer missing");
+        for (const auto& plugin : root->get_plugins()) {
+            if (std::dynamic_pointer_cast<blackflow::BlackFlowCollectionPopupTaskPlugin>(plugin) != nullptr) continue;
+            ProcessTask nested(*plugin, { "BlackFlow@Roguelike@CloseCollection" });
+            require(nested.find_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>() != nullptr,
+                    "nested ProcessTask bypasses pre-close capture");
+        }
+    });
+    for (const auto store : { std::string("Shop"), std::string("Cultivate") }) {
+        test(("merchant optional sale reward is dispatched before another shop action " + store).c_str(), [&] {
+            const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-encounter/20261024/cargo-reward.jpg");
+            auto tasks = Task.get("BlackFlow@Roguelike@Automation" + store + "SellConfirm")->next;
+            bool found = false;
+            for (int step = 0; step < 20; ++step) {
+                PipelineAnalyzer analyzer(image); analyzer.set_tasks(tasks);
+                const auto hit = analyzer.analyze();
+                require(hit.has_value(), "sale reward route lost the visible popup");
+                if (blackflow::collection_popup_button(hit->task_ptr->name).has_value()) { found = true; break; }
+                require(hit->task_ptr->name != "BlackFlow@Roguelike@Automation" + store + "SellDecision",
+                        "sale decision bypassed the visible reward popup");
+                require(hit->task_ptr->action == ProcessTaskAction::DoNothing, "sale route issued input before inspecting reward");
+                tasks = hit->task_ptr->next;
+            }
+            require(found, "sale reward route never reached a captured close task");
+        });
+        test(("merchant sale without any popup resumes on the actual selling page " + store).c_str(), [&] {
+            const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-merchant/20261024/eerie-sale-after.jpg");
+            auto tasks = Task.get("BlackFlow@Roguelike@Automation" + store + "SellConfirm")->next;
+            bool ready = false;
+            for (int step = 0; step < 8; ++step) {
+                PipelineAnalyzer analyzer(image); analyzer.set_tasks(tasks);
+                const auto hit = analyzer.analyze();
+                require(hit.has_value(), "normal sale page cannot resume");
+                require(!blackflow::collection_popup_button(hit->task_ptr->name).has_value(), "invented a popup on a selling page");
+                if (hit->task_ptr->name == "BlackFlow@Roguelike@Automation" + store + "SellDecision") { ready = true; break; }
+                require(hit->task_ptr->action == ProcessTaskAction::DoNothing, "sale observation clicked the shop");
+                tasks = hit->task_ptr->next;
+            }
+            require(ready, "sale without a reward remained waiting for a nonexistent popup");
+        });
+        test(("merchant chained reward popups return to the same sale decision " + store).c_str(), [&] {
+            const auto popup = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-encounter/20261024/cargo-reward.jpg");
+            const auto merchant = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-merchant/20261024/eerie-sale-after.jpg");
+            auto tasks = Task.get("BlackFlow@Roguelike@Automation" + store + "SellConfirm")->next;
+            int closes = 0; bool ready = false;
+            for (int step = 0; step < 16; ++step) {
+                PipelineAnalyzer analyzer(closes < 2 ? popup : merchant); analyzer.set_tasks(tasks);
+                const auto hit = analyzer.analyze(); require(hit.has_value(), "chained sale rewards lost their continuation");
+                if (blackflow::collection_popup_button(hit->task_ptr->name).has_value()) ++closes;
+                else if (hit->task_ptr->name == "BlackFlow@Roguelike@Automation" + store + "SellDecision") { ready = true; break; }
+                else require(hit->task_ptr->action == ProcessTaskAction::DoNothing, "sale resumed input before draining rewards");
+                tasks = hit->task_ptr->next;
+            }
+            require(ready && closes == 2, "chained popups did not resume the same sale flow");
+        });
+    }
     test("merchant cache survives a stationary rejected target and invalidates on shelf changes", [&] {
         const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/eerie-shelf.jpg");
         auto config = std::make_shared<RoguelikeConfig>();
@@ -147,18 +269,21 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
         store.reset_in_run_variables();
         require(!A::cache_valid(store) && !A::cache_matches(store, image), "new run retained shelf");
     });
-    test("inventory early reset rejects duplicate anchors, motion and missing observations", [&] {
-        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-recovery/20261024/post-event-inventory.jpg");
+    test("inventory early reset accepts stationary duplicate items but rejects motion and missing observations", [&] {
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-inventory/20261024/instance003-left-edge.jpg");
         auto config = std::make_shared<RoguelikeConfig>();
         blackflow::BlackFlowMovementTaskPlugin movement { {}, nullptr, "Roguelike", config, nullptr, nullptr, nullptr };
         const auto names = blackflow::BlackFlowMovementReplayAccess::names(movement, image);
-        require(blackflow::inventory_reset_can_confirm_early(image, image, names, names), "unique stationary real inventory cannot confirm origin early");
-        auto repeated = names; repeated.push_back(names.front());
-        require(!blackflow::inventory_reset_can_confirm_early(image, image, repeated, repeated), "duplicate item names can hide a moving column");
+        require(std::ranges::count_if(names, [](const TextRect& name) { return name.text == "标准引擎"; }) == 2,
+                "captured duplicate engines were not recognized as separate items");
+        require(blackflow::inventory_reset_can_confirm_early(image, image, names, names), "stationary duplicate inventory cannot confirm origin early");
         auto shifted = names; shifted.front().rect.x += 10;
         require(!blackflow::inventory_reset_can_confirm_early(image, image, names, shifted), "partial swipe mistaken for origin");
         auto changed = image.clone(); changed(cv::Rect(360, 140, 430, 150)).setTo(cv::Scalar::all(0));
         require(!blackflow::inventory_reset_can_confirm_early(image, changed, names, names), "unchanged names conceal changed cards");
+        auto rebound = image.clone();
+        image(cv::Rect(360,140,850,475)).copyTo(rebound(cv::Rect(370,140,850,475)));
+        require(!blackflow::inventory_reset_can_confirm_early(image, rebound, names, names), "same labels concealed a rebounding duplicate column");
         require(!blackflow::inventory_reset_can_confirm_early({}, image, names, names), "missing image confirms origin");
         require(!blackflow::inventory_reset_can_confirm_early(image, image, {}, {}), "empty OCR confirms origin");
     });

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <random>
 #include <regex>
 #include <tuple>
 #include <unordered_map>
@@ -457,6 +458,13 @@ bool BlackFlowSession::initialize(std::string profile, std::string* error)
     m_map_preserved_after_inventory.reset();
     m_persisted_image_packages = 0;
     ++m_run_revision;
+    // initialize() is also used by reset_run(); merchant entry/refresh and
+    // tree-hole transitions never redraw this run-wide purchase decision.
+    m_sand_table_beta_purchase_disabled = false;
+    if (m_profile == "automation_collection") {
+        static thread_local std::mt19937 store_policy_random(std::random_device {}());
+        m_sand_table_beta_purchase_disabled = std::bernoulli_distribution(0.5)(store_policy_random);
+    }
     m_page_revision = 0;
     m_decision_sequence = 0;
     m_transaction_sequence = 0;
@@ -5516,6 +5524,16 @@ json::object BlackFlowSession::run_log_state() const
         { "terminated", terminated() },
         { "movement_inventory_refresh_required", m_movement_inventory_refresh_required },
     };
+    if (m_profile == "automation_collection") {
+        result["store_purchase_policy"] = json::object {
+            { "sand_table_beta", json::object {
+                { "disabled_for_run", m_sand_table_beta_purchase_disabled },
+                { "disable_probability", 0.5 },
+                { "quota_override", m_sand_table_beta_purchase_disabled ? json::value(0) : json::value(nullptr) },
+                { "scope", "run" },
+            } },
+        };
+    }
     if (m_transaction.has_value()) {
         result["transaction"] = json::object {
             { "stage", static_cast<int>(m_transaction->stage()) },

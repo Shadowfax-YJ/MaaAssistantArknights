@@ -28,6 +28,7 @@ if __name__ == '__main__':
     for marker, file, signature in (
         ('INVALIDATE_SHOP', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'void BlackFlowAutomationStoreTaskPlugin::invalidate_shop_goods('),
         ('SCAN_SHOP', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::scan_shop_goods('),
+        ('SELECT_SHOP', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::select_shop_good('),
         ('RELOCATE', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::relocate_selection('),
         ('CLICK', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'bool BlackFlowAutomationStoreTaskPlugin::click_verified_selection('),
         ('FINALIZE', 'BlackFlowAutomationStoreTaskPlugin.cpp', 'void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase('),

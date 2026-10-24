@@ -21,8 +21,8 @@ namespace asst::blackflow
 // A collapse icon alone may be caught during the closing animation.
 [[nodiscard]] bool movement_inventory_page_visible(const cv::Mat& image);
 
-// Early reset confirmation needs pixel evidence as well as unique complete name
-// anchors. Repeated names can hide a whole-column move and use the conservative path.
+// After the swipe settles, unchanged complete name anchors AND list pixels confirm
+// the origin, including duplicate names. Names alone can hide a whole-column move.
 [[nodiscard]] bool inventory_reset_can_confirm_early(
     const cv::Mat& previous,
     const cv::Mat& current,

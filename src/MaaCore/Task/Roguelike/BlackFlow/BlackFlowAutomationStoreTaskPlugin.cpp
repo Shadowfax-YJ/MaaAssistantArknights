@@ -1394,7 +1394,8 @@ bool BlackFlowAutomationStoreTaskPlugin::select_shop_good(std::optional<StoreSel
         offers.emplace_back(StoreGoodOffer {
             name,
             cached.price,
-            automation_store_purchase_quota_allowed(name, entry_usable_count, purchased_count) &&
+            automation_store_purchase_quota_allowed(
+                name, entry_usable_count, purchased_count, m_session->sand_table_beta_purchase_disabled()) &&
                 progress_purchase_allowed &&
                 eerie_store_collectible_purchase_allowed(name, m_shop_collectibles_purchased_in_run) &&
                 !already_recorded(slot, m_shop_purchased) &&
@@ -1458,7 +1459,8 @@ bool BlackFlowAutomationStoreTaskPlugin::select_scrap_shop_good(std::optional<St
             name,
             price,
             board_vine_purchase_allowed(AutomationStoreKind::Secret, name, m_scrap_shop_has_board_vine) &&
-                automation_store_purchase_quota_allowed(name, entry_usable_count, purchased_count) &&
+                automation_store_purchase_quota_allowed(
+                    name, entry_usable_count, purchased_count, m_session->sand_table_beta_purchase_disabled()) &&
                 !already_recorded(slot, m_scrap_shop_purchased) &&
                 purchase_name_attempt_allowed(name, m_scrap_shop_buy_attempted_names),
             shelf_buyable,

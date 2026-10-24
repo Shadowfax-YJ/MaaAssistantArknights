@@ -452,8 +452,11 @@ inline constexpr std::array<StorePurchaseQuota, 15> StorePurchaseQuotas { {
 } };
 
 [[nodiscard]] inline constexpr std::optional<std::size_t>
-    automation_store_purchase_quota(std::string_view name) noexcept
+    automation_store_purchase_quota(std::string_view name, bool sand_table_beta_disabled = false) noexcept
 {
+    if (sand_table_beta_disabled && name == "沙盘β") {
+        return 0;
+    }
     const auto iter = std::ranges::find(StorePurchaseQuotas, name, &StorePurchaseQuota::name);
     return iter == StorePurchaseQuotas.end() ? std::nullopt : std::optional<std::size_t> { iter->maximum };
 }
@@ -462,9 +465,10 @@ inline constexpr std::array<StorePurchaseQuota, 15> StorePurchaseQuotas { {
     automation_store_purchase_quota_allowed(
         std::string_view name,
         std::size_t usable_parts_on_entry,
-        std::size_t successful_purchases) noexcept
+        std::size_t successful_purchases,
+        bool sand_table_beta_disabled = false) noexcept
 {
-    const std::optional<std::size_t> quota = automation_store_purchase_quota(name);
+    const std::optional<std::size_t> quota = automation_store_purchase_quota(name, sand_table_beta_disabled);
     return !quota.has_value() ||
            (usable_parts_on_entry < *quota && successful_purchases < *quota - usable_parts_on_entry);
 }

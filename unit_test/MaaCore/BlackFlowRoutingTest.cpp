@@ -3713,6 +3713,24 @@ TEST_CASE("BlackFlow merchant purchase limits include usable parts held on node 
     REQUIRE(usable_processing_item_count("种子", inventory) == 0);
 }
 
+TEST_CASE("BlackFlow per-run sand table beta quota blocks only its shop purchase")
+{
+    REQUIRE(automation_store_purchase_quota("沙盘β", true) == 0);
+    REQUIRE_FALSE(automation_store_purchase_quota("沙盘β", false).has_value());
+    REQUIRE_FALSE(automation_store_purchase_quota_allowed("沙盘β", 0, 0, true));
+    REQUIRE_FALSE(automation_store_purchase_quota_allowed("沙盘β", 0, 3, true));
+    REQUIRE(automation_store_purchase_quota_allowed("沙盘β", 0, 0, false));
+    REQUIRE(automation_store_purchase_quota_allowed("沙盘β", 100, 100, false));
+    for (const auto& quota : StorePurchaseQuotas) {
+        CAPTURE(quota.name);
+        REQUIRE(automation_store_purchase_quota(quota.name, true) == quota.maximum);
+        REQUIRE(automation_store_purchase_quota_allowed(quota.name, 0, 0, true));
+        REQUIRE_FALSE(automation_store_purchase_quota_allowed(quota.name, 0, quota.maximum, true));
+    }
+    REQUIRE(automation_store_purchase_quota_allowed("沙盘α", 0, 0, true));
+    REQUIRE(automation_store_purchase_quota_allowed("一次性喷气背包", 100, 100, true));
+}
+
 TEST_CASE("BlackFlow node-entry inventory projection drops an exhausted processing item")
 {
     RunState run;
@@ -4123,6 +4141,15 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     const auto tasks = json::open(repository_root / "resource/tasks/Roguelike/BlackFlow.json");
     REQUIRE(tasks.has_value());
 
+    const auto after_popup_checks = [&](const std::string& name) {
+        auto next = tasks->at(name).get("next", std::vector<std::string> {});
+        REQUIRE(next.size() >= 2);
+        REQUIRE(next[0] == name + "@(BlackFlow@Roguelike@CloseCollectionContinue)");
+        REQUIRE(next[1] == name + "@(BlackFlow@Roguelike@CloseCollection)");
+        next.erase(next.begin(), next.begin() + 2);
+        return next;
+    };
+
     const std::string shop_prefix = "BlackFlow@Roguelike@AutomationShop";
     const std::string shop_settle_name = shop_prefix + "PurchaseSettle";
     const auto& shop_confirm = tasks->at(shop_prefix + "BuyConfirm");
@@ -4135,7 +4162,7 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     const auto& purchase_transition = tasks->at(shop_prefix + "PurchaseTransition");
     REQUIRE(purchase_transition.get("baseTask", std::string {}) == shop_prefix + "OrdinaryPurchaseTransition");
     REQUIRE(
-        tasks->at(shop_prefix + "OrdinaryPurchaseTransition").get("next", std::vector<std::string> {}) ==
+        after_popup_checks(shop_prefix + "OrdinaryPurchaseTransition") ==
         std::vector<std::string> {
             "BlackFlow@Roguelike@ChooseOperFlag",
             shop_settle_name,
@@ -4148,7 +4175,7 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     REQUIRE(shop_settle.get("action", std::string {}) == "DoNothing");
     REQUIRE(shop_settle.get("postDelay", 0) >= 500);
     REQUIRE(
-        shop_settle.get("next", std::vector<std::string> {}) == std::vector<std::string> {
+        after_popup_checks(shop_settle_name) == std::vector<std::string> {
                                                                     "BlackFlow@Roguelike@ChooseOperFlag",
                                                                     shop_prefix + "PurchaseSettleConfirmed",
                                                                     shop_prefix + "PurchaseWait",
@@ -4158,7 +4185,7 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     REQUIRE(shop_settle_confirmed.get("template", std::string {}) == "Roguelike@StageTraderLeave.png");
     REQUIRE(shop_settle_confirmed.get("action", std::string {}) == "DoNothing");
     REQUIRE(
-        shop_settle_confirmed.get("next", std::vector<std::string> {}) ==
+        after_popup_checks(shop_prefix + "PurchaseSettleConfirmed") ==
         std::vector<std::string> { shop_prefix + "Decision" });
 
     const auto& shop_wait = tasks->at(shop_prefix + "PurchaseWait");
@@ -4174,7 +4201,7 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     const auto& recruit_wait = tasks->at(shop_prefix + "RecruitPurchaseWait");
     REQUIRE(recruit_wait.get("algorithm", std::string {}) == "JustReturn");
     REQUIRE(recruit_wait.get("action", std::string {}) == "DoNothing");
-    const auto recruit_wait_next = recruit_wait.get("next", std::vector<std::string> {});
+    const auto recruit_wait_next = after_popup_checks(shop_prefix + "RecruitPurchaseWait");
     REQUIRE(
         recruit_wait_next == std::vector<std::string> { "BlackFlow@Roguelike@ChooseOperFlag", "#self" });
     REQUIRE(recruit_wait.get("maxTimes", 0) >= 50);
@@ -4196,7 +4223,7 @@ TEST_CASE("BlackFlow automation shops use the required post-purchase settle dela
     REQUIRE(cultivate_settle.get("algorithm", std::string {}) == "JustReturn");
     REQUIRE(cultivate_settle.get("postDelay", 0) >= 1000);
     REQUIRE(
-        cultivate_settle.get("next", std::vector<std::string> {}) ==
+        after_popup_checks(cultivate_settle_name) ==
         std::vector<std::string> { cultivate_prefix + "Decision" });
 }
 

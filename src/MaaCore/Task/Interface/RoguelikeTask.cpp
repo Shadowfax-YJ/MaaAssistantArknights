@@ -391,12 +391,24 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             session->record_virtual_auto_skill_activation(device_name);
         }
     });
-    m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>(
+    const blackflow::BlackFlowCollectionPopupTaskPlugin::Capture popup_capture =
         [weak_port = std::weak_ptr<blackflow::IBlackFlowTaskPort>(
              m_blackflow_port_ptr)](std::string_view task, std::string* error) {
             const auto port = weak_port.lock();
-            return port == nullptr ? true : port->capture_collection_popup(task, error);
-        });
+            return port != nullptr && port->capture_collection_popup(task, error);
+        };
+    const blackflow::BlackFlowCollectionPopupTaskPlugin::Failure popup_failure =
+        [weak_session = std::weak_ptr<blackflow::BlackFlowSession>(m_blackflow_session_ptr),
+         weak_task = std::weak_ptr<ProcessTask>(m_roguelike_task_ptr)](
+            std::string_view task, std::string_view error) {
+            if (const auto session = weak_session.lock()) {
+                session->fail("collection_popup_capture_failed", std::string(task) + ": " + std::string(error));
+            }
+            if (const auto task_ptr = weak_task.lock()) {
+                task_ptr->set_enable(false);
+            }
+        };
+    m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>(popup_capture, popup_failure);
     m_roguelike_task_ptr->register_plugin<blackflow::BlackFlowNodeEvidenceTaskPlugin>(
         m_config_ptr,
         m_control_ptr,
@@ -473,6 +485,13 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
             m_blackflow_session_ptr,
             m_blackflow_port_ptr)
         ->set_retry_times(0);
+    // ProcessTask(*plugin, ...) copies that plugin's observers, not the outer
+    // roguelike task's. Give nested reward/encounter/store tasks the same guard.
+    for (const auto& plugin : m_roguelike_task_ptr->get_plugins()) {
+        if (std::dynamic_pointer_cast<blackflow::BlackFlowCollectionPopupTaskPlugin>(plugin) == nullptr) {
+            plugin->register_plugin<blackflow::BlackFlowCollectionPopupTaskPlugin>(popup_capture, popup_failure);
+        }
+    }
     m_subtasks.emplace_back(m_roguelike_task_ptr);
 }
 

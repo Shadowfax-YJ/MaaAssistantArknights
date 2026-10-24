@@ -17,6 +17,7 @@ namespace asst::blackflow
 {
 inline constexpr std::string_view CollectionPopupRootDirectory = "collection-popups";
 inline constexpr std::string_view CollectionPopupRunLogAction = "collection.popup.capture";
+inline constexpr std::string_view CollectionPopupPendingRunLogAction = "collection.popup.pending";
 inline constexpr std::string_view NodeEventRunLogAction = "node.event.capture";
 inline constexpr std::string_view NodeGetDropRunLogAction = "node.get-drop.capture";
 inline constexpr std::string_view NodeRecruitmentRunLogAction = "node.recruitment.capture";
@@ -43,7 +44,8 @@ inline constexpr std::string_view NodeStorePurchaseRunLogAction = "node.store.pu
 
 [[nodiscard]] inline constexpr bool is_node_evidence_run_log_action(std::string_view action) noexcept
 {
-    return action == CollectionPopupRunLogAction || action == NodeEventRunLogAction ||
+    return action == CollectionPopupRunLogAction || action == CollectionPopupPendingRunLogAction ||
+           action == NodeEventRunLogAction ||
            action == NodeGetDropRunLogAction || action == NodeRecruitmentRunLogAction ||
            action == NodeStoreRunLogAction || action == NodeEmployRunLogAction ||
            action == NodeStorePurchaseRunLogAction;

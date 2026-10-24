@@ -36,6 +36,10 @@ if __name__ == '__main__':
         ('INVENTORY_ANALYZE', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugin::analyze_inventory_frame('),
         ('REWARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'bool BlackFlowNodeEvidenceTaskPlugin::_run('),
         ('GUARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check('),
+        ('POPUP_GATE', 'BlackFlowCollectionPopupTaskPlugin.cpp', 'bool BlackFlowCollectionPopupTaskPlugin::_run()'),
+        ('POPUP_CAPTURE', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::capture_collection_popup('),
+        ('POPUP_PERSIST', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::persist_collection_popup_capture('),
+        ('POPUP_PENDING_PERSIST', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::persist_node_evidence_capture('),
     ):
         path = core / file
         source = subprocess.check_output(['git', 'show', f'{args.source_ref}:{path.as_posix()}'], cwd=repo).decode('utf-8') if args.source_ref else (repo / path).read_text('utf-8')
@@ -51,4 +55,7 @@ if __name__ == '__main__':
     if args.source_ref:
         completion_source = subprocess.check_output(['git', 'show', f'{args.source_ref}:src/MaaCore/Task/Interface/RoguelikeTask.cpp'], cwd=repo).decode('utf-8')
     result = result.replace('/*TASK_COMPLETION*/', extract(completion_source, 'bool asst::RoguelikeTask::run()').replace('bool asst::RoguelikeTask::run()', 'bool RoguelikeTask::run()'))
+    process_path = Path('src/MaaCore/Task/ProcessTask.cpp')
+    process_source = subprocess.check_output(['git', 'show', f'{args.source_ref}:{process_path.as_posix()}'], cwd=repo).decode('utf-8') if args.source_ref else (repo / process_path).read_text('utf-8')
+    result = result.replace('/*POPUP_PROCESS*/', extract(process_source, 'ProcessTask::NodeStatus ProcessTask::run_task('))
     args.output.write_text(result, encoding='utf-8')

@@ -172,6 +172,7 @@ public:
     [[nodiscard]] std::uint64_t map_section_generation() const noexcept { return m_map_section_generation; }
 
     [[nodiscard]] std::uint64_t run_revision() const noexcept { return m_run_revision; }
+    [[nodiscard]] bool sand_table_beta_purchase_disabled() const noexcept { return m_sand_table_beta_purchase_disabled; }
     [[nodiscard]] json::object run_log_state() const;
 
     [[nodiscard]] bool completed_page_changes_floor() const noexcept;
@@ -348,6 +349,7 @@ public:
     }
 
 private:
+    friend struct BlackFlowStoreReplayAccess;
     [[nodiscard]] bool no_action_points_is_terminal() const;
     [[nodiscard]] BlackFlowPlan plan_internal(
         bool require_physical_endpoint,
@@ -461,6 +463,7 @@ private:
     DiagnosticSettings m_diagnostics;
     std::size_t m_persisted_image_packages = 0;
     std::uint64_t m_run_revision = 0;
+    bool m_sand_table_beta_purchase_disabled = false;
     std::uint64_t m_page_revision = 0;
     std::uint64_t m_decision_sequence = 0;
     std::uint64_t m_transaction_sequence = 0;

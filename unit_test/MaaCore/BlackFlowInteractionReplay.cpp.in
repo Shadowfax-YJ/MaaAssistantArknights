@@ -18,7 +18,7 @@
 using namespace asst;
 using namespace asst::blackflow;
 void check(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
-struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} template<class... T> void error(T&&...) {} } Log;
+struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} template<class... T> void error(T&&...) {} template<class... T> void trace(T&&...) {} } Log;
 struct { std::string next; void set_task_base(std::string, std::string base) { next = std::move(base); } } Task;
 struct DiagnosticArtifactRequest { struct EvidenceImage { std::string role; std::shared_ptr<cv::Mat> image; }; };
 struct MovementPanelObservation { MovementKind target; bool target_found = false; };
@@ -346,6 +346,101 @@ struct BlackFlowMovementTaskPlugin {
 namespace asst::blackflow {
 /*INVENTORY_RESET_EARLY*/
 }
+namespace popup_gate_replay {
+#define LogTraceScope(...)
+struct AbstractTask {virtual ~AbstractTask()=default;bool m_enable=true;void set_enable(bool value){m_enable=value;}};
+struct Status {inline static const std::string ProcessTaskLastTimePrefix="last:";void set_number(std::string,time_t){}};
+struct ProcessTask : AbstractTask {
+    enum class TimesLimitType {Pre,Post};
+    enum class NodeStatus {Success,Runout,Interrupted,InternalError};
+    struct HitDetail {std::shared_ptr<TaskInfo> task_ptr;std::shared_ptr<json::value> reco_detail;};
+    std::unordered_map<std::string,int> m_exec_times;
+    bool m_last_task_has_ui_effect=false,m_skip_current_action=false;
+    int clicks=0;std::function<void()> before;
+    ProcessTask()=default;ProcessTask(const ProcessTask&,std::vector<std::string>){}
+    void set_skip_current_action(bool value=true){m_skip_current_action=value;}
+    std::pair<int,TimesLimitType> calc_time_limit(std::shared_ptr<TaskInfo>){return {100,TimesLimitType::Pre};}
+    json::value basic_info(){return json::object{};}
+    void callback(AsstMsg,const json::value&){}
+    bool callback_with_plugin_effect(AsstMsg msg,const json::value&){if(msg==AsstMsg::SubTaskStart&&before)before();return false;}
+    bool sleep(int){return true;}bool need_exit(){return false;}bool run(){return true;}
+    int calc_post_delay(std::shared_ptr<TaskInfo>){return 0;}
+    Status* status(){static Status value;return &value;}
+    NodeStatus run_action(const HitDetail&){++clicks;return NodeStatus::Success;}
+    NodeStatus run_task(const HitDetail&);
+};
+/*POPUP_PROCESS*/
+#undef LogTraceScope
+struct Controller {bool visible=true,empty=false;cv::Mat get_image(){return empty?cv::Mat():cv::Mat(1,1,CV_8UC3,cv::Scalar(visible,0,0));}};
+struct PipelineAnalyzer {
+    bool visible;explicit PipelineAnalyzer(const cv::Mat& image):visible(!image.empty()&&image.at<cv::Vec3b>(0,0)[0]){}
+    void set_tasks(std::vector<std::string>){}std::optional<int> analyze(){return visible?std::optional<int>(1):std::nullopt;}
+};
+struct BlackFlowCollectionPopupTaskPlugin {
+    std::function<bool(std::string_view,std::string*)> m_capture;
+    std::function<void(std::string_view,std::string_view)> m_failure;
+    std::string m_pending_task="BlackFlow@Roguelike@CloseCollectionContinue";
+    AbstractTask* m_task_ptr=nullptr;Controller controller;bool cancelled=false;int waits=0;
+    Controller* ctrler(){return &controller;}bool need_exit(){return cancelled;}bool sleep(int){++waits;return !cancelled;}
+    bool _run();
+};
+/*POPUP_GATE*/
+}
+
+namespace popup_capture_replay {
+struct Session {
+    bool random=false;
+    struct Transaction {struct Proposal {bool controllable=false;} value;const Proposal& proposal(){return value;}} tx;
+    std::string profile(){return "automation_collection";}int run_revision(){return 1;}
+    Transaction* transaction(){return random?&tx:nullptr;}
+    json::object run_log_state(){return {{"profile","automation_collection"},{"floor",1}};}
+};
+struct Context {
+    bool stable=true,cancelled=false,visible=true;
+    cv::Mat capture(){return visible?cv::Mat(720,1280,CV_8UC3,cv::Scalar::all(80)):cv::Mat();}
+    bool stopped(){return cancelled;}
+    bool capture_stable_frame(cv::Mat& image,int& samples,double& difference,std::string*){
+        image=capture();samples=2;difference=stable?0:20;return stable;
+    }
+};
+struct OcrTaskInfo {std::vector<std::string> text;};
+struct {template<class T>std::shared_ptr<T> get(std::string){return std::make_shared<T>();}} Task;
+struct OCRer {explicit OCRer(const cv::Mat&){}void set_task_info(std::string){}std::optional<int> analyze(){return 1;}};
+struct CollectionPopupDestination {std::filesystem::path directory;json::object attribution;};
+struct Origin {CollectionPopupDestination unresolved_destination{"collection-popups/unresolved/floor-1",{{"kind","unresolved"}}};};
+Origin collection_popup_origin(Session&){return {};}
+std::optional<CollectionPopupDestination> resolve_collection_popup_destination(Session& s,std::string_view,bool,std::optional<int>){
+    if(s.random)return {};return CollectionPopupDestination{"collection-popups/floor-1/node-1",{{"kind","node"},{"floor",1},{"node",1}}};
+}
+int collection_popup_floor(Session&){return 1;}
+struct BlackFlowTaskPort {
+    struct CollectionPopupCaptureState {struct Pending {std::string task,button;cv::Mat image;int samples;double difference;Origin origin;};std::vector<Pending> pending;};
+    std::shared_ptr<Session> owner=std::make_shared<Session>();std::weak_ptr<Session> m_collection_popup_session=owner;
+    std::unique_ptr<Context> m_task_context=std::make_unique<Context>();
+    std::unique_ptr<CollectionPopupCaptureState> m_collection_popup_state=std::make_unique<CollectionPopupCaptureState>();
+    bool disk_ok=true;std::vector<json::value> events;
+    bool resolve_pending_collection_popups(std::string*){return true;}bool flush_pending_collection_popups(std::string*){return true;}
+    bool matches_template(const cv::Mat& image,std::string_view){return !image.empty();}
+    std::optional<std::string> recognize_text(const cv::Mat&,std::string_view){return {};}
+    bool record_run_event(int,const RunLogEvent& event,std::shared_ptr<cv::Mat> image,bool,std::string*){
+        if(!disk_ok)return false;check(image&&!image->empty(),"popup evidence has no image");
+        const auto directory=event.details.get("collection_popup_directory",event.details.get("node_evidence_directory",std::string("images")));
+        events.emplace_back(json::object{{"schema_version",1},{"sequence",int(events.size()+1)},
+            {"timestamp","2026-10-25T00:00:00Z"},{"elapsed_ms",int(events.size()+1)},{"level","INFO"},
+            {"action",event.action},{"phase",event.phase},{"outcome",event.outcome},{"task",event.task},
+            {"floor",1},{"state",event.state},{"details",event.details},{"transaction_id",event.transaction_id},
+            {"image",json::object{{"path",directory+"/popup-"+std::to_string(events.size()+1)+".jpg"}}}});
+        return true;
+    }
+    bool capture_collection_popup(std::string_view,std::string*);
+    bool persist_collection_popup_capture(const std::string&,std::string_view,const cv::Mat&,int,double,const std::filesystem::path&,json::object,bool,std::string*);
+    bool persist_node_evidence_capture(std::string_view,std::string,std::string,const cv::Mat&,const std::filesystem::path&,json::object,json::object,std::string*);
+};
+/*POPUP_PENDING_PERSIST*/
+/*POPUP_PERSIST*/
+/*POPUP_CAPTURE*/
+}
+
 namespace whole_inventory_replay {
 constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
 constexpr std::string_view InventoryResetCollapseTask="reset-collapse", InventoryScanResetExpandTask="reset-expand";
@@ -386,6 +481,8 @@ recognize_movement_inventory_remaining_uses(const cv::Mat&,const Rect&,int count
 /*INVENTORY_NAMES_UNCHANGED*/
 struct Controller {
     int page=0, last_page=0;
+    cv::Mat first_page_image;
+    bool animate_reset_cards=false;
     int forward_swipes=0;
     bool animate_loaded=false;
     bool jitter_after_forward=false;
@@ -396,6 +493,12 @@ struct Controller {
     bool unknown_after_collapse=false;
     cv::Mat get_image(){
         cv::Mat image(720,1280,CV_8UC3,cv::Scalar(page*20,replay_reset?reset_index+1:0,panel_state));
+        if(page==0&&!first_page_image.empty()){
+            image=first_page_image.clone();
+            image.at<cv::Vec3b>(0,0)={0,uchar(replay_reset?reset_index+1:0),uchar(panel_state)};
+        }
+        if(animate_reset_cards&&forward_swipes==0)
+            image(cv::Rect(500,160,200,200)).setTo(cv::Scalar::all(reset_swipes*20));
         if(animate_loaded&&page==last_page)
             image(cv::Rect(600,588,215,23)).setTo(cv::Scalar::all(((++reads/2)%2)*255));
         return image;
@@ -478,6 +581,62 @@ void configure(BlackFlowMovementTaskPlugin& plugin,std::vector<std::vector<TextR
 int main(int argc,char** argv) {
     int failed=0,passed=0;
     auto test=[&](const char* name,auto body){Matcher::reward_matches={};try{body();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cerr<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    for(const auto scenario:{0,1,2,3,4,5})test(("popup save gates the actual ProcessTask close action "+std::to_string(scenario)).c_str(),[&]{
+        using namespace popup_gate_replay;
+        popup_gate_replay::ProcessTask process;
+        popup_gate_replay::BlackFlowCollectionPopupTaskPlugin popup;popup.m_task_ptr=&process;
+        int captures=0,failures=0;bool saved=false;
+        popup.m_capture=[&](std::string_view,std::string* error){
+            ++captures;check(process.clicks==0,"popup was clicked before capture");
+            if(scenario==1||scenario==2||scenario==3||scenario==4){
+                if(scenario==2)popup.controller.visible=false;
+                if(scenario==3)popup.controller.empty=true;
+                if(scenario==4)popup.cancelled=true;
+                *error="injected save failure";return false;
+            }
+            if(scenario==5&&captures==1){*error="temporary save failure";return false;}
+            saved=true;return true;
+        };
+        popup.m_failure=[&](std::string_view,std::string_view){++failures;};
+        process.before=[&]{popup._run();};
+        auto task=std::make_shared<TaskInfo>();task->name=popup.m_pending_task;task->action=ProcessTaskAction::ClickSelf;
+        const auto status=process.run_task({task,{}});
+        if(scenario==0||scenario==5)check(saved&&process.clicks==1&&failures==0,"saved popup did not resume exactly one normal close");
+        else check(process.clicks==0,"popup closed without a saved image");
+        if(scenario==1||scenario==3)check(failures==1&&!process.m_enable&&captures==3,"persistent save failure did not stop within its budget");
+        if(scenario==2)check(failures==0&&process.m_enable&&status==popup_gate_replay::ProcessTask::NodeStatus::Success,"a vanished popup stopped normal page routing");
+        if(scenario==4)check(failures==0&&captures==1,"cancellation invented a capture failure or retried");
+    });
+    for(const auto scenario:{0,1,2,3,4,5})test(("production popup capture persists before close "+std::to_string(scenario)).c_str(),[&]{
+        popup_capture_replay::BlackFlowTaskPort port;
+        if(scenario==1||scenario==2||scenario==3)port.m_task_context->stable=false;
+        if(scenario==2)port.m_task_context->visible=false;
+        if(scenario==3)port.m_task_context->cancelled=true;
+        if(scenario==4||scenario==5)port.owner->random=true;
+        if(scenario==5)port.disk_ok=false;
+        std::string error;const bool result=port.capture_collection_popup("BlackFlow@Roguelike@CloseCollection",&error);
+        if(scenario==2||scenario==3||scenario==5){check(!result&&port.events.empty()&&port.m_collection_popup_state->pending.empty(),"missing evidence authorized a close or left only an in-memory popup");return;}
+        check(result&&port.events.size()==1,"recognized popup was not persisted before close");
+        if(scenario==0)check(port.events.front().at("details").at("image_capture").get("mode",std::string())=="stable_before_click","stable popup mode changed");
+        if(scenario==1)check(port.events.front().at("details").at("image_capture").get("mode",std::string())=="recognized_before_click","animated popup still claims full-frame stability");
+        if(scenario==4){
+            check(port.events.front().get("action",std::string())=="collection.popup.pending"&&port.m_collection_popup_state->pending.size()==1,"random-landing popup was only kept in memory");
+            check(port.persist_collection_popup_capture("BlackFlow@Roguelike@CloseCollection","x",port.m_task_context->capture(),2,0,"collection-popups/floor-1/node-1",{{"kind","node"},{"floor",1},{"node",1}},true,&error),"final attributed popup failed");
+            std::ofstream output(std::filesystem::path(argv[2]).parent_path()/"popup-contract-events.json");output<<json::array(port.events).to_string();
+        }
+    });
+    test("skipping an obsolete popup hit cannot suppress the next ordinary action",[&]{
+        using namespace popup_gate_replay;
+        popup_gate_replay::ProcessTask process;
+        popup_gate_replay::BlackFlowCollectionPopupTaskPlugin popup;popup.m_task_ptr=&process;
+        popup.controller.visible=false;
+        popup.m_capture=[](std::string_view,std::string*){return false;};
+        process.before=[&]{popup._run();};
+        auto task=std::make_shared<TaskInfo>();task->name=popup.m_pending_task;task->action=ProcessTaskAction::ClickSelf;
+        process.run_task({task,{}});check(process.clicks==0,"obsolete popup was clicked");
+        process.before={};process.run_task({task,{}});
+        check(process.clicks==1,"popup skip leaked into another ProcessTask hit");
+    });
     auto reset_replay=[&](whole_inventory_replay::BlackFlowMovementTaskPlugin& p,const char* instance){
         using namespace whole_inventory_replay;
         const auto path=std::filesystem::path(argv[1]).parent_path()/"blackflow-inventory/20261022/runtime-layouts.json";
@@ -494,6 +653,51 @@ int main(int argc,char** argv) {
         configure(p,{OCRer::reset_layouts.front(),{title("待收集零件")}});
         p.controller.page=0;p.controller.replay_reset=true;
     };
+    test("captured duplicate engines need only one unchanged reset swipe without losing the full scan",[&]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{
+            {{{825,259,70,20},0.99,"气垫底座"},{{368,260,119,19},0.99,"一次性喷气背包"},
+             {{375,421,105,19},0.99,"坎诺特的触须"},{{813,418,90,25},0.99,"试作外骨骼"},
+             {{393,582,70,20},0.99,"标准引擎"},{{824,582,71,20},0.99,"标准引擎"}},
+            {title("一次性喷气背包"),title("洛伦茨之眼",600)},
+            {title("待收集零件")}});
+        p.controller.page=0;
+        p.controller.first_page_image=cv::imread((std::filesystem::path(argv[1]).parent_path()/
+            "blackflow-inventory/20261024/instance003-left-edge.jpg").string());
+        check(!p.controller.first_page_image.empty(),"captured duplicate inventory fixture missing");
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(p.controller.reset_swipes==1,"stationary duplicate inventory still requires extra reset swipes");
+        check(p.waits>=2&&!p.controller.reopened,"reset skipped settling or reopened unnecessarily");
+        check(frame.scan_complete&&frame.lorentz_eye_found&&p.controller.forward_swipes==2,
+              "early origin confirmation truncated the complete rightward scan");
+        check(frame.movement_instances.size()==7,"reset lost or merged separate duplicate item instances");
+    });
+    test("reset from a later page stops at the first unchanged settled swipe",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("标准引擎"),title("标准引擎",400)},
+                     {title("气垫底座")},{title("一次性喷气背包")},{title("待收集零件")}});
+        p.controller.page=2;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(p.controller.reset_swipes==3,"moving reset stopped early or kept swiping after the origin");
+        check(frame.scan_complete&&frame.movement_instances.size()==4&&p.controller.forward_swipes==3,
+              "origin reset lost duplicate items or a later column");
+    });
+    test("animated duplicate cards retain bounded reset fallback and the complete scan",[]{
+        using namespace whole_inventory_replay;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin p;
+        configure(p,{{title("标准引擎"),title("标准引擎",400)},
+                     {title("气垫底座")},{title("待收集零件")}});
+        p.controller.page=0;p.controller.animate_reset_cards=true;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;std::string error;
+        check(p.scan_inventory_frame(frame,&error),error.c_str());
+        check(p.controller.reset_swipes==4&&!p.controller.reopened,"inconclusive pixel evidence lost the conservative fallback");
+        check(frame.scan_complete&&frame.movement_instances.size()==3&&p.controller.forward_swipes==2,
+              "animated reset lost duplicate items or truncated the scan");
+    });
     for(const char* instance:{"MAA-001","MAA-003"}){
         test((std::string(instance)+" whole scan waits out recorded reset rebound").c_str(),[&]{
             whole_inventory_replay::BlackFlowMovementTaskPlugin p;reset_replay(p,instance);

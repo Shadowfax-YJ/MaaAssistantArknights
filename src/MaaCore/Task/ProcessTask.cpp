@@ -332,6 +332,7 @@ ProcessTask::NodeStatus ProcessTask::run_action(const HitDetail& hits) const
 
 ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
 {
+    m_skip_current_action = false;
     const auto& task = hits.task_ptr;
     const auto& task_name = task->name;
     m_last_task_has_ui_effect = !task->sub.empty();
@@ -375,8 +376,10 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
     }
 
     // 根据任务的 action 执行任务
-    if (auto result = run_action(hits); result != NodeStatus::Success) {
-        return result;
+    if (!m_skip_current_action) {
+        if (auto result = run_action(hits); result != NodeStatus::Success) {
+            return result;
+        }
     }
 
     status()->set_number(Status::ProcessTaskLastTimePrefix + task_name, time(nullptr));

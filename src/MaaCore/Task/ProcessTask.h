@@ -40,6 +40,10 @@ public:
     ProcessTask& set_post_delay(std::string name, int delay);
     ProcessTask& set_reusable_image(const cv::Mat& reusable);
 
+    // A before-action observer may discover that its target page has already
+    // changed. Skip this hit's input without disabling subsequent page dispatch.
+    void set_skip_current_action(bool skip = true) noexcept { m_skip_current_action = skip; }
+
     const std::string& get_last_task_name() const noexcept { return m_last_task_name; }
 
     const auto& get_last_hit() const noexcept { return m_last_hit_detail; }
@@ -95,6 +99,7 @@ protected:
     int m_task_delay = TaskDelayUnsetted;
     std::optional<int> m_passive_task_delay;
     bool m_last_task_has_ui_effect = true;
+    bool m_skip_current_action = false;
     cv::Mat m_reusable;
     std::shared_ptr<HitDetail> m_last_hit_detail = nullptr;
 };

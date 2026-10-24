@@ -14,7 +14,7 @@ if (!(Get-Command cl.exe -ErrorAction SilentlyContinue)) {
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $dep = Join-Path $repo 'src\MaaUtils\MaaDeps\vcpkg\installed\maa-x64-windows'
 $includes = @('src\MaaCore', 'src\MaaUtils\include', '3rdparty\include') | ForEach-Object { '/I' + (Join-Path $repo $_) }
-& cl.exe /nologo /std:c++20 /EHsc /MD /O2 /utf-8 @includes ('/I'+$dep+'\include\opencv4') ('/I'+$dep+'\include') ('/Fo'+$out+'\replay.obj') ('/Fe'+$out+'\replay.exe') ($out+'\replay.cpp') /link ($dep+'\lib\opencv_world4.lib')
+& cl.exe /nologo /std:c++20 /EHsc /MD /O2 /utf-8 @includes ('/I'+$dep+'\include\opencv4') ('/I'+$dep+'\include') ('/Fo'+$out+'\') ('/Fe'+$out+'\replay.exe') ($out+'\replay.cpp') (Join-Path $repo 'src/MaaCore/Task/Roguelike/BlackFlow/BlackFlowModel.cpp') /link ($dep+'\lib\opencv_world4.lib')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $previousPath = $env:PATH
 try {

@@ -1,0 +1,18 @@
+[
+  {
+    "sand_table_beta": {
+      "disable_probability": 0.5,
+      "disabled_for_run": false,
+      "quota_override": null,
+      "scope": "run"
+    }
+  },
+  {
+    "sand_table_beta": {
+      "disable_probability": 0.5,
+      "disabled_for_run": true,
+      "quota_override": 0,
+      "scope": "run"
+    }
+  }
+]

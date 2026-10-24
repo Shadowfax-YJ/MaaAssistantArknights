@@ -861,11 +861,12 @@ public:
         const AsstCallback& callback,
         Assistant* inst,
         std::string_view task_chain,
-        BlackFlowCollectionPopupTaskPlugin::Capture popup_capture) :
+        BlackFlowCollectionPopupTaskPlugin::Capture popup_capture,
+        BlackFlowCollectionPopupTaskPlugin::Failure popup_failure) :
         AbstractTask(callback, inst, task_chain)
     {
         set_retry_times(0);
-        register_plugin<BlackFlowCollectionPopupTaskPlugin>(std::move(popup_capture));
+        register_plugin<BlackFlowCollectionPopupTaskPlugin>(std::move(popup_capture), std::move(popup_failure));
     }
 
     bool execute(std::vector<std::string> tasks, std::string* error)
@@ -885,6 +886,7 @@ public:
     [[nodiscard]] std::shared_ptr<cv::Mat> last_image() const noexcept { return m_last_image; }
 
     [[nodiscard]] cv::Mat capture() const { return ctrler()->get_image(); }
+    [[nodiscard]] bool stopped() const { return need_exit(); }
 
     bool capture_employ_frame(cv::Mat& image, int& sampled_frames)
     {
@@ -1159,6 +1161,11 @@ BlackFlowTaskPort::BlackFlowTaskPort(
         task_chain,
         [this](std::string_view task, std::string* error) {
             return capture_collection_popup(task, error);
+        },
+        [this](std::string_view task, std::string_view error) {
+            if (const auto session = m_collection_popup_session.lock()) {
+                session->fail("collection_popup_capture_failed", std::string(task) + ": " + std::string(error));
+            }
         })),
     m_collection_popup_state(std::make_unique<CollectionPopupCaptureState>()),
     m_map_source(std::move(map_source))
@@ -2158,7 +2165,7 @@ bool BlackFlowTaskPort::persist_collection_popup_capture(
             { "attribution", std::move(attribution) },
             { "image_capture",
               json::object {
-                  { "mode", "stable_before_click" },
+                  { "mode", run_log_frame_is_stable(mean_difference) ? "stable_before_click" : "recognized_before_click" },
                   { "status", "captured" },
                   { "sampled_frames", sampled_frames },
                   { "mean_difference", mean_difference },
@@ -2208,10 +2215,11 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
     double mean_difference = -1.0;
     const auto expedition_popup_task = expedition_floor_popup_ocr_task(task);
     if (!m_task_context->capture_stable_frame(captured, sampled_frames, mean_difference, error)) {
-        if (expedition_popup_task.empty()) {
+        if (m_task_context->stopped()) {
             return false;
         }
-        // 鸟群和乌托邦背景一直在动。全图无法静止时仍保存弹窗文字阳性的当前帧。
+        // HUD、商店和获得演出可能持续动画。不能因背景不静止丢失即将关闭的
+        // 物品图；回退到当前帧后仍须重新识别真实 next/x 或归队文字。
         captured = m_task_context->capture();
         ++sampled_frames;
         if (error != nullptr) {
@@ -2252,6 +2260,28 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
     const auto destination = resolve_collection_popup_destination(*session, task, false, visible_floor);
     if (!destination.has_value() && session->transaction() != nullptr &&
         !session->transaction()->proposal().controllable) {
+        const auto origin = collection_popup_origin(*session);
+        // The eventual node is not known yet, but the image must be durable
+        // before next/x. This is provisional evidence, not a second item popup;
+        // the existing pending resolver still writes the final attributed event.
+        if (!persist_node_evidence_capture(
+                CollectionPopupPendingRunLogAction,
+                std::string(task),
+                "before-click",
+                captured,
+                origin.unresolved_destination.directory,
+                origin.unresolved_destination.attribution,
+                json::object {
+                    { "button", std::string(to_string(*button)) },
+                    { "attribution_pending", true },
+                    { "image_capture", json::object {
+                        { "mode", "recognized_before_click" },
+                        { "status", "captured" },
+                    } },
+                },
+                error)) {
+            return false;
+        }
         m_collection_popup_state->pending.emplace_back(
             CollectionPopupCaptureState::Pending {
                 std::string(task),
@@ -2259,7 +2289,7 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
                 std::move(captured),
                 sampled_frames,
                 mean_difference,
-                collection_popup_origin(*session),
+                origin,
             });
         return true;
     }

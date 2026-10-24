@@ -378,6 +378,7 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
     const auto reset_to_start = [&] {
         bool observation_failed = false;
         int reset_swipes = 0;
+        int stationary_layout_swipes = 0;
         return scroll_inventory_to_start(
             [&] {
                 if (observation_failed || need_exit()) {
@@ -400,15 +401,29 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
                     return false;
                 }
                 const bool unchanged = inventory_name_layout_unchanged(reset_frame.visible_names, current.visible_names);
+                stationary_layout_swipes = unchanged ? stationary_layout_swipes + 1 : 0;
                 const bool early_confirmation = inventory_reset_can_confirm_early(
                     previous_reset_image,
                     reset_image,
                     reset_frame.visible_names,
                     current.visible_names);
+                Log.info(
+                    "BlackFlow inventory reset observed",
+                    "swipe",
+                    reset_swipes,
+                    "settled layout unchanged",
+                    unchanged,
+                    "list pixels unchanged",
+                    early_confirmation);
                 reset_frame = std::move(current);
-                // Ambiguous/repeated cards keep the old four-gesture lower bound.
-                return unchanged && (early_confirmation || reset_swipes >= InventoryMaximumSwipes - 1);
-            });
+                // A settled swipe with unchanged list pixels is sufficient, even with
+                // duplicate labels. Keep the old four-gesture fallback only when the
+                // pixel evidence is inconclusive (for example animated loaded cards).
+                return early_confirmation ||
+                       (reset_swipes >= InventoryMaximumSwipes && stationary_layout_swipes >= 2);
+            },
+            [] { return false; },
+            1);
     };
     bool reset = reset_to_start();
     if (!reset && !input_failed && !frame.page_lost && !need_exit()) {

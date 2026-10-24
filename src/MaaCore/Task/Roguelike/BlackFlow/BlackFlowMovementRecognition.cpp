@@ -44,13 +44,13 @@ bool inventory_reset_can_confirm_early(
             continue;
         }
         has_item_anchor = true;
-        if (!inventory_name_is_complete(name.rect, current.cols, current.rows) ||
-            std::ranges::count_if(current_names, [&](const TextRect& other) { return other.text == name.text; }) != 1) {
+        if (!inventory_name_is_complete(name.rect, current.cols, current.rows)) {
             return false;
         }
     }
     // Exclude the animated box and HUD, but include the entire scrolling list:
     // matching only names would miss a different item instance with the same label.
+    // Duplicate names do not invalidate unchanged positions AND unchanged list pixels.
     const cv::Rect list(
         current.cols * 360 / 1280,
         current.rows * 140 / 720,

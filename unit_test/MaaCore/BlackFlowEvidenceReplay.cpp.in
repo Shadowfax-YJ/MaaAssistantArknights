@@ -5,6 +5,7 @@
 #include <vector>
 #include <opencv2/imgproc.hpp>
 #include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationCollectionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRecruitmentEvidence.h"
@@ -20,6 +21,8 @@ constexpr std::string_view ShopCaptureAnchorsTask = "capture-anchors";
 constexpr std::string_view ShopGoodsSwipeToTopTask = "to-top", ShopGoodsSwipeToBottomTask = "to-bottom";
 constexpr std::string_view ShopWalletTask = "wallet", ScrapShopWalletTask = "secret-wallet";
 struct Session {
+    bool sand_table_disabled=false;
+    bool sand_table_beta_purchase_disabled() const { return sand_table_disabled; }
     RecruitmentEvidenceScope scope { 4, 1, 5, 1, "BF-T4-5", 42 };
     std::uint64_t run_revision() const { return scope.run_revision; }
     json::object run_log_state() const { return {}; }
@@ -71,6 +74,15 @@ struct ReceiptPort {
 struct { template<class... T> void info(T&&...) {} template<class... T> void warn(T&&...) {} } Log;
 struct BlackFlowAutomationStoreTaskPlugin {
     enum class ShelfPage { Top, Bottom };
+    struct ShelfSlot {Rect rect;ShelfPage page;};
+    struct Config {
+        struct Operator {int elite=0;};
+        struct Status {std::unordered_map<std::string,Operator> opers;} value;
+        const Status& status()const{return value;}
+    };
+    std::shared_ptr<Config> m_config=std::make_shared<Config>();
+    std::vector<RunResources::MovementInstance> m_shop_entry_processing_items;
+    bool already_recorded(const ShelfSlot&,const std::vector<int>&)const{return false;}
     struct CachedShopGood { TextRect good; ShelfPage page; std::optional<int> price; std::optional<bool> buyable_when_scanned; };
     std::vector<CachedShopGood> m_shop_goods;
     std::array<std::shared_ptr<cv::Mat>, 2> m_shop_goods_images {};
@@ -89,6 +101,7 @@ struct BlackFlowAutomationStoreTaskPlugin {
     bool scan_shop_goods();
     struct StoreSelection {
         TextRect good { Rect {431, 327, 102, 24}, 1.0, "book" };
+        ShelfPage page=ShelfPage::Top;
         std::optional<int> ingots_before, price;
         std::shared_ptr<cv::Mat> image;
     };
@@ -121,12 +134,14 @@ struct BlackFlowAutomationStoreTaskPlugin {
     std::optional<int> read_optional_number(const cv::Mat& im, std::string) { ++wallet_reads; return controller.state(im).wallet; }
     bool purchased_good_sold_out(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).sold_out; }
     bool relocate_selection(StoreSelection&, std::string_view);
+    bool select_shop_good(std::optional<StoreSelection>&);
     bool click_verified_selection(StoreSelection&);
     void finalize_pending_purchase(AutomationStoreKind);
     void clear_pending_purchase() noexcept;
 };
 /*INVALIDATE_SHOP*/
 /*SCAN_SHOP*/
+/*SELECT_SHOP*/
 /*RELOCATE*/
 /*CLICK*/
 /*FINALIZE*/
@@ -186,6 +201,24 @@ struct BlackFlowTaskPort {
 
 int main() try {
     int passed = 0;
+    for(const bool disabled:{false,true}){
+        BlackFlowAutomationStoreTaskPlugin p;p.controller.load({Frame{}});
+        p.m_session->sand_table_disabled=disabled;
+        for(int visit=0;visit<3;++visit){
+            p.invalidate_shop_goods();p.m_shop_goods_scanned=true;
+            p.m_shop_goods={{{{431,258,102,24},1.0,"沙盘β"},BlackFlowAutomationStoreTaskPlugin::ShelfPage::Top,12,true},
+                            {{{825,258,102,24},1.0,"标准引擎"},BlackFlowAutomationStoreTaskPlugin::ShelfPage::Top,12,true}};
+            std::optional<BlackFlowAutomationStoreTaskPlugin::StoreSelection> selected;
+            check(p.select_shop_good(selected)&&selected.has_value(),"run policy prevented all shopping");
+            check(selected->good.text==(disabled?"标准引擎":"沙盘β"),"actual merchant selector ignored the run quota override");
+            check(p.controller.clicks.empty(),"purchase selection dispatched unexpected input");
+        }
+        p.m_shop_goods.resize(1);
+        std::optional<BlackFlowAutomationStoreTaskPlugin::StoreSelection> only_sand_table;
+        check(p.select_shop_good(only_sand_table)&&only_sand_table.has_value()==!disabled,
+              "a shelf containing only the disabled item did not finish with no purchase");
+        std::cout<<"PASS per-run sand table policy survives repeated actual merchant selection "<<disabled<<'\n';++passed;
+    }
     auto store = [&](const char* name, std::vector<Frame> frames, bool expected, int y, std::string_view kind = "eerie") {
         BlackFlowAutomationStoreTaskPlugin p;
         p.controller.load(std::move(frames));
