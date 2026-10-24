@@ -1,5 +1,32 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.31 发布与公开包核验（2026-10-25）
+
+Windows、macOS 独立采集版及 GitHub/国内自动更新源已发布为
+[`blackflow-v1.1.31`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.31)。
+构建提交 `1fbed17053d37fe0aba581af13b44a8817099c3f`，MaaMacGui 保持 `81700fa`；流水线
+[`40112743366`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40112743366)
+全部成功。发布范围包括下述重名零件回起点、可选奖励弹窗关闭前保存和整局沙盘β购买抽签。
+普通版 Latest 保持 v15.0.1。
+
+Windows CI 通过更新器、94 项交互/弹窗保护、39 项转场、初始招募守卫、难度、
+41 项刷新、32 项购买策略、61 项单挑、116 项事件、332 项原生资源/恢复与 370 项路由/归档检查。
+macOS 双架构核心、通用 GUI、版本/资源装载及 DMG 完整性检查通过；发布前十五项共享契约、
+47 项更新/封包检查通过（8 项平台条件跳过）。
+
+本机从国内 CDN 完整下载两个成品，SHA-256 与 GitHub 资产 digest 及 GitHub/CDN 两份更新清单一致：
+Windows 为 `3d0f7ae4fa1de0fd66cef98765acdb2629956a5024f22d8ed40133ffa22c6532`，
+macOS 为 `d01c25c246fd02b556cfea11179754fb58e654ed57e37188f16909dc52a662c6`。
+两份 macOS Ed25519 更新签名、Windows ZIP CRC、包身份、配置隔离、文件清单、实际资源及
+本次 Core 修复标记全部核验通过。结果保存在
+`build/diagnostics/20261025/v1.1.31-public-verification/verification.json`。
+
+原始/图片/签名 schema、能力、固定验证器 bundle、适配器、识别任务族及宿主协议保持；
+本机消费者已验证兼容新旧输入，未知 schema 继续拒绝解释。旧缺图与缺失策略字段仍未知；
+pending 证据不新增领取，禁购策略不证明未持有。历史包、OCR 缓存、人工审核及冻结统计未改写，
+专题分子分母规则保持，新局比较需保留明确购买策略。未部署远程消费者、替换或重启运行实例，
+尚无新版完整实机跑局验证。下方“未发布”描述保留源码阶段发生状态。
+
 ## v1.1.31 发布准备与消费者兼容（2026-10-25）
 
 用户确认发布采集版 v1.1.31 的 Windows、macOS 包及 GitHub/CDN 自动更新源。
