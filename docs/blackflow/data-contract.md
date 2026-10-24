@@ -1,5 +1,31 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.30 发布与公开包核验（2026-10-24）
+
+Windows、macOS 独立采集版以及 GitHub/国内自动更新源已发布为
+[`blackflow-v1.1.30`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.30)。
+构建提交 `efff19212034df28bbdcb050f1f7fafea9e49a73`，MaaMacGui `81700fa`；流水线
+[`40097203796`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40097203796)
+全部成功。普通版 Latest 保持 v15.0.1。
+
+Windows CI 通过更新器、78 项交互/任务结束、39 项页面转换、初始招募守卫、难度、
+41 项商店刷新、购买、61 项单挑、116 项事件、322 项原生恢复和 369 项路由/归档检查。
+macOS 双架构核心与通用 GUI 构建、版本、资源装载和 DMG 检查通过；界面的错误提示修正已实际编译。
+发布前十项共享契约和 47 项更新/封包测试（8 项平台跳过）通过。
+
+本机从国内 CDN 完整下载两个成品，SHA-256 与 GitHub 资产 digest、两份 latest.json 一致；
+两份 macOS Ed25519 更新签名、Windows ZIP CRC、包身份、文件清单、配置隔离、资源与
+本次核心修复标记全部核验通过。记录位于
+`build/diagnostics/20261024/v1.1.30-public-verification/verification.json`。
+原始/图片/签名 schema、capabilities、验证器 bundle 和消费者/宿主接口保持；无远程消费者部署、
+历史重算、审核/缓存覆盖或手工替换运行实例，尚无新版完整实机跑局验证。
+
+发布期间补查 003 的扫描耗时：21:30:05.120—21:30:17.012 的四次回起点手势/稳定识别约 12 秒。
+同屏两件标准引擎直接触发“任何重名即禁用提前结束”的条件，其他四个不重名锚点位置持续稳定
+也无法提前停止。本版库存回起点代码与 v1.1.29 相同，该常见场景未被此前优化覆盖，尚未修复。
+原始日志片段和开箱图保存在 build/diagnostics/20261024/inventory-reset-live-003；
+不把缺失的逐手势截图当作已验证的像素比较。以下源码阶段记录保留当时的“未发布”状态。
+
 ## v1.1.30 发布准备（2026-10-24）
 
 用户确认发布采集版 v1.1.30，范围为开局招募组合、货从口出拒购结束页、异常停止状态与诊断记录。
