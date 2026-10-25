@@ -36,8 +36,11 @@ if __name__ == '__main__':
         ('INVENTORY_ANALYZE', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugin::analyze_inventory_frame('),
         ('REWARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'bool BlackFlowNodeEvidenceTaskPlugin::_run('),
         ('GUARD', 'BlackFlowNodeEvidenceTaskPlugin.cpp', 'void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check('),
+        ('TROPHY_CAPTURE', 'BlackFlowTrophyRewardTaskPlugin.cpp', 'bool BlackFlowTrophyRewardTaskPlugin::_run('),
         ('POPUP_GATE', 'BlackFlowCollectionPopupTaskPlugin.cpp', 'bool BlackFlowCollectionPopupTaskPlugin::_run()'),
         ('POPUP_CAPTURE', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::capture_collection_popup('),
+        ('POPUP_RESOLVE', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::resolve_pending_collection_popups('),
+        ('POPUP_FLUSH', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::flush_pending_collection_popups('),
         ('POPUP_PERSIST', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::persist_collection_popup_capture('),
         ('POPUP_PENDING_PERSIST', 'BlackFlowTaskPort.cpp', 'bool BlackFlowTaskPort::persist_node_evidence_capture('),
     ):

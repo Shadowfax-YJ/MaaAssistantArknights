@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.31
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.32
 
 on:
   push:
@@ -186,6 +186,8 @@ jobs:
         run: ./unit_test/MaaCore/run_blackflow_expedition_evidence_replay.ps1
       - name: Test BlackFlow bounded recovery and captured shop page
         run: ./unit_test/MaaCore/run_blackflow_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
+      - name: Test BlackFlow overload cleanup and map recovery
+        run: ./unit_test/MaaCore/run_blackflow_overload_replay.ps1
       - name: Test BlackFlow routing and archive regressions
         run: |
           cmake -S unit_test -B build/blackflow-release-tests -A x64

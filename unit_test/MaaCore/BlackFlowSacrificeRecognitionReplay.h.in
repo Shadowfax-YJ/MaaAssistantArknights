@@ -1,0 +1,104 @@
+// Production list observation with controlled matcher/OCR results, not a synthetic empty game screenshot.
+namespace sacrifice_recognition_probe {
+using namespace asst;
+using blackflow::perception::SacrificeItemList;
+struct Reading { std::string text; double score = 0.99; };
+struct Inputs {
+    bool title = true, heading = true, back = true, cards = false, loading = false, syncing = false;
+    std::string heading_text = "零件列表";
+    std::vector<Reading> empty_text, count, relic_count;
+} inputs;
+struct Matcher {
+    explicit Matcher(const cv::Mat&) {}
+    void set_task_info(std::string_view) {}
+    bool analyze() const { return inputs.title; }
+};
+struct OCRer {
+    std::string task;
+    std::vector<Reading> result;
+    explicit OCRer(const cv::Mat&) {}
+    void set_task_info(std::string_view name) { task = name; }
+    bool analyze() {
+        if (task == "LoadingText") return inputs.loading;
+        if (task.ends_with("DataSyncConfirm")) return inputs.syncing;
+        if (task.ends_with("SacrificeBack")) return inputs.back;
+        if (task.ends_with("SacrificeListHeading")) {
+            if (inputs.heading) result={{inputs.heading_text,0.99}};
+            return inputs.heading;
+        }
+        if (task.ends_with("SacrificeRelicHudCount")) {
+            result=inputs.relic_count;
+            return !result.empty();
+        }
+        result = task.ends_with("SacrificeEmptyList") ? inputs.empty_text : inputs.count;
+        return !result.empty();
+    }
+    const auto& get_result() const { return result; }
+};
+std::vector<Rect> sacrifice_visible_items(const cv::Mat&) {
+    return inputs.cards ? std::vector<Rect>{{686,175,102,104}} : std::vector<Rect>{};
+}
+/*production_sacrifice_item_list*/
+}
+
+template <class Test>
+void sacrifice_recognition_regressions(Test&& test) {
+    using namespace sacrifice_recognition_probe;
+    const cv::Mat frame(720,1280,CV_8UC3,cv::Scalar());
+    test("sacrifice recognition explicit empty positive", [&] {
+        inputs = {}; inputs.empty_text = {{"没有可交换的零件",0.99}};
+        auto result = sacrifice_item_list(frame);
+        require(result && result->cards.empty() && result->empty_evidence == "explicit_empty_text", "empty hint rejected");
+    });
+    test("sacrifice recognition readable zero inventory positive", [&] {
+        inputs = {}; inputs.count = {{"0/12",0.99}};
+        auto result = sacrifice_item_list(frame);
+        require(result && result->cards.empty() && result->empty_evidence == "zero_inventory_count", "zero count rejected");
+    });
+    test("sacrifice recognition readable zero relic count positive", [&] {
+        inputs = {}; inputs.heading_text="收藏品列表"; inputs.relic_count={{"0",0.99}};
+        auto result = sacrifice_item_list(frame);
+        require(result && result->cards.empty() && result->empty_evidence == "zero_relic_count", "zero relic count rejected");
+    });
+    test("sacrifice recognition cannot use zero parts to prove no relics", [&] {
+        inputs = {}; inputs.heading_text="藏品列表"; inputs.count={{"0/12",0.99}}; inputs.relic_count={{"5",0.99}};
+        require(!sacrifice_item_list(frame), "parts count used for relic list");
+    });
+    test("sacrifice recognition cannot use zero relics to prove no parts", [&] {
+        inputs = {}; inputs.count={{"5/12",0.99}}; inputs.relic_count={{"0",0.99}};
+        require(!sacrifice_item_list(frame), "relic count used for parts list");
+    });
+    test("sacrifice recognition no cards and no positive evidence remains unknown", [&] {
+        inputs = {};
+        require(!sacrifice_item_list(frame), "missing OCR became empty");
+    });
+    for (const std::string value : {"5/12","0/0","0","/12","O/12","10/12","0/12 extra"}) {
+        test("sacrifice recognition nonzero or invalid counts remain unknown", [&] {
+            inputs = {}; inputs.count = {{value,0.99}};
+            require(!sacrifice_item_list(frame), "bad count accepted");
+        });
+    }
+    for (const bool text : {false,true}) test("sacrifice recognition low confidence remains unknown", [&] {
+        inputs = {};
+        (text ? inputs.empty_text : inputs.count) = {{text ? "没有可交换的零件" : "0/12",0.5}};
+        require(!sacrifice_item_list(frame), "low confidence became empty");
+    });
+    for (const int missing : {0,1,2,3,4}) test("sacrifice recognition incomplete page or overlay remains unknown", [&] {
+        inputs = {}; inputs.count = {{"0/12",0.99}};
+        if (missing==0) inputs.title=false;
+        if (missing==1) inputs.back=false;
+        if (missing==2) inputs.heading=false;
+        if (missing==3) inputs.loading=true;
+        if (missing==4) inputs.syncing=true;
+        require(!sacrifice_item_list(frame), "incomplete page became empty");
+    });
+    test("sacrifice recognition real cards take precedence over an empty hint", [&] {
+        inputs = {}; inputs.cards=true; inputs.empty_text={{"没有可交换的零件",0.99}};
+        auto result=sacrifice_item_list(frame);
+        require(result && result->cards.size()==1 && result->empty_evidence.empty(), "card contradicted by empty hint");
+    });
+    test("sacrifice recognition empty or undersized frames remain unknown", [&] {
+        inputs = {}; inputs.count={{"0/12",0.99}};
+        require(!sacrifice_item_list({}) && !sacrifice_item_list(cv::Mat(200,300,CV_8UC3)), "invalid frame became empty");
+    });
+}

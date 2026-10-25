@@ -85,6 +85,7 @@ private:
 
     [[nodiscard]] bool automation_collection_enabled() const noexcept;
     [[nodiscard]] std::vector<TextRect> recognize(const cv::Mat& image, const std::string& task) const;
+    [[nodiscard]] std::shared_ptr<OcrTaskInfo> recognition_task_info(const std::string& task) const;
     [[nodiscard]] int read_number(const cv::Mat& image, const std::string& task) const;
     [[nodiscard]] std::optional<int> read_optional_number(const cv::Mat& image, const std::string& task) const;
     [[nodiscard]] bool same_shelf_slot(const Rect& lhs, const Rect& rhs) const noexcept;
@@ -144,7 +145,6 @@ private:
     int m_shop_paid_refresh_count = 0;
     std::optional<int> m_shop_refresh_wallet_before;
     json::object m_shop_refresh_diagnostics;
-    std::size_t m_shop_collectibles_purchased_in_run = 0;
     std::optional<AutomationStoreIdentity> m_active_shop_identity;
     bool m_shop_sold_in_cycle = false;
     bool m_shop_sale_refresh_pending = false;

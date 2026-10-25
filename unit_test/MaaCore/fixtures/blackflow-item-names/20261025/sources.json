@@ -1,0 +1,20 @@
+[
+  {
+    "file": "dfe6d857-127e-411c-bf78-d79fd23837d3-1913.jpg",
+    "source_archive": "F:\\Projects\\blackflow\\archive\\2026-10-21\\2192014325\\6205.zip",
+    "source_member": "run-20261017-182700-664815/collection-popups/floor-3/node-844424997240842/001913-node-event-capture-civilization-before.jpg",
+    "run_id": "dfe6d857-127e-411c-bf78-d79fd23837d3",
+    "collector_version": "v1.1.22",
+    "sha256": "0d0133cf35997ef937ae5df679c03b485eb5a646777c5d4f24f077d788ef0aef",
+    "purpose": "Original complete six-slot page with one seed and one seed pod; replay verifies unknown name rejection when seed pod is omitted from vocabulary."
+  },
+  {
+    "file": "e6fe0855-e935-4e53-9347-0849008467db-3432.jpg",
+    "source_archive": "F:\\Projects\\blackflow\\archive\\2026-10-17\\1478880674\\5918.zip",
+    "source_member": "run-20261017-215207-934740/collection-popups/floor-4/node-1125900007505932/003432-node-event-capture-civilization-before.jpg",
+    "run_id": "e6fe0855-e935-4e53-9347-0849008467db",
+    "collector_version": "v1.1.22",
+    "sha256": "9829306388dba2b5cbcea29ea88ef3c84136262a7712b4cef26fd4cc9497583c",
+    "purpose": "Original complete six-slot page with one seed and one seed pod; replay verifies unknown name rejection when seed pod is omitted from vocabulary."
+  }
+]

@@ -2,6 +2,7 @@
 #include "Common/AsstTypes.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowExpeditionRules.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
+#include "Vision/Roguelike/BlackFlow/SacrificeRecognition.h"
 #include <algorithm>
 #include <format>
 #include <fstream>
@@ -12,7 +13,10 @@
 #include <opencv2/core.hpp>
 #include <optional>
 #include <random>
+#include <regex>
+#include <set>
 #include <stdexcept>
+#include <tuple>
 #define LogTraceFunction
 using namespace asst;
 
@@ -87,8 +91,15 @@ struct ReplayParent
 struct ReplayController
 {
     int page = 1, selected_slot = -1, choice_clicks = 0, depart_clicks = 0, back_clicks = 0, advances = 0;
+    std::vector<Point> choice_points;
     bool input_ok = true, choice_effective = true, depart_ok = true, back_ok = true, stopped = false;
     bool unstable_names = false, empty = false, stop_on_depart = false, advance_ok = true;
+    // 0 = visible cards, 1 = positively confirmed empty UI, 2 = recognition unknown.
+    std::vector<int> sacrifice_list_states { 0 };
+    size_t sacrifice_list_sample = 0;
+    int sacrifice_list_state() {
+        return sacrifice_list_states[std::min(sacrifice_list_sample++, sacrifice_list_states.size() - 1)];
+    }
     std::vector<int> after_depart { 3 };
     size_t next_frame = 0;
     int images_read = 0;
@@ -114,9 +125,10 @@ struct ReplayController
         return im;
     }
 
-    bool click(const Point&)
+    bool click(const Point& point)
     {
         ++choice_clicks;
+        choice_points.push_back(point);
         if (input_ok && choice_effective) {
             page = 2;
         }
@@ -149,7 +161,15 @@ inline bool recognize(const cv::Mat& image, std::string_view suffix) {
            (suffix == "SacrificePopupClose" && page == 12);
 }
 namespace blackflow::perception {
-inline std::vector<Rect> sacrifice_visible_items(const cv::Mat&) { return {{685,185,85,80}}; }
+inline std::vector<Rect> sacrifice_visible_items(const cv::Mat&) {
+    return active->sacrifice_list_state() == 0 ? std::vector<Rect>{{685,185,85,80}} : std::vector<Rect>{};
+}
+inline std::optional<SacrificeItemList> sacrifice_item_list(const cv::Mat&) {
+    const int state = active->sacrifice_list_state();
+    if (state == 2) return std::nullopt;
+    if (state == 1) return SacrificeItemList{{}, "explicit_empty_text", "没有可交换的零件"};
+    return SacrificeItemList{{{685,185,85,80}}, {}, {}};
+}
 inline bool sacrifice_item_selected(const cv::Mat&, const Rect&) { return true; }
 inline std::string sacrifice_selected_name(const cv::Mat&) { return "种子"; }
 }
@@ -261,6 +281,7 @@ public:
     ReplayParent parent;
     ReplayParent* m_task_ptr = &parent;
     ReplayController controller;
+    std::vector<std::size_t> stable_option_indices;
 
     struct Option
     {
@@ -311,7 +332,10 @@ public:
 
     bool move_to_analyzed_option(size_t) { return true; }
 
-    std::optional<Rect> wait_for_analyzed_option_stable(size_t) { return Rect { 100, 100, 100, 30 }; }
+    std::optional<Rect> wait_for_analyzed_option_stable(size_t index) {
+        stable_option_indices.push_back(index);
+        return Rect { 100, 100, 100, 30 };
+    }
 
     int hp(const cv::Mat&) { return -1; }
 
@@ -338,13 +362,14 @@ public:
     bool plan_encounter_choice(size_t, std::string_view);
     bool randomize_encounter_choice_order(std::vector<size_t>&);
     bool confirm_encounter_choice(const cv::Mat&, std::string_view);
+    bool observe_encounter_choice_result(const cv::Mat&);
     bool confirm_cargo_choice();
     bool refresh_sacrifice_context();
     bool report_sacrifice(std::string_view, json::object, const cv::Mat&);
     bool handle_sacrifice_event();
     bool handle_sacrifice_picker();
     bool finish_sacrifice_civilization();
-    std::optional<std::vector<std::string>> scan_sacrifice_natural_items(std::string_view) { return std::vector<std::string>{"种子"}; }
+    blackflow::SacrificeInventoryScanResult scan_sacrifice_natural_items(std::string_view) { return {std::vector<std::string>{"种子"},true}; }
     json::object basic_info_with_what(const char*) { return {}; }
     void callback(AsstMsg, json::object) {}
     struct OptionAnalyzer {
@@ -379,7 +404,7 @@ bool ProcessTask::run()
         }
         return true;
     }
-    if (task.ends_with("ExpeditionBack")) {
+    if (task.ends_with("ExpeditionBack") || task.ends_with("SacrificeBack")) {
         ++c.back_clicks;
         return c.back_ok;
     }
@@ -406,6 +431,7 @@ bool ProcessTask::run()
 /*plan_encounter_choice*/
 /*randomize_encounter_choice_order*/
 /*confirm_encounter_choice*/
+/*observe_encounter_choice_result*/
 /*confirm_cargo_choice*/
 /*refresh_sacrifice_context*/
 /*report_sacrifice*/
@@ -429,7 +455,12 @@ struct Scenario
     Scenario(std::string name = "古米", int elite = 1, int choice = 0, int destination = 3)
     {
         static std::uint64_t page_revision = 0;
-        plugin.m_expedition_context = blackflow::ExpeditionContext { 1, ++page_revision, 2, { name } };
+        const blackflow::ExpeditionContext context {
+            1, ++page_revision, 2,
+            blackflow::expedition_eligible_operators(2,name=="古米",name=="伊桑",
+                name=="凯尔希·思衡托"?std::optional<int>(elite):std::nullopt,true) };
+        plugin.m_expedition_context_provider=[context]{return std::optional(context);};
+        plugin.refresh_expedition_context();
         plugin.config.value.opers[name].elite = elite;
         plugin.m_option_list[0].enabled = choice == 0;
         plugin.m_option_list[1].enabled = choice == 1;
@@ -464,6 +495,8 @@ struct Scenario
     }
 };
 
+/*sacrifice_recognition_probe*/
+
 int main(int argc, char** argv)
 {
     int passed = 0, failed = 0;
@@ -487,6 +520,12 @@ int main(int argc, char** argv)
                         [&] {
                             Scenario s(name, elite, choice, page);
                             require(s.choose(), "choice rejected");
+                            if (choice != 0 || (std::string_view(name)=="凯尔希·思衡托" && elite!=1)) {
+                                require(s.count("cancelled")==1 && !s.plugin.m_expedition_initial_choice &&
+                                            s.plugin.controller.choice_clicks==1 && !s.plugin.controller.depart_clicks && !s.route_updates,
+                                        "ineligible operator or disabled first option did not leave");
+                                return;
+                            }
                             require(s.dispatch(), "dispatch failed");
                             require(
                                 s.count("choice_confirmed") == 1 && s.count("dispatch_confirmed") == 1 &&
@@ -525,6 +564,55 @@ int main(int argc, char** argv)
             }
         }
     }
+    test("fixed expedition priorities put unpromoted core before Ethan and Gummy", [&] {
+        require(blackflow::expedition_eligible_operators(2,true,true,1,true)==
+                    std::vector<std::string>{"凯尔希·思衡托","伊桑","古米"},"operator priority differs");
+    });
+    test("fixed expedition never chooses option two when option one is unavailable", [&] {
+        Scenario s("古米",1,1);
+        require(s.choose() && s.plugin.controller.choice_clicks==1 &&
+                    !s.plugin.m_expedition_initial_choice && s.count("cancelled")==1 &&
+                    s.plugin.stable_option_indices.back()==2,
+                "second option used instead of leaving");
+        for (const auto& e:s.events) fixtures.emplace_back(e);
+    });
+    test("fixed expedition without eligible operators selects the last option", [&] {
+        Scenario s;
+        s.plugin.m_expedition_context->operators.clear();
+        require(s.choose() && s.plugin.controller.choice_clicks==1 && !s.plugin.m_expedition_initial_choice &&
+                    s.count("cancelled")==1 && s.plugin.stable_option_indices.back()==2,
+                "no-operator event did not select leave");
+        for (const auto& e:s.events) fixtures.emplace_back(e);
+    });
+    for (const auto& [elite,safe,has_ethan,has_gummy,expected] : std::vector<std::tuple<int,bool,bool,bool,std::string>>{
+            {1,true,true,true,"凯尔希·思衡托"},{1,false,true,true,"伊桑"},
+            {2,true,true,true,"伊桑"},{2,true,false,true,"古米"},
+            {1,false,false,false,""},{2,true,false,false,""}}) {
+        test("fixed expedition dispatch follows priority and retains safe-exit eligibility", [&] {
+            Scenario s;
+            s.plugin.m_expedition_context->operators=blackflow::expedition_eligible_operators(
+                2,has_gummy,has_ethan,elite,safe);
+            s.plugin.config.value.opers["凯尔希·思衡托"].elite=elite;
+            require(s.choose(),"fixed choice");
+            if (expected.empty()) {
+                require(!s.plugin.m_expedition_initial_choice && s.plugin.stable_option_indices.back()==2 &&
+                            !s.plugin.controller.depart_clicks,"unsafe or ineligible core dispatched");
+            } else {
+                require(s.plugin.m_expedition_initial_choice==0 && s.dispatch(),"fixed first choice failed");
+                require(s.events.at(s.events.size()-1).get("details","operator_name",std::string())==expected,
+                        "operator priority changed");
+            }
+        });
+    }
+    test("fixed expedition cancellation evidence failure prevents leave input", [&] {
+        Scenario s;s.plugin.m_expedition_context->operators.clear();s.fail_phase="cancelled";
+        require(!s.choose()&&!s.plugin.parent.enabled&&!s.plugin.controller.choice_clicks,"left before cancellation evidence");
+    });
+    test("fixed expedition leave click failure stops without selecting a different branch", [&] {
+        Scenario s;s.plugin.m_expedition_context->operators.clear();s.plugin.controller.input_ok=false;
+        require(!s.choose()&&!s.plugin.parent.enabled&&!s.plugin.controller.depart_clicks,"failed leave continued");
+        for (const auto index:s.plugin.stable_option_indices) require(index==2,"leave retried on a different option");
+    });
     for (const auto phase : { "choice_planned",
                               "choice_attempt",
                               "choice_click_issued",
@@ -714,14 +802,16 @@ int main(int argc, char** argv)
         Scenario s;
         s.plugin.m_option_list[0].enabled = false;
         require(
-            s.choose() && s.count("cancelled") == 1 && !s.plugin.controller.choice_clicks,
+            s.choose() && s.count("cancelled") == 1 && s.plugin.controller.choice_clicks==1 &&
+                !s.plugin.m_expedition_initial_choice,
             "no enabled choice unrecorded");
     });
     test("no eligible operator leaves a cancellation reason before any choice", [&] {
         Scenario s;
         s.plugin.m_expedition_context->operators.clear();
         require(
-            s.choose() && s.count("cancelled") == 1 && !s.plugin.controller.choice_clicks,
+            s.choose() && s.count("cancelled") == 1 && s.plugin.controller.choice_clicks==1 &&
+                !s.plugin.m_expedition_initial_choice,
             "no eligible operator unrecorded");
     });
     test("candidate arrays are produced once from the recognized options", [&] {
@@ -760,6 +850,7 @@ int main(int argc, char** argv)
             "non-target floor acquired collection guards");
     });
     /*encounter_tests*/
+    sacrifice_recognition_regressions(test);
     if (argc > 2) {
         test("shared payload fixture matches actual producer methods", [&] {
             require(json::open(argv[2]).value() == json::value(fixtures), "producer payload fixture drifted");

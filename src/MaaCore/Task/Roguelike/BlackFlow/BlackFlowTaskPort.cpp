@@ -1,3 +1,4 @@
+#include "BlackFlowEvidenceSample.h"
 #include "BlackFlowTaskPort.h"
 
 #include <algorithm>
@@ -1132,6 +1133,7 @@ public:
         int sampled_frames = 0;
         double mean_difference = -1.0;
         CollectionPopupOrigin origin;
+        json::object evidence_sample;
     };
 
     struct PendingNodeEvidence
@@ -1144,6 +1146,9 @@ public:
         CollectionPopupOrigin origin;
     };
 
+    json::object choice_reference;
+    json::object reward_reference;
+    std::uint64_t sample_ordinal = 0;
     std::vector<Pending> pending;
     std::vector<PendingNodeEvidence> pending_node_evidence;
     RecruitmentChoiceLedger recruitment_choices;
@@ -1573,31 +1578,142 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         set_error(error, "parts-box overload cleanup has no ProcessTask context");
         return false;
     }
-    if (!inventory_already_open &&
-        !m_task_context->execute({ std::string(InventoryOverloadOpenTask) }, error)) {
-        set_error(error, "parts-box overload prompt could not be confirmed");
-        return false;
-    }
-
-    const auto inventory_is_overloaded = [&]() {
-        return recognizes_text_fragment(
-            m_task_context->capture(),
-            InventoryOverloadedBannerTask,
-            "当前零件数量过多");
+    bool evidence_failed = false;
+    bool cleanup_cleared = false;
+    const auto capture_evidence = [&](std::string_view phase, const cv::Mat& image, json::object details = { }) {
+        details["inventory_already_open_hint"] = inventory_already_open;
+        const auto session = m_collection_popup_session.lock();
+        if (!session || session->profile() != "automation_collection") {
+            return true;
+        }
+        if (image.empty() || m_task_context->stopped()) {
+            return false;
+        }
+        const auto state = session->run_log_state();
+        const RunLogEvent event {
+            .level = RunLogLevel::Info,
+            .action = "inventory.overload.capture",
+            .phase = std::string(phase),
+            .outcome = "observed",
+            .task = "BlackFlowInventoryOverload",
+            .transaction_id = state.get("transaction_id", std::string()),
+            .state = state,
+            .details = std::move(details),
+        };
+        if (!record_run_event(session->run_revision(), event, std::make_shared<cv::Mat>(image.clone()), false, error)) {
+            evidence_failed = true;
+            return false;
+        }
+        return true;
     };
-    if (!inventory_is_overloaded()) {
-        set_error(error, "parts-box opened but the overload banner was not recognized");
-        return false;
-    }
-
     const auto run_task = [&](std::string_view task_name, std::string_view failure) {
+        if (evidence_failed || m_task_context->stopped()) {
+            return false;
+        }
+        if (task_name != InventoryResetWaitTask && task_name != InventoryDiscardDetailWaitTask &&
+            !capture_evidence(
+                "before-input",
+                m_task_context->capture(),
+                { { "input_task", std::string(task_name) } })) {
+            return false;
+        }
         std::string task_error;
         if (m_task_context->execute({ std::string(task_name) }, &task_error)) {
             return true;
         }
-        set_error(error, std::string(failure) + (task_error.empty() ? std::string {} : ": " + task_error));
+        set_error(error, std::string(failure) + (task_error.empty() ? std::string { } : ": " + task_error));
         return false;
     };
+    const auto observe_stable = [&](std::string_view phase) -> std::optional<InventoryOverloadObservation> {
+        std::optional<InventoryOverloadObservation> previous;
+        cv::Mat image;
+        InventoryOverloadObservation current;
+        for (int sample = 0; sample < 6 && !m_task_context->stopped() && !evidence_failed; ++sample) {
+            image = m_task_context->capture();
+            current = recognize_inventory_overload(image);
+            if (current.known() && previous && current.page == previous->page &&
+                current.capacity == previous->capacity) {
+                json::array raw;
+                for (const auto& row : current.capacity_ocr) {
+                    raw.emplace_back(row.to_json());
+                }
+                if (!capture_evidence(
+                        phase,
+                        image,
+                        { { "capacity_count", current.capacity->count },
+                          { "capacity_limit", current.capacity->limit },
+                          { "page", current.page == InventoryOverloadPage::Map ? "map" : "inventory" },
+                          { "capacity_ocr", std::move(raw) },
+                          { "overload_cleared", current.cleared() },
+                          { "sampled_frames", sample + 1 } })) {
+                    return std::nullopt;
+                }
+                return current;
+            }
+            previous = current.known() ? std::optional(current) : std::nullopt;
+            if (sample != 5 && !run_task(InventoryResetWaitTask, "parts-box state observation was interrupted")) {
+                return std::nullopt;
+            }
+        }
+        if (!m_task_context->stopped() && !evidence_failed) {
+            json::array raw;
+            for (const auto& row : current.capacity_ocr) {
+                raw.emplace_back(row.to_json());
+            }
+            (void)capture_evidence(
+                "unresolved",
+                image,
+                { { "reason", "inventory_page_or_capacity_unrecognized" },
+                  { "capacity_ocr", std::move(raw) },
+                  { "overload_banner", current.banner },
+                  { "sampled_frames", 6 } });
+            set_error(error, "parts-box page or capacity could not be confirmed");
+        }
+        return std::nullopt;
+    };
+    const auto finish_cleanup = [&]() {
+        if (evidence_failed || m_task_context->stopped()) {
+            return false;
+        }
+        auto current = observe_stable("completion-check");
+        if (!current || !current->cleared()) {
+            return false;
+        }
+        if (current->page == InventoryOverloadPage::Inventory) {
+            if (!run_task(InventoryOverloadCloseTask, "parts-box could not return to routing after cleanup")) {
+                return false;
+            }
+            current = observe_stable("returned-to-map");
+        }
+        if (!current || !current->cleared() || current->page != InventoryOverloadPage::Map) {
+            set_error(error, "parts-box cleanup did not reach a confirmed normal map");
+            return false;
+        }
+        return true;
+    };
+    auto initial = observe_stable("initial-state");
+    if (!initial) {
+        return false;
+    }
+    if (initial->cleared()) {
+        return finish_cleanup();
+    }
+    if (initial->page == InventoryOverloadPage::Map) {
+        if (!run_task(InventoryOverloadOpenTask, "parts-box overload prompt could not be confirmed")) {
+            return false;
+        }
+        initial = observe_stable("opened");
+        if (!initial) {
+            return false;
+        }
+        if (initial->cleared()) {
+            return finish_cleanup();
+        }
+    }
+    if (initial->page != InventoryOverloadPage::Inventory) {
+        set_error(error, "parts-box overload cleanup has no confirmed expanded inventory");
+        return false;
+    }
 
     const auto analyze_parts = [&](const cv::Mat& image, int minimum_name_x, int scan_page) {
         std::vector<ObservedPart> parts;
@@ -1631,14 +1747,11 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
             if (*category == InventoryPartCategory::Processing) {
                 const std::string normalized_name = normalize_inventory_name(result.text);
                 const auto movement = std::ranges::find_if(movement_specs(), [&](const MovementSpec& spec) {
-                    return spec.kind != MovementKind::Walk &&
-                           normalized_name == normalize_inventory_name(spec.name);
+                    return spec.kind != MovementKind::Walk && normalized_name == normalize_inventory_name(spec.name);
                 });
                 if (movement != movement_specs().end()) {
-                    const auto recognition = recognize_movement_inventory_remaining_uses(
-                        image,
-                        result.rect,
-                        movement->initial_charges);
+                    const auto recognition =
+                        recognize_movement_inventory_remaining_uses(image, result.rect, movement->initial_charges);
                     if (recognition.has_value()) {
                         remaining_charges = recognition->first;
                     }
@@ -1647,32 +1760,63 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
             // 前置组始终最先丢弃；超配额加工品要等完整扫描后才能确定，
             // 因此先保留普通档，扫描结束后再只提升真正超出配额的实例。
             const InventoryDiscardRank rank {
-                inventory_part_precedes_quota_excess(result.text)
-                    ? InventoryDiscardBand::BeforeQuotaExcess
-                    : InventoryDiscardBand::Normal,
+                inventory_part_precedes_quota_excess(result.text) ? InventoryDiscardBand::BeforeQuotaExcess
+                                                                  : InventoryDiscardBand::Normal,
                 static_cast<int>(*discard_priority),
                 remaining_charges.value_or(std::numeric_limits<int>::max()),
             };
-            parts.emplace_back(ObservedPart {
-                normalize_inventory_name(result.text),
-                result.rect,
-                *category,
-                remaining_charges,
-                rank,
-                valuation,
-                scan_page,
-            });
+            parts.emplace_back(
+                ObservedPart {
+                    normalize_inventory_name(result.text),
+                    result.rect,
+                    *category,
+                    remaining_charges,
+                    rank,
+                    valuation,
+                    scan_page,
+                });
         }
         return parts;
     };
 
     const auto reset_to_start = [&]() {
+        const auto checkpoint = observe_stable("reset-check");
+        if (!checkpoint) {
+            return false;
+        }
+        if (checkpoint->cleared()) {
+            cleanup_cleared = true;
+            return false;
+        }
+        if (checkpoint->page == InventoryOverloadPage::Map) {
+            if (!run_task(InventoryOverloadOpenTask, "parts-box could not reopen overloaded inventory")) {
+                return false;
+            }
+            const auto opened = observe_stable("reset-opened");
+            if (!opened) {
+                return false;
+            }
+            if (opened->cleared()) {
+                cleanup_cleared = true;
+                return false;
+            }
+            return opened->page == InventoryOverloadPage::Inventory;
+        }
         int swipes = 0;
+        bool input_failed = false;
+        bool page_lost = false;
         cv::Mat previous = m_task_context->capture();
         const bool reset = scroll_inventory_to_start(
             [&] {
+                if (!movement_inventory_page_visible(m_task_context->capture())) {
+                    page_lost = true;
+                    return false;
+                }
                 ++swipes;
-                return run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns");
+                const bool ok =
+                    run_task(InventorySwipeToStartTask, "parts-box could not scroll back to the first columns");
+                input_failed = !ok;
+                return ok;
             },
             [&] {
                 cv::Mat current = m_task_context->capture();
@@ -1709,33 +1853,63 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                 return unchanged;
             },
             [&] {
+                const auto before_reopen = observe_stable("reset-recovery");
+                if (!before_reopen) {
+                    return false;
+                }
+                if (before_reopen->cleared()) {
+                    cleanup_cleared = true;
+                    return false;
+                }
                 Log.warn("BlackFlow inventory left-edge confirmation timed out; reopening the parts-box");
                 // 零件箱重新展开默认回到首屏。只执行本地单步任务，不进入外层的
                 // MovementInventoryObserve/路由；后续仍须重新识别目标名称、次数和坐标。
+                bool recovery_failed = false;
                 const bool reopened = reopen_inventory_to_start(
                     [&] {
-                        const auto image = m_task_context->capture();
-                        if (image.empty()) {
+                        const auto observed = observe_stable("reopen-state");
+                        if (!observed) {
+                            recovery_failed = true;
                             return InventoryPanelState::Unknown;
                         }
-                        if (matches_template(image, InventoryResetCollapseTask)) {
-                            return InventoryPanelState::Expanded;
+                        if (observed->cleared()) {
+                            cleanup_cleared = true;
+                            return InventoryPanelState::Unknown;
                         }
-                        if (recognizes_text_fragment(image, InventoryResetExpandTask, "超载")) {
-                            return InventoryPanelState::Collapsed;
-                        }
-                        return InventoryPanelState::Unknown;
+                        return observed->page == InventoryOverloadPage::Inventory ? InventoryPanelState::Expanded
+                                                                                  : InventoryPanelState::Collapsed;
                     },
                     [&](InventoryPanelState current) {
-                        return current == InventoryPanelState::Expanded
-                                   ? run_task(InventoryResetCollapseTask, "parts-box could not collapse during reset")
-                                   : run_task(InventoryResetExpandTask, "parts-box could not reopen during reset");
+                        return !recovery_failed && !evidence_failed && !cleanup_cleared && !m_task_context->stopped() &&
+                               (current == InventoryPanelState::Expanded
+                                    ? run_task(InventoryResetCollapseTask, "parts-box could not collapse during reset")
+                                    : run_task(InventoryResetExpandTask, "parts-box could not reopen during reset"));
                     },
-                    [&] { return run_task(InventoryResetWaitTask, "parts-box reopen observation was interrupted"); });
+                    [&] {
+                        return !recovery_failed && !cleanup_cleared && !evidence_failed &&
+                               run_task(InventoryResetWaitTask, "parts-box reopen observation was interrupted");
+                    });
                 Log.info("BlackFlow inventory reopen reset completed", "success", reopened);
                 return reopened;
             });
-        if (!reset && (error == nullptr || error->empty())) {
+        if (!reset && page_lost && !input_failed && !evidence_failed && !m_task_context->stopped()) {
+            const auto lost = observe_stable("reset-page-changed");
+            if (lost && lost->cleared()) {
+                cleanup_cleared = true;
+            }
+            if (lost && !lost->cleared() && lost->page == InventoryOverloadPage::Map) {
+                if (!run_task(InventoryOverloadOpenTask, "parts-box could not reopen after reset page change")) {
+                    return false;
+                }
+                const auto opened = observe_stable("reset-page-reopened");
+                if (opened && opened->cleared()) {
+                    cleanup_cleared = true;
+                    return false;
+                }
+                return opened && opened->page == InventoryOverloadPage::Inventory;
+            }
+        }
+        if (!reset && !cleanup_cleared && (error == nullptr || error->empty())) {
             set_error(error, "parts-box could not confirm the left edge after scrolling and reopening");
         }
         return reset;
@@ -1785,10 +1959,7 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                     return part.name_rect.x + part.name_rect.width / 2 < InventoryNewRightColumnMinimumX;
                 });
             }
-            parts.insert(
-                parts.end(),
-                std::make_move_iterator(page.begin()),
-                std::make_move_iterator(page.end()));
+            parts.insert(parts.end(), std::make_move_iterator(page.begin()), std::make_move_iterator(page.end()));
             if (rightmost_center.has_value()) {
                 previous_rightmost_center = rightmost_center;
             }
@@ -1801,8 +1972,7 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         std::map<std::string, std::vector<std::size_t>> candidates_by_name;
         for (std::size_t index = 0; index < parts.size(); ++index) {
             const ObservedPart& part = parts[index];
-            if (part.category == InventoryPartCategory::Processing &&
-                part.rank.band == InventoryDiscardBand::Normal) {
+            if (part.category == InventoryPartCategory::Processing && part.rank.band == InventoryDiscardBand::Normal) {
                 candidates_by_name[part.name].emplace_back(index);
             }
         }
@@ -1824,26 +1994,34 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         }
     };
 
-    for (int discard_attempt = 0; discard_attempt < InventoryMaximumDiscardAttempts && inventory_is_overloaded();
-         ++discard_attempt) {
+    for (int discard_attempt = 0; discard_attempt < InventoryMaximumDiscardAttempts; ++discard_attempt) {
+        const auto checkpoint = observe_stable("before-scan");
+        if (!checkpoint) {
+            return false;
+        }
+        if (checkpoint->cleared()) {
+            return finish_cleanup();
+        }
         auto parts = scan_all_parts();
         if (!parts.has_value()) {
-            return false;
+            return cleanup_cleared && !evidence_failed && finish_cleanup();
         }
         apply_quota_excess_ranks(*parts);
         // 上一次丢弃完成后，零件箱容量和顶部提示可能不会在 800 ms 内同时刷新。
         // 完整扫描本身会持续数秒，因此必须在真正选择并丢弃下一件之前重新读取现场；
         // 否则会拿循环入口处的短暂旧提示作出不可逆的额外丢弃。
-        if (!inventory_is_overloaded()) {
-            Log.info("BlackFlow inventory overload cleared while scanning; skipping the pending discard");
-            break;
+        const auto before_select = observe_stable("before-selection");
+        if (!before_select) {
+            return false;
         }
-        const auto selected = std::ranges::min_element(
-            *parts,
-            {},
-            [](const ObservedPart& part) { return part.rank; });
+        if (before_select->cleared()) {
+            return finish_cleanup();
+        }
+        const auto selected = std::ranges::min_element(*parts, { }, [](const ObservedPart& part) { return part.rank; });
         if (selected == parts->end()) {
-            set_error(error, "parts-box remains overloaded but no known discardable part was recognized across the list");
+            set_error(
+                error,
+                "parts-box remains overloaded but no known discardable part was recognized across the list");
             return false;
         }
 
@@ -1853,7 +2031,7 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         const std::optional<int> selected_remaining_charges = selected->remaining_charges;
         const Rect selected_name_rect = selected->name_rect;
         if (!reset_to_start()) {
-            return false;
+            return cleanup_cleared && !evidence_failed && finish_cleanup();
         }
         for (int page = 0; page < selected_page; ++page) {
             if (!run_task(InventorySwipeTask, "parts-box could not return to the selected discard page")) {
@@ -1863,7 +2041,7 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
 
         const auto locate_selected = [&]() -> std::optional<Rect> {
             const auto visible = analyze_parts(m_task_context->capture(), 0, selected_page);
-            const auto found = std::ranges::min_element(visible, {}, [&](const ObservedPart& part) {
+            const auto found = std::ranges::min_element(visible, { }, [&](const ObservedPart& part) {
                 const int center_distance = std::abs(
                                                 (part.name_rect.x + part.name_rect.width / 2) -
                                                 (selected_name_rect.x + selected_name_rect.width / 2)) +
@@ -1901,16 +2079,67 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
             }
             return false;
         };
+        const auto before_detail = observe_stable("before-detail");
+        if (!before_detail) {
+            return false;
+        }
+        if (before_detail->cleared()) {
+            return finish_cleanup();
+        }
+        if (before_detail->page != InventoryOverloadPage::Inventory) {
+            set_error(error, "parts-box discard target page changed");
+            return false;
+        }
         Log.info("BlackFlow opening inventory discard target", selected_name, "scan page", selected_page);
         if (!open_inventory_part_detail(
                 locate_selected,
-                [&](const Rect& rect) { return m_task_context->click(rect); },
+                [&](const Rect& rect) {
+                    if (evidence_failed || m_task_context->stopped()) {
+                        return false;
+                    }
+                    const auto image = m_task_context->capture();
+                    const auto observed = recognize_inventory_overload(image);
+                    if (!observed.known() || observed.cleared() || observed.page != InventoryOverloadPage::Inventory) {
+                        const auto changed = observe_stable("detail-page-changed");
+                        if (changed && changed->cleared()) {
+                            cleanup_cleared = true;
+                        }
+                        return false;
+                    }
+                    return capture_evidence(
+                               "detail-input",
+                               image,
+                               { { "selected_name", selected_name },
+                                 { "rect", json::array { rect.x, rect.y, rect.width, rect.height } } }) &&
+                           m_task_context->click(rect);
+                },
                 [&]() {
                     return recognizes_text_fragment(m_task_context->capture(), InventoryDiscardButtonTask, "丢弃");
                 },
                 [&]() { return run_task(InventoryDiscardDetailWaitTask, "parts-box detail observation wait failed"); },
                 relocate_selected)) {
             set_error(error, "could not locate a stable parts-box discard target or open its detail after retries");
+            return cleanup_cleared && !evidence_failed && finish_cleanup();
+        }
+        OCRer discard_capacity(m_task_context->capture());
+        discard_capacity.set_task_info("BlackFlow@Roguelike@SacrificeInventoryCount");
+        (void)discard_capacity.analyze();
+        const auto fresh_capacity = inventory_capacity_from_ocr(discard_capacity.get_result());
+        if (!fresh_capacity || fresh_capacity->count <= fresh_capacity->limit) {
+            (void)capture_evidence(
+                "unresolved",
+                m_task_context->capture(),
+                { { "reason", "capacity_changed_before_discard" }, { "selected_name", selected_name } });
+            set_error(error, "parts-box capacity changed or became unknown before discard");
+            return false;
+        }
+        if (!capture_evidence(
+                "discard-selected",
+                m_task_context->capture(),
+                { { "selected_name", selected_name },
+                  { "scan_page", selected_page },
+                  { "capacity_count", fresh_capacity->count },
+                  { "capacity_limit", fresh_capacity->limit } })) {
             return false;
         }
         Log.info(
@@ -1934,10 +2163,7 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         }
         // 正在装载的加工品会在首次点击“丢弃”后追加一次确认。普通零件会直接回到
         // 零件箱，因此先在确认按钮的限定区域内识别，只有弹窗确实存在时才点击。
-        if (recognizes_text_fragment(
-                m_task_context->capture(),
-                InventoryEquippedDiscardConfirmTask,
-                "确认")) {
+        if (recognizes_text_fragment(m_task_context->capture(), InventoryEquippedDiscardConfirmTask, "确认")) {
             Log.info("BlackFlow confirms discarding equipped processing item", selected_name);
             if (!run_task(
                     InventoryEquippedDiscardConfirmTask,
@@ -1945,16 +2171,46 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
                 return false;
             }
         }
+        bool decreased = false;
+        for (int sample = 0; sample < 6 && !m_task_context->stopped(); ++sample) {
+            const auto after_discard = observe_stable("after-discard");
+            if (!after_discard) {
+                return false;
+            }
+            if (after_discard->cleared()) {
+                return finish_cleanup();
+            }
+            if (after_discard->capacity->count < fresh_capacity->count) {
+                decreased = true;
+                break;
+            }
+            if (sample != 5 && !run_task(InventoryResetWaitTask, "parts-box discard update wait was interrupted")) {
+                return false;
+            }
+        }
+        if (!decreased) {
+            if (!m_task_context->stopped()) {
+                (void)capture_evidence(
+                    "unresolved",
+                    m_task_context->capture(),
+                    { { "reason", "discard_count_did_not_decrease" }, { "selected_name", selected_name } });
+                set_error(error, "parts-box count did not decrease after discard; refusing another discard");
+            }
+            return false;
+        }
     }
 
-    if (inventory_is_overloaded()) {
+    const auto final = observe_stable("discard-budget-check");
+    if (final && final->cleared()) {
+        return finish_cleanup();
+    }
+    if (final) {
         set_error(
             error,
             "parts-box remains overloaded after " + std::to_string(InventoryMaximumDiscardAttempts) +
                 " discard attempts");
-        return false;
     }
-    return run_task(InventoryOverloadCloseTask, "parts-box could not return to routing after cleanup");
+    return false;
 }
 
 bool BlackFlowTaskPort::cleanup_open_inventory_if_overloaded(bool& cleanup_performed, std::string* error)
@@ -2142,7 +2398,8 @@ bool BlackFlowTaskPort::persist_collection_popup_capture(
     const std::filesystem::path& relative_directory,
     json::object attribution,
     bool deferred,
-    std::string* error)
+    std::string* error,
+    json::object evidence_sample)
 {
     const auto session = m_collection_popup_session.lock();
     if (session == nullptr || session->profile() != "automation_collection") {
@@ -2160,6 +2417,8 @@ bool BlackFlowTaskPort::persist_collection_popup_capture(
         .state = std::move(state),
         .details = json::object {
             { "button", std::string(button) },
+            { "evidence_sample", std::move(evidence_sample) },
+            { "attributed_at_unix_ms", evidence_unix_time_ms() },
             { "collection_popup_directory", relative_directory.generic_string() },
             { "deferred_attribution", deferred },
             { "attribution", std::move(attribution) },
@@ -2226,6 +2485,18 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
             error->clear();
         }
     }
+    auto evidence_sample = collection_popup_evidence_sample(
+        session->run_revision(), ++m_collection_popup_state->sample_ordinal, session->run_log_state());
+    const auto& choice_reference = m_collection_popup_state->choice_reference;
+    if (choice_reference.get("run_revision", std::uint64_t(0)) == session->run_revision() &&
+        choice_reference.get("transaction_id", std::string()) == session->run_log_state().get("transaction_id", std::string())) {
+        evidence_sample["choice_reference"] = choice_reference;
+    }
+    const auto& input_reference = m_collection_popup_state->reward_reference;
+    if (input_reference.get("run_revision", std::uint64_t(0)) == session->run_revision() &&
+        input_reference.get("transaction_id", std::string()) == session->run_log_state().get("transaction_id", std::string())) {
+        evidence_sample["input_reference"] = input_reference;
+    }
     const std::string_view template_task = *button == CollectionPopupButton::Continue
                                                ? "BlackFlow@Roguelike@CloseCollectionContinue"
                                                : "BlackFlow@Roguelike@CloseCollection";
@@ -2274,6 +2545,7 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
                 json::object {
                     { "button", std::string(to_string(*button)) },
                     { "attribution_pending", true },
+                    { "evidence_sample", evidence_sample },
                     { "image_capture", json::object {
                         { "mode", "recognized_before_click" },
                         { "status", "captured" },
@@ -2290,6 +2562,7 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
                 sampled_frames,
                 mean_difference,
                 origin,
+                evidence_sample,
             });
         return true;
     }
@@ -2312,7 +2585,8 @@ bool BlackFlowTaskPort::capture_collection_popup(std::string_view task, std::str
         resolved.directory,
         resolved.attribution,
         false,
-        error);
+        error,
+        evidence_sample);
 }
 
 bool BlackFlowTaskPort::capture_event_page(
@@ -2353,10 +2627,32 @@ bool BlackFlowTaskPort::capture_event_detail(
         return false;
     }
 
+    if (m_collection_popup_state != nullptr) {
+        details["evidence_sample"] = collection_popup_evidence_sample(
+            session->run_revision(), ++m_collection_popup_state->sample_ordinal, session->run_log_state());
+        if (details.contains("choice_id")) {
+            if (m_collection_popup_state->choice_reference.get("choice_id",std::string()) != details.at("choice_id").as_string()) {
+                m_collection_popup_state->reward_reference.clear();
+            }
+            m_collection_popup_state->choice_reference = {
+                { "choice_id", details.at("choice_id") },
+                { "event_name", std::string(event_name) },
+                { "candidate_capture_id", details.get("candidate_capture_id", std::string()) },
+                { "run_revision", session->run_revision() },
+                { "transaction_id", session->run_log_state().get("transaction_id", std::string()) },
+            };
+        }
+    }
     details["event_name"] = std::string(event_name);
     const auto destination = resolve_collection_popup_destination(*session, {}, true);
     if (!destination.has_value() && session->transaction() != nullptr &&
         !session->transaction()->proposal().controllable && m_collection_popup_state != nullptr) {
+        const auto origin = collection_popup_origin(*session);
+        auto provisional = details;
+        provisional["attribution_pending"] = true;
+        provisional["final_action"] = std::string(NodeEventRunLogAction);
+        if (!persist_node_evidence_capture("node.evidence.pending", "RoguelikeEvent", std::string(phase), stitched_image,
+                origin.unresolved_destination.directory, origin.unresolved_destination.attribution, std::move(provisional), error)) return false;
         m_collection_popup_state->pending_node_evidence.emplace_back(
             CollectionPopupCaptureState::PendingNodeEvidence {
                 std::string(NodeEventRunLogAction),
@@ -2386,6 +2682,35 @@ bool BlackFlowTaskPort::capture_event_detail(
         resolved.attribution,
         std::move(details),
         error);
+}
+
+bool BlackFlowTaskPort::capture_reward_result(
+    std::string_view task, json::object details, const cv::Mat& image, std::string* error)
+{
+    const auto session = m_collection_popup_session.lock();
+    if (!session || session->profile() != "automation_collection") return true;
+    if (image.empty() || !m_collection_popup_state) {
+        set_error(error, "reward result observation is unavailable"); return false;
+    }
+    details["source_context"] = recruitment_evidence_context(recruitment_evidence_scope(*session));
+    details["capture_kind"] = "reward_result";
+    details["acquisition_status"] = "unresolved";
+    details["evidence_sample"] = collection_popup_evidence_sample(
+        session->run_revision(), ++m_collection_popup_state->sample_ordinal, session->run_log_state());
+    const auto& reference = m_collection_popup_state->reward_reference;
+    if (reference.get("run_revision", std::uint64_t(0)) == session->run_revision() &&
+        reference.get("transaction_id", std::string()) == session->run_log_state().get("transaction_id", std::string())) {
+        details["input_reference"] = reference;
+    }
+    const auto& choice = m_collection_popup_state->choice_reference;
+    if (choice.get("run_revision", std::uint64_t(0)) == session->run_revision() &&
+        choice.get("transaction_id", std::string()) == session->run_log_state().get("transaction_id", std::string())) {
+        details["choice_reference"] = choice;
+    }
+    const auto destination = resolve_collection_popup_destination(*session, task, true);
+    const auto resolved = destination.value_or(collection_popup_origin(*session).unresolved_destination);
+    return persist_node_evidence_capture("node.reward.result", std::string(task), "after-input", image,
+        resolved.directory, resolved.attribution, std::move(details), error);
 }
 
 bool BlackFlowTaskPort::select_recruitment_voucher(std::string* error)
@@ -2606,6 +2931,18 @@ bool BlackFlowTaskPort::capture_get_drop(
         } },
     };
     if (m_collection_popup_state != nullptr) {
+        details["evidence_sample"] = collection_popup_evidence_sample(
+            session->run_revision(), ++m_collection_popup_state->sample_ordinal, session->run_log_state());
+        m_collection_popup_state->reward_reference = {
+            { "evidence_id", details.at("evidence_sample").get("evidence_id", std::string()) },
+            { "run_revision", session->run_revision() },
+            { "transaction_id", session->run_log_state().get("transaction_id", std::string()) },
+        };
+        const auto& choice = m_collection_popup_state->choice_reference;
+        if (choice.get("run_revision", std::uint64_t(0)) == session->run_revision() &&
+            choice.get("transaction_id", std::string()) == session->run_log_state().get("transaction_id", std::string())) {
+            details["choice_reference"] = choice;
+        }
         auto& choices = m_collection_popup_state->recruitment_choices;
         const auto scope = recruitment_evidence_scope(*session);
         details["source_context"] = recruitment_evidence_context(scope);
@@ -2667,6 +3004,12 @@ bool BlackFlowTaskPort::capture_get_drop(
         recruitment_page ? NodeRecruitmentRunLogAction : NodeGetDropRunLogAction;
     if (!destination.has_value() && session->transaction() != nullptr &&
         !session->transaction()->proposal().controllable && m_collection_popup_state != nullptr) {
+        const auto origin = collection_popup_origin(*session);
+        auto provisional = details;
+        provisional["attribution_pending"] = true;
+        provisional["final_action"] = std::string(action);
+        if (!persist_node_evidence_capture("node.evidence.pending", std::string(task), "before-click", captured,
+                origin.unresolved_destination.directory, origin.unresolved_destination.attribution, std::move(provisional), error)) return false;
         m_collection_popup_state->pending_node_evidence.emplace_back(
             CollectionPopupCaptureState::PendingNodeEvidence {
                 std::string(action),
@@ -2861,7 +3204,8 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
 
     std::vector<CollectionPopupCaptureState::Pending> unresolved;
     unresolved.reserve(m_collection_popup_state->pending.size());
-    for (auto& pending : m_collection_popup_state->pending) {
+    for (size_t index = 0; index < m_collection_popup_state->pending.size(); ++index) {
+        auto& pending = m_collection_popup_state->pending[index];
         const auto destination = resolve_pending_collection_popup_destination(*session, pending.task, pending.origin);
         if (!destination.has_value()) {
             unresolved.emplace_back(std::move(pending));
@@ -2876,8 +3220,12 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
                 destination->directory,
                 destination->attribution,
                 true,
-                error)) {
+                error,
+                pending.evidence_sample)) {
             unresolved.emplace_back(std::move(pending));
+            for (size_t tail = index + 1; tail < m_collection_popup_state->pending.size(); ++tail) {
+                unresolved.emplace_back(std::move(m_collection_popup_state->pending[tail]));
+            }
             m_collection_popup_state->pending = std::move(unresolved);
             return false;
         }
@@ -2886,7 +3234,8 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
 
     std::vector<CollectionPopupCaptureState::PendingNodeEvidence> unresolved_evidence;
     unresolved_evidence.reserve(m_collection_popup_state->pending_node_evidence.size());
-    for (auto& pending : m_collection_popup_state->pending_node_evidence) {
+    for (size_t index = 0; index < m_collection_popup_state->pending_node_evidence.size(); ++index) {
+        auto& pending = m_collection_popup_state->pending_node_evidence[index];
         const auto destination = resolve_pending_collection_popup_destination(*session, pending.task, pending.origin);
         if (!destination.has_value()) {
             unresolved_evidence.emplace_back(std::move(pending));
@@ -2902,6 +3251,9 @@ bool BlackFlowTaskPort::resolve_pending_collection_popups(std::string* error)
                 pending.details,
                 error)) {
             unresolved_evidence.emplace_back(std::move(pending));
+            for (size_t tail = index + 1; tail < m_collection_popup_state->pending_node_evidence.size(); ++tail) {
+                unresolved_evidence.emplace_back(std::move(m_collection_popup_state->pending_node_evidence[tail]));
+            }
             m_collection_popup_state->pending_node_evidence = std::move(unresolved_evidence);
             return false;
         }
@@ -2922,7 +3274,8 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
 
     std::vector<CollectionPopupCaptureState::Pending> unwritten;
     unwritten.reserve(m_collection_popup_state->pending.size());
-    for (auto& pending : m_collection_popup_state->pending) {
+    for (size_t index = 0; index < m_collection_popup_state->pending.size(); ++index) {
+        auto& pending = m_collection_popup_state->pending[index];
         const auto& destination = pending.origin.unresolved_destination;
         if (!persist_collection_popup_capture(
                 pending.task,
@@ -2933,8 +3286,12 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
                 destination.directory,
                 destination.attribution,
                 true,
-                error)) {
+                error,
+                pending.evidence_sample)) {
             unwritten.emplace_back(std::move(pending));
+            for (size_t tail = index + 1; tail < m_collection_popup_state->pending.size(); ++tail) {
+                unwritten.emplace_back(std::move(m_collection_popup_state->pending[tail]));
+            }
             m_collection_popup_state->pending = std::move(unwritten);
             return false;
         }
@@ -2943,7 +3300,8 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
 
     std::vector<CollectionPopupCaptureState::PendingNodeEvidence> unwritten_evidence;
     unwritten_evidence.reserve(m_collection_popup_state->pending_node_evidence.size());
-    for (auto& pending : m_collection_popup_state->pending_node_evidence) {
+    for (size_t index = 0; index < m_collection_popup_state->pending_node_evidence.size(); ++index) {
+        auto& pending = m_collection_popup_state->pending_node_evidence[index];
         const auto& destination = pending.origin.unresolved_destination;
         if (!persist_node_evidence_capture(
                 pending.action,
@@ -2955,6 +3313,9 @@ bool BlackFlowTaskPort::flush_pending_collection_popups(std::string* error)
                 pending.details,
                 error)) {
             unwritten_evidence.emplace_back(std::move(pending));
+            for (size_t tail = index + 1; tail < m_collection_popup_state->pending_node_evidence.size(); ++tail) {
+                unwritten_evidence.emplace_back(std::move(m_collection_popup_state->pending_node_evidence[tail]));
+            }
             m_collection_popup_state->pending_node_evidence = std::move(unwritten_evidence);
             return false;
         }

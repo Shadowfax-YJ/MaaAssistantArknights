@@ -193,6 +193,7 @@ bool OCRer::filter_and_replace_by_required_(Result& res, bool allow_fuzzy_match)
         }
         utils::FuzzyTextMatchSettings settings;
         settings.minimum_fuzzy_candidate_length = m_params.fuzzy_match_min_length;
+        settings.isolated_fuzzy_candidate_length = m_params.fuzzy_match_isolated_length;
         const utils::FuzzyTextMatch match = utils::fuzzy_match_ocr_text(equ_text, candidates, settings);
         if (!match.accepted) {
             Log.debug(

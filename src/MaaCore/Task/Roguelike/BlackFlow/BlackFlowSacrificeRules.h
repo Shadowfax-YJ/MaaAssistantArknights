@@ -19,6 +19,16 @@ struct SacrificeContext
     bool operator==(const SacrificeContext&) const = default;
 };
 
+struct SacrificeInventoryScanResult
+{
+    std::optional<std::vector<std::string>> natural_items;
+    bool panel_closed = false;
+
+    bool has_value() const noexcept { return natural_items.has_value(); }
+    explicit operator bool() const noexcept { return has_value(); }
+    const std::vector<std::string>* operator->() const { return &natural_items.value(); }
+};
+
 enum class SacrificePhase
 {
     Initial,

@@ -1,4 +1,4 @@
-## v1.1.30
+## v1.1.32
 
 ### Highlights
 
@@ -44,6 +44,36 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.32 (2026-10-25)</b></summary>
+
+### 改进 | Improved
+
+* 调整“先行一步”派遣优先级，保留天猫离队前的安全出口检查。 @Shadowfax-YJ
+* 改善零件及藏品的短名称识别，保留无歧义的三字纠错，减少相似物品混淆。 @Shadowfax-YJ
+* 更新难度 6 的购买、出售、奖励选择及超载丢弃策略。 @Shadowfax-YJ
+* 补齐事件选择、奖励结果、扫描失败和过载清理现场记录。 @Shadowfax-YJ
+
+### 修复 | Fix
+
+* 修复解除零件箱超载后仍因回起点失败而停止的问题，恢复后重新完整扫描库存。 @Shadowfax-YJ
+* 修复开局奖励弹窗阻塞后续流程的问题。 @Shadowfax-YJ
+* 修复“失与得”没有可交换零件时仍多轮等待的问题。 @Shadowfax-YJ
+* 修复复原文明扫描完整性判断及详情弹窗恢复问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
+<summary><b>v1.1.31 (2026-10-25)</b></summary>
+
+### 改进 | Improved
+
+* 优化零件箱回起点判断，重名零件也能确认到头，减少多余滑动并保留完整扫描。 @Shadowfax-YJ
+* 补齐商店出售及其他奖励流程的弹窗截图，在关闭前保存；持续保存失败时会报错停止。 @Shadowfax-YJ
+* 沙盘β改为每局有 50% 概率跳过购买，结果整局固定并记录到日志。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.30 (2026-10-24)</b></summary>
 
 ### 改进 | Improved

@@ -916,7 +916,8 @@
             "旅行绒",
             "恋心草",
             "无缘果",
-            "种荚"
+            "种荚",
+            "白模鸟"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -1028,7 +1029,27 @@
             "血橙",
             "无缘果",
             "力反馈方向盘",
-            "洛伦茨之眼"
+            "洛伦茨之眼",
+            "结构性原理",
+            "“简易遥控器”",
+            "恋家果",
+            "光彩松露",
+            "笼控器",
+            "板藤",
+            "霜晶树",
+            "回声玉米",
+            "浪花",
+            "血蕈",
+            "枯苔藓球",
+            "紧急逃生座椅",
+            "鸣笛",
+            "坎诺特特快",
+            "薄葬草",
+            "旅行绒",
+            "恋心草",
+            "种荚",
+            "白模坎诺特",
+            "涂装坎诺特"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -1212,7 +1233,8 @@
             "旅行绒",
             "恋心草",
             "无缘果",
-            "种荚"
+            "种荚",
+            "白模鸟"
         ],
         "fullMatch": true,
         "fuzzyMatch": true
@@ -1528,7 +1550,9 @@
             "涂装黎博利"
         ],
         "fullMatch": true,
-        "fuzzyMatch": true
+        "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3
     },
     "BlackFlow@Roguelike@CultivateSellingFlag": {
         "template": "BlackFlow@Roguelike@CultivateBulkSell.png",
@@ -1542,7 +1566,9 @@
         "roi": [395, 159, 857, 290],
         "text": ["种子"],
         "fullMatch": true,
-        "fuzzyMatch": true
+        "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3
     },
     "BlackFlow@Roguelike@CultivateStartButton": {
         "algorithm": "OcrDetect",
@@ -2333,6 +2359,8 @@
         "text": [],
         "fullMatch": true,
         "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3,
         "ocrReplace": [
             ["^垫底座$", "气垫底座"],
             ["^简易遥控器$", "“简易遥控器”"]
@@ -2404,7 +2432,6 @@
             "“简易遥控器”",
             "力反馈方向盘",
             "一次性喷气背包",
-            "光彩松露",
             "板藤",
             "恋家果",
             "老妈妈的融雪",
@@ -2419,15 +2446,15 @@
             "标准引擎",
             "洛伦茨之眼",
             "小八界",
+            "生逝",
             "种子",
             "报废轮子",
             "报废假肢",
-            "生逝",
             "回声玉米",
             "霜晶树",
-            "恋心草",
             "血橙",
             "无缘果",
+            "恋心草",
             "浪花",
             "雾滚草",
             "白模鱼",
@@ -2436,13 +2463,13 @@
             "种荚",
             "枯苔藓球",
             "涂装坎诺特",
+            "鸣笛",
             "白模狗",
             "涂装佩洛",
             "白模坎诺特",
-            "涂装黎博利",
             "涂装阿戈尔",
-            "白模鸟",
-            "鸣笛"
+            "涂装黎博利",
+            "白模鸟"
         ]
     },
     "BlackFlow@Roguelike@InventoryNaturalPriority": {
@@ -2675,6 +2702,7 @@
         "fullMatch": true,
         "fuzzyMatch": true,
         "next": [
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@RolesDefault",
             "BlackFlow@Roguelike@LastRewardConfirm",
@@ -2728,6 +2756,7 @@
         "template": "BlackFlow@Roguelike@LastRewardConfirm.png",
         "next": [
             "BlackFlow@Roguelike@RolesDefault",
+            "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollectionContinue)",
             "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
             "BlackFlow@Roguelike@LastReward-EnterPoint",
             "BlackFlow@Roguelike@RecruitMain",
@@ -3204,7 +3233,9 @@
             "装载中"
         ],
         "fullMatch": true,
-        "fuzzyMatch": true
+        "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3
     },
     "BlackFlow@Roguelike@MovementInventorySwipe": {
         "algorithm": "JustReturn",
@@ -3230,6 +3261,11 @@
         ],
         "action": "ClickSelf",
         "postDelay": 500
+    },
+    "BlackFlow@Roguelike@MovementInventoryMapCapacity": {
+        "Doc": "过载清理的地图终态容量，仅在已确认无遮挡地图后读取，不能用未识别当作已解除超载。",
+        "baseTask": "BlackFlow@Roguelike@SacrificeInventoryCount",
+        "roi": [701, 679, 111, 39]
     },
     "BlackFlow@Roguelike@MovementInventoryResetExpand": {
         "Doc": "收起后以底栏超载按钮确认可重新展开；与收起图标互斥，过渡帧不点击。",
@@ -3376,7 +3412,9 @@
             "涂装坎诺特"
         ],
         "fullMatch": true,
-        "fuzzyMatch": true
+        "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3
     },
     "BlackFlow@Roguelike@MovementInventoryDiscardPriority": {
         "Doc": "零件箱过载时的跨类别丢弃顺序，数组从先丢到后丢。超出商店购买配额的加工品实例会动态插在 MovementInventoryDiscardBeforeQuotaExcess 之后，其他零件保持本数组的相对顺序。",
@@ -3420,8 +3458,8 @@
             "笼控器",
             "恋家果",
             "旅行绒",
-            "板藤",
             "光彩松露",
+            "板藤",
             "一次性喷气背包",
             "力反馈方向盘",
             "“简易遥控器”",
@@ -3431,7 +3469,14 @@
     "BlackFlow@Roguelike@MovementInventoryDiscardBeforeQuotaExcess": {
         "Doc": "零件箱过载时固定早于‘超出商店购买配额的加工品’丢弃的前置组，顺序与 MovementInventoryDiscardPriority 的同名项一致。",
         "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
-        "text": ["白模鸟", "涂装黎博利", "枯苔藓球", "报废假肢", "报废轮子"]
+        "text": [
+            "白模鸟",
+            "涂装黎博利",
+            "枯苔藓球",
+            "鸣笛",
+            "报废假肢",
+            "报废轮子"
+        ]
     },
     "BlackFlow@Roguelike@MovementInventoryDiscardButton": {
         "algorithm": "OcrDetect",
@@ -3602,7 +3647,9 @@
             "剩余3次"
         ],
         "fullMatch": true,
-        "fuzzyMatch": true
+        "fuzzyMatch": true,
+        "fuzzyMatchMinLength": 3,
+        "fuzzyMatchIsolatedLength": 3
     },
     "BlackFlow@Roguelike@MovementPanelOpenClick": {
         "algorithm": "JustReturn",
@@ -4543,6 +4590,39 @@
             104
         ]
     },
+    "BlackFlow@Roguelike@SacrificeListHeading": {
+        "algorithm": "OcrDetect",
+        "roi": [850, 110, 200, 55],
+        "text": ["零件列表", "藏品列表", "收藏品列表"],
+        "fullMatch": true,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificeEmptyList": {
+        "Doc": "只接受明确无可交换物品的完整提示；OCR 空结果不能视为空列表。",
+        "algorithm": "OcrDetect",
+        "roi": [680, 175, 590, 350],
+        "text": [
+            "没有可交换的零件", "暂无可交换的零件", "无可交换的零件",
+            "没有可供交换的零件", "暂无可供交换的零件", "无可供交换的零件",
+            "没有可交换的物品", "暂无可交换的物品", "无可交换的物品"
+        ],
+        "fullMatch": true,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryHudCount": {
+        "Doc": "选物页底栏的总库存数量；仅明确读到 0/容量时可独立证明没有可交换物品。",
+        "algorithm": "OcrDetect",
+        "roi": [704, 671, 100, 44],
+        "text": [],
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@SacrificeRelicHudCount": {
+        "Doc": "藏品选物页只核对底栏收藏品数量，不能使用零件箱数量证明没有藏品。",
+        "algorithm": "OcrDetect",
+        "roi": [150, 638, 60, 45],
+        "text": [],
+        "fuzzyMatch": false
+    },
     "BlackFlow@Roguelike@SacrificeSelectedLabel": {
         "algorithm": "OcrDetect",
         "roi": [
@@ -4626,6 +4706,27 @@
         "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
         "action": "ClickSelf",
         "postDelay": 500
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryDetailsClose": {
+        "Doc": "零件箱被藏品详情遮住时只关闭左下角详情面板；必须匹配当前真实收起按钮。",
+        "algorithm": "MatchTemplate",
+        "template": "BlackFlow@Roguelike@SacrificeInventoryDetailsClose.png",
+        "roi": [
+            110,
+            630,
+            140,
+            85
+        ],
+        "templThreshold": 0.9,
+        "action": "ClickSelf"
+    },
+    "BlackFlow@Roguelike@SacrificeInventoryEmptySlots": {
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
+        "text": [
+            "待收集零件"
+        ],
+        "fuzzyMatch": false,
+        "fullMatch": true
     },
     "BlackFlow@Roguelike@SacrificeInventoryCount": {
         "algorithm": "OcrDetect",

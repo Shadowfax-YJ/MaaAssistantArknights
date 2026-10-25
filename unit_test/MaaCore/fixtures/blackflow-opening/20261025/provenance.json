@@ -1,0 +1,18 @@
+{
+  "opening_run": "run-20261025-022119-022379",
+  "opening_sequences": {
+    "reward-candidates.jpg": 17,
+    "reward-confirming.jpg": 18,
+    "item-popup.jpg": 21
+  },
+  "next_source_archive": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-003\\debug\\BlackFlow\\run-20261024-221738-686552.zip",
+  "next_source_member": "run-20261024-221738-686552/collection-popups/floor-3/node-844424963686406/002207-collection-popup-capture-before-click.jpg",
+  "next_source_task": "BlackFlow@Roguelike@StageEncounterReward@BlackFlow@Roguelike@CloseCollectionContinue",
+  "next_source_usage": "generic NEXT popup recognition only; not an opening recording",
+  "sha256": {
+    "item-popup.jpg": "5b8309f3d54fe2a277e1f704a5c41db7555182a90c92f198ccac206514d312aa",
+    "next-popup.jpg": "534146486982716222b4096fd542b2bf7711915091458aee5f31341b39dacbda",
+    "reward-candidates.jpg": "bd265d900d77ca58e23db59373bf932d7ea54edc7b95849303953aac52710f94",
+    "reward-confirming.jpg": "fa9787b0821b677f6f70ebf5430da851cdd52e265e98da3a95e168267f43cdda"
+  }
+}

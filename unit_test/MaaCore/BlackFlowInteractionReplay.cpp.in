@@ -1,3 +1,4 @@
+#define LogTraceFunction
 #include <algorithm>
 #include <functional>
 #include <fstream>
@@ -11,6 +12,7 @@
 #include "Common/AsstMsg.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEvidenceSample.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMovementRecognition.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowRunLog.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowStartRewardRules.h"
@@ -37,6 +39,7 @@ struct Session {
     void record_processing_item_evidence(json::object, std::vector<DiagnosticArtifactRequest::EvidenceImage>) {}
 };
 struct Controller {
+    bool sequential_rewards=false;
     bool panel = false, movement_mode = false, click_ok = true, movement_changes = true, cancelled = false;
     int clicks = 0, reads = 0, stage = 0;
     MovementKind loaded = MovementKind::M03;
@@ -49,7 +52,7 @@ struct Controller {
     bool click(const Rect&) {
         ++clicks;
         if (movement_mode && movement_changes && click_ok) loaded = MovementKind::Walk;
-        if (!movement_mode && click_ok) stage = 1;
+        if (!movement_mode && click_ok) stage = sequential_rewards ? stage+1 : 1;
         return click_ok;
     }
     cv::Mat get_image() {
@@ -137,6 +140,14 @@ struct BlackFlowNodeEvidenceTaskPlugin {
     std::function<bool(std::string_view,std::optional<Rect>,std::string*)> m_capture=[](auto,auto,auto){return true;};
     std::string m_pending_task="BlackFlow@Roguelike@GetDropConfirmed",m_reward_scope;
     int m_stalled_reward_rounds=0,captures=0;
+    struct Port { bool result_ok=true;int results=0;std::vector<json::object> observations;
+        bool capture_reward_result(std::string_view,json::object details,const cv::Mat& image,std::string*) {
+            ++results;observations.push_back(std::move(details));return result_ok&&!image.empty();
+        }
+    };
+    struct Parent {bool enabled=true;void set_enable(bool value){enabled=value;}} parent;
+    Parent* m_task_ptr=&parent;
+    std::shared_ptr<Port> m_port=std::make_shared<Port>();
     Controller controller;
     std::shared_ptr<Session> m_session=std::make_shared<Session>();
     std::vector<std::string> outcomes;
@@ -331,8 +342,9 @@ struct BlackFlowMovementTaskPlugin {
     std::shared_ptr<Port> m_port=std::make_shared<Port>();
     int m_inventory_observation_retries=0;
     bool page_lost=true, cancelled=false;
+    std::function<bool(InventoryFrame&,std::string*)> scan_override;
     bool need_exit(){return cancelled;}
-    bool scan_inventory_frame(InventoryFrame& frame,std::string*){frame.page_lost=page_lost;return !page_lost;}
+    bool scan_inventory_frame(InventoryFrame& frame,std::string* error){if(scan_override)return scan_override(frame,error);frame.page_lost=page_lost;return !page_lost;}
     void record_run_event(RunLogLevel,std::string,std::string,std::string,json::object,std::string,std::shared_ptr<cv::Mat> = nullptr,bool = false){}
     void record_inventory_evidence(const InventoryFrame&,std::string_view,std::string_view){}
     void report_outputs(){}
@@ -388,6 +400,8 @@ struct BlackFlowCollectionPopupTaskPlugin {
 }
 
 namespace popup_capture_replay {
+inline std::int64_t evidence_unix_time_ms(){return 1792886400000LL;}
+inline json::object collection_popup_evidence_sample(std::uint64_t r,std::uint64_t n,json::object s) {return asst::blackflow::collection_popup_evidence_sample(r,n,std::move(s),evidence_unix_time_ms());}
 struct Session {
     bool random=false;
     struct Transaction {struct Proposal {bool controllable=false;} value;const Proposal& proposal(){return value;}} tx;
@@ -413,17 +427,23 @@ std::optional<CollectionPopupDestination> resolve_collection_popup_destination(S
     if(s.random)return {};return CollectionPopupDestination{"collection-popups/floor-1/node-1",{{"kind","node"},{"floor",1},{"node",1}}};
 }
 int collection_popup_floor(Session&){return 1;}
+std::optional<CollectionPopupDestination> resolve_pending_collection_popup_destination(Session& s,std::string_view,const Origin&) {return s.random?std::nullopt:std::optional(CollectionPopupDestination{"collection-popups/floor-2/node-2",{{"kind","node"},{"floor",2},{"node",2}}});}
 struct BlackFlowTaskPort {
-    struct CollectionPopupCaptureState {struct Pending {std::string task,button;cv::Mat image;int samples;double difference;Origin origin;};std::vector<Pending> pending;};
+    struct CollectionPopupCaptureState {
+        struct Pending {std::string task,button;cv::Mat image;int sampled_frames;double mean_difference;Origin origin;json::object evidence_sample;};
+        struct PendingNodeEvidence {std::string action,task,phase;cv::Mat image;json::object details;Origin origin;};
+        std::uint64_t sample_ordinal=0;json::object choice_reference,reward_reference;
+        std::vector<Pending> pending;std::vector<PendingNodeEvidence> pending_node_evidence;
+    };
     std::shared_ptr<Session> owner=std::make_shared<Session>();std::weak_ptr<Session> m_collection_popup_session=owner;
     std::unique_ptr<Context> m_task_context=std::make_unique<Context>();
     std::unique_ptr<CollectionPopupCaptureState> m_collection_popup_state=std::make_unique<CollectionPopupCaptureState>();
-    bool disk_ok=true;std::vector<json::value> events;
-    bool resolve_pending_collection_popups(std::string*){return true;}bool flush_pending_collection_popups(std::string*){return true;}
+    bool disk_ok=true;int fail_after=-1;std::vector<json::value> events;
+    bool resolve_pending_collection_popups(std::string*);bool flush_pending_collection_popups(std::string*);
     bool matches_template(const cv::Mat& image,std::string_view){return !image.empty();}
     std::optional<std::string> recognize_text(const cv::Mat&,std::string_view){return {};}
     bool record_run_event(int,const RunLogEvent& event,std::shared_ptr<cv::Mat> image,bool,std::string*){
-        if(!disk_ok)return false;check(image&&!image->empty(),"popup evidence has no image");
+        if(!disk_ok || (fail_after>=0 && int(events.size())>=fail_after))return false;check(image&&!image->empty(),"popup evidence has no image");
         const auto directory=event.details.get("collection_popup_directory",event.details.get("node_evidence_directory",std::string("images")));
         events.emplace_back(json::object{{"schema_version",1},{"sequence",int(events.size()+1)},
             {"timestamp","2026-10-25T00:00:00Z"},{"elapsed_ms",int(events.size()+1)},{"level","INFO"},
@@ -433,14 +453,47 @@ struct BlackFlowTaskPort {
         return true;
     }
     bool capture_collection_popup(std::string_view,std::string*);
-    bool persist_collection_popup_capture(const std::string&,std::string_view,const cv::Mat&,int,double,const std::filesystem::path&,json::object,bool,std::string*);
+    bool persist_collection_popup_capture(const std::string&,std::string_view,const cv::Mat&,int,double,const std::filesystem::path&,json::object,bool,std::string*,json::object = {});
     bool persist_node_evidence_capture(std::string_view,std::string,std::string,const cv::Mat&,const std::filesystem::path&,json::object,json::object,std::string*);
 };
 /*POPUP_PENDING_PERSIST*/
 /*POPUP_PERSIST*/
 /*POPUP_CAPTURE*/
+/*POPUP_RESOLVE*/
+/*POPUP_FLUSH*/
 }
 
+namespace trophy_capture_replay {
+constexpr std::string_view RewardTask="BlackFlow@Roguelike@GetDropTrophyRewardConfirmed";
+struct BlackFlowTrophyRewardAnalyzer {
+    struct Detection {std::string name,category;Rect button_rect;};
+    inline static int calls=0;
+    std::vector<Detection> detections;
+    explicit BlackFlowTrophyRewardAnalyzer(const cv::Mat&) {++calls;detections={{"种子","自然物",{calls==1?100:500,400,80,30}},{"种荚","自然物",{900,400,80,30}}};}
+    bool analyze(){return true;}const auto& get_detections()const{return detections;}
+};
+struct SafeRewardSelection {size_t detection_index=0;size_t priority=0;DropOptionSelection option;};
+std::optional<SafeRewardSelection> resolve_safe_reward_selection(const std::vector<BlackFlowTrophyRewardAnalyzer::Detection>& detections){
+    std::vector<Rect> buttons;for(const auto& d:detections)buttons.push_back(d.button_rect);
+    return SafeRewardSelection{0,0,*resolve_drop_option_selection(buttons,detections[0].button_rect)};
+}
+struct BlackFlowTrophyRewardTaskPlugin {
+    struct Parent {bool enabled=true;void set_enable(bool value){enabled=value;}} parent;
+    Parent* m_task_ptr=&parent;
+    struct Port {int captures=0,results=0;bool capture_ok=true,result_ok=true;Rect selected;cv::Mat frame;json::object receipt;
+        bool capture_get_drop(std::string_view,Rect r,std::string*,const cv::Mat* image=nullptr){++captures;selected=r;if(image)frame=image->clone();return capture_ok||captures==1;}
+        bool capture_reward_result(std::string_view,json::object d,const cv::Mat&,std::string*){++results;receipt=std::move(d);return result_ok;}
+    };
+    std::shared_ptr<Port> m_port=std::make_shared<Port>();
+    struct Controller {int clicks=0;Rect rect;bool input_ok=true;cv::Mat get_image(){return cv::Mat(720,1280,CV_8UC3,cv::Scalar(17,0,0));}bool click(Rect r){++clicks;rect=r;return input_ok;}} controller;
+    bool log_ok=true;json::object selected;cv::Mat selection_frame;
+    Controller* ctrler(){return &controller;}
+    std::shared_ptr<cv::Mat> get_hit_image(){return {};}
+    bool record_run_event(RunLogLevel,std::string action,std::string,std::string,json::object d,std::string,std::shared_ptr<cv::Mat> image=nullptr,bool=false){if(action=="reward.trophy.select"){selected=d;if(image)selection_frame=image->clone();}return log_ok;}
+    bool _run();
+};
+/*TROPHY_CAPTURE*/
+}
 namespace whole_inventory_replay {
 constexpr std::string_view InventorySwipeTask="forward", InventorySwipeToStartTask="back", InventoryItemsTask="items";
 constexpr std::string_view InventoryResetCollapseTask="reset-collapse", InventoryScanResetExpandTask="reset-expand";
@@ -621,9 +674,56 @@ int main(int argc,char** argv) {
         if(scenario==1)check(port.events.front().at("details").at("image_capture").get("mode",std::string())=="recognized_before_click","animated popup still claims full-frame stability");
         if(scenario==4){
             check(port.events.front().get("action",std::string())=="collection.popup.pending"&&port.m_collection_popup_state->pending.size()==1,"random-landing popup was only kept in memory");
-            check(port.persist_collection_popup_capture("BlackFlow@Roguelike@CloseCollection","x",port.m_task_context->capture(),2,0,"collection-popups/floor-1/node-1",{{"kind","node"},{"floor",1},{"node",1}},true,&error),"final attributed popup failed");
+            check(port.persist_collection_popup_capture("BlackFlow@Roguelike@CloseCollection","x",port.m_task_context->capture(),2,0,"collection-popups/floor-1/node-1",{{"kind","node"},{"floor",1},{"node",1}},true,&error,port.m_collection_popup_state->pending.front().evidence_sample),"final attributed popup failed");
+            check(port.events[0].at("details").at("evidence_sample")==port.events[1].at("details").at("evidence_sample"),"deferred attribution changed the original observation");
             std::ofstream output(std::filesystem::path(argv[2]).parent_path()/"popup-contract-events.json");output<<json::array(port.events).to_string();
         }
+    });
+    test("popup observation retains its actual reward input reference",[&]{
+        popup_capture_replay::BlackFlowTaskPort p;std::string error;
+        p.m_collection_popup_state->reward_reference={{"run_revision",1},{"transaction_id",""},{"evidence_id","actual-card"}};
+        check(p.capture_collection_popup("BlackFlow@Roguelike@CloseCollection",&error),"capture");
+        check(p.events[0].at("details").at("evidence_sample").get("input_reference","evidence_id",std::string())=="actual-card","popup borrowed only a hash/name instead of the actual input reference");
+    });
+    for(bool flush:{false,true})test(flush?"flush failure preserves the unvisited evidence tail":"resolve failure preserves the unvisited evidence tail",[&]{
+        popup_capture_replay::BlackFlowTaskPort port;port.owner->random=true;std::string error;
+        for(int n=0;n<3;++n)check(port.capture_collection_popup("BlackFlow@Roguelike@CloseCollection",&error),"pending save");
+        check(port.m_collection_popup_state->pending.size()==3,"same-name consecutive observations collapsed");
+        auto first=port.m_collection_popup_state->pending[0].evidence_sample;
+        auto second=port.m_collection_popup_state->pending[1].evidence_sample;
+        check(first.at("evidence_id")!=second.at("evidence_id"),"image hash substituted for observation identity");
+        port.owner->random=false;port.fail_after=int(port.events.size())+1;
+        check(!(flush?port.flush_pending_collection_popups(&error):port.resolve_pending_collection_popups(&error)),"storage failure ignored");
+        check(port.m_collection_popup_state->pending.size()==2,"write failure dropped unvisited captures");
+        port.fail_after=-1;
+        check(flush?port.flush_pending_collection_popups(&error):port.resolve_pending_collection_popups(&error),"retry failed");
+        check(port.events.size()==6&&port.m_collection_popup_state->pending.empty(),"retry duplicated or lost final receipts");
+        check(port.events[3].at("details").at("evidence_sample")==first,"final receipt lost original sample");
+    });
+    for(int failure:{0,1,2,3,4})test(("trophy actual confirmed card and input receipt "+std::to_string(failure)).c_str(),[&]{
+        using namespace trophy_capture_replay;BlackFlowTrophyRewardAnalyzer::calls=0;
+        BlackFlowTrophyRewardTaskPlugin p;
+        if(failure==1)p.m_port->capture_ok=false;
+        if(failure==2)p.log_ok=false;
+        if(failure==3)p.m_port->result_ok=false;
+        if(failure==4)p.controller.input_ok=false;
+        const bool result=p._run();
+        if(failure==1||failure==2){check(!result&&!p.parent.enabled&&!p.controller.clicks,"unsaved confirmed card was clicked");return;}
+        check(p.controller.clicks==1&&p.controller.rect.x==500&&p.m_port->selected.x==500,"initial candidate substituted for confirmed card");
+        check(!p.selection_frame.empty()&&!p.m_port->frame.empty(),"actual selected frame missing");
+        check(p.m_port->receipt.get("click_dispatched",true)==(failure!=4),"failed click represented as acquisition");
+        if(failure==3)check(!result&&!p.parent.enabled,"failed result persistence continued");
+    });
+    test("three independent event rewards retain every before and after observation",[&]{
+        BlackFlowNodeEvidenceTaskPlugin p;p.controller.sequential_rewards=true;
+        for(int i=0;i<4;++i)p.controller.frames.push_back(cv::Mat(720,1280,CV_8UC3,cv::Scalar::all(30+i*40)));
+        for(int i=0;i<3;++i)p.run();
+        check(p.controller.clicks==3&&p.m_port->results==3&&p.captures==3,"multi-item event kept only its recruitment or final click");
+        for(const auto& r:p.m_port->observations)check(r.get("receipt_status",std::string())=="page_changed","independent reward page not closed by evidence");
+    });
+    test("reward result evidence failure prevents the next reward input",[&]{
+        BlackFlowNodeEvidenceTaskPlugin p;p.m_port->result_ok=false;p.controller.frames={cv::Mat::zeros(720,1280,CV_8UC3)};p.run();
+        check(!p.parent.enabled&&p.controller.clicks==1&&p.m_port->results==1,"more inputs followed unsaved reward result");
     });
     test("skipping an obsolete popup hit cannot suppress the next ordinary action",[&]{
         using namespace popup_gate_replay;
@@ -859,6 +959,26 @@ int main(int argc,char** argv) {
         const bool complete=p.scan_inventory_frame(frame,&error);
         check(complete,error.c_str());
         check(frame.scan_complete&&frame.movement_instances.size()==1,"reset jitter lost or duplicated inventory");
+    });
+    for(bool complete:{true,false})test(complete?"overload handoff commits only after the real complete ordinary rescan":"overload handoff keeps the old snapshot when the real rescan is incomplete",[&]{
+        inventory_replay::BlackFlowMovementTaskPlugin observer;
+        whole_inventory_replay::BlackFlowMovementTaskPlugin scan;
+        using whole_inventory_replay::title;
+        whole_inventory_replay::configure(scan,complete?std::vector<std::vector<TextRect>>{{title("气垫底座")},{title("待收集零件")}}:
+            std::vector<std::vector<TextRect>>{{title("气垫底座")},{}});
+        int scans=0;
+        observer.scan_override=[&](auto& target,std::string* error){
+            ++scans;whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame frame;
+            const bool ok=scan.scan_inventory_frame(frame,error);
+            if(ok){target.movement_instances=frame.movement_instances;target.lorentz_eye_found=frame.lorentz_eye_found;}
+            return ok;
+        };
+        observer.m_port->cleanup=true;observer.observe_inventory();
+        check(observer.m_session->commits==0&&observer.m_session->inventory==5&&scans==0&&Task.next=="reopen","cleanup invented a new inventory snapshot");
+        observer.m_port->cleanup=false;observer.observe_inventory();
+        check(scans==1,"ordinary rescan was skipped");
+        if(complete)check(observer.m_session->commits==1&&observer.m_session->inventory==1&&!observer.m_session->failed,"complete rescan did not commit the refreshed inventory");
+        else check(observer.m_session->commits==0&&observer.m_session->inventory==5&&observer.m_session->failed,"incomplete rescan replaced known resources");
     });
     test("whole inventory without empty slots completes despite OCR box height jitter",[]{
         using namespace whole_inventory_replay;

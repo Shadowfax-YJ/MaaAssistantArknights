@@ -18,6 +18,7 @@
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
+#include "Config/Roguelike/RoguelikeShoppingConfig.h"
 #include "Utils/StringMisc.hpp"
 #include "Vision/Matcher.h"
 #include "Vision/OCRer.h"
@@ -257,7 +258,6 @@ void BlackFlowAutomationStoreTaskPlugin::reset_in_run_variables()
     m_shop_sale_refresh_pending = false;
     m_shop_refresh_wallet_before.reset();
     m_shop_refresh_diagnostics.clear();
-    m_shop_collectibles_purchased_in_run = 0;
     m_active_shop_identity.reset();
     m_shop_sold_in_cycle = false;
     m_shop_shelf_page = ShelfPage::Top;
@@ -461,9 +461,6 @@ void BlackFlowAutomationStoreTaskPlugin::finalize_pending_purchase(AutomationSto
     if (kind == AutomationStoreKind::Eerie) {
         if (succeeded) {
             m_shop_purchased_names.emplace_back(*m_pending_purchase_name);
-            if (collectible) {
-                ++m_shop_collectibles_purchased_in_run;
-            }
             if (m_pending_purchase.has_value()) {
                 m_shop_purchased.emplace_back(*m_pending_purchase);
             }
@@ -1084,26 +1081,40 @@ bool BlackFlowAutomationStoreTaskPlugin::automation_collection_enabled() const n
            m_config->get_mode() == RoguelikeMode::BlackFlowAutomationCollection;
 }
 
-std::vector<TextRect> BlackFlowAutomationStoreTaskPlugin::recognize(const cv::Mat& image, const std::string& task) const
+std::shared_ptr<OcrTaskInfo> BlackFlowAutomationStoreTaskPlugin::recognition_task_info(const std::string& task) const
 {
     const auto task_info = Task.get<OcrTaskInfo>(task);
     if (task_info == nullptr) {
         return { };
     }
-    OCRer analyzer(image);
     auto recognition_info = std::make_shared<OcrTaskInfo>(*task_info);
-    // A short real item name must not be corrected into a different purchase candidate.
-    recognition_info->fuzzy_match_min_length = std::max(4U, recognition_info->fuzzy_match_min_length);
-    analyzer.set_task_info(recognition_info);
-    const bool sale_task = task == ShopSellItemsTask || task == ScrapShopSellItemsTask;
+    recognition_info->fuzzy_match_min_length = std::max(3U, recognition_info->fuzzy_match_min_length);
+    recognition_info->fuzzy_match_isolated_length = 3;
     if (!task_info->text.empty()) {
         const auto inventory = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@MovementInventoryAllItems");
         if (inventory == nullptr) {
             return { };
         }
         // Recognize identity before applying policy. Otherwise 种荚/血蕈 become 种子/血橙.
-        analyzer.set_required(merchant_sale_recognition_vocabulary(task_info->text, inventory->text));
+        std::vector<std::string> known_goods;
+        for (const auto& good : RoguelikeShopping.get_goods(std::string(RoguelikeTheme::BlackFlow))) {
+            known_goods.emplace_back(good.name);
+        }
+        recognition_info->text = merchant_sale_recognition_vocabulary(task_info->text, inventory->text, known_goods);
     }
+    return recognition_info;
+}
+
+std::vector<TextRect> BlackFlowAutomationStoreTaskPlugin::recognize(const cv::Mat& image, const std::string& task) const
+{
+    const auto task_info = Task.get<OcrTaskInfo>(task);
+    const auto recognition_info = recognition_task_info(task);
+    if (task_info == nullptr || recognition_info == nullptr) {
+        return {};
+    }
+    OCRer analyzer(image);
+    analyzer.set_task_info(recognition_info);
+    const bool sale_task = task == ShopSellItemsTask || task == ScrapShopSellItemsTask;
     const auto result = analyzer.analyze();
     if (!result.has_value()) {
         return { };
@@ -1397,7 +1408,6 @@ bool BlackFlowAutomationStoreTaskPlugin::select_shop_good(std::optional<StoreSel
             automation_store_purchase_quota_allowed(
                 name, entry_usable_count, purchased_count, m_session->sand_table_beta_purchase_disabled()) &&
                 progress_purchase_allowed &&
-                eerie_store_collectible_purchase_allowed(name, m_shop_collectibles_purchased_in_run) &&
                 !already_recorded(slot, m_shop_purchased) &&
                 purchase_name_attempt_allowed(name, m_shop_attempted_names),
             shelf_buyable,

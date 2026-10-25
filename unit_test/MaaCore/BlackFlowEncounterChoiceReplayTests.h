@@ -1,5 +1,7 @@
 // Included inside the controlled production replay main; these are real producer methods.
     json::array encounter_fixtures;
+    json::array generic_fixtures;
+    json::array sacrifice_empty_fixtures;
     struct ChoiceScenario {
         RoguelikeStageEncounterTaskPlugin p;
         json::array events;
@@ -84,6 +86,55 @@
         require(s.p.confirm_cargo_choice() && s.count("confirmed")==1 && !s.p.controller.advances,"reward confirmation blocked or advanced page");
         encounter_fixtures.emplace_back(json::object{{"case","cargo-direct-reward"},{"payloads",s.events}});
     });
+    for(const auto name:{"得偿","襁褓金乌","普通直接到账事件"})test("generic actual fallback and independent receipt",[&]{
+        ChoiceScenario s; s.p.m_option_list[0].enabled=false;
+        require(s.begin(name),"generic candidates");
+        require(s.p.select_analyzed_option(1),"actual enabled fallback");
+        s.p.controller.page=13;
+        require(s.p.observe_encounter_choice_result(s.p.controller.get_image()),"receipt observation");
+        require(s.count("planned")==1&&s.count("click_issued")==1,"resolved selection missing");
+        require(s.count("confirmed")==1,"independent popup receipt missing");
+        require(s.events.at(s.events.size()-1).at("details").get("option_index",0)==2,"configured first option substituted for actual fallback");
+        require(s.events.at(s.events.size()-1).at("details").get("acquisition_status",std::string())=="unresolved","choice confirmation invented acquisition");
+        generic_fixtures.emplace_back(json::object{{"case","generic-"+std::string(name)},{"payloads",s.events}});
+    });
+    test("generic second stage keeps distinct choice identity and links the first receipt",[&]{
+        ChoiceScenario s;require(s.begin("得偿")&&s.p.select_analyzed_option(1),"first input");
+        const auto first=s.p.m_encounter_choice.details;
+        s.p.m_option_list={{true,{},"领取第一件",""},{true,{},"放弃",""}};
+        require(s.begin("得偿")&&s.count("confirmed")==1,"secondary page did not prove transition");
+        require(s.p.m_encounter_choice.step==1&&!s.p.m_encounter_choice.selected,"secondary page reused first selection");
+        require(s.p.select_analyzed_option(0),"second input");
+        auto ids=std::set<std::string>{};for(const auto& e:s.events)if(e.get("phase",std::string())=="planned") ids.insert(e.at("details").get("choice_id",std::string()));
+        require(ids.size()==2,"multi-stage choice IDs collided");
+    });
+    test("generic unchanged input has evidence without a fabricated award",[&]{
+        ChoiceScenario s;require(s.begin("普通事件"),"candidates");s.p.controller.choice_effective=false;
+        require(!s.p.select_analyzed_option(0)&&!s.count("confirmed"),"unchanged page confirmed");
+        require(!s.p.select_analyzed_option(1)&&!s.p.parent.enabled,"ambiguous dispatched input switched to fallback");
+    });
+    test("generic random groups retain their own eligibility and retry order",[&]{
+        ChoiceScenario s;require(s.begin("普通事件"),"candidates");std::vector<size_t> a{1,2},b{3};
+        require(s.p.randomize_encounter_choice_order(a)&&s.p.randomize_encounter_choice_order(b),"orders");
+        const auto original=a;std::vector<size_t> retry{1,2};require(s.p.randomize_encounter_choice_order(retry),"retry");
+        require(b==std::vector<size_t>{3}&&retry==original&&s.count("order")==2,"group order leaked or redrawn");
+    });
+    test("changed event title with a new candidate page confirms only the old source choice",[&]{
+        ChoiceScenario s;require(s.begin("第一阶段")&&s.p.select_analyzed_option(1),"first input");
+        s.p.m_option_list={{true,{},"领取第二阶段",""}};
+        require(s.begin("第二阶段")&&s.count("confirmed")==1,"old choice lost on title change");
+        require(s.p.m_encounter_choice.step==1&&s.p.m_encounter_choice.details.get("parent_choice_status",std::string())=="confirmed","source link missing");
+    });
+    test("configured next title with unchanged options cannot fabricate a receipt",[&]{
+        ChoiceScenario s;require(s.begin("第一阶段")&&s.p.select_analyzed_option(1),"first input");
+        require(s.begin("另一配置阶段")&&s.count("confirmed")==0,"configured title alone confirmed input");
+        require(s.p.m_encounter_choice.details.get("parent_choice_status",std::string())=="unresolved","unknown source was discarded");
+    });
+    test("transient missing post-input frame stays pending without stopping or inventing a receipt",[&]{
+        ChoiceScenario s;require(s.begin("普通事件")&&s.p.select_analyzed_option(1),"input");
+        require(s.p.observe_encounter_choice_result({})&&s.count("result_pending")==1&&s.p.parent.enabled,"empty result capture stopped original routing");
+        require(!s.count("confirmed"),"missing frame became a receipt");
+    });
     const auto start_cargo_decline = [&](ChoiceScenario& s) {
         s.p.m_option_list = {
             {false,{},"想要一个能节省力气的",""}, {false,{},"想要一个可以保值的",""},
@@ -149,6 +200,73 @@
         require(s.p.handle_sacrifice_picker() && s.count("confirmed")==2,"second picker confirmation");
         encounter_fixtures.emplace_back(json::object{{"case","sacrifice-two-rounds"},{"payloads",s.events}});
     });
+    test("sacrifice confirmed empty returns on first dispatch then leaves", [&] {
+        ChoiceScenario s;
+        require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+        s.p.controller.sacrifice_list_states = {1};
+        require(s.p.handle_sacrifice_picker(), "empty picker");
+        require(s.p.controller.back_clicks == 1 && s.p.m_sacrifice.phase == blackflow::SacrificePhase::Finished,
+                "confirmed empty still waits instead of returning");
+        require(s.p.m_sacrifice.picker_attempts.count == 1 && s.count("picker-recovery") == 1,
+                "empty recovery not persisted on first dispatch");
+        require(s.count("item-selected") == 0 && s.count("exchange-reward") == 0, "empty became exchange");
+        sacrifice_empty_fixtures.emplace_back(json::object{{"case","sacrifice-confirmed-empty"},{"payloads",s.events}});
+        s.p.controller.page = 1;
+        require(s.p.handle_sacrifice_event() && s.p.controller.choice_clicks == 2, "did not leave event");
+    });
+    for (const auto states : {std::vector<int>{2}, std::vector<int>{1,2}, std::vector<int>{2,1},
+                              std::vector<int>{1,0}, std::vector<int>{0,1}}) {
+        test("sacrifice unknown or changing list is never confirmed empty", [&] {
+            ChoiceScenario s;
+            require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+            s.p.controller.sacrifice_list_states = states;
+            require(s.p.handle_sacrifice_picker(), "unknown picker");
+            require(!s.p.controller.back_clicks && s.p.m_sacrifice.phase == blackflow::SacrificePhase::AwaitPicker,
+                    "recognition failure or transient empty caused exit");
+            require(s.count("picker-recovery") == 0 && s.count("item-selected") == 0, "unknown became evidence");
+        });
+    }
+    test("sacrifice unknown list retains bounded recovery", [&] {
+        ChoiceScenario s;
+        require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+        s.p.controller.sacrifice_list_states = {2};
+        for (int i = 0; i < blackflow::SacrificePickerAttempts::Limit; ++i) {
+            require(s.p.handle_sacrifice_picker() && !s.p.controller.back_clicks, "unknown returned early");
+        }
+        require(s.p.handle_sacrifice_picker() && s.p.controller.back_clicks == 1, "unknown not bounded");
+        require(s.events.at(s.events.size() - 1).get("details", "reason", std::string()) == "retry_limit_reached",
+                "unknown recorded as no exchangeable items");
+        sacrifice_empty_fixtures.emplace_back(json::object{{"case","sacrifice-unconfirmed-list"},{"payloads",s.events}});
+    });
+    test("sacrifice empty evidence failure prevents return input", [&] {
+        ChoiceScenario s;
+        require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+        s.p.controller.sacrifice_list_states = {1};
+        s.fail_phase = "picker-recovery";
+        require(!s.p.handle_sacrifice_picker() && !s.p.parent.enabled && !s.p.controller.back_clicks,
+                "returned without saving empty evidence");
+    });
+    test("sacrifice empty failed return stops task", [&] {
+        ChoiceScenario s;
+        require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+        s.p.controller.sacrifice_list_states = {1};
+        s.p.controller.back_ok = false;
+        require(!s.p.handle_sacrifice_picker() && !s.p.parent.enabled && s.p.controller.back_clicks == 1,
+                "failed return continued");
+    });
+    test("sacrifice user stop after saving empty evidence does not become recovery failure", [&] {
+        ChoiceScenario s;
+        require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");
+        s.p.controller.sacrifice_list_states = {1};
+        const auto observe = s.p.m_event_detail_observer;
+        s.p.m_event_detail_observer = [&](auto event, auto phase, json::object details, const cv::Mat& image) {
+            const bool saved = observe(event, phase, std::move(details), image);
+            if (phase == "picker-recovery") s.p.controller.stopped = true;
+            return saved;
+        };
+        require(!s.p.handle_sacrifice_picker() && !s.p.controller.back_clicks && s.p.parent.enabled,
+                "user stop became failed recovery or issued return input");
+    });
     for (const auto phase : {"event-choice","item-selected","exchange-reward","reward-claim-attempt","reward-claim-click-issued"}) test("sacrifice failure stops before subsequent action",[&]{
         ChoiceScenario s;s.fail_phase=phase;require(s.p.refresh_sacrifice_context(),"context");
         if(s.p.handle_sacrifice_event() && s.p.handle_sacrifice_picker()){
@@ -177,4 +295,11 @@
         const auto expected=std::filesystem::path(argv[3]).parent_path()/"cargo-decline/choice-payloads.json";
         require(json::open(actual).value()==json::open(expected).value(),"decline producer payload drifted");
     });
+    if(argc>3) test("shared sacrifice empty payload fixture matches actual producer methods", [&] {
+        const auto expected=std::filesystem::path(argv[3]).parent_path().parent_path().parent_path()/"blackflow-sacrifice/20261025/lifecycle-payloads.json";
+        require(json::open(expected).value()==json::value(sacrifice_empty_fixtures),"sacrifice empty producer payload drifted");
+    });
     if(argc>1) std::ofstream(std::filesystem::path(argv[1]).parent_path()/"encounter-payloads.json")<<json::value(encounter_fixtures).to_string();
+    if(argc>1) std::ofstream(std::filesystem::path(argv[1]).parent_path()/"sacrifice-empty-payloads.json")<<json::value(sacrifice_empty_fixtures).to_string();
+
+    if(argc>1) std::ofstream(std::filesystem::path(argv[1]).parent_path()/"generic-payloads.json")<<json::value(generic_fixtures).to_string();

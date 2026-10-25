@@ -424,6 +424,8 @@ public:
         return true;
     }
 
+    virtual bool capture_reward_result(std::string_view, json::object, const cv::Mat&, std::string* = nullptr) { return true; }
+
     virtual bool select_recruitment_voucher(std::string* = nullptr) { return false; }
     virtual bool capture_employ_page(std::string* = nullptr) { return false; }
 
@@ -523,6 +525,7 @@ public:
         std::optional<Rect> selected_button = std::nullopt,
         std::string* error = nullptr,
         const cv::Mat* selection_image = nullptr) override;
+    bool capture_reward_result(std::string_view task, json::object details, const cv::Mat& image, std::string* error = nullptr) override;
     bool select_recruitment_voucher(std::string* error = nullptr) override;
     bool capture_employ_page(std::string* error = nullptr) override;
     bool capture_store_page(
@@ -580,7 +583,8 @@ private:
         const std::filesystem::path& relative_directory,
         json::object attribution,
         bool deferred,
-        std::string* error);
+        std::string* error,
+        json::object evidence_sample = { });
     bool persist_node_evidence_capture(
         std::string_view action,
         std::string task,

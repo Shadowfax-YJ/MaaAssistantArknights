@@ -49,7 +49,10 @@ bool BlackFlowNodeEvidenceTaskPlugin::verify(AsstMsg msg, const json::value& det
     // 真正执行前先无条件保存当前画面，不能等点击完成，也不能只依赖按钮模板回调。
     const bool pursuit_loot_preclick =
         msg == AsstMsg::SubTaskStart && pursuit_first_loot_click_task(task, details.get("details", "exec_times", 0));
-    if (!recruitment_page && !employ_page && !get_drop_page && !pursuit_loot_preclick) {
+    const bool event_result = msg == AsstMsg::SubTaskStart &&
+        (task == "BlackFlow@Roguelike@StageEncounterResult" || task == "BlackFlow@Roguelike@StageEncounterReward" ||
+         task == "BlackFlow@Roguelike@CloseEventAfterEncounter");
+    if (!recruitment_page && !employ_page && !get_drop_page && !pursuit_loot_preclick && !event_result) {
         return false;
     }
     m_pending_task = task;
@@ -59,6 +62,18 @@ bool BlackFlowNodeEvidenceTaskPlugin::verify(AsstMsg msg, const json::value& det
 bool BlackFlowNodeEvidenceTaskPlugin::_run()
 {
     if (!m_capture || m_pending_task.empty()) {
+        return true;
+    }
+    if (m_pending_task == "BlackFlow@Roguelike@StageEncounterResult" ||
+        m_pending_task == "BlackFlow@Roguelike@StageEncounterReward" ||
+        m_pending_task == "BlackFlow@Roguelike@CloseEventAfterEncounter") {
+        std::string error;
+        if (m_port && !m_port->capture_reward_result(m_pending_task,
+                {{"receipt_status", "event_stage_observed"}}, ctrler()->get_image(), &error)) {
+            m_task_ptr->set_enable(false);
+            Log.error("BlackFlow event result evidence persistence failed", error);
+        }
+        m_pending_task.clear();
         return true;
     }
     const bool controlled_click = node_get_drop_requires_stable_click(m_pending_task) ||
@@ -164,6 +179,14 @@ void BlackFlowNodeEvidenceTaskPlugin::click_drop_with_progress_check()
                 break;
             }
             previous_changed = after.clone();
+        }
+        if (m_port && !m_port->capture_reward_result(m_pending_task,
+                {{"receipt_status", progressed ? "page_changed" : "unresolved"}, {"click_dispatched",dispatched},
+                 {"attempt",attempt}, {"rect",json::array{hit->rect.x,hit->rect.y,hit->rect.width,hit->rect.height}}},
+                progressed ? previous_changed : ctrler()->get_image(), &error)) {
+            m_task_ptr->set_enable(false);
+            Log.error("BlackFlow reward result evidence persistence failed", error);
+            return;
         }
         record_run_event(
             progressed ? RunLogLevel::Info : RunLogLevel::Warning,

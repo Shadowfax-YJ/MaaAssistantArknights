@@ -128,7 +128,8 @@ bool BlackFlowTrophyRewardTaskPlugin::_run()
 
     // 证据采集会等待画面稳定；等待后必须在最新帧上重新做完整语义选择，绝不沿用
     // ProcessTask 或初次分析留下的按钮坐标。
-    BlackFlowTrophyRewardAnalyzer confirmed_analyzer(ctrler()->get_image());
+    const cv::Mat selection_image = ctrler()->get_image();
+    BlackFlowTrophyRewardAnalyzer confirmed_analyzer(selection_image);
     if (!confirmed_analyzer.analyze()) {
         reject_unsafe("confirmed_semantic_analysis_failed", 0);
         return true;
@@ -143,6 +144,14 @@ bool BlackFlowTrophyRewardTaskPlugin::_run()
     }
 
     const auto& selected = detections[selection->detection_index];
+    // The initial stable capture may have preceded a changed selection. Persist
+    // the confirmed card and button from exactly the frame being acted on.
+    if (m_port && !m_port->capture_get_drop(RewardTask,
+            detections[selection->detection_index].button_rect, &capture_error, &selection_image)) {
+        m_task_ptr->set_enable(false);
+        return false;
+    }
+
     Log.info(
         __FUNCTION__,
         "| selecting confirmed trophy reward",
@@ -150,7 +159,7 @@ bool BlackFlowTrophyRewardTaskPlugin::_run()
         selected.category,
         "priority",
         selection->priority);
-    record_run_event(
+    if (!record_run_event(
         RunLogLevel::Info,
         "reward.trophy.select",
         "started",
@@ -165,9 +174,18 @@ bool BlackFlowTrophyRewardTaskPlugin::_run()
             { "selected_option_index_from_left", selection->option.selected_index_from_left },
         },
         "BlackFlowTrophyReward",
-        nullptr,
-        true);
-    ctrler()->click(selected.button_rect);
+        std::make_shared<cv::Mat>(selection_image))) {
+        m_task_ptr->set_enable(false);
+        return false;
+    }
+    const bool dispatched = ctrler()->click(selected.button_rect);
+    if (m_port && !m_port->capture_reward_result(RewardTask,
+            {{"receipt_status","input_issued"},{"click_dispatched",dispatched},
+             {"selected_name",selected.name},{"selected_option_index_from_left",selection->option.selected_index_from_left}},
+            ctrler()->get_image(), &capture_error)) {
+        m_task_ptr->set_enable(false);
+        return false;
+    }
     return true;
 }
 } // namespace asst::blackflow

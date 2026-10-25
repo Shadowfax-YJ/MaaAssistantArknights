@@ -117,7 +117,7 @@ struct BlackFlowAutomationStoreTaskPlugin {
     bool m_pending_purchase_confirmed = false, m_scrap_shop_cultivation_requested = false;
     std::vector<int> m_shop_purchased, m_shop_attempted, m_scrap_shop_purchased, m_scrap_shop_buy_attempted;
     std::vector<std::string> m_shop_purchased_names, m_shop_attempted_names, m_scrap_shop_purchased_names, m_scrap_shop_buy_attempted_names;
-    int m_shop_collectibles_purchased_in_run = 0, wallet_reads = 0, name_reads = 0, price_reads = 0;
+    int wallet_reads = 0, name_reads = 0, price_reads = 0;
     Controller* ctrler() { return &controller; }
     bool sleep(int) { return true; }
     bool purchase_wallet_page(const cv::Mat& im, AutomationStoreKind) { return controller.state(im).shop; }
@@ -218,6 +218,18 @@ int main() try {
         check(p.select_shop_good(only_sand_table)&&only_sand_table.has_value()==!disabled,
               "a shelf containing only the disabled item did not finish with no purchase");
         std::cout<<"PASS per-run sand table policy survives repeated actual merchant selection "<<disabled<<'\n';++passed;
+    }
+    {
+        BlackFlowAutomationStoreTaskPlugin p;
+        p.controller.load({Frame {}});
+        p.m_shop_goods_scanned = true;
+        p.m_shop_purchased_names = {"猎犬咖啡", "悲伤的红"};
+        p.m_shop_goods.push_back({TextRect {Rect {431, 405, 102, 24}, 1.0, "三尺万象"},
+                                BlackFlowAutomationStoreTaskPlugin::ShelfPage::Top, 12, true});
+        std::optional<BlackFlowAutomationStoreTaskPlugin::StoreSelection> selected;
+        check(p.select_shop_good(selected) && selected && selected->good.text == "三尺万象",
+              "two earlier collectibles must not block another configured collectible");
+        std::cout << "PASS actual merchant still selects a third distinct collectible\n"; ++passed;
     }
     auto store = [&](const char* name, std::vector<Frame> frames, bool expected, int y, std::string_view kind = "eerie") {
         BlackFlowAutomationStoreTaskPlugin p;
@@ -339,7 +351,8 @@ int main() try {
         check(receipt.at("item_name").as_string().empty() != confirmed, "planned name written as actual purchase");
         check(!p.m_pending_purchase_name.has_value() && p.m_pending_purchase_id.empty(), "pending purchase not consumed");
         if (scenario == 1) check(p.wallet_reads == 0, "wallet OCR must not run on a recruitment/unknown page");
-        if (scenario == 0) check(p.m_shop_collectibles_purchased_in_run == 1, "successful collectible counted more than once");
+        if (scenario == 0) check(std::ranges::count(p.m_shop_purchased_names, "《炎国字汇》") == 1,
+                                 "successful collectible counted more than once");
         if (scenario == 5) check(p.m_scrap_shop_cultivation_requested, "confirmed seed must retain cultivation policy");
         std::cout << "PASS receipt finalization " << scenario << '\n'; ++passed;
     }

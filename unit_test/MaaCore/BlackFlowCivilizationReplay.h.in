@@ -1,0 +1,237 @@
+#pragma once
+#include <regex>
+#include <map>
+#include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowCivilizationInventory.h"
+
+namespace civilization_replay {
+using namespace asst;
+namespace blackflow = asst::blackflow;
+inline json::object observations;
+inline std::map<const unsigned char*,std::string> frame_paths;
+inline bool missing_capacity=false, unknown_names=false;
+inline cv::Mat load(const std::string& path) {
+    auto frame=MAA_NS::imread(std::filesystem::path(path));
+    require(!frame.empty(),"civilization original frame missing");
+    frame_paths[frame.data]=path; return frame;
+}
+struct OCRer {
+    cv::Mat image;std::string task;std::vector<TextRect> result;bool raw=false;
+    explicit OCRer(const cv::Mat& im):image(im){}
+    void set_task_info(const std::string& value){task=value.substr(value.rfind('@')+1);}
+    void set_required(std::vector<std::string> value){raw=value.empty();}
+    void set_fuzzy_match(bool){}
+    void set_replace(std::vector<std::pair<std::string,std::string>>){}
+    bool analyze(){
+        result.clear();
+        if(image.empty() || (task=="SacrificeInventoryCount"&&missing_capacity) ||
+           (task=="MovementInventoryAllItems"&&unknown_names&&!raw))return false;
+        const auto& frame=observations.at(frame_paths.at(image.data));
+        const auto key=raw?task+"Raw":task;
+        if(frame.contains(key))for(const auto& row:frame.at(key).as_array()) {
+            auto r=row.at("rect").as_array();result.push_back({{r[0].as_integer(),r[1].as_integer(),r[2].as_integer(),r[3].as_integer()},row.at("score").as_double(),row.at("text").as_string()});
+        }
+        return !result.empty();
+    }
+    const auto& get_result()const{return result;}
+};
+struct Plugin;
+struct ProcessTask {
+    Plugin& owner;std::vector<std::string> tasks;
+    ProcessTask(Plugin& p,std::vector<std::string> t):owner(p),tasks(std::move(t)){}
+    ProcessTask& set_retry_times(int){return *this;}
+    bool run();
+};
+struct Parent {bool enabled=true;void set_enable(bool value){enabled=value;}};
+struct Plugin {
+    static constexpr std::string_view Prefix="BlackFlow@Roguelike@";
+    struct Controller {
+        Plugin* owner=nullptr;bool expanded=false,close_ok=true,open_ok=true,details_ok=false;int page=0,closes=0,opens=0,swipes=0,details_closes=0;
+        cv::Mat get_image(){return expanded?owner->pages[std::min(std::size_t(page),owner->pages.size()-1)]:owner->collapsed;}
+    } controller;
+    std::vector<cv::Mat> pages;cv::Mat collapsed;
+    Parent parent;Parent* m_task_ptr=&parent;
+    struct {std::optional<blackflow::SacrificeContext> context=blackflow::SacrificeContext{1,2};int exchanges=0,evidence_sequence=0;bool evidence_failed=false;} m_sacrifice;
+    std::function<bool(std::string_view,std::string_view,json::object,const cv::Mat&)> m_event_detail_observer;
+    json::array events;std::vector<cv::Mat> saved_frames;
+    std::string fail_status;bool cancelled=false;
+    Plugin(cv::Mat closed,std::vector<cv::Mat> frames):pages(std::move(frames)),collapsed(std::move(closed)) {
+        controller.owner=this;
+        m_event_detail_observer=[&](auto,auto phase,json::object details,const cv::Mat& image){
+            if(!fail_status.empty() && details.get("inventory_status",std::string())==fail_status)return false;
+            events.emplace_back(json::object{{"phase",std::string(phase)},{"details",std::move(details)},
+                {"closes_before_save",controller.closes},{"expanded_before_save",controller.expanded}});
+            saved_frames.push_back(image.clone());return true;
+        };
+    }
+    auto* ctrler(){return &controller;}
+    bool need_exit(){return cancelled;}
+    bool sleep(int){return !cancelled;}
+    bool recognize(const cv::Mat& image,const std::string& task){
+        if(image.empty())return false;
+        return observations.at(frame_paths.at(image.data)).get(task,false);
+    }
+    bool report_sacrifice(std::string_view,json::object,const cv::Mat&);
+    /*scan_declaration*/
+};
+inline bool ProcessTask::run(){
+    auto& c=owner.controller;const auto& t=tasks.front();
+    if(t.ends_with("SacrificeInventoryOpen")){++c.opens;if(!c.open_ok)return false;c.expanded=true;c.page=0;return true;}
+    if(t.ends_with("SacrificeInventoryDetailsClose")){++c.details_closes;return c.details_ok;}
+    if(t.ends_with("SacrificeInventoryClose")){++c.closes;if(!c.close_ok)return false;c.expanded=false;return true;}
+    if(t.ends_with("MovementInventorySwipe")){++c.swipes;++c.page;return true;}
+    throw std::runtime_error("unexpected civilization input: "+t);
+}
+/*production_report*/
+/*production_scan*/
+}
+
+template<class Test>
+void civilization_scan_regressions(const std::filesystem::path& fixture_root,Test&& test) {
+    using namespace civilization_replay;
+    const auto root=fixture_root/"unit_test/MaaCore/fixtures/blackflow-civilization/20261025";
+    observations.clear();
+    const auto recorded=json::open(root/"observations.json").value();
+    for(const auto& [path, value]:recorded.as_object()) observations[(root/path).string()]=value;
+    auto cases=json::open(root/"sources.json").value();
+    std::string closed_path;
+    for(const auto& [path,row]:observations)if(row.get("SacrificeInventoryOpen",false)&&
+       !row.get("SacrificeInventoryExpanded",false)&&row.get("StageEncounterOcr",false)){closed_path=path;break;}
+    require(!closed_path.empty(),"no original collapsed event page for replay");
+    auto frames=[&](std::string_view id,std::string_view phase){
+        std::vector<cv::Mat> result;
+        for(const auto& c:cases.as_array())if(c.at("case").as_string()==id)for(const auto& file:c.at("images").as_array()){
+            if(!file.contains("event") || file.at("event").at("phase").as_string()!=phase)continue;
+            result.push_back(load((root/file.at("path").as_string()).string()));
+        }
+        return result;
+    };
+    test("civilization current production recognizers distinguish detail overlay empty box and ordinary inventory",[&]{
+        const auto find_image=[&](std::string_view suffix) {
+            for(const auto& [path,value]:observations)if(value.get("original_path",std::string()).ends_with(suffix))return load(path);
+            throw std::runtime_error("original recognition image missing");
+        };
+        const auto overlay=find_image("dlc0-06-2873.jpg"),ordinary=find_image("dlc0-02-6089.jpg");
+        asst::Matcher detail(overlay);detail.set_task_info("BlackFlow@Roguelike@SacrificeInventoryDetailsClose");
+        require(detail.analyze().has_value(),"actual detail overlay missing");
+        asst::Matcher negative(ordinary);negative.set_task_info("BlackFlow@Roguelike@SacrificeInventoryDetailsClose");
+        require(!negative.analyze(),"ordinary inventory misclassified as overlay");
+        const auto empty=find_image("01-4985-BF-A8-256.evidence-1.jpg");
+        asst::OCRer names(empty);names.set_task_info("BlackFlow@Roguelike@SacrificeInventoryEmptySlots");
+        require(names.analyze().has_value()&&names.get_result().size()==6,"actual empty-slot recognition differs from replay cache");
+    });
+    json::array exported;
+    const auto export_scan=[&](std::string name,const Plugin& p){
+        json::array payloads;
+        for(const auto& e:p.events)payloads.emplace_back(json::object{{"event_name","回滚文明"},{"phase",e.at("phase")},{"details",e.at("details")},{"has_image",true}});
+        exported.emplace_back(json::object{{"case",std::move(name)},{"payloads",std::move(payloads)}});
+    };
+    test("civilization conflicting identities in one slot stay unknown",[&]{
+        cv::Mat image(720,1280,CV_8UC3,cv::Scalar::all(30));
+        std::vector<TextRect> names{{{400,257,80,24},.99,"种子"},{{400,257,80,24},.99,"种荚"},{{400,257,80,24},.99,"种子"}};
+        require(blackflow::civilization_inventory_slots(names,image).empty(),"one conflicting slot was filled by first/last OCR winner");
+    });
+    test("civilization full data survives failed closing without authorizing event input",[&]{
+        Plugin p(load(closed_path),frames("dlc0-02","civilization-before"));p.controller.close_ok=false;
+        auto result=p.scan_sacrifice_natural_items("civilization-before");
+        require(result.has_value(),"complete original scan was discarded when close failed");
+        require(!result.panel_closed&&!p.parent.enabled,"complete data authorized event input with inventory expanded");
+        export_scan("civilization-close-failed",p);
+    });
+    test("civilization failed names persist the expanded failure frame before recovery",[&]{
+        Plugin p(load(closed_path),frames("dlc0-02","civilization-before"));unknown_names=true;
+        auto result=p.scan_sacrifice_natural_items("civilization-before");unknown_names=false;
+        require(!result,"unknown identities became complete or empty");
+        require(std::ranges::any_of(p.events,[](const auto& e){return e.get("expanded_before_save",false)&&e.get("closes_before_save",0)==0;}),
+                "unknown page was saved only after closing");
+        export_scan("civilization-unknown-identities",p);
+    });
+    test("civilization capacity failure retains its original expanded page",[&]{
+        Plugin p(load(closed_path),frames("dlc0-02","civilization-before"));missing_capacity=true;
+        auto result=p.scan_sacrifice_natural_items("civilization-before");missing_capacity=false;
+        require(!result,"missing capacity became an empty inventory");
+        require(std::ranges::any_of(p.events,[](const auto& e){return e.get("expanded_before_save",false)&&e.get("closes_before_save",0)==0;}),
+                "capacity failure lost its original frame");
+    });
+    test("civilization real short swipe cannot be counted as a new column",[&]{
+        Plugin p(load(closed_path),frames("dlc0-04","civilization-before"));
+        auto result=p.scan_sacrifice_natural_items("civilization-before");
+        require(!result,"short swipe manufactured complete inventory");
+    });
+    for(const auto id:{"dlc0-01","dlc0-07","dlc0-08","dlc0-12","dlc0-14"}) {
+        test((std::string("civilization archived empty-box classification ")+id).c_str(),[&]{
+            const auto c=std::ranges::find_if(cases.as_array(),[&](const auto& c){return c.at("case").as_string()==id;});
+            const auto f=std::ranges::find_if(c->at("images").as_array(),[](const auto& f){return !f.contains("event")&&f.get("label",std::string()).find("inventory-page")!=std::string::npos;});
+            require(f!=c->at("images").as_array().end(),"empty-box original missing");
+            const auto& observed=observations.at((root/f->at("path").as_string()).string());
+            require(observed.get("SacrificeInventoryExpanded",false),"empty inventory not recognized as expanded");
+            Plugin p(load(closed_path),{load((root/f->at("path").as_string()).string())});
+            auto result=p.scan_sacrifice_natural_items("civilization-after");
+            require(result && result->empty(),"verified empty inventory remained unknown");
+        });
+    }
+    for(const auto id:{"dlc0-02","dlc0-03","dlc0-05","dlc0-09","dlc0-10"})test((std::string("civilization complete eleven-slot old page ")+id).c_str(),[&]{
+        Plugin p(load(closed_path),frames(id,"civilization-before"));
+        auto result=p.scan_sacrifice_natural_items("civilization-before");
+        std::string reason;
+        for(const auto& e:p.events)if(!e.at("details").get("reason",std::string()).empty())reason=e.at("details").get("reason",std::string());
+        require(result && result.panel_closed && p.parent.enabled,"complete original inventory rejected: "+reason);
+    });
+    for(const auto id:{"dlc0-00","dlc0-11","dlc0-13","dlc0-15"})test((std::string("civilization bounded original open failure ")+id).c_str(),[&]{
+        auto original=frames(id,"civilization-before");require(!original.empty(),"open failure original missing");
+        Plugin p(original.front(),original);p.controller.open_ok=false;
+        auto result=p.scan_sacrifice_natural_items("civilization-before");
+        require(!result&&!p.parent.enabled&&p.controller.opens<=1&&p.controller.swipes==0,"open failure issued unsafe inputs");
+        require(!p.saved_frames.empty(),"original open failure not preserved");
+    });
+    test("civilization same-name instances with real different descriptions are not deduplicated",[&]{
+        const auto backup=observations;
+        auto original=frames("dlc0-02","civilization-before");
+        for(auto& image:original)for(auto& row:observations[frame_paths.at(image.data)]["MovementInventoryAllItems"].as_array()) row["text"]="种子";
+        Plugin p(load(closed_path),original);auto result=p.scan_sacrifice_natural_items("civilization-before");
+        observations=backup;
+        require(result&&result->size()==11,"separate same-name slots were deduplicated or movement inferred from names alone");
+    });
+    test("civilization identical last viewport never establishes another column",[&]{
+        auto original=frames("dlc0-02","civilization-before");original[1]=original[0];
+        Plugin p(load(closed_path),original);auto result=p.scan_sacrifice_natural_items("civilization-before");
+        require(!result&&p.controller.swipes==1,"repeated last page counted as new slots");
+    });
+    test("civilization details overlay preserves the obstructed original before bounded recovery",[&]{
+        auto original=frames("dlc0-06","civilization-after");require(original.size()==2,"overlay originals missing");
+        Plugin p(load(closed_path),{original.back()});auto result=p.scan_sacrifice_natural_items("civilization-after");
+        require(!result&&!p.parent.enabled&&p.controller.details_closes==1,"overlay was empty or recovery unbounded");
+        require(std::ranges::any_of(p.events,[](const auto& e){return e.at("details").get("reason",std::string())=="relic_details_overlay";}),"obstructed original lost");
+    });
+    test("civilization failure persistence stops before closing or selecting",[&]{
+        Plugin p(load(closed_path),frames("dlc0-02","civilization-before"));unknown_names=true;p.fail_status="incomplete";
+        auto result=p.scan_sacrifice_natural_items("civilization-before");unknown_names=false;
+        require(!result&&p.m_sacrifice.evidence_failed&&!p.parent.enabled&&p.controller.closes==0,"input followed a failed required save");
+    });
+    test("civilization missing zero evidence never masquerades as empty",[&]{
+        const auto backup=observations;
+        auto c=std::ranges::find_if(cases.as_array(),[](const auto& c){return c.at("case").as_string()=="dlc0-01";});
+        const auto f=std::ranges::find_if(c->at("images").as_array(),[](const auto& f){return !f.contains("event")&&f.get("label",std::string()).find("inventory-page")!=std::string::npos;});
+        const auto path=(root/f->at("path").as_string()).string();observations[path]["SacrificeInventoryEmptySlots"]=json::array{};
+        Plugin p(load(closed_path),{load(path)});auto result=p.scan_sacrifice_natural_items("civilization-after");observations=backup;
+        require(!result,"O/12 without explicit empty slots became confirmed empty");
+    });
+
+    for(const auto& c:cases.as_array())if(c.get("case",std::string()).starts_with("dlc1"))for(const auto phase:{"civilization-before","civilization-after"}) {
+        test(("civilization archived repeated-end columns "+c.get("case",std::string())+" "+phase).c_str(),[&]{
+            Plugin p(load(closed_path),frames(c.at("case").as_string(),phase));
+            auto result=p.scan_sacrifice_natural_items(phase);
+            if(result) {
+                auto actual=*result.natural_items;std::ranges::sort(actual);
+                std::vector<std::string> expected;for(const auto& x:c.at("reviewed_naturals").at(std::string_view(phase)=="civilization-before"?"before":"after").as_array()) expected.push_back(x.as_string());
+                std::ranges::sort(expected);require(actual==expected,"complete scan contradicts independently reviewed actual slots");
+            } else {
+                require(std::ranges::any_of(p.events,[](const auto& e){return e.at("details").get("inventory_status",std::string())=="incomplete";}),"rejected old duplicate scan has no explicit failure evidence");
+            }
+        });
+    }
+
+    std::ofstream(std::filesystem::current_path()/"civilization-payloads.json")<<json::value(exported).to_string();
+
+}

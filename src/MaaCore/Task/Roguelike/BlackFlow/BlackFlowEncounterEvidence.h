@@ -27,14 +27,18 @@ inline bool record_encounter_evidence(
     };
     const bool choice = details.get("capture_kind", std::string()) == "encounter_choice";
     constexpr std::string_view phases[] = { "candidates",   "order",        "planned",   "attempt",
-                                            "input_failed", "click_issued", "confirmed", "unresolved" };
+                                            "input_failed", "click_issued", "confirmed", "unresolved", "result_observed", "result_pending" };
     if (choice && std::ranges::find(phases, phase) == std::end(phases)) {
         return failed("invalid encounter choice phase");
     }
     const auto& page = session.page_context();
+    const bool next_candidate_receipt = choice && page &&
+        details.get("result_event_name", std::string()) == page->node_name &&
+        ((phase == "confirmed" && details.get("confirmation_basis",std::string()) == "next_event_candidate_page") ||
+         (phase == "result_observed" && details.get("result_basis",std::string()) == "next_event_candidate_page"));
     if (session.profile() != "automation_collection" || !page || page->stage != PageExecutionStage::Running ||
-        is_combat_node_type(page->node_type) || page->node_name != event_name ||
-        (event_name != "货从口出" && event_name != "回滚文明") ||
+        is_combat_node_type(page->node_type) || (page->node_name != event_name && !next_candidate_receipt) ||
+        (!choice && event_name != "回滚文明") ||
         details.get("run_revision", std::uint64_t(0)) != session.run_revision() ||
         details.get("page_revision", std::uint64_t(0)) != page->page_revision ||
         details.get("evidence_sequence", 0) <= 0 ||
@@ -50,7 +54,7 @@ inline bool record_encounter_evidence(
         { "node", page->node },
         { "transaction_id", page->transaction_id },
     };
-    const bool required_image = !choice || phase == "candidates" || phase == "attempt" || phase == "confirmed";
+    const bool required_image = !choice || phase == "candidates" || phase == "attempt" || phase == "confirmed" || phase == "result_observed";
     if (required_image && image.empty()) {
         return failed("required encounter screenshot is empty");
     }
@@ -59,6 +63,7 @@ inline bool record_encounter_evidence(
         const std::string capture_phase = !choice                 ? std::string(phase)
                                           : phase == "candidates" ? "cc-cand"
                                           : phase == "confirmed"  ? "cc-done"
+                                          : phase == "result_observed" ? "cc-result"
                                                                   : "cc-try";
         if (!port.capture_event_detail(event_name, capture_phase, details, image, error)) {
             return failed(error && !error->empty() ? *error : "encounter image could not be saved");

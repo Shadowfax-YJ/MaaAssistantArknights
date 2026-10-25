@@ -1,0 +1,136 @@
+[
+    {
+        "action": "start.opening.support.confirming",
+        "details": {
+            "confirmation_x": 635,
+            "confirmation_y": 595,
+            "observation_index": 1,
+            "preferred": false,
+            "selected_index": 1,
+            "selected_name": "林间代步"
+        },
+        "elapsed_ms": 1,
+        "floor": 0,
+        "image": {
+            "path": "images/reward-confirming.jpg"
+        },
+        "level": "INFO",
+        "map_generation": 0,
+        "outcome": "pending",
+        "phase": "before-click",
+        "schema_version": 1,
+        "sequence": 1,
+        "state": {
+            "action_points": 0,
+            "active_movement": "",
+            "current_node": 18446744073709551615,
+            "decision_id": "",
+            "expedition_core_away": false,
+            "floor": 0,
+            "hope": 0,
+            "ingots": 0,
+            "lorentz_eye_available": false,
+            "map_generation": 0,
+            "map_revision": 0,
+            "movement_instances": [
+            ],
+            "movement_inventory_refresh_required": true,
+            "observation_id": "",
+            "observed_current_node": 18446744073709551615,
+            "painted_liberi": false,
+            "profile": "automation_collection",
+            "random_reveals_on_processing_move": 0,
+            "resources_revision": 0,
+            "revealed_nodes": [
+            ],
+            "run_revision": 1,
+            "seeds": 0,
+            "selected_difficulty": -1,
+            "sellable_scraps": 0,
+            "store_purchase_policy": {
+                "sand_table_beta": {
+                    "disable_probability": 0.500000,
+                    "disabled_for_run": false,
+                    "quota_override": null,
+                    "scope": "run"
+                }
+            },
+            "strategy_terminal": false,
+            "terminated": false,
+            "transaction_id": "",
+            "tree_hole_outer_floor": 0,
+            "viewport_revision": 0,
+            "visited_nodes": [
+            ],
+            "white_model_birds": 0
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-24T18:21:30Z"
+    },
+    {
+        "action": "start.opening.support.transition",
+        "details": {
+            "observation_index": 1,
+            "preferred": false,
+            "selected_index": 1,
+            "selected_name": "林间代步"
+        },
+        "elapsed_ms": 2,
+        "floor": 0,
+        "image": {
+            "path": "images/item-popup.jpg"
+        },
+        "level": "INFO",
+        "map_generation": 0,
+        "outcome": "pending",
+        "phase": "observed",
+        "schema_version": 1,
+        "sequence": 2,
+        "state": {
+            "action_points": 0,
+            "active_movement": "",
+            "current_node": 18446744073709551615,
+            "decision_id": "",
+            "expedition_core_away": false,
+            "floor": 0,
+            "hope": 0,
+            "ingots": 0,
+            "lorentz_eye_available": false,
+            "map_generation": 0,
+            "map_revision": 0,
+            "movement_instances": [
+            ],
+            "movement_inventory_refresh_required": true,
+            "observation_id": "",
+            "observed_current_node": 18446744073709551615,
+            "painted_liberi": false,
+            "profile": "automation_collection",
+            "random_reveals_on_processing_move": 0,
+            "resources_revision": 0,
+            "revealed_nodes": [
+            ],
+            "run_revision": 1,
+            "seeds": 0,
+            "selected_difficulty": -1,
+            "sellable_scraps": 0,
+            "store_purchase_policy": {
+                "sand_table_beta": {
+                    "disable_probability": 0.500000,
+                    "disabled_for_run": false,
+                    "quota_override": null,
+                    "scope": "run"
+                }
+            },
+            "strategy_terminal": false,
+            "terminated": false,
+            "transaction_id": "",
+            "tree_hole_outer_floor": 0,
+            "viewport_revision": 0,
+            "visited_nodes": [
+            ],
+            "white_model_birds": 0
+        },
+        "task": "RoguelikeCustomStartTaskPlugin",
+        "timestamp": "2026-10-24T18:21:30Z"
+    }
+]

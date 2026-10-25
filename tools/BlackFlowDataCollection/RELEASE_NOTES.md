@@ -1,10 +1,13 @@
-黑流树海采集版 v1.1.31
+黑流树海采集版 v1.1.32
 
 ### 本次更新
 
-* 优化零件箱回起点判断，重名零件也能确认到头，减少多余滑动并保留完整扫描。
-* 补齐商店出售及其他奖励流程的弹窗截图，在关闭前保存；持续保存失败时会报错停止。
-* 沙盘β改为每局有 50% 概率跳过购买，结果整局固定并记录到日志。
+* 修复解除零件箱超载、已返回地图后仍报错停止的问题，清理后会重新完整扫描库存。
+* 修复开局奖励弹窗阻塞后续流程的问题；“失与得”确认没有可交换零件时直接返回离开。
+* 调整“先行一步”派遣策略：优先未精二的天猫，其次伊桑、古米；保留天猫离队前的安全出口检查。
+* 改善零件及藏品名称识别，减少相似短名称被误改成其他物品，同时保留无歧义的三字名称纠错。
+* 修复复原文明零件扫描的完整性判断与弹窗恢复，补齐事件选择、奖励结果及异常现场记录。
+* 更新难度 6 的物品购买、出售、奖励选择及超载丢弃策略。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -17,8 +20,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.31/MAA-BlackFlow-Data-Collection-v1.1.31-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.31/MAA-BlackFlow-Data-Collection-v1.1.31-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.32/MAA-BlackFlow-Data-Collection-v1.1.32-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.32/MAA-BlackFlow-Data-Collection-v1.1.32-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

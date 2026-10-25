@@ -146,9 +146,13 @@ struct Port : IBlackFlowTaskPort
 #include "BlackFlowExpeditionPickerReplay.h"
 #include "BlackFlowLinkedEncounterReplay.h"
 #include "BlackFlowMerchantInventoryReplay.h"
+#include "BlackFlowItemNameReplay.h"
+#include "BlackFlowCivilizationReplay.generated.h"
+#include "BlackFlowOverloadRecognitionReplay.h"
 #include "BlackFlowMovePreviewReplay.h"
 #include "BlackFlowOpeningCultivationReplay.h"
 #include "BlackFlowOpeningSelectionReplay.h"
+#include "BlackFlowOpeningRewardControllerReplay.generated.h"
 #include "BlackFlowRevealReplay.h"
 #include "BlackFlowStoreIdentityReplay.h"
 
@@ -606,6 +610,9 @@ int main(int argc, char** argv)
         }
     });
     merchant_inventory_regressions(std::filesystem::path(argv[1]), test);
+    item_name_regressions(std::filesystem::path(argv[1]), test);
+    civilization_scan_regressions(std::filesystem::path(argv[1]), test);
+    overload_recognition_regressions(std::filesystem::path(argv[1]), test);
     store_identity_regressions(std::filesystem::path(argv[1]), test);
     encounter_evidence_regressions(std::filesystem::path(argv[1]), test);
     move_preview_regressions(std::filesystem::path(argv[1]), test);
@@ -614,6 +621,7 @@ int main(int argc, char** argv)
     expedition_evidence_regressions(std::filesystem::path(argv[1]), test);
     opening_cultivation_regressions(std::filesystem::path(argv[1]), test);
     opening_selection_regressions(std::filesystem::path(argv[1]), test);
+    opening_reward_controller_regressions(std::filesystem::path(argv[1]), test);
     linked_encounter_regressions(std::filesystem::path(argv[1]), test);
     reveal_session_regressions(std::filesystem::path(argv[1]), test);
     duel_preparation_regressions(std::filesystem::path(argv[1]), test);

@@ -19,6 +19,10 @@ struct BlackFlowStoreReplayAccess
     {
         return p.recognize(image, task);
     }
+    static auto name_task(BlackFlowAutomationStoreTaskPlugin& p, const std::string& task)
+    {
+        return p.recognition_task_info(task);
+    }
 
     static void cache_shelf(BlackFlowAutomationStoreTaskPlugin& p, const cv::Mat& image)
     {
@@ -296,7 +300,7 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
         require(!anchors.empty() && std::ranges::any_of(anchors, [](const TextRect& row) { return row.text.find("价格") != std::string::npos; }),
                 "purchase identity filtering discarded the complete-shelf anchors");
     });
-    test("captured secret shelf keeps one real seed and rejects blood mushroom and seed pod aliases", [&] {
+    test("captured secret shelf preserves unpurchased identities before filtering purchases", [&] {
         const auto image =
             MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-merchant/20261024/secret-shelf.jpg");
         require(!image.empty(), "secret shelf fixture missing");
@@ -307,19 +311,32 @@ void merchant_inventory_regressions(const std::filesystem::path& repo, Test&& te
             store,
             image,
             "BlackFlow@Roguelike@AutomationCultivateBuyItems");
-        int seeds = 0;
+        int seeds = 0, seed_pods = 0, blood_mushrooms = 0;
+        std::vector<blackflow::StoreGoodOffer> declined_offers;
         for (const auto& item : goods) {
-            require(
-                item.text != "血橙" && item.text != "种荚" && item.text != "血蕈",
-                "non-buyable item became a purchase");
+            require(item.text != "血橙", "blood mushroom became a purchasable blood orange");
+            if (item.text == "种荚" || item.text == "血蕈") {
+                seed_pods += item.text == "种荚";
+                blood_mushrooms += item.text == "血蕈";
+                declined_offers.push_back({item.text, 1, true, true});
+            }
             if (item.text == "种子") {
                 ++seeds;
                 require(item.rect.x >= 1000 && item.rect.y < 300, "seed moved to pod card");
             }
         }
         require(seeds == 1, "actual seed missing or duplicated by fuzzy alias");
+        require(seed_pods == 1 && blood_mushrooms == 1, "full recognition lost unpurchased item identities");
+        require(!blackflow::select_preferred_affordable_good(blackflow::ScrapShopBuyPriority, declined_offers, 100),
+                "recognized but unselected items became purchase candidates");
         OCRer legacy(image);
         legacy.set_task_info("BlackFlow@Roguelike@AutomationCultivateBuyItems");
+        // Deliberately omit the two identities to retain the original alias regression,
+        // independently of future changes to the full production vocabulary.
+        auto incomplete = Task.get<OcrTaskInfo>("BlackFlow@Roguelike@AutomationCultivateBuyItems")->text;
+        std::erase(incomplete, "种荚");
+        std::erase(incomplete, "血蕈");
+        legacy.set_required(std::move(incomplete));
         require(legacy.analyze().has_value(), "fixture no longer reproduces original recognition");
         const auto old = legacy.get_result();
         require(

@@ -108,6 +108,7 @@ void OCRerConfig::_set_task_info(OcrTaskInfo task_info)
     m_params.fuzzy_match = task_info.fuzzy_match;
     m_params.join_adjacent = task_info.join_adjacent;
     m_params.fuzzy_match_min_length = task_info.fuzzy_match_min_length;
+    m_params.fuzzy_match_isolated_length = task_info.fuzzy_match_isolated_length;
     set_replace(task_info.replace_map, task_info.replace_full);
     m_params.use_char_model = task_info.is_ascii;
     m_params.without_det = task_info.without_det;

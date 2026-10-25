@@ -1,0 +1,36 @@
+{
+  "run": "run-20261025-040829-920985",
+  "events": [
+    4597,
+    4598
+  ],
+  "collector_version": "v1.1.30",
+  "files": [
+    {
+      "file": "overloaded-inventory.jpg",
+      "source": "D:\\Projects\\MaaAssistantArknights\\build\\diagnostics\\20261025\\run-040829-review\\extracted\\run-20261025-040829-920985\\images\\004597-inventory-overload-check-started.jpg",
+      "sha256": "1037762f2c02cc797a59bd5562e488a98d8b1f9efcdfec546856070cc7e90d97"
+    },
+    {
+      "file": "cleared-map.jpg",
+      "source": "D:\\Projects\\MaaAssistantArknights\\build\\diagnostics\\20261025\\run-040829-review\\extracted\\run-20261025-040829-920985\\images\\004598-inventory-overload-check-failed.jpg",
+      "sha256": "1f6da8c2d93d8f7c4ccd7ddd58028a67188406e4821085b166472d83e277388e"
+    },
+    {
+      "file": "normal-inventory.jpg",
+      "source": "D:\\Projects\\MaaAssistantArknights\\unit_test\\MaaCore\\fixtures\\blackflow-civilization\\20261025\\005-dlc0-02-6089.jpg",
+      "sha256": "328bdabe35a25da53f4cf67645fce76bcba910730772b66bfea293b74ba33c05"
+    },
+    {
+      "file": "details-overlay.jpg",
+      "source": "D:\\Projects\\MaaAssistantArknights\\unit_test\\MaaCore\\fixtures\\blackflow-civilization\\20261025\\027-dlc0-06-2873.jpg",
+      "sha256": "196ddd212b129c2bc426a394845e41c06fe2f2bba7b59f3b42ae627432aea0e3"
+    },
+    {
+      "file": "reward-popup.jpg",
+      "source": "D:\\Projects\\MaaAssistantArknights\\unit_test\\MaaCore\\fixtures\\blackflow-encounter\\20261024\\cargo-reward.jpg",
+      "sha256": "12d92ff4092c7fc320351c0675017cac773770c6e31b8bdaabdfb857dc3d0462"
+    }
+  ],
+  "controlled_inputs": "Internal timing, stale frames and input failures in the method replay are controlled, not claimed as original intermediate frames."
+}

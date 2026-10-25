@@ -1,0 +1,141 @@
+{
+  "resource/PaddleOCR/det/inference.onnx": "d73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e",
+  "resource/PaddleOCR/rec/inference.onnx": "5435fd747c9e0efe15a96d0b378d5bd157e9492ed8fd80edf08f30d02fa24634",
+  "resource/ocr_config.json": "50a10c1c78871501895554bb50a198fbc5964651f230c170cbbc381c76cc7470",
+  "src/MaaCore/Utils/FuzzyTextMatcher.h": "fe3b44586c48ad504545da8f29f8b33048626669441938a2ecd1e779b0dc7d52",
+  "src/MaaCore/Vision/OCRer.cpp": "8cf534cd966222e28d893aa208ff8e07ac68f32e6f63fd409d97ca71cb3313ed",
+  "src/MaaCore/Vision/Config/OCRerConfig.cpp": "891fdfa948c3ec0175e7f1aa190f20caca859befea6ca86d1fd1c107e56e0a13",
+  "tasks": {
+    "MovementInventoryAllItems": {
+      "algorithm": "OcrDetect",
+      "roi": [
+        348,
+        132,
+        930,
+        495
+      ],
+      "ocrReplace": [
+        [
+          "^垫底座$",
+          "气垫底座"
+        ],
+        [
+          "^次性喷气背包$",
+          "一次性喷气背包"
+        ],
+        [
+          "^简易遥控器$",
+          "“简易遥控器”"
+        ]
+      ],
+      "text": [
+        "报废轮子",
+        "报废假肢",
+        "标准引擎",
+        "重弹簧",
+        "气垫底座",
+        "试作外骨骼",
+        "小八界",
+        "一次性喷气背包",
+        "老妈妈的融雪",
+        "坎诺特的触须",
+        "结构性原理",
+        "“简易遥控器”",
+        "恋家果",
+        "光彩松露",
+        "笼控器",
+        "板藤",
+        "霜晶树",
+        "回声玉米",
+        "多生苔藓",
+        "浪花",
+        "种子",
+        "血蕈",
+        "雾滚草",
+        "枯苔藓球",
+        "白模鱼",
+        "白模狗",
+        "涂装阿戈尔",
+        "涂装佩洛",
+        "白模鸟",
+        "涂装黎博利",
+        "紧急逃生座椅",
+        "力反馈方向盘",
+        "鸣笛",
+        "坎诺特特快",
+        "薄葬草",
+        "生逝",
+        "血橙",
+        "旅行绒",
+        "恋心草",
+        "无缘果",
+        "种荚",
+        "洛伦茨之眼",
+        "白模坎诺特",
+        "涂装坎诺特"
+      ],
+      "fullMatch": true,
+      "fuzzyMatch": true,
+      "fuzzyMatchMinLength": 3,
+      "fuzzyMatchIsolatedLength": 3
+    },
+    "SacrificeInventoryCount": {
+      "algorithm": "OcrDetect",
+      "roi": [
+        115,
+        380,
+        170,
+        45
+      ],
+      "text": [],
+      "fuzzyMatch": false
+    },
+    "SacrificeInventoryOpen": {
+      "algorithm": "OcrDetect",
+      "roi": [
+        650,
+        639,
+        175,
+        80
+      ],
+      "text": [
+        "零件箱"
+      ],
+      "fullMatch": false,
+      "fuzzyMatch": false,
+      "action": "ClickSelf",
+      "postDelay": 500
+    },
+    "SacrificeInventoryExpanded": {
+      "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
+      "roi": [
+        589,
+        639,
+        101,
+        80
+      ],
+      "action": "DoNothing"
+    },
+    "SacrificeInventoryDetailsClose": {
+      "Doc": "零件箱被藏品详情遮住时只关闭左下角详情面板；必须匹配当前真实收起按钮。",
+      "algorithm": "MatchTemplate",
+      "template": "BlackFlow@Roguelike@SacrificeInventoryDetailsClose.png",
+      "roi": [
+        110,
+        630,
+        140,
+        85
+      ],
+      "templThreshold": 0.9,
+      "action": "ClickSelf"
+    },
+    "SacrificeInventoryEmptySlots": {
+      "baseTask": "BlackFlow@Roguelike@MovementInventoryAllItems",
+      "text": [
+        "待收集零件"
+      ],
+      "fuzzyMatch": false,
+      "fullMatch": true
+    }
+  }
+}

@@ -1,4 +1,4 @@
-param([string]$Python = 'python', [string]$OutputDirectory)
+param([string]$Python = 'python', [string]$OutputDirectory, [switch]$RecordFixtures)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $repo 'build/blackflow-expedition-evidence-replay' }
@@ -16,5 +16,10 @@ $includes = @('src/MaaCore', 'src/MaaUtils/include', '3rdparty/include') | ForEa
 & cl.exe /nologo /std:c++20 /EHsc /MD /O2 /utf-8 @includes ('/I'+$dep+'/include/opencv4') ('/I'+$dep+'/include') ('/Fo'+$out+'/replay.obj') ('/Fe'+$out+'/replay.exe') ($out+'/replay.cpp') /link ($dep+'/lib/opencv_world4.lib')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $env:PATH = $dep + '/bin;' + $env:PATH
-& ($out+'/replay.exe') (Join-Path $out 'producer-payloads.json') (Join-Path $repo 'unit_test/MaaCore/fixtures/blackflow-expedition/20261024/lifecycle-payloads.json') (Join-Path $repo 'unit_test/MaaCore/fixtures/blackflow-encounter/20261024/lifecycle-payloads.json')
+if ($RecordFixtures) {
+    & ($out+'/replay.exe') (Join-Path $out 'producer-payloads.json')
+}
+else {
+    & ($out+'/replay.exe') (Join-Path $out 'producer-payloads.json') (Join-Path $repo 'unit_test/MaaCore/fixtures/blackflow-expedition/20261025/lifecycle-payloads.json') (Join-Path $repo 'unit_test/MaaCore/fixtures/blackflow-encounter/20261024/lifecycle-payloads.json')
+}
 exit $LASTEXITCODE

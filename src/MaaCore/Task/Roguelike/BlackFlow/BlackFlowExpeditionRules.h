@@ -34,6 +34,21 @@ struct ExpeditionContext
                : previous_elite;
 }
 
+[[nodiscard]] inline std::vector<std::string>
+    prioritized_expedition_operator_order(const std::vector<std::string>& operators)
+{
+    std::vector<std::string> result;
+    for (const auto name : { AutomationCollectionCoreOperator,
+                             AutomationCollectionSpecialistOperator,
+                             AutomationCollectionDefenderOperator }) {
+        if (std::ranges::find(operators, name) != operators.end()) {
+            result.emplace_back(name);
+        }
+    }
+    return result;
+}
+
+// 天猫继续要求未精二且已证明离队后能安全出层，辅助干员不受该额外路线条件限制。
 [[nodiscard]] inline std::vector<std::string> expedition_eligible_operators(
     int floor,
     bool has_gummy,
@@ -54,31 +69,7 @@ struct ExpeditionContext
     if (core_elite.has_value() && *core_elite >= 0 && *core_elite < 2 && battle_free_exit) {
         operators.emplace_back(AutomationCollectionCoreOperator);
     }
-    return operators;
-}
-
-// 古米/伊桑合为一组，与天猫各占 50%；组内再等概率选择。
-// 同组候选连续排列：抽中的组员缺席时先尝试另一名组员，保留这一组的 50% 概率。
-// draw_ticket(total) 返回 [0, total) 内的整数。
-template <typename DrawTicket>
-[[nodiscard]] std::vector<std::string>
-    grouped_expedition_operator_order(const std::vector<std::string>& operators, DrawTicket&& draw_ticket)
-{
-    std::vector<std::string> result;
-    for (const auto name : { AutomationCollectionDefenderOperator, AutomationCollectionSpecialistOperator }) {
-        if (std::ranges::find(operators, name) != operators.end()) {
-            result.emplace_back(name);
-        }
-    }
-    const bool has_core = std::ranges::find(operators, AutomationCollectionCoreOperator) != operators.end();
-    const bool core_first = has_core && (result.empty() || draw_ticket(2) == 1);
-    if (result.size() == 2 && draw_ticket(2) == 1) {
-        std::swap(result[0], result[1]);
-    }
-    if (has_core) {
-        result.insert(core_first ? result.begin() : result.end(), std::string(AutomationCollectionCoreOperator));
-    }
-    return result;
+    return prioritized_expedition_operator_order(operators);
 }
 
 // 只接受选中干员后左下角的完整说明，不能把未选择时的提示或头像 OCR 当作姓名。

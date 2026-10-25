@@ -1,4 +1,6 @@
 #pragma once
+
+#include <map>
 #include <functional>
 
 #include "AbstractRoguelikeTaskPlugin.h"
@@ -96,13 +98,14 @@ private:
     bool handle_sacrifice_event();
     bool handle_sacrifice_picker();
     bool finish_sacrifice_civilization();
-    std::optional<std::vector<std::string>> scan_sacrifice_natural_items(std::string_view phase);
+    blackflow::SacrificeInventoryScanResult scan_sacrifice_natural_items(std::string_view phase);
     bool report_sacrifice(std::string_view phase, json::object details, const cv::Mat& image);
     bool prepare_encounter_choice(std::string_view event_name, int round, const cv::Mat& image);
     bool plan_encounter_choice(size_t index, std::string_view policy);
     bool randomize_encounter_choice_order(std::vector<size_t>& order);
     bool report_encounter_choice(std::string_view phase, json::object details = { }, const cv::Mat& image = { });
     bool confirm_encounter_choice(const cv::Mat& image, std::string_view basis);
+    bool observe_encounter_choice_result(const cv::Mat& image);
     bool confirm_cargo_choice();
     void refresh_expedition_context();
     bool capture_expedition_candidates(const cv::Mat& image);
@@ -175,6 +178,8 @@ private:
         std::optional<blackflow::SacrificeContext> context;
         std::string event_name;
         int round = 0;
+        int step = 0;
+        bool generic = false;
         int sequence = 0;
         int attempt = 0;
         bool failed = false;
@@ -183,6 +188,7 @@ private:
         bool capture_clicks = false;
         std::optional<size_t> selected;
         std::vector<size_t> order;
+        std::map<std::vector<size_t>, std::vector<size_t>> group_orders;
         json::object details;
     } m_encounter_choice;
 

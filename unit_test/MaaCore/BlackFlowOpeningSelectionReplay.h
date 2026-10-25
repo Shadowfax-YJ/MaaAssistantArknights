@@ -53,6 +53,34 @@ void opening_selection_regressions(const std::filesystem::path& repo, Test&& tes
     const auto root = repo / "unit_test/MaaCore/fixtures/blackflow-opening/20261024";
     const auto wrong = MAA_NS::imread(root / "wrong-vouchers.jpg");
     const auto support = MAA_NS::imread(root / "last-support.jpg");
+    test("opening popup foreground takes priority over the actual support header", [&] {
+        const auto popup=MAA_NS::imread(root.parent_path()/"20261025/item-popup.jpg");
+        require(!popup.empty(),"003 popup fixture missing");
+        OCRer header(popup);header.set_task_info("BlackFlow@Roguelike@OpeningSupportPage");
+        Matcher close(popup);close.set_task_info("BlackFlow@Roguelike@CloseCollection");
+        require(header.analyze().has_value()&&close.analyze().has_value(),"recorded popup/header overlap not reproduced");
+        const auto transition=inspect_opening_reward_transition(popup,"林间代步");
+        require(transition.destination_ready&&!transition.same_reward_page,"foreground reward ignored due to background header");
+    });
+    test("opening popup original pending card stays unconfirmed", [&] {
+        const auto pending=MAA_NS::imread(root.parent_path()/"20261025/reward-confirming.jpg");
+        require(!pending.empty(),"003 pending fixture missing");
+        const auto transition=inspect_opening_reward_transition(pending,"林间代步");
+        require(transition.same_reward_page&&!transition.destination_ready,"original card became a popup");
+    });
+    test("opening popup shared NEXT button is accepted and routed with start reward attribution", [&] {
+        const auto popup=MAA_NS::imread(root.parent_path()/"20261025/next-popup.jpg");
+        require(!popup.empty(),"NEXT popup fixture missing");
+        Matcher close(popup);close.set_task_info("BlackFlow@Roguelike@CloseCollectionContinue");
+        require(close.analyze().has_value(),"actual generic NEXT popup not recognized");
+        const auto transition=inspect_opening_reward_transition(popup,"林间代步");
+        require(transition.destination_ready&&!transition.same_reward_page,"NEXT popup rejected");
+        PipelineAnalyzer next(popup);
+        next.set_tasks(Task.get("BlackFlow@Roguelike@LastReward-EnterPoint")->next);
+        const auto hit=next.analyze();
+        require(hit && collection_popup_source(hit->task_ptr->name)==CollectionPopupSource::StartReward &&
+                    collection_popup_button(hit->task_ptr->name).has_value(),"NEXT handoff lost start reward evidence");
+    });
     for (int index = 1; index <= 3; ++index) {
         test(("opening original support header is recognized " + std::to_string(index)).c_str(), [&] {
             const auto image = MAA_NS::imread(root.parent_path() / ("candidates-" + std::to_string(index) + ".jpg"));

@@ -21,6 +21,35 @@ namespace asst::blackflow
 // A collapse icon alone may be caught during the closing animation.
 [[nodiscard]] bool movement_inventory_page_visible(const cv::Mat& image);
 
+enum class InventoryOverloadPage
+{
+    Unknown,
+    Inventory,
+    Map
+};
+
+struct InventoryCapacity
+{
+    int count = 0;
+    int limit = 0;
+    bool operator==(const InventoryCapacity&) const = default;
+};
+
+struct InventoryOverloadObservation
+{
+    InventoryOverloadPage page = InventoryOverloadPage::Unknown;
+    std::optional<InventoryCapacity> capacity;
+    std::vector<TextRect> capacity_ocr;
+    bool banner = false;
+
+    [[nodiscard]] bool known() const { return page != InventoryOverloadPage::Unknown && capacity.has_value(); }
+
+    [[nodiscard]] bool cleared() const { return known() && capacity->count <= capacity->limit && !banner; }
+};
+
+[[nodiscard]] std::optional<InventoryCapacity> inventory_capacity_from_ocr(std::span<const TextRect> values);
+[[nodiscard]] InventoryOverloadObservation recognize_inventory_overload(const cv::Mat& image);
+
 // After the swipe settles, unchanged complete name anchors AND list pixels confirm
 // the origin, including duplicate names. Names alone can hide a whole-column move.
 [[nodiscard]] bool inventory_reset_can_confirm_early(

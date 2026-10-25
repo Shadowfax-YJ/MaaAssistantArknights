@@ -700,6 +700,7 @@ struct OcrTaskInfo : public TaskInfo
     bool fuzzy_match = false;                        // 是否在候选全集中进行带歧义保护的编辑距离匹配
     bool join_adjacent = false;                      // 单框匹配失败后，拼接相邻同一行片段并精确匹配完整候选
     unsigned fuzzy_match_min_length = 0;             // 更短的候选只接受完整匹配；0 保持默认模糊规则
+    unsigned fuzzy_match_isolated_length = 0;        // 该长度候选存在编辑距离 1 的其他候选时仅完整匹配；0 不限制
     bool is_ascii = false;                           // 是否启用字符数字模型
     bool without_det = false;                        // 是否不使用检测模型
     bool replace_full = false;                       // 匹配之后，是否将整个字符串replace（false是只替换match的部分）

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "BlackFlowModel.h"
+#include "Utils/FuzzyTextMatcher.h"
 
 namespace asst::blackflow
 {
@@ -347,18 +348,9 @@ inline constexpr std::array<std::string_view, 8> EerieStoreCollectibleBuyPriorit
     "“小格兰法洛”",
 };
 
-inline constexpr std::size_t EerieStoreCollectibleRunPurchaseLimit = 2;
-
 [[nodiscard]] inline constexpr bool is_eerie_store_collectible(std::string_view name) noexcept
 {
     return std::ranges::find(EerieStoreCollectibleBuyPriority, name) != EerieStoreCollectibleBuyPriority.end();
-}
-
-[[nodiscard]] inline constexpr bool eerie_store_collectible_purchase_allowed(
-    std::string_view name,
-    std::size_t purchased_in_run) noexcept
-{
-    return !is_eerie_store_collectible(name) || purchased_in_run < EerieStoreCollectibleRunPurchaseLimit;
 }
 
 [[nodiscard]] inline constexpr bool eerie_store_purchase_opens_recruitment(std::string_view name) noexcept
@@ -383,9 +375,12 @@ inline constexpr std::array<std::string_view, 34> ShopBuyPriority {
     "小八界",
     "气垫底座",
     "标准引擎",
+    "洛伦茨之眼",
     "报废轮子",
     "报废假肢",
+    "生逝",
     "多生苔藓",
+    "血橙",
     "雾滚草",
     "白模鱼",
     "猎犬咖啡",
@@ -396,33 +391,29 @@ inline constexpr std::array<std::string_view, 34> ShopBuyPriority {
     "铁卫-侵掠",
     "迷藏",
     "“小格兰法洛”",
-    "生逝",
-    "血橙",
-    "无缘果",
-    "力反馈方向盘",
-    "洛伦茨之眼",
+    "薄葬草",
+    "白模坎诺特",
 };
 
-inline constexpr std::array<std::string_view, 19> ScrapShopBuyPriority {
+inline constexpr std::array<std::string_view, 18> ScrapShopBuyPriority {
     "一次性喷气背包",
     "重弹簧",
     "种子",
+    "力反馈方向盘",
     "老妈妈的融雪",
     "坎诺特的触须",
     "试作外骨骼",
     "小八界",
     "气垫底座",
     "标准引擎",
+    "生逝",
+    "多生苔藓",
+    "血橙",
     "报废轮子",
     "报废假肢",
-    "多生苔藓",
     "雾滚草",
     "白模鱼",
-    "生逝",
-    "血橙",
-    "无缘果",
-    "力反馈方向盘",
-    "洛伦茨之眼",
+    "白模坎诺特",
 };
 
 // 只列有限配额；未列出的可购买物品不限量。加工品还扣除进节点时的可用实例，
@@ -492,11 +483,20 @@ inline constexpr std::array<StorePurchaseQuota, 15> StorePurchaseQuotas { {
 // OCR 纠错，避免把白模狗等名称纠成名单中允许出售的白模鸟。
 [[nodiscard]] inline std::vector<std::string> merchant_sale_recognition_vocabulary(
     const std::vector<std::string>& sale_candidates,
-    const std::vector<std::string>& inventory_names)
+    const std::vector<std::string>& inventory_names,
+    const std::vector<std::string>& known_goods = {})
 {
     std::vector<std::string> vocabulary = sale_candidates;
     for (const auto& name : inventory_names) {
         if (std::ranges::find(vocabulary, name) == vocabulary.end()) {
+            vocabulary.emplace_back(name);
+        }
+    }
+    for (const auto& name : known_goods) {
+        const auto normalized = utils::detail::normalize_ocr_text(name);
+        if (std::ranges::none_of(vocabulary, [&](const std::string& existing) {
+                return utils::detail::normalize_ocr_text(existing) == normalized;
+            })) {
             vocabulary.emplace_back(name);
         }
     }

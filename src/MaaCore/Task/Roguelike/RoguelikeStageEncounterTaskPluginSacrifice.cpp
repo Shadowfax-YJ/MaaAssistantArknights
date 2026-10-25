@@ -1,3 +1,4 @@
+#include "BlackFlow/BlackFlowCivilizationInventory.h"
 #include "RoguelikeStageEncounterTaskPlugin.h"
 
 #include <map>
@@ -200,11 +201,20 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
 bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
 {
     using blackflow::SacrificePhase;
+    if (need_exit()) {
+        return false;
+    }
     const auto leave_picker = [&]() {
+        if (need_exit()) {
+            return false;
+        }
         ProcessTask back(*this, { std::string(Prefix) + "SacrificeBack" });
         back.set_retry_times(2);
         if (back.run()) {
             return true;
+        }
+        if (need_exit()) {
+            return false;
         }
         // 插件返回 false 不会阻断外层 ProcessTask；退不出选择页时必须显式停用它。
         Log.error("BlackFlow sacrifice picker recovery failed; stopping the task");
@@ -244,14 +254,32 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
         return false;
     }
     if (!m_sacrifice.selected_card.has_value()) {
-        auto cards = blackflow::perception::sacrifice_visible_items(ctrler()->get_image());
+        const auto observed = blackflow::perception::sacrifice_item_list(ctrler()->get_image());
         sleep(350);
-        const auto stable = blackflow::perception::sacrifice_visible_items(ctrler()->get_image());
-        if (cards.empty() || cards != stable) {
-            Log.warn("BlackFlow sacrifice item list not stable; retrying without selecting an empty slot");
+        const auto image = ctrler()->get_image();
+        const auto stable = blackflow::perception::sacrifice_item_list(image);
+        if (need_exit()) {
+            return false;
+        }
+        if (!observed.has_value() || !stable.has_value() || *observed != *stable) {
+            Log.warn("BlackFlow sacrifice item list unknown or not stable; retrying without assuming it is empty");
             return true;
         }
-        m_sacrifice.selected_card = cards[random_index(cards.size())];
+        if (stable->cards.empty()) {
+            if (!report_sacrifice(
+                    "picker-recovery",
+                    { { "reason", "no_exchangeable_items" },
+                      { "attempts", m_sacrifice.picker_attempts.count },
+                      { "list_status", "confirmed_empty" },
+                      { "confirmation_basis", stable->empty_evidence },
+                      { "observed_text", stable->observed_text } },
+                    image)) {
+                return false;
+            }
+            m_sacrifice.phase = SacrificePhase::Finished;
+            return leave_picker();
+        }
+        m_sacrifice.selected_card = stable->cards[random_index(stable->cards.size())];
     }
     const Rect card = *m_sacrifice.selected_card;
     const cv::Mat before = ctrler()->get_image();
@@ -292,30 +320,95 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
     return !need_exit();
 }
 
-std::optional<std::vector<std::string>>
+blackflow::SacrificeInventoryScanResult
     asst::RoguelikeStageEncounterTaskPlugin::scan_sacrifice_natural_items(std::string_view phase)
 {
+    blackflow::SacrificeInventoryScanResult result;
+    const auto& context = m_sacrifice.context;
+    const std::string scan_id = "inventory-" + std::to_string(context ? context->run_revision : 0) + "-" +
+                                std::to_string(context ? context->page_revision : 0) + "-" +
+                                std::to_string(m_sacrifice.evidence_sequence + 1);
+    int page = 0, attempt = 0, observed = 0, sample_index = 0;
+    std::optional<int> count;
+    json::array capacity_readings;
+    blackflow::CivilizationInventorySlots last_slots, last_empty;
+    std::vector<std::string> naturals;
+    std::string failure;
+    const auto readings = [](const auto& values) {
+        json::array array;
+        for (const auto& value : values) array.emplace_back(value.to_json());
+        return array;
+    };
+    const auto slots = [](const auto& values) {
+        json::array array;
+        for (const auto& [position, value] : values) {
+            auto entry = value.to_json();
+            entry["column"] = position.first;
+            entry["row"] = position.second;
+            array.emplace_back(std::move(entry));
+        }
+        return array;
+    };
+    const auto save = [&](std::string status, std::string reason, const cv::Mat& image,
+                          json::object extra = {}, bool raw = false) {
+        extra["scan_id"] = scan_id;
+        extra["scan_attempt"] = attempt;
+        extra["scan_page"] = page;
+        extra["sample_index"] = sample_index;
+        extra["inventory_status"] = std::move(status);
+        extra["reason"] = reason;
+        extra["inventory_count"] = count ? json::value(*count) : json::value(nullptr);
+        extra["capacity_ocr"] = capacity_readings;
+        extra["scan_complete"] = result.natural_items.has_value();
+        extra["panel_closed"] = result.panel_closed;
+        extra["observed_count"] = observed;
+        extra["observed_natural_items"] = json::array(naturals);
+        extra["natural_items"] = result.natural_items ? json::value(json::array(*result.natural_items)) : json::value(nullptr);
+        extra["slot_observations"] = slots(last_slots);
+        extra["empty_slot_observations"] = slots(last_empty);
+        if (raw && !image.empty()) {
+            OCRer original(image);
+            original.set_task_info(std::string(Prefix) + "MovementInventoryAllItems");
+            original.set_required({});
+            original.set_fuzzy_match(false);
+            original.set_replace({});
+            (void)original.analyze();
+            extra["raw_ocr"] = readings(original.get_result());
+        }
+        if (!reason.empty()) failure = std::move(reason);
+        return report_sacrifice(phase, std::move(extra), image);
+    };
     const auto single_task = [&](std::string_view suffix) {
-        ProcessTask task(*this, { std::string(Prefix) + std::string(suffix) });
+        if (need_exit() || m_sacrifice.evidence_failed) return false;
+        ProcessTask task(*this, {std::string(Prefix) + std::string(suffix)});
         task.set_retry_times(0);
         return task.run();
     };
     const auto set_panel = [&](bool expanded) {
-        int consecutive = 0;
-        int cooldown = 0;
-        int clicks = 0;
-        for (int sample = 0; sample < 22 && !need_exit(); ++sample) {
-            const cv::Mat image = ctrler()->get_image();
+        int consecutive = 0, cooldown = 0, clicks = 0, details_closed = 0;
+        cv::Mat image;
+        for (int sample = 0; sample < 22 && !need_exit() && !m_sacrifice.evidence_failed; ++sample) {
+            sample_index = sample;
+            image = ctrler()->get_image();
+            if (recognize(image, "SacrificeInventoryDetailsClose")) {
+                if (!save("obstructed", "relic_details_overlay", image, {}, true) || details_closed++ >= 1 ||
+                    !single_task("SacrificeInventoryDetailsClose")) return false;
+                consecutive = 0;
+                sleep(300);
+                continue;
+            }
             const bool is_expanded = recognize(image, "SacrificeInventoryExpanded");
             const bool is_collapsed = !is_expanded && recognize(image, "SacrificeInventoryOpen") &&
-                                      (recognize(image, "StageEncounterOcr") || recognize(image, "MapPrepare-Ready") ||
-                                       recognize(image, "MapPrepare-ZoomOut"));
+                (recognize(image, "StageEncounterOcr") || recognize(image, "MapPrepare-Ready") || recognize(image, "MapPrepare-ZoomOut"));
             consecutive = (expanded ? is_expanded : is_collapsed) ? consecutive + 1 : 0;
-            if (consecutive >= 2) {
-                return true;
+            if (consecutive >= 2) return true;
+            if (!is_expanded && !is_collapsed && (sample == 0 || sample == 21)) {
+                if (!save("ui_unrecognized", "toggle_page_unrecognized", image, {{"target_expanded",expanded}}, true)) return false;
             }
             if ((expanded ? is_collapsed : is_expanded) && cooldown == 0 && clicks < 3) {
+                if (!save("toggle_attempt", {}, image, {{"target_expanded",expanded},{"toggle_attempt",clicks+1}})) return false;
                 if (!single_task(expanded ? "SacrificeInventoryOpen" : "SacrificeInventoryClose")) {
+                    (void)save("toggle_failed", "toggle_input_failed", ctrler()->get_image(), {{"target_expanded",expanded}}, true);
                     return false;
                 }
                 ++clicks;
@@ -324,140 +417,109 @@ std::optional<std::vector<std::string>>
             sleep(300);
             cooldown = std::max(0, cooldown - 1);
         }
+        if (!need_exit() && !m_sacrifice.evidence_failed)
+            (void)save("toggle_failed", "toggle_timeout", image, {{"target_expanded",expanded}}, true);
         return false;
     };
-    // 重新展开必定位于首屏；全过程只做局部单步操作，不调用地图移动或丢弃零件流程。
     if (!set_panel(false) || !set_panel(true)) {
-        (void)set_panel(false);
-        (void)report_sacrifice(phase, json::object { { "inventory_status", "open_failed" } }, ctrler()->get_image());
-        return std::nullopt;
+        if (!need_exit() && !m_sacrifice.evidence_failed) {
+            (void)save("open_failed", "inventory_open_failed", ctrler()->get_image(), {}, true);
+            if (m_task_ptr) m_task_ptr->set_enable(false);
+        }
+        return result;
     }
-    const auto scan = [&]() -> std::optional<std::vector<std::string>> {
-        OCRer capacity(ctrler()->get_image());
+    const auto scan = [&]() -> bool {
+        const auto capacity_image = ctrler()->get_image();
+        OCRer capacity(capacity_image);
         capacity.set_task_info(std::string(Prefix) + "SacrificeInventoryCount");
-        std::optional<int> count;
         if (capacity.analyze()) {
-            const std::regex fraction(R"((\d+)\s*/\s*\d+)");
-            for (const auto& result : capacity.get_result()) {
+            capacity_readings = readings(capacity.get_result());
+            const std::regex fraction(R"(([0-9]+|[Oo])\s*/\s*([0-9]+))");
+            for (const auto& value : capacity.get_result()) {
                 std::smatch match;
-                if (std::regex_search(result.text, match, fraction)) {
-                    count = std::stoi(match[1].str());
-                    break;
+                if (!std::regex_search(value.text, match, fraction)) continue;
+                if (match[1].length() > 2 || match[2].length() > 2) { count.reset(); break; }
+                const int current = match[1] == "O" || match[1] == "o" ? 0 : std::stoi(match[1].str());
+                const int maximum = std::stoi(match[2].str());
+                if (maximum <= 0 || current > maximum || (count && *count != current)) {
+                    count.reset(); break;
                 }
+                count = current;
             }
         }
-        if (!count.has_value() || *count > 3 * (2 + blackflow::InventoryMaximumSwipes)) {
-            return std::nullopt;
+        if (!count || *count > 3 * (2 + blackflow::InventoryMaximumSwipes)) {
+            (void)save("incomplete", "capacity_unrecognized", capacity_image, {}, true);
+            return false;
         }
-        std::vector<std::string> naturals;
-        int observed = 0;
-        cv::Mat previous_page;
+        cv::Mat previous_image;
+        blackflow::CivilizationInventorySlots previous_page;
         const auto natural_names = Task.get<OcrTaskInfo>(std::string(Prefix) + "InventoryNaturalPriority")->text;
-        for (int page = 0; page <= blackflow::InventoryMaximumSwipes && !need_exit(); ++page) {
+        for (page = 0; page <= blackflow::InventoryMaximumSwipes && !need_exit(); ++page) {
             if (page > 0 && !single_task("MovementInventorySwipe")) {
-                return std::nullopt;
+                (void)save("incomplete", "swipe_input_failed", ctrler()->get_image(), {}, true); return false;
             }
-            // 每次手势移动一列；首屏检查两列，以后只纳入右侧新列，保留相同名称的各个实例。
-            // 容量计数用于交叉校验，右侧截断的第三列不计入。
-            using Slots = std::map<std::pair<int, int>, std::string>;
-            Slots previous;
-            std::optional<Slots> stable;
+            blackflow::CivilizationInventorySlots prior_names;
+            std::optional<blackflow::CivilizationInventorySlots> stable;
             cv::Mat image;
-            for (int sample = 0; sample < 5 && !need_exit(); ++sample) {
+            for (sample_index = 0; sample_index < 5 && !need_exit(); ++sample_index) {
                 sleep(300);
                 image = ctrler()->get_image();
-                if (!recognize(image, "SacrificeInventoryExpanded")) {
-                    continue;
+                if (recognize(image, "SacrificeInventoryDetailsClose")) {
+                    (void)save("obstructed", "relic_details_overlay", image, {}, true); return false;
                 }
+                if (!recognize(image, "SacrificeInventoryExpanded")) continue;
                 OCRer names(image);
                 names.set_task_info(std::string(Prefix) + "MovementInventoryAllItems");
-                Slots slots;
-                if (names.analyze()) {
-                    for (const auto& result : names.get_result()) {
-                        const int x = result.rect.x + result.rect.width / 2;
-                        const int y = result.rect.y + result.rect.height / 2;
-                        if (x < (page == 0 ? 348 : 760) || x >= 1190) {
-                            continue;
-                        }
-                        const int row = (y - 245) / 162;
-                        if (row < 0 || row >= 3 || std::abs(y - (270 + row * 162)) > 30) {
-                            continue;
-                        }
-                        slots[{ x < 760 ? 0 : 1, row }] = result.text;
-                    }
+                (void)names.analyze();
+                last_slots = blackflow::civilization_inventory_slots(names.get_result(), image);
+                if (sample_index > 0 && blackflow::civilization_slot_layout_equal(prior_names, last_slots) &&
+                    (!last_slots.empty() || *count == 0)) {
+                    stable = last_slots; break;
                 }
-                if (sample > 0 && slots == previous && (!slots.empty() || *count == 0)) {
-                    stable = std::move(slots);
-                    break;
-                }
-                previous = std::move(slots);
+                prior_names = last_slots;
             }
-            if (!stable.has_value()) {
-                return std::nullopt;
+            if (!stable) {
+                (void)save("incomplete", "names_not_stable_or_page_lost", image, {}, true); return false;
             }
-            if (!previous_page.empty()) {
-                double largest_difference = 0;
-                for (int row = 0; row < 3; ++row) {
-                    const Rect names_roi { 348, 245 + row * 162, 844, 45 };
-                    const auto old_names = make_roi(previous_page, names_roi);
-                    const auto new_names = make_roi(image, names_roi);
-                    largest_difference = std::max(
-                        largest_difference,
-                        cv::norm(old_names, new_names, cv::NORM_L1) /
-                            static_cast<double>(new_names.total() * new_names.channels()));
-                }
-                if (largest_difference <= 3.0) {
-                    // 手势丢失或列表未动时，不能把同一列再加一次来凑满容量。
-                    return std::nullopt;
-                }
+            last_empty.clear();
+            if ((page + 2) * 3 > *count) {
+                OCRer empty(image);
+                empty.set_task_info(std::string(Prefix) + "SacrificeInventoryEmptySlots");
+                (void)empty.analyze();
+                last_empty = blackflow::civilization_inventory_slots(empty.get_result(), image, true);
             }
-            previous_page = image.clone();
+            if (!blackflow::civilization_inventory_page_complete(*stable, last_empty, page, *count)) {
+                (void)save("incomplete", "column_coverage_incomplete", image, {}, true); return false;
+            }
+            if (page > 0 && !blackflow::civilization_inventory_advanced_one_column(previous_image, previous_page, image, *stable)) {
+                (void)save("incomplete", "column_advance_not_verified", image, {}, true); return false;
+            }
             for (const auto& [slot, name] : *stable) {
+                if (page > 0 && slot.first == 0) continue;
                 ++observed;
-                if (std::ranges::find(natural_names, name) != natural_names.end()) {
-                    naturals.push_back(name);
-                }
+                if (std::ranges::find(natural_names, name.text) != natural_names.end()) naturals.push_back(name.text);
             }
-            if (!report_sacrifice(
-                    phase,
-                    json::object { { "scan_page", page },
-                                   { "inventory_count", *count },
-                                   { "observed_count", observed },
-                                   { "natural_items", json::array(naturals) } },
-                    image)) {
-                return std::nullopt;
-            }
-            if (observed == *count) {
-                return naturals;
-            }
-            if (observed > *count) {
-                return std::nullopt;
-            }
+            if (!save("page_observed", {}, image)) return false;
+            if (observed == *count) { result.natural_items = naturals; return true; }
+            previous_image = image.clone();
+            previous_page = *stable;
         }
-        return std::nullopt;
+        if (!need_exit()) (void)save("incomplete", "scan_limit_reached", ctrler()->get_image(), {}, true);
+        return false;
     };
-    auto result = scan();
-    if (m_sacrifice.evidence_failed) {
-        return std::nullopt;
+    for (attempt = 1; attempt <= 2 && !need_exit(); ++attempt) {
+        page = observed = 0; naturals.clear(); count.reset(); last_slots.clear(); last_empty.clear();
+        if (scan() || m_sacrifice.evidence_failed || failure != "relic_details_overlay") break;
+        if (attempt == 2 || !set_panel(false) || !set_panel(true)) break;
     }
-    const bool closed = set_panel(false);
-    if (!closed) {
-        result.reset();
-    }
-    if (m_sacrifice.evidence_failed) {
-        return std::nullopt;
-    }
-    if (!report_sacrifice(
-            phase,
-            json::object {
-                { "inventory_status", result.has_value() ? "complete" : "incomplete" },
-                { "panel_closed", closed },
-                { "natural_items", result.has_value() ? json::value(json::array(*result)) : json::value(nullptr) } },
-            ctrler()->get_image())) {
-        return std::nullopt;
-    }
+    if (m_sacrifice.evidence_failed || need_exit()) return result;
+    result.panel_closed = set_panel(false);
+    if (m_sacrifice.evidence_failed) return result;
+    if (!save(result.natural_items ? "complete" : "incomplete", result.panel_closed ? std::string() : "inventory_close_failed", ctrler()->get_image())) return result;
+    if (!result.panel_closed && m_task_ptr) m_task_ptr->set_enable(false);
     return result;
 }
+
 
 bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
 {
@@ -470,7 +532,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
         return !need_exit();
     };
     if (m_sacrifice.phase == SacrificePhase::BeforeCivilization) {
-        m_sacrifice.naturals_before = scan_sacrifice_natural_items("civilization-before");
+        const auto scan = scan_sacrifice_natural_items("civilization-before");
+        m_sacrifice.naturals_before = scan.natural_items;
+        if (!scan.panel_closed) return false;
         if (m_sacrifice.evidence_failed) {
             return false;
         }
@@ -520,7 +584,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::finish_sacrifice_civilization()
         if (!confirm_encounter_choice(image, map ? "map_after_civilization" : "civilization_options_changed")) {
             return false;
         }
-        auto after = scan_sacrifice_natural_items("civilization-after");
+        const auto scan = scan_sacrifice_natural_items("civilization-after");
+        auto after = scan.natural_items;
+        if (!scan.panel_closed) return false;
         if (m_sacrifice.evidence_failed) {
             return false;
         }

@@ -89,6 +89,22 @@ struct OpeningRewardTransition
 inline OpeningRewardTransition inspect_opening_reward_transition(const cv::Mat& image, std::string_view selected)
 {
     OpeningRewardTransition result;
+    if (image.empty()) {
+        return result;
+    }
+    // Reward popups can leave the original support header/card text visible behind them.
+    // Recognize the foreground first; this is observation only, the parent keeps its
+    // existing before-close capture guard and normal popup dispatch.
+    PipelineAnalyzer popup(image);
+    // PipelineAnalyzer expects concrete task names, not resource-list @(...) expressions.
+    popup.set_tasks({
+        "BlackFlow@Roguelike@CloseCollectionContinue",
+        "BlackFlow@Roguelike@CloseCollection",
+    });
+    if (popup.analyze().has_value()) {
+        result.destination_ready = true;
+        return result;
+    }
     OCRer header(image);
     header.set_task_info("BlackFlow@Roguelike@OpeningSupportPage");
     if (header.analyze()) {
@@ -113,7 +129,6 @@ inline OpeningRewardTransition inspect_opening_reward_transition(const cv::Mat& 
     next.set_tasks({
         "BlackFlow@Roguelike@OpeningRoleCandidates",
         "BlackFlow@Roguelike@OpeningVoucherPage",
-        "BlackFlow@Roguelike@LastRewardConfirm@(BlackFlow@Roguelike@CloseCollection)",
     });
     result.destination_ready = next.analyze().has_value();
     return result;

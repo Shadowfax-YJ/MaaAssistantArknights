@@ -27,6 +27,7 @@ struct FuzzyTextMatchSettings
     double minimum_margin = 0.12;
     std::size_t maximum_edit_distance = 2;
     std::size_t minimum_fuzzy_candidate_length = 0;
+    std::size_t isolated_fuzzy_candidate_length = 0;
 };
 
 namespace detail
@@ -193,6 +194,19 @@ inline FuzzyTextMatch fuzzy_match_ocr_text(
                        output.edit_distance <= edit_limit &&
                        output.similarity >= required_similarity &&
                        output.similarity - output.runner_up_similarity >= settings.minimum_margin);
+    if (output.accepted && !output.exact && best_length == settings.isolated_fuzzy_candidate_length) {
+        const auto winner = detail::normalize_ocr_text(output.canonical);
+        for (const auto& candidate : candidates) {
+            const auto other = detail::normalize_ocr_text(candidate);
+            if (other == winner || other.empty()) {
+                continue;
+            }
+            if (detail::levenshtein_distance(winner, other) == 1) {
+                output.accepted = false;
+                break;
+            }
+        }
+    }
     return output;
 }
 } // namespace asst::utils

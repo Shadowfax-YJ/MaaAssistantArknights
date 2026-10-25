@@ -806,6 +806,12 @@ asst::TaskPtr asst::TaskData::generate_ocr_task_info(
         "fuzzyMatchMinLength",
         ocr_task_info_ptr->fuzzy_match_min_length,
         default_ptr->fuzzy_match_min_length);
+    utils::get_and_check_value_or(
+        name,
+        task_json,
+        "fuzzyMatchIsolatedLength",
+        ocr_task_info_ptr->fuzzy_match_isolated_length,
+        default_ptr->fuzzy_match_isolated_length);
     utils::get_and_check_value_or(name, task_json, "isAscii", ocr_task_info_ptr->is_ascii, default_ptr->is_ascii);
     utils::get_and_check_value_or(
         name,
@@ -1104,7 +1110,7 @@ bool asst::TaskData::syntax_check(const std::string& task_name, const json::valu
               // specific
               "cache",         "fullMatch",   "fuzzyMatch",      "isAscii",       "ocrReplace",   "rectMove",
               "replaceFull",   "roi",         "text",            "withoutDet",   "useRaw",
-              "binThreshold",  "fuzzyMatchMinLength", "joinAdjacent",
+              "binThreshold",  "fuzzyMatchMinLength", "fuzzyMatchIsolatedLength", "joinAdjacent",
           } },
         { AlgorithmType::FeatureMatch,
           {

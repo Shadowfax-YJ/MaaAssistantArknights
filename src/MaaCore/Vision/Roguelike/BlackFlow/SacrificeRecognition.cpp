@@ -1,5 +1,7 @@
 #include "SacrificeRecognition.h"
 
+#include <regex>
+
 #include "Config/TaskData.h"
 #include "MaaUtils/NoWarningCV.hpp"
 #include "Vision/Matcher.h"
@@ -7,6 +9,60 @@
 
 namespace asst::blackflow::perception
 {
+std::optional<SacrificeItemList> sacrifice_item_list(const cv::Mat& image)
+{
+    if (image.empty() || image.cols < 1280 || image.rows < 720) {
+        return std::nullopt;
+    }
+    Matcher title(image);
+    title.set_task_info("BlackFlow@Roguelike@SacrificePicker");
+    if (!title.analyze()) {
+        return std::nullopt;
+    }
+    auto cards = sacrifice_visible_items(image);
+    if (!cards.empty()) {
+        return SacrificeItemList { std::move(cards), {}, {} };
+    }
+    // Failure to detect card borders is not evidence of an empty inventory. Require the
+    // loaded picker controls plus an explicit empty message or a readable zero inventory.
+    for (const auto task : { "LoadingText", "BlackFlow@Roguelike@DataSyncConfirm" }) {
+        OCRer overlay(image);
+        overlay.set_task_info(task);
+        if (overlay.analyze()) {
+            return std::nullopt;
+        }
+    }
+    OCRer back(image);
+    back.set_task_info("BlackFlow@Roguelike@SacrificeBack");
+    OCRer heading(image);
+    heading.set_task_info("BlackFlow@Roguelike@SacrificeListHeading");
+    if (!back.analyze() || !heading.analyze() || heading.get_result().size() != 1) {
+        return std::nullopt;
+    }
+    const auto& list_heading = heading.get_result().front().text;
+    const bool parts = list_heading == "零件列表";
+    if (!parts && list_heading != "藏品列表" && list_heading != "收藏品列表") {
+        return std::nullopt;
+    }
+    OCRer empty(image);
+    empty.set_task_info("BlackFlow@Roguelike@SacrificeEmptyList");
+    if (empty.analyze() && empty.get_result().size() == 1 && empty.get_result().front().score >= 0.95) {
+        return SacrificeItemList { {}, "explicit_empty_text", empty.get_result().front().text };
+    }
+    OCRer count(image);
+    count.set_task_info(
+        parts ? "BlackFlow@Roguelike@SacrificeInventoryHudCount" : "BlackFlow@Roguelike@SacrificeRelicHudCount");
+    if (count.analyze() && count.get_result().size() == 1 && count.get_result().front().score >= 0.95) {
+        static const std::regex zero_parts(R"(^\s*0\s*/\s*[1-9][0-9]{0,2}\s*$)");
+        static const std::regex zero_relics(R"(^\s*0\s*$)");
+        const auto& text = count.get_result().front().text;
+        if (std::regex_match(text, parts ? zero_parts : zero_relics)) {
+            return SacrificeItemList { {}, parts ? "zero_inventory_count" : "zero_relic_count", text };
+        }
+    }
+    return std::nullopt;
+}
+
 bool sacrifice_item_selected(const cv::Mat& image, const Rect& card)
 {
     const Rect edge { card.x + 10, card.y + 93, 82, 10 };

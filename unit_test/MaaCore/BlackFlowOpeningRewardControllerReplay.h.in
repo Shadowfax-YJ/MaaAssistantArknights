@@ -1,0 +1,127 @@
+#pragma once
+
+#include <random>
+
+#include "Task/Roguelike/BlackFlow/BlackFlowOpeningSelection.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowCollectionPopup.h"
+
+namespace opening_reward_controller_replay {
+using namespace asst;
+namespace blackflow = asst::blackflow;
+struct Controller {
+    cv::Mat candidates, confirming;
+    std::vector<cv::Mat> after;
+    int stage=0, clicks=0, destination_reads=0;
+    bool confirm_ok=true;
+    cv::Mat get_image() {
+        if (stage==0) return candidates;
+        if (stage==1) return confirming;
+        return after[std::min(std::size_t(destination_reads++), after.size()-1)];
+    }
+    bool click(const Rect& rect) {
+        require(stage==0 && rect.x >= 560 && rect.x <= 700, "replay did not select the recorded middle card");
+        ++clicks; stage=1; return true;
+    }
+    bool click(const Point&) {
+        require(stage==1, "old confirmation point clicked on a follow-up page");
+        ++clicks; if (confirm_ok) stage=2; return true;
+    }
+};
+struct Plugin {
+    Controller controller;
+    bool cancelled=false;
+    std::uint64_t m_start_reward_observation_index=0;
+    std::string fail_save;
+    std::vector<std::string> selected, opening_phases;
+    std::vector<cv::Mat> opening_frames;
+    json::array reward_events;
+    std::function<void(std::string_view)> m_blackflow_start_reward_observer;
+    std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_start_reward_evidence_observer;
+    std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_blackflow_opening_evidence_observer;
+    explicit Plugin(const std::filesystem::path& root) {
+        controller.candidates=MAA_NS::imread(root/"reward-candidates.jpg");
+        controller.confirming=MAA_NS::imread(root/"reward-confirming.jpg");
+        controller.after={MAA_NS::imread(root/"item-popup.jpg")};
+        require(!controller.candidates.empty()&&!controller.confirming.empty()&&!controller.after[0].empty(),"opening replay images missing");
+        m_blackflow_start_reward_observer=[&](auto name){selected.emplace_back(name);};
+        m_blackflow_start_reward_evidence_observer=[&](auto phase,json::object details,std::shared_ptr<cv::Mat> image){
+            if (phase==fail_save) return false;
+            if (phase=="candidates") require(controller.clicks==0 && image && !image->empty(),"selection preceded candidate evidence");
+            reward_events.emplace_back(json::object{{"phase",std::string(phase)},{"details",std::move(details)}});
+            return true;
+        };
+        m_blackflow_opening_evidence_observer=[&](auto phase,json::object,std::shared_ptr<cv::Mat> image){
+            require(image&&!image->empty(),"opening decision frame missing");
+            if (phase==fail_save) return false;
+            opening_phases.emplace_back(phase); opening_frames.emplace_back(image->clone());
+            return true;
+        };
+    }
+    Controller* ctrler(){return &controller;}
+    bool sleep(int){return !cancelled;}
+    bool need_exit()const{return cancelled;}
+    bool run() {
+        const bool automation_collection=true;
+        /*production_reward_branch*/
+        return false;
+    }
+};
+}
+
+template<class Test>
+void opening_reward_controller_regressions(const std::filesystem::path& repo,Test&& test) {
+    using namespace asst;
+    using namespace asst::blackflow;
+    const auto root=repo/"unit_test/MaaCore/fixtures/blackflow-opening/20261025";
+    test("opening popup real image completes the actual reward method without another input",[&]{
+        opening_reward_controller_replay::Plugin p(root);
+        auto config=std::make_shared<RoguelikeConfig>();
+        require(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",30002}}),"opening contract config");
+        auto session=std::make_shared<BlackFlowSession>();
+        auto port=std::make_shared<Port>();
+        BlackFlowLifecycleTaskPlugin lifecycle({},nullptr,"Roguelike",config,nullptr,session,port);
+        require(lifecycle.load_params(json::object{{"blackflow_strategy","automation_collection"}}),"opening contract lifecycle");
+        BlackFlowStoreReplayAccess::sand_table_policy(*session,false);
+        const auto first_event=port->events.size();
+        const auto original_observer=p.m_blackflow_opening_evidence_observer;
+        p.m_blackflow_opening_evidence_observer=[&](auto phase,json::object details,std::shared_ptr<cv::Mat> image){
+            return lifecycle.record_opening_evidence(phase,details,image) && original_observer(phase,std::move(details),image);
+        };
+        require(p.run(),"actual post-confirmation popup was rejected");
+        require(p.controller.clicks==2 && p.selected==std::vector<std::string>{"林间代步"},"selection changed or popup received stale input");
+        require(p.opening_phases==std::vector<std::string>{"support.confirming","support.transition"},"transition not saved before handoff");
+        require(cv::norm(p.opening_frames.back(),p.controller.after[0],cv::NORM_INF)==0,"wrong transition image saved");
+        PipelineAnalyzer next(p.controller.after[0]);
+        next.set_tasks(Task.get("BlackFlow@Roguelike@LastReward-EnterPoint")->next);
+        const auto hit=next.analyze();
+        require(hit && collection_popup_button(hit->task_ptr->name).has_value(),"parent did not resume on an evidence-guarded close");
+        require(collection_popup_source(hit->task_ptr->name)==CollectionPopupSource::StartReward,"opening popup lost its source");
+        require(!session->result() && port->events.size()==first_event+2,"reward transition failed or completed the run");
+        json::array shared;
+        for (std::size_t i=0;i<2;++i) {
+            const auto& event=port->events.at(first_event+i);
+            shared.emplace_back(json::object {
+                {"schema_version",1},{"sequence",int(i+1)},{"elapsed_ms",int(i+1)},
+                {"timestamp","2026-10-24T18:21:30Z"},{"action",event.action},{"phase",event.phase},
+                {"outcome",event.outcome},{"level",std::string(to_string(event.level))},{"task",event.task},
+                {"state",event.state},{"details",event.details},{"floor",0},{"map_generation",0},
+                {"image",json::object{{"path",i==0?"images/reward-confirming.jpg":"images/item-popup.jpg"}}},
+            });
+        }
+        std::ofstream("opening-popup-transition-events.json") << json::value(shared).format();
+    });
+    test("opening popup transition persistence failure cannot commit selection",[&]{
+        opening_reward_controller_replay::Plugin p(root);p.fail_save="support.transition";
+        require(!p.run() && p.selected.empty() && p.controller.clicks==2,"unsaved popup allowed confirmation or extra input");
+    });
+    test("opening popup one transient frame cannot confirm reward",[&]{
+        opening_reward_controller_replay::Plugin p(root);
+        p.controller.after.push_back(cv::Mat(720,1280,CV_8UC3,cv::Scalar()));
+        require(!p.run() && p.selected.empty() && p.controller.clicks==2,"transient popup confirmed or old point retried");
+    });
+    test("opening popup unknown follow-up never authorizes an old confirmation click",[&]{
+        opening_reward_controller_replay::Plugin p(root);
+        p.controller.after={cv::Mat(720,1280,CV_8UC3,cv::Scalar())};
+        require(!p.run() && p.selected.empty() && p.controller.clicks==2,"unknown page was accepted or clicked");
+    });
+}

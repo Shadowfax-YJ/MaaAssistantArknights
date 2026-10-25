@@ -16,11 +16,18 @@ void expedition_evidence_regressions(const std::filesystem::path& repo, Test&& t
     for (const auto& item : fixture.as_array()) {
         cases[item.get("details", "expedition_id", std::string())].emplace_back(item);
     }
+    const auto priority_fixture =
+        json::open(repo / "unit_test/MaaCore/fixtures/blackflow-expedition/20261025/lifecycle-payloads.json").value();
+    for (const auto& item : priority_fixture.as_array()) {
+        cases["fixed/"+item.get("details", "expedition_id", std::string())].emplace_back(item);
+    }
     json::array exported;
+    json::array priority_exported;
+    int case_index=0;
     const auto previous_user_directory = UserDir.empty() ? std::filesystem::current_path() : UserDir.get();
     for (const auto& [id, payloads] : cases) {
         test("expedition actual Session port logger stores replayable node images and lifecycle", [&] {
-            const auto case_root = root / std::to_string(exported.size());
+            const auto case_root = root / std::to_string(case_index++);
             std::filesystem::create_directories(case_root);
             require(UserDir.set(case_root), "isolated test directory");
             auto session = std::make_shared<BlackFlowSession>();
@@ -86,22 +93,49 @@ void expedition_evidence_regressions(const std::filesystem::path& repo, Test&& t
                     ++captures;
                 }
             }
-            require(confirmations == 1 && captures >= 3, "missing or duplicate expedition evidence");
+            const bool dispatched=std::ranges::any_of(payloads,[](const auto& payload){
+                return payload.get("phase",std::string())=="dispatch_confirmed";
+            });
+            require(confirmations == (dispatched?1:0) && captures >= (dispatched?3:2), "missing or duplicate expedition evidence");
             std::ifstream readable(run / "run.log");
             const std::string readable_text((std::istreambuf_iterator<char>(readable)), { });
-            require(
+            if (dispatched) require(
                 readable_text.find("selected_option_index_from_top=") != std::string::npos &&
                     readable_text.find("operator_name=") != std::string::npos &&
                     readable_text.find("elite_before=1") != std::string::npos,
                 "readable archive log omitted choice, operator or pre-dispatch elite");
             std::string error;
             require(validate_run_log_replay_stream(rows, &error), error);
-            exported.emplace_back(json::object { { "case", id }, { "events", std::move(events) } });
+            (id.starts_with("fixed/")?priority_exported:exported).emplace_back(
+                json::object { { "case", id }, { "events", std::move(events) } });
             UserDir.set(previous_user_directory);
         });
     }
     UserDir.set(previous_user_directory);
     std::ofstream(root / "producer-events.json") << json::value(std::move(exported)).to_string();
+    std::ofstream(root / "priority-producer-events.json") << json::value(std::move(priority_exported)).to_string();
+    for (const std::string name : {"凯尔希·思衡托","伊桑","古米"}) {
+        test("expedition only confirmed core departure adds battle restrictions",[&] {
+            BlackFlowSession session;
+            require(session.initialize("automation_collection")&&session.set_current_floor(2)&&
+                        session.update(map_frame(2,1,0,"expedition")),"expedition restriction session");
+            const auto original=session.forbidden_landing_types();
+            const bool original_residents=session.roaming_residents_allowed();
+            session.record_expedition_dispatch(name);
+            const bool core=name=="凯尔希·思衡托";
+            require(session.run_log_state().get("expedition_core_away",false)==core,"wrong departing operator changed core away state");
+            if (core) {
+                require(session.forbidden_landing_types().contains(NodeType::BattleSavage)&&
+                            session.forbidden_landing_types().contains(NodeType::BattleBoss)&&
+                            !session.roaming_residents_allowed(),"core away did not avoid battle and residents");
+            } else {
+                require(session.forbidden_landing_types()==original&&session.roaming_residents_allowed()==original_residents,
+                        "support operator departure changed combat rules");
+            }
+            require(session.set_current_floor(3)&&!session.run_log_state().get("expedition_core_away",true),
+                    "away restriction persisted into the next floor");
+        });
+    }
     test("expedition bridge rejects missing frames and stale contexts", [&] {
         BlackFlowSession session;
         require(session.initialize("automation_collection"), "initialize");

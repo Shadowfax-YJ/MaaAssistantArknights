@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <regex>
 #include <string_view>
 #include <utility>
 
@@ -27,6 +28,94 @@ bool movement_inventory_page_visible(const cv::Mat& image)
     OCRer contents(image);
     contents.set_task_info("BlackFlow@Roguelike@MovementInventoryContents");
     return contents.analyze().has_value();
+}
+
+std::optional<InventoryCapacity> inventory_capacity_from_ocr(std::span<const TextRect> values)
+{
+    const std::regex fraction(R"((^|[^0-9-])([0-9]{1,2})\s*/\s*([0-9]{1,2})([^0-9]|$))");
+    std::optional<InventoryCapacity> result;
+    for (const auto& value : values) {
+        if (value.score < 0.85) {
+            continue;
+        }
+        std::smatch match;
+        if (!std::regex_search(value.text, match, fraction)) {
+            continue;
+        }
+        InventoryCapacity current { std::stoi(match[2].str()), std::stoi(match[3].str()) };
+        if (current.limit <= 0 || (result && *result != current)) {
+            return std::nullopt;
+        }
+        result = current;
+    }
+    return result;
+}
+
+InventoryOverloadObservation recognize_inventory_overload(const cv::Mat& image)
+{
+    InventoryOverloadObservation result;
+    if (image.empty()) {
+        return result;
+    }
+    for (const auto* task : { "LoadingText",
+                              "BlackFlow@Roguelike@DataSyncConfirm",
+                              "BlackFlow@Roguelike@MovementInventoryDiscardButton",
+                              "BlackFlow@Roguelike@MovementInventoryEquippedDiscardConfirm" }) {
+        OCRer overlay(image);
+        overlay.set_task_info(task);
+        if (overlay.analyze()) {
+            return result;
+        }
+    }
+    for (const auto* task : { "BlackFlow@Roguelike@CloseCollection",
+                              "BlackFlow@Roguelike@CloseCollectionContinue",
+                              "BlackFlow@Roguelike@SacrificeInventoryDetailsClose" }) {
+        Matcher overlay(image);
+        overlay.set_task_info(task);
+        if (overlay.analyze()) {
+            return result;
+        }
+    }
+    if (movement_inventory_page_visible(image)) {
+        result.page = InventoryOverloadPage::Inventory;
+    }
+    else {
+        Matcher opened(image);
+        opened.set_task_info("BlackFlow@Roguelike@MovementInventoryOpened");
+        if (opened.analyze()) {
+            return result;
+        }
+        for (const auto* task : { "BlackFlow@Roguelike@MapPrepare-Ready", "BlackFlow@Roguelike@MapPrepare-ZoomOut" }) {
+            Matcher map(image);
+            map.set_task_info(task);
+            if (map.analyze()) {
+                result.page = InventoryOverloadPage::Map;
+            }
+        }
+    }
+    if (result.page == InventoryOverloadPage::Unknown) {
+        return result;
+    }
+    OCRer capacity(image);
+    capacity.set_task_info(
+        result.page == InventoryOverloadPage::Inventory ? "BlackFlow@Roguelike@SacrificeInventoryCount"
+                                                        : "BlackFlow@Roguelike@MovementInventoryMapCapacity");
+    (void)capacity.analyze();
+    result.capacity_ocr = capacity.get_result();
+    result.capacity = inventory_capacity_from_ocr(result.capacity_ocr);
+    OCRer banner(image);
+    banner.set_task_info("BlackFlow@Roguelike@MovementInventoryOverloadedBanner");
+    result.banner = banner.analyze().has_value();
+    if (result.page == InventoryOverloadPage::Map) {
+        OCRer prompt(image);
+        prompt.set_task_info("BlackFlow@Roguelike@MovementInventoryResetExpand");
+        result.banner = prompt.analyze().has_value() || result.banner;
+    }
+    // An old banner and a new count may coexist during the discard animation.
+    if (result.capacity && result.capacity->count <= result.capacity->limit && result.banner) {
+        result.capacity.reset();
+    }
+    return result;
 }
 
 bool inventory_reset_can_confirm_early(

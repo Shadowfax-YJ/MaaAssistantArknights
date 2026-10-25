@@ -1,10 +1,14 @@
-param([Parameter(Mandatory=$true)][string]$CoreBuildDirectory, [string]$OutputDirectory, [string]$Filter)
+param([Parameter(Mandatory=$true)][string]$CoreBuildDirectory, [string]$OutputDirectory, [string]$Filter, [string]$Python = 'python')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $core = (Resolve-Path $CoreBuildDirectory).Path
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $repo 'build\blackflow-recovery-replay' }
 $out = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $out -Force | Out-Null
+& $Python (Join-Path $PSScriptRoot 'generate_blackflow_opening_reward_replay.py') (Join-Path $out 'BlackFlowOpeningRewardControllerReplay.generated.h')
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+& $Python (Join-Path $PSScriptRoot 'generate_blackflow_civilization_replay.py') (Join-Path $out 'BlackFlowCivilizationReplay.generated.h')
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 if (!(Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -13,6 +17,7 @@ if (!(Get-Command cl.exe -ErrorAction SilentlyContinue)) {
 }
 $dep = Join-Path $repo 'src\MaaUtils\MaaDeps\vcpkg\installed\maa-x64-windows'
 $includes = @('src\MaaCore','src\MaaUtils\include','include','3rdparty\include','3rdparty\EmulatorExtras') | ForEach-Object { '/I'+(Join-Path $repo $_) }
+$includes += '/I'+$out
 & cl.exe /nologo /c /std:c++20 /EHsc /MD /O2 /utf-8 /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR /D_WIN32_WINNT=0x0A00 /DASST_DLL_EXPORTS /DASST_WITH_EMULATOR_EXTRAS=1 /DASST_WITH_EXTRA_CALLERS=0 /DASST_WITH_MAC_SCK=0 @includes ('/I'+$dep+'\include') ('/I'+$dep+'\include\opencv4') ('/Fo'+$out+'\replay.obj') (Join-Path $PSScriptRoot 'BlackFlowRecoveryReplay.cpp')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # Link the built production objects, including Session and recognizers, rather than a mock implementation.

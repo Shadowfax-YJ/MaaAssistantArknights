@@ -30,7 +30,7 @@ def test_actual_node_images_and_all_lifecycle_cases_accept_v1_signed_envelope():
             for sequence, row in enumerate(rows, 1):
                 row.update(sequence=sequence, elapsed_ms=sequence, timestamp=original[0]['timestamp'])
                 row.pop('run_uuid', None)
-                if row.get('image') and row['action'].startswith(('node.expedition.', 'node.event.')):
+                if row.get('image') and row['action'].startswith(('node.expedition.', 'node.event.', 'node.reward.')):
                     path = row['image']['path']
                     assert path.startswith('collection-popups/floor-2/node-')
                     phase = (row.get('details') or {}).get('choice_phase')
