@@ -1,5 +1,29 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.33 发布与公开包核验（2026-10-25）
+
+Windows、macOS 独立采集版及 GitHub/国内自动更新源已发布为
+[`blackflow-v1.1.33`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.33)。
+构建提交 `5336d44ed51256c6a0b2d6cb660f07e6809720a0`；流水线
+[`40180764458`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40180764458)
+的 Windows、macOS 两架构、通用应用及发布任务全部成功。
+CI 已通过 25 项同步多阶段专项、421 项原生、370 项路由/归档、169 项事件、106 项交互、
+20 项过载、33 组买卖及 41 项刷新等检查；本地更新/封包检查 47 项通过（8 项平台条件跳过）。
+
+本机从国内 CDN 完整下载两平台安装包，SHA-256 与 GitHub 资产 digest 和两份更新清单一致：
+Windows `f5bd63666bb1abb132daf2713f2f29fe1c69410eac327cde7cbf60b590f1850b`，
+macOS `299b61394ebda55cd5020813a96f6189b14792dc59986edec520e270671001e8`。
+两份 macOS 更新签名、Windows ZIP CRC、包身份、配置隔离、文件清单、实际任务/事件链配置及
+Core 版本和新事件链校验标记全部通过；普通版 Latest 保持 v15.0.1。
+结果保存在 `build/diagnostics/20261025/v1.1.33-public-verification/verification.json`。
+
+增量运行时代码只涉及三份事件链查询/记录器源码，资源、OCR 模型及物品/事件选项策略与
+v1.1.32 一致。消费者 129 项分析和 33 项共享/独立签名检查已通过，无需消费者生产代码变更。
+原始/图片/签名 v1、能力、固定验证器 bundle、任务族及宿主协议保持，未知原始版本仍拒绝；
+子页选择不增加节点访问或物品取得，旧缺项仍未知，旧失败局不补写为后续页已完成。
+历史原包、缓存、人工审核及冻结统计不覆盖，未部署远程消费者、替换或重启运行实例，
+尚无新版完整实机对局验证。下方“未发布”保留源码修复阶段状态。
+
 ## v1.1.33 发布准备与消费者兼容（2026-10-25）
 
 用户确认发布采集版 v1.1.33 的 Windows、macOS 包及 GitHub/CDN 自动更新源。
