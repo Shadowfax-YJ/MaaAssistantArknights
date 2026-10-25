@@ -3,6 +3,7 @@
 #include "Config/ResourceLoader.h"
 #include "Config/Roguelike/RoguelikeStageEncounterConfig.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowEncounterEvidence.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionEvidence.h"
 #include "Task/Roguelike/BlackFlow/BlackFlowMapObservationSource.h"
 #include "Utils/WorkingDir.hpp"
 #include <fstream>
@@ -30,14 +31,15 @@ struct BlackFlowEncounterRecorderBridge::State
     std::string last_error;
     bool fail_capture = false;
     bool fail_save = false;
+    int floor = 1;
     BlackFlowPerceptionSnapshot frame;
 
     void move_to(int from, int to)
     {
         MoveCandidate move;
         move.action_id = "multistage-replay-move";
-        move.source = *make_stable_node_id(1, { 0, from });
-        move.target = move.landing = *make_stable_node_id(1, { 0, to });
+        move.source = *make_stable_node_id(floor, { 0, from });
+        move.target = move.landing = *make_stable_node_id(floor, { 0, to });
         move.path = move.possible_landings = { move.target };
         move.landing_action_point_gains.emplace(move.target, 0);
         move.movement = MovementKind::Walk;
@@ -80,20 +82,22 @@ std::vector<std::pair<std::string, std::string>> BlackFlowEncounterRecorderBridg
 
 BlackFlowEncounterRecorderBridge::BlackFlowEncounterRecorderBridge(
     const std::filesystem::path& output,
-    const std::string& root) :
+    const std::string& root,
+    int floor) :
     m_state(std::make_unique<State>())
 {
     auto& state = *m_state;
+    state.floor = floor;
     state.output = output;
     state.previous = UserDir.empty() ? std::filesystem::current_path() : UserDir.get();
     std::filesystem::create_directories(output);
     check(UserDir.set(output), "replay UserDir");
-    check(state.session->initialize("automation_collection") && state.session->set_current_floor(1), "initialize");
+    check(state.session->initialize("automation_collection") && state.session->set_current_floor(floor), "initialize");
     auto& frame = state.frame;
     auto& observation = frame.observation;
     observation.observation_id = "multi-stage-map";
     observation.sequence = observation.viewport_revision = 1;
-    observation.floor = 1;
+    observation.floor = floor;
     observation.floor_from_ocr = observation.recognition_ok = observation.graph_connected = true;
     observation.current_marker_temporary_id = 0;
     observation.current_marker_score = 1;
@@ -149,7 +153,7 @@ bool BlackFlowEncounterRecorderBridge::record(
     // result from a mocked logger. Preserve and restore its earlier evidence.
     const auto logs = m_state->output / "debug/BlackFlow";
     for (const auto& entry : std::filesystem::directory_iterator(logs)) {
-        const auto node = entry.path() / "collection-popups/floor-1" /
+        const auto node = entry.path() / "collection-popups" / ("floor-" + std::to_string(m_state->floor)) /
                           ("node-" + std::to_string(m_state->session->page_context()->node));
         if (!std::filesystem::is_directory(node)) {
             continue;
@@ -171,6 +175,13 @@ bool BlackFlowEncounterRecorderBridge::record(
         return result;
     }
     throw std::runtime_error("no replay evidence directory to block");
+}
+
+bool BlackFlowEncounterRecorderBridge::record_expedition(
+    std::string_view phase, json::object details, const cv::Mat& image)
+{
+    return record_expedition_evidence(
+        *m_state->session, m_state->port, phase, std::move(details), image, &m_state->last_error);
 }
 
 json::array BlackFlowEncounterRecorderBridge::events() const
@@ -210,7 +221,7 @@ void BlackFlowEncounterRecorderBridge::complete_page()
     check(m_state->session->apply_node_task_result(result, json::object { }), "complete page");
 }
 
-void BlackFlowEncounterRecorderBridge::change_node()
+void BlackFlowEncounterRecorderBridge::change_node(const std::string& name)
 {
     complete_page();
     m_state->session->cancel_transaction();
@@ -218,10 +229,13 @@ void BlackFlowEncounterRecorderBridge::change_node()
     observation.observation_id = "multi-stage-next-node-map";
     observation.sequence = observation.viewport_revision = 2;
     observation.current_marker_temporary_id = 1;
+    if (name == ExpeditionEventName) {
+        observation.nodes.front().type = "expedition";
+    }
     observation.hud_action_points = m_state->frame.run.action_points = 6;
     check(m_state->session->update(m_state->frame), "next node map");
     m_state->move_to(1, 0);
-    check(m_state->session->observe_page_content("another node", "RoguelikeEvent"), "new node title");
+    check(m_state->session->observe_page_content(name, "RoguelikeEvent"), "new node title");
 }
 
 void BlackFlowEncounterRecorderBridge::fail_next_capture()

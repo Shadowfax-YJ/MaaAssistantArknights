@@ -1,8 +1,10 @@
-黑流树海采集版 v1.1.33
+黑流树海采集版 v1.1.34
 
 ### 本次更新
 
-* 修复“思乡心切”等多阶段事件在进入后续页面时异常停止的问题，恢复后续选项执行与记录。
+* 修复多阶段事件转作战后，进入后续“先行一步”等节点时异常停止的问题。
+* 修复移动加工品列表回弹时过早点击，导致装载失败并放弃当前探索的问题。
+* 将难度 6 的生逝、旅行绒最低出售价格调整为 50。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -15,8 +17,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.33/MAA-BlackFlow-Data-Collection-v1.1.33-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.33/MAA-BlackFlow-Data-Collection-v1.1.33-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.34/MAA-BlackFlow-Data-Collection-v1.1.34-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.34/MAA-BlackFlow-Data-Collection-v1.1.34-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

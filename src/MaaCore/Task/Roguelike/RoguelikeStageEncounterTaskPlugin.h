@@ -100,6 +100,7 @@ private:
     bool finish_sacrifice_civilization();
     blackflow::SacrificeInventoryScanResult scan_sacrifice_natural_items(std::string_view phase);
     bool report_sacrifice(std::string_view phase, json::object details, const cv::Mat& image);
+    void refresh_encounter_choice_context();
     bool prepare_encounter_choice(std::string_view event_name, int round, const cv::Mat& image);
     bool plan_encounter_choice(size_t index, std::string_view policy);
     bool randomize_encounter_choice_order(std::vector<size_t>& order);

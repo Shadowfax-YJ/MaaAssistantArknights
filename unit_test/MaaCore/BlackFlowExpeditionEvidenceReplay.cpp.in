@@ -348,6 +348,7 @@ public:
     }
 
     void refresh_expedition_context();
+    void refresh_encounter_choice_context();
     bool capture_expedition_candidates(const cv::Mat&);
     bool report_expedition(std::string_view, json::object = { }, const cv::Mat& = { });
     bool abort_expedition(std::string_view);
@@ -427,6 +428,7 @@ bool ProcessTask::run()
 /*select_analyzed_option*/
 /*reset_in_run_variables*/
 /*report_encounter_choice*/
+/*refresh_encounter_choice_context*/
 /*prepare_encounter_choice*/
 /*plan_encounter_choice*/
 /*randomize_encounter_choice_order*/

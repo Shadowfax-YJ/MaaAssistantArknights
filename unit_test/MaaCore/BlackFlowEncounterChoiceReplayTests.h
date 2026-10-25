@@ -187,6 +187,20 @@
         require(s.begin() && s.p.m_encounter_choice.order.empty() && !s.p.m_encounter_choice.selected,"stale choice reused");
         require(s.count("candidates")==2,"new page candidates missing");
     });
+    for (int stage : {0,1,2}) for (int change : {0,1,2}) test("generic choice cannot capture a later node input or result",[&]{
+        ChoiceScenario s;
+        require(s.begin("普通事件")&&s.p.plan_encounter_choice(0,"configured_option"),"old plan");
+        if(stage>0)require(s.p.select_analyzed_option(0),"old input");
+        if(stage==2){s.p.controller.page=4;require(s.p.observe_encounter_choice_result(s.p.controller.get_image()),"old receipt");}
+        const auto events=s.events.size();const int clicks=s.p.controller.choice_clicks;
+        if(change==0)++s.revision;
+        if(change==1)s.p.m_sacrifice_context_provider=[&]{return std::optional(blackflow::SacrificeContext{2,s.revision});};
+        if(change==2)s.p.m_sacrifice_context_provider=[]{return std::optional<blackflow::SacrificeContext>{};};
+        s.p.m_option_list={{true,{},"新节点的独立选项",""}};
+        require(s.p.select_analyzed_option(0)&&s.p.observe_encounter_choice_result(s.p.controller.get_image()),"new input stopped");
+        require(!s.p.m_encounter_choice.context&&s.events.size()==events&&s.p.controller.choice_clicks==clicks+1,
+                "retired choice captured another node or fabricated a receipt");
+    });
     test("sacrifice picker confirms actual initial choice and second round remains first",[&]{
         ChoiceScenario s;require(s.p.refresh_sacrifice_context(),"context");
         require(s.p.handle_sacrifice_event() && s.count("event-choice")==1,"initial choice");

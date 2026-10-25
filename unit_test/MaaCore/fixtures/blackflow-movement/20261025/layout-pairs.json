@@ -1,0 +1,379 @@
+[
+  {
+    "before_role": "panel-page-9-frame-10",
+    "after_role": "panel-page-9-frame-11",
+    "before": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 275,
+        "rect": {
+          "height": 21,
+          "width": 83,
+          "x": 1149,
+          "y": 265
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 415,
+        "rect": {
+          "height": 21,
+          "width": 83,
+          "x": 1149,
+          "y": 405
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 556,
+        "rect": {
+          "height": 18,
+          "width": 99,
+          "x": 1141,
+          "y": 547
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 696,
+        "rect": {
+          "height": 18,
+          "width": 81,
+          "x": 1149,
+          "y": 687
+        }
+      }
+    ],
+    "after": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 269,
+        "rect": {
+          "height": 22,
+          "width": 84,
+          "x": 1148,
+          "y": 258
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 409,
+        "rect": {
+          "height": 22,
+          "width": 84,
+          "x": 1148,
+          "y": 398
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 549,
+        "rect": {
+          "height": 19,
+          "width": 98,
+          "x": 1141,
+          "y": 540
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 689,
+        "rect": {
+          "height": 19,
+          "width": 82,
+          "x": 1149,
+          "y": 680
+        }
+      }
+    ],
+    "max_delta": 7,
+    "before_image": "moving-1-before.jpg",
+    "after_image": "moving-1-after.jpg"
+  },
+  {
+    "before_role": "panel-page-1-frame-16",
+    "after_role": "panel-page-1-frame-17",
+    "before": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 305,
+        "rect": {
+          "height": 22,
+          "width": 83,
+          "x": 1149,
+          "y": 294
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 446,
+        "rect": {
+          "height": 18,
+          "width": 98,
+          "x": 1141,
+          "y": 437
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 585,
+        "rect": {
+          "height": 19,
+          "width": 82,
+          "x": 1149,
+          "y": 576
+        }
+      }
+    ],
+    "after": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 297,
+        "rect": {
+          "height": 25,
+          "width": 85,
+          "x": 1147,
+          "y": 285
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 438,
+        "rect": {
+          "height": 19,
+          "width": 98,
+          "x": 1141,
+          "y": 429
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 579,
+        "rect": {
+          "height": 22,
+          "width": 84,
+          "x": 1148,
+          "y": 568
+        }
+      }
+    ],
+    "max_delta": 8,
+    "before_image": "moving-2-before.jpg",
+    "after_image": "moving-2-after.jpg"
+  },
+  {
+    "before_role": "panel-page-1-frame-21",
+    "after_role": "panel-page-1-frame-22",
+    "before": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 297,
+        "rect": {
+          "height": 22,
+          "width": 84,
+          "x": 1148,
+          "y": 286
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 437,
+        "rect": {
+          "height": 19,
+          "width": 98,
+          "x": 1141,
+          "y": 428
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 577,
+        "rect": {
+          "height": 19,
+          "width": 82,
+          "x": 1149,
+          "y": 568
+        }
+      }
+    ],
+    "after": [
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "center": 287,
+        "rect": {
+          "height": 22,
+          "width": 84,
+          "x": 1148,
+          "y": 276
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_10",
+        "center": 427,
+        "rect": {
+          "height": 19,
+          "width": 98,
+          "x": 1141,
+          "y": 418
+        }
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "center": 567,
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 558
+        }
+      }
+    ],
+    "max_delta": 10,
+    "before_image": "moving-3-before.jpg",
+    "after_image": "moving-3-after.jpg"
+  },
+  {
+    "stationary": true,
+    "source_history_entry": 12,
+    "before_role": "panel-page-1-frame-1",
+    "before_image": "stationary-12-before.jpg",
+    "before": [
+      {
+        "movement": "walk",
+        "rect": {
+          "height": 19,
+          "width": 68,
+          "x": 1156,
+          "y": 301
+        },
+        "center": 310
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "rect": {
+          "height": 21,
+          "width": 84,
+          "x": 1148,
+          "y": 440
+        },
+        "center": 450
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 582
+        },
+        "center": 591
+      }
+    ],
+    "after_role": "panel-page-1-frame-2",
+    "after_image": "stationary-12-after.jpg",
+    "after": [
+      {
+        "movement": "walk",
+        "rect": {
+          "height": 19,
+          "width": 69,
+          "x": 1155,
+          "y": 301
+        },
+        "center": 310
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "rect": {
+          "height": 21,
+          "width": 84,
+          "x": 1148,
+          "y": 440
+        },
+        "center": 450
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 582
+        },
+        "center": 591
+      }
+    ]
+  },
+  {
+    "stationary": true,
+    "source_history_entry": 15,
+    "before_role": "panel-page-1-frame-1",
+    "before_image": "stationary-15-before.jpg",
+    "before": [
+      {
+        "movement": "walk",
+        "rect": {
+          "height": 19,
+          "width": 69,
+          "x": 1155,
+          "y": 301
+        },
+        "center": 310
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 442
+        },
+        "center": 451
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 582
+        },
+        "center": 591
+      }
+    ],
+    "after_role": "panel-page-1-frame-2",
+    "after_image": "stationary-15-after.jpg",
+    "after": [
+      {
+        "movement": "walk",
+        "rect": {
+          "height": 19,
+          "width": 69,
+          "x": 1155,
+          "y": 301
+        },
+        "center": 310
+      },
+      {
+        "movement": "rogue_6_scrap_M_06",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 442
+        },
+        "center": 451
+      },
+      {
+        "movement": "rogue_6_scrap_M_11",
+        "rect": {
+          "height": 18,
+          "width": 82,
+          "x": 1149,
+          "y": 582
+        },
+        "center": 591
+      }
+    ]
+  }
+]

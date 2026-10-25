@@ -1,7 +1,7 @@
 {
     "difficulty": 6,
-    "approved_draft_sha256": "bb4df4c8f287db5146fdca0fb986e0fd5520fa32f50845e7ca9ffa9b2dc7ed00",
-    "saved_at": "2026-10-24T21:34:35.314402+00:00",
+    "approved_draft_sha256": "0ea2cfc74645f3ee92b32fb768d3a7f4a56cd42cf6ee99529c75418a7767caa2",
+    "saved_at": "2026-10-25T11:27:29.077415+00:00",
     "source_commit": "bee3f83c5d60590b5e1cd42b8d09d00ce32ab10d",
     "policy": {
         "shop_buy": [
@@ -126,9 +126,9 @@
             "雾滚草": 8,
             "浪花": 8,
             "板藤": 50,
-            "生逝": 16,
+            "生逝": 50,
             "血橙": 8,
-            "旅行绒": 24,
+            "旅行绒": 50,
             "无缘果": 14
         },
         "loot": [

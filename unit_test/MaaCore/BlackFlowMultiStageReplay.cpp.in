@@ -12,8 +12,8 @@ struct MultiStageScenario
     blackflow_replay::RoguelikeStageEncounterTaskPlugin p;
     std::string fault;
 
-    MultiStageScenario(const std::filesystem::path& output, const std::string& root) :
-        recorder(output, root)
+    MultiStageScenario(const std::filesystem::path& output, const std::string& root, int floor = 1) :
+        recorder(output, root, floor)
     {
         p.m_sacrifice_context_provider = [&] {
             auto [run, page] = recorder.revisions();
@@ -187,6 +187,50 @@ int main(int argc, char** argv)
             require(
                 !scenario.click() && scenario.p.controller.choice_clicks == 1,
                 "a rejected receipt allowed another input");
+        });
+    }
+    for (const auto& [root, child] : links) {
+        test("multi-stage battle transition then expedition through the production recorder: " + root, [&] {
+            MultiStageScenario scenario(output / std::to_string(ordinal++), root, 2);
+            auto& p = scenario.p;
+            require(scenario.begin(root, root=="划算买卖"?"让它闭嘴":"first option") && scenario.click(), "first event page");
+            require(scenario.begin(child, child=="划算买卖-2"?"为客户群体发声！":"second option") && scenario.click(), "second event page");
+            p.controller.page = 18; // Captured event-to-battle result is not a map or collection receipt.
+            require(p.observe_encounter_choice_result(p.controller.get_image()), "pending battle transition");
+            require(p.m_encounter_choice.clicked && !p.m_encounter_choice.confirmed, "invented old choice confirmation");
+            const auto old_context = p.m_encounter_choice.context.value();
+            scenario.recorder.change_node("未涉足之树"); // Real completion, map update, next transaction and title.
+            p.m_expedition_context_provider = [&] {
+                auto [run, page] = scenario.recorder.revisions();
+                return std::optional(asst::blackflow::ExpeditionContext { run, page, 2, { "古米" } });
+            };
+            p.m_expedition_evidence_observer = [&](auto phase, auto details, const auto& image) {
+                return scenario.recorder.record_expedition(phase, std::move(details), image);
+            };
+            p.refresh_expedition_context();
+            p.m_option_list = { {true, {}, "尝试探索树的内部", ""}, {true, {}, "离开", ""} };
+            p.controller.page = 1;
+            require(p.capture_expedition_candidates(p.controller.get_image()), "new expedition candidates");
+            require(p.handle_expedition_choice(), "new expedition first choice");
+            // _run calls this generic observer even after the special expedition choice.
+            const bool continued = p.observe_encounter_choice_result(p.controller.get_image());
+            require(continued, "stale old result stopped expedition: " + scenario.recorder.error());
+            require(!scenario.recorder.terminated() && p.parent.enabled, "new node stopped");
+            const bool dispatched = p.handle_expedition_picker();
+            require(dispatched, "expedition picker: " + scenario.recorder.error());
+            require(p.m_expedition_finished && p.controller.depart_clicks == 1, "expedition did not complete");
+            int expedition_confirmed = 0;
+            for (const auto& e : scenario.recorder.events()) {
+                const auto action = e.get("action", std::string());
+                if (action.starts_with("node.encounter.choice.")) {
+                    require(e.get("details", "page_revision", std::uint64_t(0)) == old_context.page_revision,
+                            "old choice escaped to the expedition node");
+                    require(!(action.ends_with(".confirmed") && e.get("details", "choice_step", 0) == 1),
+                            "retiring old input invented an acquisition receipt");
+                }
+                expedition_confirmed += action == "node.expedition.dispatch_confirmed";
+            }
+            require(expedition_confirmed == 1, "missing real expedition confirmation");
         });
     }
     std::ofstream(output.parent_path() / "producer-events.json") << json::value(exported).to_string();

@@ -1,4 +1,4 @@
-## v1.1.33
+## v1.1.34
 
 ### Highlights
 
@@ -44,6 +44,20 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.34 (2026-10-25)</b></summary>
+
+### 修复 | Fix
+
+* 修复多阶段事件转作战后，进入后续“先行一步”等节点时异常停止的问题。 @Shadowfax-YJ
+* 修复移动加工品列表回弹时过早点击，导致装载失败并放弃当前探索的问题。 @Shadowfax-YJ
+
+### 改进 | Improved
+
+* 将难度 6 的生逝、旅行绒最低出售价格调整为 50。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.33 (2026-10-25)</b></summary>
 
 ### 修复 | Fix

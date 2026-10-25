@@ -202,6 +202,25 @@ bool asst::RoguelikeStageEncounterTaskPlugin::report_encounter_choice(
     return true;
 }
 
+void asst::RoguelikeStageEncounterTaskPlugin::refresh_encounter_choice_context()
+{
+    if (!m_encounter_choice.context) {
+        return;
+    }
+    const auto current = m_sacrifice_context_provider ? m_sacrifice_context_provider() : std::nullopt;
+    if (m_encounter_choice.context != current) {
+        // A battle or another special event need not provide a generic result receipt.
+        // Keep that old evidence unresolved in its original node; never report it in
+        // the next transaction, nor let its selected index capture a new event's input.
+        Log.info(
+            "BlackFlow retire encounter choice after context change",
+            m_encounter_choice.event_name,
+            m_encounter_choice.context->run_revision,
+            m_encounter_choice.context->page_revision);
+        m_encounter_choice = { };
+    }
+}
+
 bool asst::RoguelikeStageEncounterTaskPlugin::prepare_encounter_choice(
     std::string_view event_name,
     int round,
@@ -330,6 +349,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::confirm_encounter_choice(const cv:
 
 bool asst::RoguelikeStageEncounterTaskPlugin::observe_encounter_choice_result(const cv::Mat& image)
 {
+    refresh_encounter_choice_context();
     auto& choice = m_encounter_choice;
     if (!choice.generic || !choice.context || !choice.clicked || choice.confirmed || choice.failed) return !choice.failed;
     if (image.empty()) {
@@ -774,6 +794,7 @@ bool asst::RoguelikeStageEncounterTaskPlugin::_run()
     std::vector<std::string> event_names = RoguelikeStageEncounter.get_event_names(theme);
 
     if (theme == RoguelikeTheme::BlackFlow) {
+        refresh_encounter_choice_context();
         // 事件选项点击失败时画面通常仍是原事件页。继续走事件结果分发即可重新识别并续办；
         // 禁止点击左上角尝试“恢复地图”，那只会打开退出探索确认并回到原事件页。
         Task.set_task_base("BlackFlow@Roguelike@StageEncounterResult", "BlackFlow@Roguelike@StageEncounterReward");
@@ -1617,6 +1638,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::update_option_list(std::string_vie
 bool asst::RoguelikeStageEncounterTaskPlugin::select_analyzed_option(size_t index)
 {
     LogTraceFunction;
+    if (m_config->get_theme() == RoguelikeTheme::BlackFlow) {
+        refresh_encounter_choice_context();
+    }
     if (m_config->get_theme() == RoguelikeTheme::BlackFlow && m_encounter_choice.generic &&
         m_sacrifice_context_provider && m_encounter_choice.context == m_sacrifice_context_provider() &&
         index < m_option_list.size() && m_option_list[index].enabled && !m_encounter_choice.confirmed) {

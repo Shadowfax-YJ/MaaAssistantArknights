@@ -543,9 +543,9 @@ inline constexpr std::array<NaturalSaleFloor, 8> NaturalSaleFloors { {
     { "雾滚草", 8 },
     { "浪花", 8 },
     { "板藤", 50 },
-    { "生逝", 16 },
+    { "生逝", 50 },
     { "血橙", 8 },
-    { "旅行绒", 24 },
+    { "旅行绒", 50 },
     { "无缘果", 14 },
 } };
 

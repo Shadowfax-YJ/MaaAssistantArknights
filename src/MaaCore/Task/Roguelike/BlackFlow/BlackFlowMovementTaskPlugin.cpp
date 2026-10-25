@@ -2,6 +2,7 @@
 
 #include "BlackFlowMovementRecognition.h"
 #include "BlackFlowInventoryRules.h"
+#include "BlackFlowEvidenceFrame.h"
 
 #include <algorithm>
 #include <cmath>
@@ -833,6 +834,7 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
         std::optional<std::vector<MovementPanelLayoutEntry>> previous_layout;
         std::optional<PanelItem> located_target;
         std::optional<std::vector<MovementPanelLayoutEntry>> located_layout;
+        std::shared_ptr<cv::Mat> located_image;
         std::optional<int> best_observed_remaining;
         bool target_without_count_seen = false;
         for (const MovementPanelScanAction action : movement_panel_full_scan_plan()) {
@@ -917,6 +919,7 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 }
                 if (!preferred_remaining.has_value() || visible_target.remaining_uses == preferred_remaining) {
                     located_target = visible_target;
+                    located_image = frame.image;
                     located_layout.emplace();
                     located_layout->reserve(frame.name_hits.size());
                     for (const PanelNameHit& item : frame.name_hits) {
@@ -1003,11 +1006,17 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
             return close_panel(error) ? SelectionOutcome::Selected : SelectionOutcome::Failed;
         }
 
-        // 固定等待无法覆盖不同设备上的惯性和顶部回弹。连续两帧布局一致后才使用
-        // 当前坐标；稳定得快就立即识别，仍在移动则继续观察，绝不复用旧坐标。
+        // 扫描到底允许的 10px OCR 容差不能证明卡片已经停稳：整列缓慢滑动也会落入
+        // 该范围。点击前须让三帧卡片内容都与同一锚帧一致，排除 HUD 动画并保留 OCR
+        // 框抖动容差；仍在移动时继续观察，不用旧坐标点击。
         std::vector<MovementPanelLayoutEntry> stability_layout = std::move(*located_layout);
+        auto stability_image = std::move(located_image);
+        int stable_comparisons = 0;
         std::optional<PanelFrame> settled_frame;
         for (int stability_attempt = 0; stability_attempt < MaxSelectionStabilityAttempts; ++stability_attempt) {
+            if (need_exit()) {
+                return SelectionOutcome::Failed;
+            }
             sleep(SelectionStabilityProbeDelay);
             PanelFrame candidate;
             if (!scan_current_frame(candidate, error)) {
@@ -1028,11 +1037,19 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 candidate_layout.emplace_back(
                     MovementPanelLayoutEntry { item.movement, vertical_center(item.name_rect) });
             }
-            if (movement_panel_layout_unchanged(stability_layout, candidate_layout)) {
-                settled_frame = std::move(candidate);
-                break;
+            if (movement_panel_layout_unchanged(stability_layout, candidate_layout) &&
+                stability_image && candidate.image &&
+                evidence_frames_match(*stability_image, *candidate.image, cv::Rect { 1110, 192, 168, 500 })) {
+                if (++stable_comparisons >= 2) {
+                    settled_frame = std::move(candidate);
+                    break;
+                }
             }
-            stability_layout = std::move(candidate_layout);
+            else {
+                stable_comparisons = 0;
+                stability_layout = std::move(candidate_layout);
+                stability_image = candidate.image;
+            }
         }
         if (!settled_frame.has_value()) {
             Log.warn(

@@ -10,10 +10,10 @@ result = (here / 'BlackFlowExpeditionEvidenceReplay.cpp.in').read_text('utf-8')
 methods = ['refresh_expedition_context', 'report_expedition', 'abort_expedition', 'capture_expedition_candidates', 'handle_expedition_choice',
            'confirm_expedition_dispatch', 'wait_for_secondary_event', 'handle_expedition_picker', 'select_analyzed_option',
            'reset_in_run_variables']
-methods += ['report_encounter_choice', 'prepare_encounter_choice', 'plan_encounter_choice', 'randomize_encounter_choice_order',
+methods += ['refresh_encounter_choice_context', 'report_encounter_choice', 'prepare_encounter_choice', 'plan_encounter_choice', 'randomize_encounter_choice_order',
             'confirm_encounter_choice', 'observe_encounter_choice_result', 'confirm_cargo_choice']
 for name in methods:
-    prefix = 'void' if name in ('refresh_expedition_context', 'reset_in_run_variables') else 'bool'
+    prefix = 'void' if name in ('refresh_expedition_context', 'refresh_encounter_choice_context', 'reset_in_run_variables') else 'bool'
     method = extract(source, prefix + ' asst::RoguelikeStageEncounterTaskPlugin::' + name + '(')
     if name == 'randomize_encounter_choice_order':
         method, count = re.subn(r'std::random_device\s*\{\s*\}\(\)', 'std::mt19937::result_type { 1234 }', method)
