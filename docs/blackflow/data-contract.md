@@ -1,5 +1,29 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.34 发布与公开包核验（2026-10-25）
+
+Windows、macOS 通用采集版及 GitHub/CDN 自动更新源已发布为
+[`blackflow-v1.1.34`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.34)。
+来源提交 `866a7d1087bf05113d02695376ceeedb1b8f2c73`；流水线
+[`40191101263`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40191101263)
+的 Windows、macOS 两架构、通用应用和发布任务全部成功。
+CI 通过 119 项交互、39 项页面切换、41 项刷新、61 项狭路相逢、178 项事件、421 项原生恢复、
+20 项过载、37 项跨页/跨节点同步专项及 370 项路由/归档等检查。
+本地相关分析 33 项、共享契约 57 项通过；更新与封包 47 项检查通过（其中 8 项平台条件跳过）。
+
+本机从国内 CDN 完整下载两平台包，文件大小、SHA-256 与 GitHub 资产 digest、两份更新清单一致：
+Windows `3e56871e04a081a64296efa8d2028dbd0d32c88b7bb27eb917c5049624823253`，
+macOS `fa2733b4a35a12ac574ef6a68aa430e746a2ef3bb79c56645ec3c8611e057c43`。
+GitHub/CDN 两份 macOS 更新签名、Windows ZIP CRC、包身份、配置隔离、文件清单、实际任务/
+事件链资源及 Core 版本/跨节点修复标记通过；普通版 Latest 保持 `v15.0.1`。
+详细记录在 `build/diagnostics/20261025/v1.1.34-public-verification/verification.json`。
+
+本版包含下述两处运行时修复及已确认的 N6 生逝、旅行绒最低售价 50。
+原始/图片/签名 schema、能力、固定验证器 bundle、任务族及宿主协议保持；未知版本仍拒绝，
+未决结果不补为奖励或新增访问。消费者无需生产代码变更；未来出售/收入/持有分布按版本区分，
+统计分子分母定义、历史原件、缓存、人工审核及冻结报告保持。
+未部署远程消费者或替换/重启运行实例，没有新版完整实机对局；下方未发布段落保留源码阶段状态。
+
 ## v1.1.34 发布准备（2026-10-25）
 
 用户确认发布采集版 v1.1.34 的 Windows、macOS 包及 GitHub/CDN 自动更新源。
