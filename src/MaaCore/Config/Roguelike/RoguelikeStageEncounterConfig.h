@@ -3,6 +3,7 @@
 #include "Config/AbstractConfig.h"
 
 #include <optional>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -29,6 +30,11 @@ public:
     }
 
     const auto& get_event_names(const std::string& theme) const noexcept { return m_event_names.at(theme); }
+
+    // Uses the same mode override/fallback as get_events; an unloaded/unknown
+    // theme or event has no configured successors.
+    [[nodiscard]] std::vector<std::string> next_event_names(
+        std::string_view theme, RoguelikeMode mode, std::string_view event_name) const;
 
     enum class ComparisonType
     {

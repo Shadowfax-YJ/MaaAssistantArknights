@@ -1,9 +1,40 @@
 #include "RoguelikeStageEncounterConfig.h"
 
+#include <algorithm>
 #include <meojson/json.hpp>
 #include <unordered_set>
 
 #include "Utils/Logger.hpp"
+
+std::vector<std::string> asst::RoguelikeStageEncounterConfig::next_event_names(
+    std::string_view theme,
+    RoguelikeMode mode,
+    std::string_view event_name) const
+{
+    const std::string theme_name(theme);
+    auto mode_events = m_events.find({ theme_name, static_cast<int>(mode) });
+    if (mode_events == m_events.end()) {
+        mode_events = m_events.find({ theme_name, -1 });
+    }
+    if (mode_events == m_events.end()) {
+        return { };
+    }
+    const auto event = mode_events->second.find(std::string(event_name));
+    if (event == mode_events->second.end()) {
+        return { };
+    }
+    std::vector<std::string> result;
+    if (!event->second.next_event.empty()) {
+        result.emplace_back(event->second.next_event);
+    }
+    for (const auto& group : event->second.choice_groups) {
+        if (group.next_event && !group.next_event->empty() &&
+            std::ranges::find(result, *group.next_event) == result.end()) {
+            result.emplace_back(*group.next_event);
+        }
+    }
+    return result;
+}
 
 bool asst::RoguelikeStageEncounterConfig::parse(const json::value& json)
 {
@@ -13,7 +44,7 @@ bool asst::RoguelikeStageEncounterConfig::parse(const json::value& json)
 
     // m_event[(肉鸽主题,模式)] 默认继承 m_event["(肉鸽主题,std::nullopt)"]
     std::pair<std::string, int> key = std::make_pair(theme, -1);
-    std::vector<int> modes = json.get("mode", std::vector<int> {});
+    std::vector<int> modes = json.get("mode", std::vector<int> { });
     std::unordered_map<std::string, RoguelikeEvent> events;
     if (!modes.empty()) {
         events = m_events.at(key);

@@ -1,0 +1,24 @@
+{
+  "run": "run-20261025-163154-720268",
+  "collector_version": "v1.1.32",
+  "root": "思乡心切",
+  "child": "思乡心切-2",
+  "selected_options": [
+    "赶跑它",
+    "强行驱赶"
+  ],
+  "error": "encounter evidence has no matching running event page or identity",
+  "images": [
+    {
+      "file": "original-first-page.jpg",
+      "source": "collection-popups/floor-1/node-281474976710660/000375-node-event-capture-cc-cand.jpg",
+      "sha256": "96f0bd26b29def785e95303acfef91e1e88ee7d6ca3d257172839c93581a564e"
+    },
+    {
+      "file": "original-second-page.jpg",
+      "source": "images/000387-task-finished-failed.jpg",
+      "sha256": "c4842f701bda41d5dea380f4649fc55a11e628344ffcc3b33429bf69626b6d90"
+    }
+  ],
+  "controller_boundary": "original names and candidate texts; timing, inputs and result observation are controlled in replay, not a new live game"
+}

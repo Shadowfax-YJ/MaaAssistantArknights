@@ -1,4 +1,4 @@
-## v1.1.32
+## v1.1.33
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.33 (2026-10-25)</b></summary>
+
+### 修复 | Fix
+
+* 修复“思乡心切”等多阶段事件在进入后续页面时异常停止的问题，恢复后续选项执行与记录。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.32 (2026-10-25)</b></summary>
 
 ### 改进 | Improved

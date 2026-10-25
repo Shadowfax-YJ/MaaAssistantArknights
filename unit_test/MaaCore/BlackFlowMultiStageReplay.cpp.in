@@ -1,0 +1,195 @@
+#include "BlackFlowEncounterRecorderBridge.h"
+#include <chrono>
+
+void require(bool value, const std::string& message)
+{
+    require(value, message.c_str());
+}
+
+struct MultiStageScenario
+{
+    BlackFlowEncounterRecorderBridge recorder;
+    blackflow_replay::RoguelikeStageEncounterTaskPlugin p;
+    std::string fault;
+
+    MultiStageScenario(const std::filesystem::path& output, const std::string& root) :
+        recorder(output, root)
+    {
+        p.m_sacrifice_context_provider = [&] {
+            auto [run, page] = recorder.revisions();
+            return std::optional(asst::blackflow::SacrificeContext { run, page });
+        };
+        p.m_event_detail_observer = [&](auto name, auto phase, json::object details, const cv::Mat& image) {
+            if (phase == "candidates" && details.get("choice_step", 0) > 0) {
+                if (fault == "stale run") {
+                    details["run_revision"] = details.get("run_revision", 0) + 1;
+                }
+                if (fault == "stale page") {
+                    details["page_revision"] = details.get("page_revision", 0) + 1;
+                }
+                if (fault == "missing parent") {
+                    details.erase("parent_choice_id");
+                }
+                if (fault == "missing step") {
+                    details.erase("choice_step");
+                }
+                if (fault == "empty capture") {
+                    recorder.fail_next_capture();
+                }
+                if (fault == "save failure") {
+                    recorder.fail_next_save();
+                }
+            }
+            return recorder.record(name, phase, std::move(details), image);
+        };
+    }
+
+    bool begin(const std::string& name, std::string option)
+    {
+        p.m_option_list = { { true, { }, std::move(option), "" } };
+        if (name == "思乡心切") {
+            p.m_option_list = { { true, { }, "赶跑它", "" }, { true, { }, "安慰它", "" } };
+        }
+        if (name == "思乡心切-2") {
+            p.m_option_list = { { true, { }, "强行驱赶", "" } };
+        }
+        p.controller.page = 1;
+        return p.prepare_encounter_choice(name, 0, p.controller.get_image());
+    }
+
+    bool click() { return p.plan_encounter_choice(0, "configured_option") && p.select_analyzed_option(0); }
+};
+
+int main(int argc, char** argv)
+{
+    if (argc != 3) {
+        return 2;
+    }
+    BlackFlowEncounterRecorderBridge::load(argv[1]);
+    const auto output =
+        std::filesystem::path(argv[2]) / std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    std::filesystem::create_directories(output);
+    int passed = 0, failed = 0, ordinal = 0;
+    json::array exported;
+    const auto test = [&](const std::string& name, auto body) {
+        try {
+            body();
+            ++passed;
+            std::cout << "PASS " << name << '\n';
+        }
+        catch (const std::exception& e) {
+            ++failed;
+            std::cerr << "FAIL " << name << ": " << e.what() << '\n';
+        }
+    };
+    const auto links = BlackFlowEncounterRecorderBridge::configured_links();
+    require(links.size() == 12, "configured chains changed: expand coverage");
+    std::vector<std::vector<std::string>> chains;
+    for (const auto& [root, child] : links) {
+        chains.push_back({ root, child });
+        if (root == child) {
+            chains.push_back({ root, child, child });
+        }
+    }
+    for (const auto& names : chains) {
+        test("configured chain " + names.front() + " pages=" + std::to_string(names.size()), [&] {
+            MultiStageScenario scenario(output / std::to_string(ordinal++), names.front());
+            auto& recorder = scenario.recorder;
+            auto& p = scenario.p;
+            for (std::size_t step = 0; step < names.size(); ++step) {
+                const bool prepared = scenario.begin(names[step], "page-option-" + std::to_string(step));
+                require(prepared, "page candidates: " + recorder.error());
+                require(p.m_encounter_choice.step == step, "page did not advance choice step");
+                const bool clicked = scenario.click();
+                require(clicked, "page click: " + recorder.error());
+                require(
+                    p.controller.choice_clicks == step + 1 && !p.m_encounter_choice.confirmed,
+                    "input was not pending");
+            }
+            p.controller.page = 4;
+            require(p.observe_encounter_choice_result(p.controller.get_image()), "second receipt: " + recorder.error());
+            require(
+                p.controller.choice_clicks == names.size() && p.m_encounter_choice.confirmed && !recorder.terminated(),
+                "last page did not finish");
+            const auto events = recorder.events();
+            std::vector<std::string> ids;
+            std::string transaction;
+            std::uint64_t node = 0;
+            int candidates = 0, attempts = 0, confirmations = 0;
+            for (const auto& event : events) {
+                const auto action = event.get("action", std::string());
+                if (!action.starts_with("node.encounter.choice.") && action != "node.event.capture") {
+                    continue;
+                }
+                const auto& d = event.at("details");
+                const auto step = d.get("choice_step", 0);
+                require(
+                    step < names.size() && d.get("event_name", std::string()) == names.at(step),
+                    "recorder received a substituted name");
+                const auto current_node = d.get("source_context", "node", std::uint64_t(0));
+                const auto current_transaction = d.get("source_context", "transaction_id", std::string());
+                require(current_node != 0 && !current_transaction.empty(), "missing source identity");
+                require(
+                    event.get("state", "page", "node_name", std::string()) == names.front(),
+                    "child replaced the canonical node title");
+                if (!node) {
+                    node = current_node;
+                    transaction = current_transaction;
+                }
+                require(
+                    node == current_node && transaction == current_transaction,
+                    "multi-stage chain escaped its node");
+                if (action.ends_with(".candidates")) {
+                    ++candidates;
+                    ids.emplace_back(d.get("choice_id", std::string()));
+                }
+                if (step > 0) {
+                    require(d.get("parent_choice_id", std::string()) == ids.at(step - 1), "child lost parent receipt");
+                }
+                attempts += action.ends_with(".attempt");
+                confirmations += action.ends_with(".confirmed");
+            }
+            require(
+                candidates == names.size() && attempts == names.size() && confirmations == names.size() &&
+                    std::set<std::string>(ids.begin(), ids.end()).size() == names.size(),
+                "incomplete production chain");
+            exported.emplace_back(json::object { { "names", json::array(names) }, { "events", events } });
+        });
+    }
+    const std::string root = "思乡心切", child = "思乡心切-2";
+    for (const auto* fault : { "stale run",
+                               "stale page",
+                               "missing parent",
+                               "missing step",
+                               "empty capture",
+                               "save failure",
+                               "resolved page",
+                               "other node",
+                               "unconfigured suffix",
+                               "other configured event" }) {
+        test(std::string("reject ") + fault + " before child input", [&] {
+            MultiStageScenario scenario(output / std::to_string(ordinal++), root);
+            require(scenario.begin(root, "first option") && scenario.click(), "first input");
+            scenario.fault = fault;
+            if (scenario.fault == "resolved page") {
+                scenario.recorder.complete_page();
+            }
+            if (scenario.fault == "other node") {
+                scenario.recorder.change_node();
+            }
+            const auto name = scenario.fault == "unconfigured suffix"      ? "思乡心切-999"
+                              : scenario.fault == "other configured event" ? "无人商店-2"
+                                                                           : child;
+            const bool next = scenario.begin(name, "second option");
+            require(
+                !next && !scenario.p.parent.enabled && scenario.recorder.terminated(),
+                "invalid child was accepted");
+            require(
+                !scenario.click() && scenario.p.controller.choice_clicks == 1,
+                "a rejected receipt allowed another input");
+        });
+    }
+    std::ofstream(output.parent_path() / "producer-events.json") << json::value(exported).to_string();
+    std::cout << passed << " passed, " << failed << " failed\n";
+    return failed ? 1 : 0;
+}

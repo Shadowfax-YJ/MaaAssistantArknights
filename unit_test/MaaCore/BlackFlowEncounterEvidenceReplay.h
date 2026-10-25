@@ -61,7 +61,7 @@ void encounter_evidence_regressions(const std::filesystem::path& repo, Test&& te
                     record_encounter_evidence(
                         *session,
                         port,
-                        title,
+                        payload.get("event_name", title),
                         payload.get("phase", std::string()),
                         details,
                         payload.get("has_image", false)
@@ -157,14 +157,14 @@ void encounter_evidence_regressions(const std::filesystem::path& repo, Test&& te
     });
     test("changed event title receipt keeps the same actual node and transaction scope",[&]{
         BlackFlowSession session;require(session.initialize("automation_collection")&&session.set_current_floor(2)&&session.update(map_frame(2,1,0,"incident")),"initialize");
-        commit_move(session,2);require(session.mark_page_running()&&session.observe_page_content("第二阶段","RoguelikeEvent"),"running");
+        commit_move(session,2);require(session.mark_page_running()&&session.observe_page_content("思乡心切-2","RoguelikeEvent"),"running");
         Port port;cv::Mat image(720,1280,CV_8UC3,cv::Scalar::all(30));
-        json::object d{{"capture_kind","encounter_choice"},{"choice_id","first-stage"},{"result_event_name","第二阶段"},
+        json::object d{{"capture_kind","encounter_choice"},{"choice_id","first-stage"},{"result_event_name","思乡心切-2"},
             {"confirmation_basis","next_event_candidate_page"},{"evidence_sequence",1},
             {"run_revision",session.run_revision()},{"page_revision",session.page_context()->page_revision}};
-        require(record_encounter_evidence(session,port,"第一阶段","confirmed",d,image),"new title rejected the actual old source");
+        require(record_encounter_evidence(session,port,"思乡心切","confirmed",d,image),"new title rejected the actual old source");
         d["page_revision"]=session.page_context()->page_revision+1;
-        require(!record_encounter_evidence(session,port,"第一阶段","confirmed",d,image),"title exception bypassed stale page guard");
+        require(!record_encounter_evidence(session,port,"思乡心切","confirmed",d,image),"title exception bypassed stale page guard");
     });
     std::ofstream(root / "civilization-producer-events.json") << json::value(civ_exported).to_string();
     std::ofstream(root / "generic-producer-events.json") << json::value(generic_exported).to_string();
