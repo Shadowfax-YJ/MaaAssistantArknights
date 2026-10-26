@@ -1,4 +1,4 @@
-## v1.1.34
+## v1.1.35
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.35 (2026-10-26)</b></summary>
+
+### 修复 | Fix
+
+* 修复前往节点时出现“零件箱已满”弹窗后异常停止的问题，整理完成后重新扫描库存并继续探索。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.34 (2026-10-25)</b></summary>
 
 ### 修复 | Fix

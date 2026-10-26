@@ -1,0 +1,36 @@
+{
+  "original": {
+    "run": "run-20261026-022843-501626",
+    "event_sequence": 2854,
+    "file": "overload-prompt.jpg",
+    "sha256": "f502b6021135fd84d8f1ead321f8e39753cd783bc22f4012654a308931c0c037"
+  },
+  "producer_sample": "actual extracted cleanup, complete-scan, inventory-evidence and direct recovery methods; real floor-three Session, TaskData, lifecycle, output reporter and logger; controlled device/OCR boundaries after the original modal",
+  "controlled_capacity": "2/1 -> 1/1; not the missing capacity hidden behind the original modal",
+  "sample_files": [
+    {
+      "file": "floor-3/BF-A1-2.evidence-1.jpg",
+      "sha256": "306f2a8a600a2c2722cbfbb0e4cd94b046fe0f83323195f3e9714b02df050a76"
+    },
+    {
+      "file": "floor-3/BF-A1-2.evidence-2.jpg",
+      "sha256": "64acb23fb6495c3c089c68730477cde2cb3b2dd23f1ff7544e02a1d0559cad4f"
+    },
+    {
+      "file": "floor-3/BF-A1-2.snapshot.json",
+      "sha256": "66e4f8b55c2d782d0a9cfc9dcf185d23940ee646090fe191d4341d7f0046c5e3"
+    },
+    {
+      "file": "images/000002-inventory-overload-capture-before-input.jpg",
+      "sha256": "0339e616df9284c4d94fa2d2128f69b8e828a3c0269afa05b85e18ee57fe43ef"
+    },
+    {
+      "file": "images/000003-inventory-overload-capture-initial-state.jpg",
+      "sha256": "2be29d616dff1bc6517dda7a619739e81b5c68dcdb9211348d36d97307ad83f0"
+    },
+    {
+      "file": "images/000016-inventory-depart-overload-completed.jpg",
+      "sha256": "4d9a57352689d8dbb06e559177a6c1bc15d224a9248f180b931607d1141c6c38"
+    }
+  ]
+}

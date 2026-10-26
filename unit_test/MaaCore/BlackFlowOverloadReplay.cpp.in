@@ -23,14 +23,16 @@ using namespace asst::blackflow;
 struct {template<class... T>void info(T&&...){}template<class... T>void warn(T&&...){}template<class... T>void error(T&&...){} } Log;
 void set_error(std::string* out,std::string value){if(out)*out=std::move(value);}
 /*CONSTANTS*/
-enum Page {Overloaded=1,ClearMap=2,ClearExpanded=3,OverloadedMap=4,Unknown=5};
+enum Page {Overloaded=1,ClearMap=2,ClearExpanded=3,OverloadedMap=4,Unknown=5,OverloadPrompt=6};
 struct Device {
     Page page=Overloaded;bool detail=false,cancelled=false,after_discard=false;
     bool input_ok=true,clear_to_map=true,missing_capacity=false,stay_overloaded=false;
     bool clear_before_detail_click=false,detail_transition_armed=false;
     bool collapse_during_reset=false,equipped=false,confirm_pending=false,confirm_ok=true;std::string item="种子";int confirms=0;
     bool unknown_after_discard=false,popup=false,cancel_on_wait=false,unknown_items=false,banner_missing=false,discard_input_ok=true;
-    int captures=0,stale=0,swipes=0,toggles=0,discards=0,detail_clicks=0,waits=0;
+    bool prompt_stays=false;
+    int capacity_count=13,capacity_limit=12;
+    int captures=0,stale=0,swipes=0,toggles=0,discards=0,detail_clicks=0,waits=0,prompt_opens=0;
     cv::Mat image(){
         ++captures;auto visible=page;if(stale>0){--stale;visible=Overloaded;}
         cv::Mat result(720,1280,CV_8UC3,cv::Scalar::all(visible==ClearMap?40+(captures%2)*20:10));
@@ -48,6 +50,7 @@ struct OCRer {
         rows.clear();if(image.empty())return {};
         int page=image.at<cv::Vec3b>(0,0)[0];bool detail=image.at<cv::Vec3b>(0,0)[1];
         auto row=[&](std::string text){rows.push_back({{400,257,80,24},.999,std::move(text)});};
+        if(task.ends_with("MovementInventoryOverloadPrompt")&&page==OverloadPrompt)row("零件箱已满");
         if(task.ends_with("MovementInventoryAllItems")&&!device->unknown_items&&(page==Overloaded||page==ClearExpanded))row(device->item);
         if(task.ends_with("MovementInventoryOverloadedBanner")&&!device->banner_missing&&page==Overloaded)row("当前零件数量过多");
         if(task.ends_with("MovementInventoryResetExpand")&&page==OverloadedMap)row("超载");
@@ -55,8 +58,8 @@ struct OCRer {
         if(task.ends_with("MovementInventoryAllItems")&&device->detail_transition_armed&&device->clear_before_detail_click){device->clear_before_detail_click=false;device->page=ClearMap;}
         if(task.ends_with("MovementInventoryEquippedDiscardConfirm")&&device->confirm_pending)row("确认");
         if(task.ends_with("MovementInventoryContents")&&(page==Overloaded||page==ClearExpanded))row("零件箱容量");
-        if((task.ends_with("SacrificeInventoryCount")||task.ends_with("MovementInventoryMapCapacity"))&&!device->missing_capacity&&page!=Unknown)
-            row(page==Overloaded||page==OverloadedMap?"13/12":"12/12");
+        if((task.ends_with("SacrificeInventoryCount")||task.ends_with("MovementInventoryMapCapacity"))&&!device->missing_capacity&&page!=Unknown&&page!=OverloadPrompt)
+            row(std::to_string(page==Overloaded||page==OverloadedMap?device->capacity_count:std::min(device->capacity_count,device->capacity_limit))+"/"+std::to_string(device->capacity_limit));
         return rows.empty()?std::nullopt:std::optional(rows);
     }
     const auto& get_result()const{return rows;}
@@ -92,7 +95,7 @@ struct Context {
         if(task.ends_with("MovementInventoryResetCollapse")){++state.toggles;state.page=state.page==ClearExpanded?ClearMap:OverloadedMap;return true;}
         if(task.ends_with("MovementInventoryResetExpand")){++state.toggles;if(state.page!=OverloadedMap)return false;state.page=Overloaded;return true;}
         if(task.ends_with("MovementInventoryScanResetExpand")){++state.toggles;state.page=state.page==ClearMap?ClearExpanded:Overloaded;return true;}
-        if(task.ends_with("MovementInventoryOverloadOpen")){++state.toggles;state.page=Overloaded;return true;}
+        if(task.ends_with("MovementInventoryOverloadOpen")){++state.toggles;++state.prompt_opens;if(!state.prompt_stays)state.page=Overloaded;return true;}
         if(task.ends_with("MovementInventoryOverloadClose")){if(state.page!=ClearExpanded)return false;++state.toggles;state.page=ClearMap;return true;}
         if(task.ends_with("MovementInventoryDiscardButton")){
             ++state.discards;if(!state.discard_input_ok)return false;state.detail=false;state.after_discard=true;
@@ -114,15 +117,31 @@ struct BlackFlowTaskPort {
     bool record_run_event(int,const RunLogEvent& e,std::shared_ptr<cv::Mat> image,bool,std::string*){
         if(!disk_ok||e.phase==fail_phase)return false;if(e.phase=="before-detail")device->detail_transition_armed=true;events.emplace_back(json::object{{"action",e.action},{"phase",e.phase},{"details",e.details},{"has_image",image&&!image->empty()}});return true;
     }
-    bool cleanup_overloaded_inventory(bool,std::string*);
+    bool cleanup_overloaded_inventory(bool,std::string*,bool=false);
     bool cleanup_open_inventory_if_overloaded(bool&,std::string*);
+    bool cleanup_depart_inventory_overload(std::string*);
 };
 /*OVERLOAD_CLEANUP*/
 /*OVERLOAD_WRAPPER*/
+/*OVERLOAD_DEPART*/
 int main(int argc,char** argv){
  int passed=0,failed=0;json::array exported;
  auto test=[&](const char* name,auto fn){try{fn();++passed;std::cout<<"PASS "<<name<<'\n';}catch(const std::exception& e){++failed;std::cout<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
  auto require=[](bool value,const char* reason){if(!value)throw std::runtime_error(reason);};
+ for(bool hint:{false,true})test("confirmed overload modal opens before reading its obscured capacity",[&]{
+   BlackFlowTaskPort p;device=&p.m_task_context->state;device->page=OverloadPrompt;std::string error;
+   require(p.cleanup_overloaded_inventory(hint,&error),error.c_str());
+   require(device->prompt_opens==1&&device->discards==1&&device->page==ClearMap,"modal did not open once, clear and finish");
+ });
+ test("unchanged modal after its one open input never becomes a cleared inventory",[&]{
+   BlackFlowTaskPort p;device=&p.m_task_context->state;device->page=OverloadPrompt;device->prompt_stays=true;std::string error;
+   require(!p.cleanup_overloaded_inventory(false,&error)&&device->prompt_opens==1&&!device->discards,"unchanged modal was accepted or clicked repeatedly");
+ });
+ test("direct departure keeps the cleaned expanded inventory available for a complete rescan",[&]{
+   BlackFlowTaskPort p;device=&p.m_task_context->state;device->page=OverloadPrompt;device->clear_to_map=false;std::string error;
+   require(p.cleanup_depart_inventory_overload(&error),error.c_str());
+   require(device->prompt_opens==1&&device->discards==1&&device->page==ClearExpanded&&device->toggles==1,"direct cleanup closed or departed before rescanning");
+ });
  test("cleanup clears overload to the real observed normal-map branch without a false left-edge failure",[&]{
    BlackFlowTaskPort p;device=&p.m_task_context->state;std::string error;bool performed=false;
    const bool ok=p.cleanup_open_inventory_if_overloaded(performed,&error);

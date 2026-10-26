@@ -1,0 +1,247 @@
+namespace direct {
+/*CONSTANTS*/
+struct OutputRecorder : ::asst::blackflow::BlackFlowTaskPluginBase {
+    using BlackFlowTaskPluginBase::BlackFlowTaskPluginBase;
+    bool verify(AsstMsg,const json::value&) const override{return false;}
+    bool _run() override{return true;}
+    void flush(){report_outputs();}
+};
+using whole_inventory_replay::InventoryResetCollapseTask;
+using whole_inventory_replay::InventoryStabilityProbeDelay;
+using whole_inventory_replay::movement_inventory_page_visible;
+inline int destination_after_close=1;
+struct OCRer {
+    cv::Mat image;std::string task;
+    explicit OCRer(const cv::Mat& im):image(im){}
+    void set_task_info(std::string_view t){task=t;}
+    std::optional<std::vector<TextRect>> analyze(){
+        if(image.empty())return {};
+        const int state=image.at<cv::Vec3b>(0,0)[2];
+        if((state==5&&task=="LoadingText")||(state==6&&task.ends_with("DataSyncConfirm")))
+            return std::vector<TextRect>{{{10,10,100,25},.99,"overlay"}};
+        return {};
+    }
+};
+struct Matcher {
+    cv::Mat image;std::string task;
+    explicit Matcher(const cv::Mat& im):image(im){}
+    void set_task_info(std::string_view t){task=t;}
+    std::optional<int> analyze(){
+        if(image.empty())return {};
+        const int state=image.at<cv::Vec3b>(0,0)[2];
+        const bool found=(task.ends_with("MovementInventoryOpened")&&state==0)||
+            (task.ends_with("HuntedConfirm")&&state==3)||
+            (task.ends_with("MovementInventoryClosePreview")&&state==4)||
+            (task.ends_with("CloseCollection")&&state==7);
+        return found?std::optional(1):std::nullopt;
+    }
+};
+InventoryOverloadObservation recognize_inventory_overload(const cv::Mat& image){
+    InventoryOverloadObservation o;if(image.empty())return o;
+    const int state=image.at<cv::Vec3b>(0,0)[2];
+    if(state==0||state==1||state>=5){o.page=state==0?InventoryOverloadPage::Inventory:InventoryOverloadPage::Map;o.capacity=InventoryCapacity{state==8?2:1,1};}
+    return o;
+}
+struct Tasks {
+    std::map<std::string,std::string> bases;
+    void set_task_base(std::string name,std::string base){bases[name]=base;}
+} Task;
+struct Port {
+    recovery_replay::BlackFlowTaskPort cleanup;
+    std::function<void()> after_cleanup;
+    bool cleanup_depart_inventory_overload(std::string* error){
+        const bool ok=cleanup.cleanup_depart_inventory_overload(error);
+        if(ok&&after_cleanup)after_cleanup();return ok;
+    }
+};
+struct BlackFlowMovementTaskPlugin : whole_inventory_replay::BlackFlowMovementTaskPlugin {
+    std::shared_ptr<::asst::blackflow::BlackFlowSession> m_session=std::make_shared<::asst::blackflow::BlackFlowSession>();
+    std::shared_ptr<Port> m_port=std::make_shared<Port>();
+    ::asst::blackflow::BlackFlowTaskPort* logger=nullptr;
+    int m_inventory_observation_retries=0,complete_scans=0;
+    bool stop_after_collapse=false;
+    BlackFlowMovementTaskPlugin(){check(m_session->configure_diagnostics({DiagnosticLevel::Detailed,3}),"diagnostics");}
+    bool need_exit(){return cancelled||m_port->cleanup.m_task_context->state.cancelled;}
+    using whole_inventory_replay::BlackFlowMovementTaskPlugin::InventoryFrame;
+    bool run_fixed_task(std::string_view task){
+        const bool ok=whole_inventory_replay::BlackFlowMovementTaskPlugin::run_fixed_task(task);
+        if(ok&&task==InventoryResetCollapseTask){controller.panel_state=destination_after_close;if(stop_after_collapse)cancelled=true;}
+        return ok;
+    }
+    bool scan_inventory_frame(InventoryFrame& f,std::string* error){
+        const bool ok=whole_inventory_replay::BlackFlowMovementTaskPlugin::scan_inventory_frame(f,error);
+        complete_scans+=ok&&f.scan_complete;return ok;
+    }
+    void record_inventory_evidence(const InventoryFrame&,std::string_view,std::string_view) const;
+    void record_run_event(RunLogLevel level,std::string action,std::string phase,std::string outcome,
+                          json::object details,std::string task,std::shared_ptr<cv::Mat> image=nullptr,bool capture=false){
+        RunLogEvent event{.level=level,.action=std::move(action),.phase=std::move(phase),.outcome=std::move(outcome),
+                          .task=std::move(task),.state=m_session->run_log_state(),.details=std::move(details)};
+        std::string error;
+        if(!image&&capture)image=std::make_shared<cv::Mat>(ctrler()->get_image());
+        check(logger->record_run_event(m_session->run_revision(),event,image,false,&error),error.c_str());
+    }
+    void report_outputs(){
+        auto config=std::make_shared<::asst::RoguelikeConfig>();
+        auto port=std::shared_ptr<::asst::blackflow::IBlackFlowTaskPort>(logger,[](auto*){});
+        ::asst::ProcessTask parent({},nullptr,"Roguelike");
+        OutputRecorder recorder({},nullptr,"Roguelike",config,nullptr,m_session,port);
+        recorder.set_task_ptr(&parent);recorder.flush();
+    }
+    bool cleanup_direct_depart_overload(std::string_view);
+    bool refresh_inventory_after_direct_depart(std::string*);
+};
+/*RESCAN*/
+/*CLEANUP*/
+/*INVENTORY_EVIDENCE*/
+}
+// A resource-graph interpreter with controlled recognition and input. TaskData
+// resolves the real templates/actions/next lists; the real lifecycle callback
+// selects floor-3 pursuit combat when HuntedConfirmCompleted is observed.
+bool continue_departure(const std::string& resume,const std::string& source,int ui,
+                        const std::shared_ptr<::asst::blackflow::BlackFlowSession>& session,
+                        ::asst::blackflow::BlackFlowTaskPort& logger){
+    auto config=std::make_shared<::asst::RoguelikeConfig>();
+    check(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",30002}}),"collection config");
+    auto port=std::shared_ptr<::asst::blackflow::IBlackFlowTaskPort>(&logger,[](auto*){});
+    ::asst::ProcessTask parent({},nullptr,"Roguelike");
+    ::asst::blackflow::BlackFlowLifecycleTaskPlugin lifecycle({},nullptr,"Roguelike",config,nullptr,session,port);
+    lifecycle.set_task_ptr(&parent);
+    std::vector<std::string> candidates{resume};int departure_inputs=0;
+    for(int step=0;step<24;++step){
+        ::asst::TaskPtr selected;
+        for(const auto& name:candidates){
+            auto info=::asst::Task.get(name);check(bool(info),"missing production resource task");
+            bool matches=info->algorithm==AlgorithmType::JustReturn;
+            if(auto templ=std::dynamic_pointer_cast<MatchTaskInfo>(info)){
+                for(const auto& file:templ->templ_names){
+                    matches=matches||(ui==3&&file.ends_with("HuntedConfirm.png"))||
+                        (ui==4&&file.find("MovePreview")!=std::string::npos)||
+                        (ui==5&&(file.ends_with("BattleQuickFormation.png")||file.ends_with("Roguelike@StartAction.png")));
+                }
+            }
+            if(matches){selected=std::move(info);break;}
+        }
+        if(!selected){if(ui==1&&source=="HuntedDepart"){ui=3;continue;}return false;}
+        check(selected->name.find("Abandon")==std::string::npos,"recovery entered the abandon graph");
+        if(selected->name=="BlackFlow@Roguelike@HuntedConfirmCompleted"){
+            check(lifecycle.verify(AsstMsg::SubTaskStart,json::object{{"subtask","ProcessTask"},{"details",json::object{{"task",selected->name}}}}),"pursuit lifecycle callback");
+            check(lifecycle.run(),"production pursuit lifecycle failed");
+        }
+        if(selected->action==ProcessTaskAction::ClickSelf&&ui==3)ui=4;
+        if(selected->action==ProcessTaskAction::ClickRect&&ui==4&&selected->name=="BlackFlow@Roguelike@"+source){++departure_inputs;ui=5;}
+        if(selected->name=="BlackFlow@Roguelike@"+source+"Destination"&&ui==5)return departure_inputs==1;
+        candidates=selected->next;
+    }
+    return false;
+}
+} // namespace recovery_replay
+
+void initialize_floor_three(asst::blackflow::BlackFlowSession& session){
+ using namespace asst::blackflow;
+ recovery_replay::check(session.initialize("automation_collection")&&session.set_current_floor(3),"session");
+ BlackFlowPerceptionSnapshot frame;auto& map=frame.observation;
+ map.observation_id="controlled-floor-three";map.sequence=map.viewport_revision=1;map.floor=3;
+ map.floor_from_ocr=map.recognition_ok=map.graph_connected=true;
+ map.current_marker_temporary_id=0;map.current_marker_score=1;
+ map.hud_action_points=frame.run.action_points=7;frame.run.active_movement=MovementKind::Walk;
+ for(int i=0;i<2;++i){PerceptionNodeObservation node;node.temporary_id=i;node.position={0,i};
+  node.exists=node.detected_by_vision=true;node.confidence=1;node.type="incident";node.icon_rect={400+120*i,200,60,60};map.nodes.push_back(node);}
+ map.edges.push_back({0,1,true,true,false,1,"visual"});
+ recovery_replay::check(session.update(frame),"controlled floor-three map");
+ (void)session.take_diagnostic_requests();(void)session.take_telemetry_events();
+}
+
+int main(int argc,char**argv){
+ using namespace recovery_replay;
+ if(argc!=3)return 2;
+ const std::filesystem::path repo=argv[1],out=argv[2];
+ check(::asst::ResourceLoader::get_instance().load(repo/"resource"),"production resources");
+ const auto original=MAA_NS::imread(repo/"unit_test/MaaCore/fixtures/blackflow-overload/20261026/overload-prompt.jpg");
+ check(!original.empty(),"001 original modal missing");
+ const auto resources=json::open(repo/"resource/tasks/Roguelike/BlackFlow.json").value();
+ int passed=0,failed=0,ordinal=0;
+ const auto test=[&](const std::string& name,auto fn){try{fn();++passed;std::cout<<"PASS "<<name<<'\n';}
+    catch(const std::exception& e){++failed;std::cout<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+ const auto output=out/std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+ const auto previous=UserDir.empty()?std::filesystem::current_path():UserDir.get();
+ for(const auto source:{"HuntedDepart","StageEncounterBattleDepart","StageEnterBattleAgain"}){
+  for(const int destination:{1,3,4}){
+   if(destination==3&&std::string_view(source)!="HuntedDepart")continue;
+   for(const auto entry:{OverloadPrompt,Overloaded,ClearMap})for(const bool automatic:{false,true}){
+    if(entry==ClearMap&&automatic)continue;
+    test(std::string(source)+" entry="+std::to_string(entry)+" automatic="+std::to_string(automatic)+" -> cleanup -> full rescan -> "+std::to_string(destination),[&]{
+     const auto folder=output/std::to_string(ordinal++);std::filesystem::create_directories(folder);check(UserDir.set(folder),"UserDir");
+     direct::BlackFlowMovementTaskPlugin p;
+     initialize_floor_three(*p.m_session);
+     check(p.m_session->apply_movement_inventory_observation({{MovementKind::M05,1,0},{MovementKind::M03,3,1}},nullptr,false),"old inventory");
+     ::asst::blackflow::BlackFlowTaskPort logger({},nullptr,"Roguelike",std::make_shared<BlackFlowMapObservationSource>());
+     logger.set_collection_popup_session(p.m_session);p.logger=&logger;
+     auto& port=p.m_port->cleanup;port.owner=p.m_session;port.m_collection_popup_session=p.m_session;
+     port.sink=[&](const auto& e,auto image){std::string error;return logger.record_run_event(p.m_session->run_revision(),e,image,false,&error);};
+     auto& state=port.m_task_context->state;state.page=entry;state.prompt_image=original;state.clear_to_map=automatic;
+     state.item="气垫底座";state.capacity_count=2;state.capacity_limit=1;
+     whole_inventory_replay::configure(p,{{whole_inventory_replay::title("标准引擎")},{whole_inventory_replay::title("待收集零件")}});
+     p.m_port->after_cleanup=[&]{p.controller.panel_state=state.page==ClearExpanded?0:1;};
+     direct::destination_after_close=destination;direct::Task.bases.clear();
+     check(p.cleanup_direct_depart_overload(std::string("BlackFlow@Roguelike@")+source),"handler");
+     check(!p.m_session->terminated(),p.m_session->run_log_state().to_string().c_str());
+     check(state.discards==(entry==ClearMap?0:1)&&state.prompt_opens==(entry==OverloadPrompt?1:0),"opening or discard count");
+     check(p.complete_scans==1&&p.controller.forward_swipes==1,"did not execute one full production inventory scan");
+     check(!p.m_session->movement_inventory_refresh_required(),"inventory still invalid");
+     bool saved_scan=false;
+     for(const auto& file:std::filesystem::recursive_directory_iterator(folder)){
+       if(file.path().filename()!="processing-item-history.json")continue;
+       const auto snapshots=json::open(file.path()).value();
+       for(const auto& snapshot:snapshots.as_array()){
+         saved_scan=saved_scan||(snapshot.get("scan_complete",false)&&snapshot.get("scan_scope",std::string())=="whole_inventory");
+         for(const auto& image:snapshot.at("evidence_images").as_array())
+           check(std::filesystem::is_regular_file(file.path().parent_path()/image.at("file").as_string()),"recorded scan image missing");
+       }
+     }
+     check(saved_scan,"production recorder did not persist the complete rescan");
+     const auto& items=p.m_session->run().resources.movement_instances;
+     check(items.size()==1&&items.front().movement==MovementKind::M03,"discarded item survived or refreshed resources were lost");
+     const auto resume=direct::Task.bases.at("BlackFlow@Roguelike@DirectDepartInventoryOverloadAction");
+     const auto& next=resources.at(resume).at("next").as_array();
+     const bool hunted=std::string_view(source)=="HuntedDepart";
+     check(next.at(0).as_string()==std::string("BlackFlow@Roguelike@")+source,"wrong source-specific resume");
+     // Controlled device transitions; next-list order and action types come from production resources.
+     if(destination==3||(destination==1&&hunted)){
+       check(next.at(1).as_string()=="BlackFlow@Roguelike@HuntedConfirm","map/pursuit misrouted to ordinary stages");
+       check(resources.at(next.at(1).as_string()).get("action",std::string())=="ClickSelf","pursuit confirmation missing");
+     }
+     check(resources.at(next.at(0).as_string()).get("action",std::string())=="ClickRect","departure input missing");
+     if(hunted||destination==4)check(continue_departure(resume,source,destination,p.m_session,logger),"production continuation did not reach the entered battle interface");
+    });
+   }
+  }
+ }
+ for(const auto fault:{"prompt input","prompt unchanged","evidence save","capacity","discard input","rescan","close","unknown destination","transient destination","loading","sync","reward","late overload","stop","stop during opening"}){
+  test(std::string("no resume after ")+fault,[&]{
+   const auto folder=output/std::to_string(ordinal++);std::filesystem::create_directories(folder);check(UserDir.set(folder),"UserDir");
+   direct::BlackFlowMovementTaskPlugin p;initialize_floor_three(*p.m_session);
+   check(p.m_session->apply_movement_inventory_observation({{MovementKind::M05,1,0}},nullptr,false),"old resources");
+   ::asst::blackflow::BlackFlowTaskPort logger({},nullptr,"Roguelike",std::make_shared<BlackFlowMapObservationSource>());
+   logger.set_collection_popup_session(p.m_session);p.logger=&logger;
+   auto& port=p.m_port->cleanup;port.owner=p.m_session;port.m_collection_popup_session=p.m_session;
+   port.sink=[&](const auto& e,auto image){std::string error;return logger.record_run_event(p.m_session->run_revision(),e,image,false,&error);};
+   auto& state=port.m_task_context->state;state.page=OverloadPrompt;state.prompt_image=original;state.clear_to_map=false;
+   state.item="气垫底座";state.capacity_count=2;state.capacity_limit=1;
+   whole_inventory_replay::configure(p,{{whole_inventory_replay::title("标准引擎")},{whole_inventory_replay::title("待收集零件")}});
+   p.m_port->after_cleanup=[&]{p.controller.panel_state=state.page==ClearExpanded?0:1;};
+   const std::string_view f=fault;state.input_ok=f!="prompt input";state.prompt_stays=f=="prompt unchanged";port.disk_ok=f!="evidence save";
+   state.missing_capacity=f=="capacity";state.discard_input_ok=f!="discard input";state.cancel_on_wait=f=="stop during opening";
+   if(f=="rescan")whole_inventory_replay::configure(p,{{}});
+   if(f=="transient destination")p.controller.close_states={1,2};
+   p.controller.collapse_ok=f!="close";p.stop_after_collapse=f=="stop";
+   direct::destination_after_close=f=="unknown destination"?2:f=="loading"?5:f=="sync"?6:f=="reward"?7:f=="late overload"?8:1;direct::Task.bases.clear();
+   p.cleanup_direct_depart_overload("BlackFlow@Roguelike@HuntedDepart");
+   check(direct::Task.bases.at("BlackFlow@Roguelike@DirectDepartInventoryOverloadAction")==direct::RecoveryFailedTask,"failed chain allowed departure");
+   check(p.m_session->run().resources.movement_instances.front().movement==MovementKind::M05,"failed chain committed new resources");
+   check((f=="stop"||f=="stop during opening")?!p.m_session->terminated():p.m_session->terminated(),"wrong failure/cancellation outcome");
+  });
+ }
+ UserDir.set(previous);
+ std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
+}

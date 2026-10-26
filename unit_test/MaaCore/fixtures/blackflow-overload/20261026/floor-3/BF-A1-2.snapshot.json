@@ -1,0 +1,96 @@
+{
+    "accepted_observation_id": "controlled-floor-three",
+    "artifact_set_id": "BF-A1-2",
+    "captured_image_height": 0,
+    "captured_image_width": 0,
+    "diagnostic_sequence": 1,
+    "evidence_images": [
+        {
+            "file": "floor-3/BF-A1-2.evidence-1.jpg",
+            "height": 720,
+            "role": "inventory-page-1",
+            "width": 1280
+        },
+        {
+            "file": "floor-3/BF-A1-2.evidence-2.jpg",
+            "height": 720,
+            "role": "inventory-page-2",
+            "width": 1280
+        }
+    ],
+    "evidence_type": "inventory_ocr",
+    "floor": 3,
+    "floor_four_remembrance": false,
+    "items": [
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 0,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_03",
+            "name": "标准引擎",
+            "name_rect": {
+                "height": 24,
+                "width": 140,
+                "x": 900,
+                "y": 258
+            },
+            "name_score": 0.990000,
+            "remaining_charges": 3,
+            "scan_page": 0,
+            "star_slots": [
+            ]
+        }
+    ],
+    "lorentz_eye_found": false,
+    "lorentz_eye_presence": "absent",
+    "map_generation": 1,
+    "map_revision": 3,
+    "map_section_generation": 1,
+    "map_section_key": "floor-3-generation-1",
+    "map_section_label": "3 层",
+    "outcome": "直接前往过载清理后完整重扫",
+    "recognition_attempt_count": 0,
+    "recognition_attempt_id": "",
+    "recognition_floor": 0,
+    "recognition_floor_source": "next_level_ocr",
+    "recognition_node_diagnostics": [
+    ],
+    "recognition_ocr_diagnostics": [
+    ],
+    "recognition_retry_count": 0,
+    "recognition_screenshot_us": 0,
+    "recognition_topology_base_edge_count": 0,
+    "recognition_topology_extra_edge_count": 0,
+    "recognition_topology_match_score": 0,
+    "recognition_topology_source_digest": "",
+    "recognition_topology_template_id": "",
+    "recognition_tree_hole_color": "",
+    "recognition_tree_hole_effect": "",
+    "recognition_us": 0,
+    "run_revision": 1,
+    "scan_complete": true,
+    "scan_scope": "whole_inventory",
+    "scan_stop_reason": "已扫描到零件箱末尾",
+    "session_active_movement": "walk",
+    "session_active_movement_name": "徒步跋涉",
+    "snapshot_file": "BF-A1-2.snapshot.json",
+    "stopped_at_ordered_boundary": false,
+    "tree_hole_outer_floor": 0,
+    "trigger": "processing_item_observation",
+    "type_boundary_items": [
+        {
+            "boundary_label": "空格",
+            "evidence_image_role": "inventory-page-2",
+            "name": "待收集零件",
+            "name_rect": {
+                "height": 24,
+                "width": 140,
+                "x": 900,
+                "y": 258
+            },
+            "name_score": 0.990000,
+            "scan_page": 1,
+            "type_boundary": true
+        }
+    ]
+}

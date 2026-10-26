@@ -1561,7 +1561,10 @@ bool BlackFlowTaskPort::check_battle_preview_map(BattlePreviewMapCheck& check, s
     return true;
 }
 
-bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open, std::string* error)
+bool BlackFlowTaskPort::cleanup_overloaded_inventory(
+    bool inventory_already_open,
+    std::string* error,
+    bool keep_inventory_open)
 {
     struct ObservedPart
     {
@@ -1679,6 +1682,11 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         if (!current || !current->cleared()) {
             return false;
         }
+        if (keep_inventory_open && current->page == InventoryOverloadPage::Inventory) {
+            // Direct departure must rescan the cleaned inventory before closing it
+            // and allowing a pursuit / nested battle to resume.
+            return true;
+        }
         if (current->page == InventoryOverloadPage::Inventory) {
             if (!run_task(InventoryOverloadCloseTask, "parts-box could not return to routing after cleanup")) {
                 return false;
@@ -1691,6 +1699,18 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(bool inventory_already_open
         }
         return true;
     };
+    if (m_task_context->stopped()) {
+        return false;
+    }
+    // This modal hides the capacity readout. Confirm the observed prompt first;
+    // a missing capacity is not evidence that the inventory is already clear.
+    if (recognizes_text_fragment(
+            m_task_context->capture(),
+            InventoryOverloadPromptTask,
+            "零件箱已满") &&
+        !run_task(InventoryOverloadOpenTask, "parts-box overload prompt could not be confirmed")) {
+        return false;
+    }
     auto initial = observe_stable("initial-state");
     if (!initial) {
         return false;
@@ -2235,7 +2255,7 @@ bool BlackFlowTaskPort::cleanup_open_inventory_if_overloaded(bool& cleanup_perfo
 
 bool BlackFlowTaskPort::cleanup_depart_inventory_overload(std::string* error)
 {
-    return cleanup_overloaded_inventory(false, error);
+    return cleanup_overloaded_inventory(false, error, true);
 }
 
 MoveConfirmationStatus BlackFlowTaskPort::confirm(

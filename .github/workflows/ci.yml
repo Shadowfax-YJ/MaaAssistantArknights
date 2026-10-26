@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.34
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.35
 
 on:
   push:
@@ -188,6 +188,8 @@ jobs:
         run: ./unit_test/MaaCore/run_blackflow_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow overload cleanup and map recovery
         run: ./unit_test/MaaCore/run_blackflow_overload_replay.ps1
+      - name: Test BlackFlow overload modal through cleanup, full rescan and departure recovery
+        run: ./unit_test/MaaCore/run_blackflow_depart_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow multi-stage choices through the production recorder
         run: ./unit_test/MaaCore/run_blackflow_multistage_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow routing and archive regressions

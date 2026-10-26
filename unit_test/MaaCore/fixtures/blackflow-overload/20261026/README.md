@@ -1,0 +1,7 @@
+# Direct departure overload modal, 2026-10-26
+
+Unmodified screenshot from MAA-001 v1.1.34 run-20261026-022843-501626, event 2854. It shows the full-capacity confirmation dialog; the inventory capacity behind it is obscured. Production prompt OCR returns 零件箱已满 with confidence 0.999837, while inventory/page capacity recognition correctly stays unknown.
+
+The composed replay uses the real prompt OCR, extracted production cleanup, complete-scan, inventory-evidence and recovery methods, plus the real floor-three Session, output reporter and logger. Subsequent inventory pages, discarded item, UI transitions, waits and inputs are explicitly controlled boundaries; they are not a reconstruction of missing intermediate screenshots from this run. A resource-graph interpreter uses production TaskData and lifecycle callbacks to continue pursuit or an open battle preview to the battle formation/start-action page. Encounter/reentry recovery from the map checks the existing RecoverMap handoff; it does not simulate the entire map planner or a real device run.
+
+`producer-events.json` and its six referenced JPEG/JSON files are actual output of this composed replay. The complete inventory evidence and both scan-page images pass through the production recorder. The controlled capacity is 2/1 -> 1/1, not a reading of the original modal's obscured background. Provenance hashes cover every referenced file. The shared contract tests check fresh inventory state, evidence references, conservative downstream normalization and the independent v1 signed envelope.

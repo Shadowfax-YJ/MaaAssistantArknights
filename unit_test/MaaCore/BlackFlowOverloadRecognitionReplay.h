@@ -10,6 +10,17 @@ void overload_recognition_regressions(const std::filesystem::path& repo, Test&& 
     using namespace asst;
     using namespace asst::blackflow;
     const auto root = repo / "unit_test/MaaCore/fixtures/blackflow-overload/20261025";
+    test("001 original overload modal has a real prompt and confirm button but no readable capacity", [&] {
+        const auto image = MAA_NS::imread(repo / "unit_test/MaaCore/fixtures/blackflow-overload/20261026/overload-prompt.jpg");
+        require(!image.empty(), "001 overload modal missing");
+        OCRer prompt(image);
+        prompt.set_task_info("BlackFlow@Roguelike@MovementInventoryOverloadPrompt");
+        require(prompt.analyze().has_value(), "actual overload prompt not recognized");
+        OCRer confirm(image);
+        confirm.set_task_info("BlackFlow@Roguelike@MovementInventoryOverloadOpen");
+        require(confirm.analyze().has_value(), "actual modal confirm button not recognized");
+        require(!recognize_inventory_overload(image).known(), "modal supplied an invented background capacity");
+    });
     for (const auto& [name, page, count, limit] : {
              std::tuple { "overloaded-inventory.jpg", InventoryOverloadPage::Inventory, 13, 12 },
              std::tuple { "cleared-map.jpg", InventoryOverloadPage::Map, 12, 12 },

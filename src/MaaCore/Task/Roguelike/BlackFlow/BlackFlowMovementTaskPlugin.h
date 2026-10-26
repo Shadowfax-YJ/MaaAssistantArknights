@@ -113,6 +113,7 @@ private:
 
     bool observe_inventory();
     bool cleanup_direct_depart_overload(std::string_view source_task);
+    bool refresh_inventory_after_direct_depart(std::string* error);
     bool scan_inventory_frame(InventoryFrame& frame, std::string* error);
     bool wait_for_inventory_stability(InventoryFrame& frame, cv::Mat& image, std::string* error);
     bool reopen_inventory_for_scan(std::string* error);

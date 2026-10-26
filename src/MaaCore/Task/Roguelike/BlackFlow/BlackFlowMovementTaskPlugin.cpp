@@ -229,6 +229,10 @@ bool BlackFlowMovementTaskPlugin::cleanup_direct_depart_overload(std::string_vie
         "BlackFlowDirectDepartInventory");
     std::string error;
     if (!m_port->cleanup_depart_inventory_overload(&error)) {
+        if (need_exit()) {
+            report_outputs();
+            return true;
+        }
         record_run_event(
             RunLogLevel::Error,
             "inventory.depart-overload",
@@ -251,6 +255,25 @@ bool BlackFlowMovementTaskPlugin::cleanup_direct_depart_overload(std::string_vie
     // 关闭零件箱后可能回到原预览，也可能回到地图，因此先走来源专用的现场路由，
     // 不能直接把追猎送进 Stages，否则地图先于追猎确认出现时会误走 NextLevel。
     m_session->invalidate_movement_inventory();
+    if (!refresh_inventory_after_direct_depart(&error)) {
+        if (!need_exit()) {
+            m_session->fail(
+                "movement_inventory_observation_failed",
+                error.empty() ? "direct-depart inventory could not be fully rescanned" : error,
+                FailureDisposition::StopTask);
+            record_run_event(
+                RunLogLevel::Error,
+                "inventory.depart-overload",
+                "rescan-failed",
+                "error",
+                json::object { { "source_task", std::string(source_task) }, { "error", error } },
+                "BlackFlowDirectDepartInventory",
+                std::make_shared<cv::Mat>(ctrler()->get_image()),
+                false);
+        }
+        report_outputs();
+        return true;
+    }
     const std::string_view resume_task = hunted          ? HuntedResumeTask
                                          : encounter_battle ? EncounterBattleResumeTask
                                                             : BattleReenterResumeTask;
@@ -270,6 +293,116 @@ bool BlackFlowMovementTaskPlugin::cleanup_direct_depart_overload(std::string_vie
     Log.info("BlackFlow direct-depart inventory overload cleaned", source_task, "resume", resume_task);
     report_outputs();
     return true;
+}
+
+bool BlackFlowMovementTaskPlugin::refresh_inventory_after_direct_depart(std::string* error)
+{
+    if (need_exit()) {
+        return false;
+    }
+    if (!movement_inventory_page_visible(ctrler()->get_image()) && !reopen_inventory_for_scan(error)) {
+        return false;
+    }
+    InventoryFrame frame;
+    if (!scan_inventory_frame(frame, error) || !frame.scan_complete) {
+        record_inventory_evidence(
+            frame,
+            "直接前往过载清理后重扫失败",
+            error == nullptr ? std::string_view { } : std::string_view(*error));
+        return false;
+    }
+    record_inventory_evidence(frame, "直接前往过载清理后完整重扫", {});
+    std::optional<InventoryCapacity> previous_capacity;
+    bool inventory_ready = false;
+    for (int sample = 0; sample < 6 && !need_exit(); ++sample) {
+        const auto observed = recognize_inventory_overload(ctrler()->get_image());
+        const bool ready = observed.cleared() && observed.page == InventoryOverloadPage::Inventory;
+        if (ready && previous_capacity == observed.capacity) {
+            inventory_ready = true;
+            break;
+        }
+        previous_capacity = ready ? observed.capacity : std::nullopt;
+        if (sample != 5 && !sleep(InventoryStabilityProbeDelay)) {
+            return false;
+        }
+    }
+    if (!inventory_ready || need_exit()) {
+        set_error(error, "cleaned inventory changed before closing the complete rescan");
+        return false;
+    }
+    // Single recognized collapse input: do not run the ordinary close graph,
+    // which may route or depart before this source-specific recovery is ready.
+    if (!run_fixed_task(InventoryResetCollapseTask)) {
+        set_error(error, "rescanned inventory could not be collapsed");
+        return false;
+    }
+    enum class Destination
+    {
+        Unknown,
+        Map,
+        Pursuit,
+        Preview
+    };
+    auto previous_destination = Destination::Unknown;
+    for (int sample = 0; sample < 6 && !need_exit(); ++sample) {
+        const auto image = ctrler()->get_image();
+        if (image.empty()) {
+            previous_destination = Destination::Unknown;
+            if (sample != 5 && !sleep(InventoryStabilityProbeDelay)) {
+                return false;
+            }
+            continue;
+        }
+        auto destination = Destination::Unknown;
+        bool blocked = movement_inventory_page_visible(image);
+        for (const auto* task : { "LoadingText", "BlackFlow@Roguelike@DataSyncConfirm" }) {
+            OCRer overlay(image);
+            overlay.set_task_info(task);
+            blocked = overlay.analyze().has_value() || blocked;
+        }
+        for (const auto* task : { "BlackFlow@Roguelike@MovementInventoryOpened",
+                                  "BlackFlow@Roguelike@CloseCollection",
+                                  "BlackFlow@Roguelike@CloseCollectionContinue",
+                                  "BlackFlow@Roguelike@SacrificeInventoryDetailsClose" }) {
+            Matcher overlay(image);
+            overlay.set_task_info(task);
+            blocked = overlay.analyze().has_value() || blocked;
+        }
+        if (!blocked) {
+            const auto observed = recognize_inventory_overload(image);
+            if (!observed.known() || observed.cleared()) {
+                for (const auto& [task, kind] : {
+                         std::pair { "BlackFlow@Roguelike@HuntedConfirm", Destination::Pursuit },
+                         std::pair { "BlackFlow@Roguelike@MovementInventoryClosePreview", Destination::Preview } }) {
+                    Matcher page(image);
+                    page.set_task_info(task);
+                    if (page.analyze()) {
+                        destination = kind;
+                        break;
+                    }
+                }
+                if (destination == Destination::Unknown && observed.cleared() &&
+                    observed.page == InventoryOverloadPage::Map) {
+                    destination = Destination::Map;
+                }
+            }
+        }
+        if (destination != Destination::Unknown && destination == previous_destination) {
+            if (!m_session->apply_movement_inventory_observation(
+                    frame.movement_instances, error, frame.lorentz_eye_found)) {
+                return false;
+            }
+            m_session->mark_map_preserved_after_inventory();
+            m_inventory_observation_retries = 0;
+            return true;
+        }
+        previous_destination = destination;
+        if (sample != 5 && !sleep(InventoryStabilityProbeDelay)) {
+            return false;
+        }
+    }
+    set_error(error, "rescanned inventory did not reach a stable map, preview or pursuit confirmation");
+    return false;
 }
 
 bool BlackFlowMovementTaskPlugin::observe_inventory()

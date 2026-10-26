@@ -36,10 +36,13 @@ def main():
     harness = r'''
     #include <iostream>
     #include <map>
+    #include <memory>
     #include <string>
     #include <string_view>
     #include <vector>
     #include <utility>
+    namespace cv {struct Mat {};}
+    struct Controller {cv::Mat get_image(){return {};}};
     namespace json {using object=std::map<std::string,std::string>;}
     enum class FailureDisposition {StopTask};
     enum class RunLogLevel {Info,Error};
@@ -60,6 +63,11 @@ def main():
     };
     struct BlackFlowMovementTaskPlugin {
         Session* m_session;Port* m_port;
+        Controller controller;
+        Controller* ctrler(){return &controller;}
+        int rescans=0;
+        bool need_exit(){return false;}
+        bool refresh_inventory_after_direct_depart(std::string*){++rescans;return true;}
         template<class... A> void record_run_event(A&&...){}
         void report_outputs(){}
         bool cleanup_direct_depart_overload(std::string_view);
@@ -71,7 +79,7 @@ def main():
             Session session;Port port;BlackFlowMovementTaskPlugin plugin{&session,&port};
             Task.bases.clear();
             plugin.cleanup_direct_depart_overload(argv[i]);
-            const bool ok=!session.failed&&port.cleanup_calls==1&&session.invalidated&&
+            const bool ok=!session.failed&&port.cleanup_calls==1&&session.invalidated&&plugin.rescans==1&&
                 Task.bases[std::string(DirectDepartOverloadAction)]==argv[i+1];
             std::cout<<(ok?"PASS":"FAIL")<<" source="<<argv[i]<<" cleanup_calls="<<port.cleanup_calls
                      <<" successor="<<Task.bases[std::string(DirectDepartOverloadAction)]

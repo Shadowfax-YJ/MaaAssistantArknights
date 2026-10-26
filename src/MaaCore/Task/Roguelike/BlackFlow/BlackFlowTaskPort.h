@@ -572,7 +572,7 @@ private:
         cv::Mat& stable_map_image,
         std::string* error,
         cv::Mat* panel_evidence = nullptr);
-    bool cleanup_overloaded_inventory(bool inventory_already_open, std::string* error);
+    bool cleanup_overloaded_inventory(bool inventory_already_open, std::string* error, bool keep_inventory_open = false);
     bool classify_entered_page(const cv::Mat& image, EnteredPageObservation& observation, std::string* error) const;
     bool persist_collection_popup_capture(
         const std::string& task,
