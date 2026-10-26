@@ -1,5 +1,29 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.35 发布与公开包核验（2026-10-26）
+
+Windows、macOS 通用采集版及 GitHub/CDN 自动更新源已发布为
+[`blackflow-v1.1.35`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.35)。
+来源提交 `b13d098742dfc4f2553ba441d1d15565a5dcf0c3`；流水线
+[`40279543819`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40279543819)
+的两平台构建和发布任务全部成功。Windows 上传前通过 119 项交互、39 项页面切换、41 项
+刷新、61 项狭路相逢、178 项事件、422 项原生恢复、24 项过载、50 项弹窗到重扫/前往的
+组合回放、37 项跨页/跨节点及 370 项路由/归档等检查。
+
+本机完整下载国内两平台包，大小、SHA-256 与 GitHub 资产 digest、双份更新清单一致：
+Windows `65fe4b1f0b812732e2e02cebdfdef9a854e188d0740023d3e2be3b278c16f398`，
+macOS `33ff5b9e7f24fb16f15d6a73e653227b2d03f577aa748292ff914447a578ae9f`。
+GitHub/CDN 两份 macOS 更新签名、Windows ZIP CRC、包身份、配置隔离、文件清单、
+任务/事件资源及 Core 版本/新修复标记通过；普通版 Latest 保持 `v15.0.1`。
+完整记录在 `build/diagnostics/20261026/v1.1.35-public-verification/verification.json`。
+
+本版包含下述过载确认弹窗入口及清理后完整重扫修复，更新说明只描述用户可见效果。
+消费者已兼容，60 项共享契约与 74 项相关分析检查通过，无需消费者生产代码变更。
+原始/图片/签名 schema、能力、固定验证器 bundle、任务族和宿主协议保持；未知版本仍拒绝，
+旧缺项仍未知，不增加获得/访问事实，专题分子分母定义、历史原件、缓存、人工审核及冻结
+统计保持。未部署远程消费者、替换或重启运行实例，没有新版完整实机对局验证。
+下方发布准备及未发布段落保留当时验证阶段状态。
+
 ## v1.1.35 发布准备（2026-10-26）
 
 用户确认发布采集版 v1.1.35 的 Windows、macOS 包及 GitHub/CDN 自动更新源。范围仅为下述
