@@ -1,5 +1,33 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.36 发布与公开包核验（2026-10-26）
+
+Windows、macOS 通用采集版及 GitHub/CDN 自动更新源已发布为
+[`blackflow-v1.1.36`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.36)。
+来源提交 `b93e84cda2931b861fa7342455d3dc6d203c9f84`；流水线
+[`40305965748`](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40305965748)
+最终成功。macOS 首次在成功创建 DMG 后由 `hdiutil verify` 返回 `Resource temporarily unavailable`；
+同一提交只重跑 GUI 及其下游任务后，实际 DMG 校验为 VALID，没有跳过校验、替换源码或重做
+已成功的 Windows/Core 构建。该初次环境失败及成功重试日志均保留在本机发布核验目录。
+
+CI Windows 上传前通过 119 项交互、39 项页面切换、41 项刷新、61 项狭路相逢、184 项
+事件/派遣、429 项原生恢复、24 项过载、50 项组合恢复、37 项跨页及 370 项路由/归档检查。
+新增实图覆盖薄葬草选中/未选中、重复项、不同列及无薄葬草/藏品页负例；本地 60 项共享
+契约与更新/封包检查（47 项，其中 8 项平台条件跳过）通过。
+
+本机完整下载国内两平台包，大小、SHA-256 与 GitHub 资产 digest、双份更新清单一致：
+Windows `bbc5367c1764f5ee05c83b94724c4c8f453a8e0c26d309f377644074a16bb3cd`，
+macOS `6ab7ab4d41d986eb58a21b38a75d3a701287aff3e9c746fcabf39020809ef2bc`。
+GitHub/CDN 两份 macOS 更新签名、Windows ZIP CRC、包身份、配置隔离、文件清单、
+资源及 Core 版本/新逻辑标记通过；新薄葬草模板与来源提交逐字节一致。普通版 Latest 保持
+`v15.0.1`。详情见 `build/diagnostics/20261026/v1.1.36-public-verification/verification.json`。
+
+本版仅增加薄葬草优先取舍，更新说明只描述该用户可见规则。消费者已兼容，无需生产代码
+变更；原始/图片/签名 schema、能力、固定验证器 bundle、任务族和宿主协议保持。旧缺项
+仍未知、未知版本拒绝；按策略版本区分未来换出/奖励分布，不当作均匀库存抽样。专题分子
+分母定义、历史原件、缓存、审核及冻结统计保持。未部署远程消费者、替换或重启运行实例，
+没有新版完整实机对局验证；下方准备及未发布段落保留当时验证阶段状态。
+
 ## v1.1.36 发布准备（2026-10-26）
 
 用户授权直接发版并由维护端确定本次版本号，沿用当前 CI 采集版 v1.1.35 的补丁序列发布
