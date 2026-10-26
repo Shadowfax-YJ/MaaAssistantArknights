@@ -63,6 +63,30 @@ std::optional<SacrificeItemList> sacrifice_item_list(const cv::Mat& image)
     return std::nullopt;
 }
 
+std::optional<Rect> sacrifice_preferred_part(const cv::Mat& image, const std::vector<Rect>& cards)
+{
+    if (image.empty()) {
+        return std::nullopt;
+    }
+    for (const auto& card : cards) {
+        Matcher icon(image);
+        icon.set_task_info("BlackFlow@Roguelike@SacrificeThinGrass");
+        icon.set_roi(card);
+        if (!icon.analyze()) {
+            continue;
+        }
+        // Apply the part rule only to the parts picker, never the relic picker.
+        OCRer heading(image);
+        heading.set_task_info("BlackFlow@Roguelike@SacrificeListHeading");
+        if (heading.analyze() && heading.get_result().size() == 1 &&
+            heading.get_result().front().text == "零件列表") {
+            return card;
+        }
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
 bool sacrifice_item_selected(const cv::Mat& image, const Rect& card)
 {
     const Rect edge { card.x + 10, card.y + 93, 82, 10 };

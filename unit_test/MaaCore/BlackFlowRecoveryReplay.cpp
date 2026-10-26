@@ -149,6 +149,7 @@ struct Port : IBlackFlowTaskPort
 #include "BlackFlowItemNameReplay.h"
 #include "BlackFlowCivilizationReplay.generated.h"
 #include "BlackFlowOverloadRecognitionReplay.h"
+#include "BlackFlowSacrificePriorityReplay.h"
 #include "BlackFlowMovePreviewReplay.h"
 #include "BlackFlowOpeningCultivationReplay.h"
 #include "BlackFlowOpeningSelectionReplay.h"
@@ -613,6 +614,7 @@ int main(int argc, char** argv)
     item_name_regressions(std::filesystem::path(argv[1]), test);
     civilization_scan_regressions(std::filesystem::path(argv[1]), test);
     overload_recognition_regressions(std::filesystem::path(argv[1]), test);
+    sacrifice_priority_regressions(std::filesystem::path(argv[1]), test);
     store_identity_regressions(std::filesystem::path(argv[1]), test);
     encounter_evidence_regressions(std::filesystem::path(argv[1]), test);
     move_preview_regressions(std::filesystem::path(argv[1]), test);

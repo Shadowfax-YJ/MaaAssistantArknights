@@ -1,8 +1,8 @@
-黑流树海采集版 v1.1.35
+黑流树海采集版 v1.1.36
 
 ### 本次更新
 
-* 修复前往节点时出现“零件箱已满”弹窗后异常停止的问题，整理完成后重新扫描库存并继续探索。
+* 失与得交换零件时优先选择薄葬草。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -15,8 +15,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.35/MAA-BlackFlow-Data-Collection-v1.1.35-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.35/MAA-BlackFlow-Data-Collection-v1.1.35-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.36/MAA-BlackFlow-Data-Collection-v1.1.36-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.36/MAA-BlackFlow-Data-Collection-v1.1.36-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

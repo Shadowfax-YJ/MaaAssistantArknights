@@ -121,6 +121,8 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_event()
             ++m_sacrifice.exchanges;
             m_sacrifice.phase = SacrificePhase::AwaitRepeat;
             m_sacrifice.selected_card.reset();
+            m_sacrifice.preferred_part = false;
+            m_sacrifice.preferred_part_rejected = false;
             m_sacrifice.picker_attempts = { };
             m_sacrifice.selected_name.clear();
             m_sacrifice.initial_choice.reset();
@@ -279,7 +281,16 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
             m_sacrifice.phase = SacrificePhase::Finished;
             return leave_picker();
         }
-        m_sacrifice.selected_card = stable->cards[random_index(stable->cards.size())];
+        if (!m_sacrifice.preferred_part_rejected) {
+            m_sacrifice.selected_card = blackflow::perception::sacrifice_preferred_part(image, stable->cards);
+        }
+        m_sacrifice.preferred_part = m_sacrifice.selected_card.has_value();
+        if (!m_sacrifice.selected_card) {
+            m_sacrifice.selected_card = stable->cards[random_index(stable->cards.size())];
+        }
+    }
+    if (need_exit()) {
+        return false;
     }
     const Rect card = *m_sacrifice.selected_card;
     const cv::Mat before = ctrler()->get_image();
@@ -303,6 +314,13 @@ bool asst::RoguelikeStageEncounterTaskPlugin::handle_sacrifice_picker()
         if (name.empty() || name != previous) {
             previous = name;
             continue;
+        }
+        if (m_sacrifice.preferred_part && name != "薄葬草") {
+            Log.warn("BlackFlow sacrifice preferred part name mismatch; falling back to random selection", name);
+            m_sacrifice.selected_card.reset();
+            m_sacrifice.preferred_part = false;
+            m_sacrifice.preferred_part_rejected = true;
+            return true;
         }
         if (!report_sacrifice("item-selected", json::object { { "selected_name", name } }, image)) {
             return false;

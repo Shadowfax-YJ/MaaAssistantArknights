@@ -214,6 +214,52 @@
         require(s.p.handle_sacrifice_picker() && s.count("confirmed")==2,"second picker confirmation");
         encounter_fixtures.emplace_back(json::object{{"case","sacrifice-two-rounds"},{"payloads",s.events}});
     });
+    test("sacrifice parts prefer thin grass over the random first card and record its actual name", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80},{911,185,85,80}};
+        c.sacrifice_names={"种子","薄葬草","薄葬草"};c.sacrifice_preferred=1;
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event()&&s.p.handle_sacrifice_picker(),"exchange");
+        require(c.sacrifice_selected==1&&c.sacrifice_card_clicks==1&&c.sacrifice_confirmations==1,"preferred card not exchanged");
+        require(s.p.m_sacrifice.selected_name=="薄葬草"&&s.count("item-selected")==1,"actual selected name missing");
+    });
+    test("sacrifice without thin grass keeps random selection", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80}};c.sacrifice_names={"种子","生逝"};
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event()&&s.p.handle_sacrifice_picker(),"exchange");
+        require(c.sacrifice_selected==0&&c.sacrifice_confirmations==1&&s.p.m_sacrifice.selected_name=="种子","random policy changed");
+    });
+    test("sacrifice priority repeats in the second round and preserves its first event option", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80}};c.sacrifice_names={"种子","薄葬草"};c.sacrifice_preferred=1;
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event()&&s.p.handle_sacrifice_picker(),"first exchange");
+        s.p.m_option_list={{true,{},"获得加工品",""}};
+        require(s.p.handle_sacrifice_event(),"first reward");c.page=1;c.sacrifice_selected=0;
+        s.p.m_option_list={{true,{},"原始选项",""},{true,{},"另一选项",""},{true,{},"离开",""}};
+        require(s.p.handle_sacrifice_event()&&s.p.m_sacrifice.initial_choice==0&&s.p.handle_sacrifice_picker(),"second exchange");
+        require(c.sacrifice_probes==2&&c.sacrifice_confirmations==2&&s.p.m_sacrifice.selected_name=="薄葬草","priority not reset per round");
+    });
+    test("sacrifice unconfirmed preferred name retries the same card without confirming", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80}};c.sacrifice_names={"种子",""};c.sacrifice_preferred=1;
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event()&&s.p.handle_sacrifice_picker(),"first observation");
+        require(c.sacrifice_probes==1&&c.sacrifice_confirmations==0&&s.count("item-selected")==0,"unreadable name became exchange");
+        c.sacrifice_names[1]="薄葬草";
+        require(s.p.handle_sacrifice_picker()&&c.sacrifice_probes==1&&c.sacrifice_card_clicks==1&&c.sacrifice_confirmations==1,"retry changed selected card");
+    });
+    test("sacrifice false preferred icon never confirms a mismatched name as thin grass", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80}};c.sacrifice_names={"种子","生逝"};c.sacrifice_preferred=1;
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event()&&s.p.handle_sacrifice_picker(),"priority observation");
+        require(c.sacrifice_confirmations==0&&s.count("item-selected")==0&&s.p.m_sacrifice.preferred_part_rejected,"mismatch confirmed");
+        require(s.p.handle_sacrifice_picker()&&c.sacrifice_probes==1&&c.sacrifice_confirmations==1&&s.p.m_sacrifice.selected_name=="种子","random fallback stuck on rejected priority");
+    });
+    test("sacrifice user stop during preferred recognition issues no selection or confirmation", [&] {
+        ChoiceScenario s;auto& c=s.p.controller;
+        c.sacrifice_cards={{685,185,85,80},{798,185,85,80}};c.sacrifice_names={"种子","薄葬草"};c.sacrifice_preferred=1;
+        c.stop_on_sacrifice_probe=true;
+        require(s.p.refresh_sacrifice_context()&&s.p.handle_sacrifice_event(),"initial choice");
+        require(!s.p.handle_sacrifice_picker()&&!c.sacrifice_card_clicks&&!c.sacrifice_confirmations,"input after stop");
+    });
     test("sacrifice confirmed empty returns on first dispatch then leaves", [&] {
         ChoiceScenario s;
         require(s.p.refresh_sacrifice_context() && s.p.handle_sacrifice_event(), "initial choice");

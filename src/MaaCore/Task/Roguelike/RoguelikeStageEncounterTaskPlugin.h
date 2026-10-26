@@ -200,6 +200,8 @@ private:
         int exchanges = 0;
         std::optional<size_t> initial_choice;
         std::optional<Rect> selected_card;
+        bool preferred_part = false;
+        bool preferred_part_rejected = false;
         blackflow::SacrificePickerAttempts picker_attempts;
         std::string selected_name;
         std::optional<std::vector<std::string>> naturals_before;

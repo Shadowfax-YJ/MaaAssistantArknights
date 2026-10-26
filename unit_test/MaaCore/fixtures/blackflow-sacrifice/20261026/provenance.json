@@ -1,0 +1,50 @@
+{
+  "originals": [
+    {
+      "file": "thin-grass-0.jpg",
+      "member": "run-20261023-071455-620718/collection-popups/floor-5/node-1407375017771018/004262-node-event-capture-item-selected.jpg",
+      "sha256": "083cc6f1f2bd566d562c8b5f67f8501547c92d783b58f7bafd4a9ab1d7254f7a",
+      "selected_name": "薄葬草"
+    },
+    {
+      "file": "thin-grass-1.jpg",
+      "member": "run-20261023-142017-666274/collection-popups/floor-5/node-1407374917107718/004582-node-event-capture-item-selected.jpg",
+      "sha256": "43c57b7dad522112eceab97071aed9b85f18b65849604b7a9dd28e3293e32757",
+      "selected_name": "薄葬草"
+    },
+    {
+      "file": "thin-grass-2.jpg",
+      "member": "run-20261023-180949-275259/collection-popups/floor-2/node-562949953421314/001350-node-event-capture-item-selected.jpg",
+      "sha256": "484ec5118ff0ee4cdff77c4e58232f60fce3c3fdd1ac599bd498f7d9d44a3d97",
+      "selected_name": "薄葬草"
+    },
+    {
+      "file": "thin-grass-3.jpg",
+      "member": "run-20261024-003856-253305/collection-popups/floor-2/node-562950020530180/001265-node-event-capture-item-selected.jpg",
+      "sha256": "a4b2ebfc6d6f4232694ce9dd547b5b155618a94eb15c028ba4bc88a42593568a",
+      "selected_name": "薄葬草"
+    },
+    {
+      "file": "thin-grass-4.jpg",
+      "member": "run-20261024-151111-937729/collection-popups/floor-3/node-844424963686402/002400-node-event-capture-item-selected.jpg",
+      "sha256": "7048315723f0eabf4931e9e68eecb4891dc82c48fbd411955c2b7961bfe7f729",
+      "selected_name": "薄葬草"
+    },
+    {
+      "file": "relic-picker.jpg",
+      "member": "run-20261020-021614-902872/collection-popups/floor-3/node-844424963686404/002728-node-event-capture-item-selected.jpg",
+      "sha256": "f0ea0c80525b03d66c977c93f0e8f436acd1cde8e35926df4df04208a06057d7",
+      "selected_name": "“阿猛”"
+    }
+  ],
+  "template": {
+    "file": "resource/template/Roguelike/BlackFlow/BlackFlow@Roguelike@SacrificeThinGrass.png",
+    "source": "thin-grass-0.jpg",
+    "crop": [
+      923,
+      190,
+      66,
+      68
+    ]
+  }
+}

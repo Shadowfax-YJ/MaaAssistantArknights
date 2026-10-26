@@ -97,6 +97,12 @@ struct ReplayController
     // 0 = visible cards, 1 = positively confirmed empty UI, 2 = recognition unknown.
     std::vector<int> sacrifice_list_states { 0 };
     size_t sacrifice_list_sample = 0;
+    std::vector<Rect> sacrifice_cards {{685,185,85,80}};
+    std::vector<std::string> sacrifice_names {"种子"};
+    std::optional<size_t> sacrifice_preferred;
+    size_t sacrifice_selected = 0;
+    int sacrifice_probes = 0, sacrifice_card_clicks = 0, sacrifice_confirmations = 0;
+    bool sacrifice_mode = false, stop_on_sacrifice_probe = false;
     int sacrifice_list_state() {
         return sacrifice_list_states[std::min(sacrifice_list_sample++, sacrifice_list_states.size() - 1)];
     }
@@ -148,6 +154,14 @@ struct ReplayController
             return false;
         }
         selected_slot = (rect.x - 685) / 113;
+        if (sacrifice_mode) {
+            for (size_t i=0;i<sacrifice_cards.size();++i) {
+                const auto& card=sacrifice_cards[i];
+                if (rect.x>=card.x && rect.x<card.x+card.width && rect.y>=card.y && rect.y<card.y+card.height) {
+                    sacrifice_selected=i;++sacrifice_card_clicks;break;
+                }
+            }
+        }
         return true;
     }
 };
@@ -165,13 +179,19 @@ inline std::vector<Rect> sacrifice_visible_items(const cv::Mat&) {
     return active->sacrifice_list_state() == 0 ? std::vector<Rect>{{685,185,85,80}} : std::vector<Rect>{};
 }
 inline std::optional<SacrificeItemList> sacrifice_item_list(const cv::Mat&) {
+    active->sacrifice_mode=true;
     const int state = active->sacrifice_list_state();
     if (state == 2) return std::nullopt;
     if (state == 1) return SacrificeItemList{{}, "explicit_empty_text", "没有可交换的零件"};
-    return SacrificeItemList{{{685,185,85,80}}, {}, {}};
+    return SacrificeItemList{active->sacrifice_cards, {}, {}};
 }
-inline bool sacrifice_item_selected(const cv::Mat&, const Rect&) { return true; }
-inline std::string sacrifice_selected_name(const cv::Mat&) { return "种子"; }
+inline std::optional<Rect> sacrifice_preferred_part(const cv::Mat&,const std::vector<Rect>& cards) {
+    ++active->sacrifice_probes;
+    if(active->stop_on_sacrifice_probe)active->stopped=true;
+    return active->sacrifice_preferred?std::optional(cards.at(*active->sacrifice_preferred)):std::nullopt;
+}
+inline bool sacrifice_item_selected(const cv::Mat&, const Rect& card) { return card==active->sacrifice_cards.at(active->sacrifice_selected); }
+inline std::string sacrifice_selected_name(const cv::Mat&) { return active->sacrifice_names.at(active->sacrifice_selected); }
 }
 
 struct OCRer
@@ -412,7 +432,7 @@ bool ProcessTask::run()
     if (task.ends_with("StageEncounterLeaveConfirm")) {
         return c.page == 2;
     }
-    if (task.ends_with("SacrificeConfirm")) c.page = 3;
+    if (task.ends_with("SacrificeConfirm")) {c.page = 3;++c.sacrifice_confirmations;}
     return true;
 }
 }

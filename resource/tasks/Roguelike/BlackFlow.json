@@ -4561,7 +4561,7 @@
         ]
     },
     "BlackFlow@Roguelike@SacrificeSelectItem": {
-        "Doc": "由通用事件插件随机选择失与得物品，核对左下名称后确认交换。",
+        "Doc": "零件交换优先选择薄葬草，其余保留随机选择；核对左下名称后确认交换。",
         "algorithm": "JustReturn",
         "next": [
             "BlackFlow@Roguelike@StageEncounterReward"
@@ -4580,6 +4580,12 @@
         "next": [
             "BlackFlow@Roguelike@StageEncounterResult"
         ]
+    },
+    "BlackFlow@Roguelike@SacrificeThinGrass": {
+        "Doc": "仅定位失与得卡片中的薄葬草图标；仍须零件列表标题及选中后的名称复核。",
+        "template": "BlackFlow@Roguelike@SacrificeThinGrass.png",
+        "roi": [686, 175, 566, 330],
+        "templThreshold": 0.93
     },
     "BlackFlow@Roguelike@SacrificeFirstItem": {
         "algorithm": "JustReturn",

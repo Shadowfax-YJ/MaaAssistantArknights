@@ -1,4 +1,4 @@
-## v1.1.35
+## v1.1.36
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.36 (2026-10-26)</b></summary>
+
+### 改进 | Improved
+
+* 失与得交换零件时优先选择薄葬草。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.35 (2026-10-26)</b></summary>
 
 ### 修复 | Fix
