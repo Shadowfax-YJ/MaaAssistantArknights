@@ -1,5 +1,24 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.37 发布与公开包核验（2026-10-28）
+
+Windows、macOS 通用采集版及 GitHub/CDN 更新源已发布为
+[blackflow-v1.1.37](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.37)，来源提交 `c586149cb5651c9c913a4739dce1901a8b4d269e`；流水线
+[40641850931](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40641850931)
+成功。修复派遣直接结束页未交回通用结算，以及移动装载网络等待被判失败后弃局。
+公开说明仅保留这两项用户可感知修复。
+
+CI 两平台构建、macOS DMG 实际校验及 Windows 上传前回归通过；新增真实截图组合回放
+19 项通过。完整下载国内双平台包后，核对 GitHub 资产 SHA-256、双份清单、macOS 更新
+签名、Windows ZIP/文件清单/版本身份，以及结束页资源和两项修复的 Core 标记均通过。
+普通版 Latest Release 保持 `v15.0.1`。结果保存于
+`build/diagnostics/20261028/v1.1.37-public-verification/verification.json`。
+
+原始 v1、图片/签名 schema、能力、固定验证器 bundle、任务族及宿主协议不变；69 项共享
+契约及 57 项相关分析检查通过。旧缺项未知，未知版本拒绝，统计定义、历史归档、缓存、审核
+与冻结报告保持，无需消费者或通用宿主生产代码升级及远程部署。未替换或重启运行实例，
+未进行新版完整实机对局。下方段落保留验证与发布准备阶段状态。
+
 ## v1.1.37 发布准备（2026-10-28）
 
 用户要求发布本次两项修复，维护端将 CI 采集版版本从 v1.1.36 调整为 v1.1.37，沿用
