@@ -1,0 +1,66 @@
+{
+    "accepted_observation_id": "controlled-recovery-map",
+    "artifact_set_id": "BF-A1-2",
+    "captured_image_height": 0,
+    "captured_image_width": 0,
+    "diagnostic_sequence": 2,
+    "evidence_images": [
+        {
+            "file": "floor-2/BF-A1-2.evidence-1.jpg",
+            "height": 720,
+            "role": "loaded-icon",
+            "width": 1280
+        }
+    ],
+    "evidence_type": "loaded_icon",
+    "floor": 2,
+    "floor_four_remembrance": false,
+    "items": [
+        {
+            "evidence_image_role": "loaded-icon",
+            "loaded": true,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 44,
+                "width": 64,
+                "x": 1176,
+                "y": 100
+            },
+            "name_score": 0.882401
+        }
+    ],
+    "map_generation": 1,
+    "map_revision": 7,
+    "map_section_generation": 1,
+    "map_section_key": "floor-2-generation-1",
+    "map_section_label": "2 层",
+    "outcome": "已识别地图装载图标",
+    "recognition_attempt_count": 0,
+    "recognition_attempt_id": "",
+    "recognition_floor": 0,
+    "recognition_floor_source": "next_level_ocr",
+    "recognition_node_diagnostics": [
+    ],
+    "recognition_ocr_diagnostics": [
+    ],
+    "recognition_retry_count": 0,
+    "recognition_screenshot_us": 0,
+    "recognition_topology_base_edge_count": 0,
+    "recognition_topology_extra_edge_count": 0,
+    "recognition_topology_match_score": 0,
+    "recognition_topology_source_digest": "",
+    "recognition_topology_template_id": "",
+    "recognition_tree_hole_color": "",
+    "recognition_tree_hole_effect": "",
+    "recognition_us": 0,
+    "run_revision": 1,
+    "scan_complete": false,
+    "session_active_movement": "walk",
+    "session_active_movement_name": "徒步跋涉",
+    "snapshot_file": "BF-A1-2.snapshot.json",
+    "target": "rogue_6_scrap_M_01",
+    "target_name": "报废轮子",
+    "tree_hole_outer_floor": 0,
+    "trigger": "processing_item_observation"
+}

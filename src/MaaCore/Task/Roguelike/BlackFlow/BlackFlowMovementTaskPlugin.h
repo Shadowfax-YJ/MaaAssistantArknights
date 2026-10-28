@@ -40,6 +40,7 @@ private:
         Selected,
         Unavailable,
         Failed,
+        NetworkBlocked,
     };
 
     enum class InventoryAnalysisOutcome
@@ -121,9 +122,10 @@ private:
         analyze_inventory_frame(const cv::Mat& image, InventoryFrame& frame, int minimum_name_x, std::string* error) const;
 
     SelectionOutcome select_movement(MovementKind target, std::string* error);
-    bool verify_walking_on_map();
-    bool ensure_panel_open(std::string* error);
-    bool close_panel(std::string* error);
+    bool verify_walking_on_map(bool* network_waited = nullptr);
+    bool wait_for_movement_network(cv::Mat& image, bool& network_waited, std::string* error);
+    bool ensure_panel_open(std::string* error, bool* network_waited = nullptr);
+    bool close_panel(std::string* error, bool* network_waited = nullptr);
     bool title_visible(const cv::Mat& image) const;
     bool scan_current_frame(PanelFrame& frame, std::string* error) const;
     bool analyze_frame(const cv::Mat& image, PanelFrame& frame, std::string* error) const;
@@ -152,5 +154,8 @@ private:
     mutable PendingWork m_pending = PendingWork::None;
     mutable std::string m_direct_depart_source;
     int m_inventory_observation_retries = 0;
+    static constexpr int NetworkWaitSamples = 240;
+    int m_network_wait_samples_remaining = NetworkWaitSamples;
+    int m_network_wait_revision = 0;
 };
 } // namespace asst::blackflow

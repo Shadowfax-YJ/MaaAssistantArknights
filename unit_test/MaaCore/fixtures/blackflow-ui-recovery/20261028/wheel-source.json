@@ -1,0 +1,130 @@
+{
+  "file": "wheel-preview.jpg",
+  "sha256": "56eb4d1c56665b382925a5a954b41ae7e54164a0cc2d0787aaefeb95fbc84087",
+  "source": "run-20261028-060705-991990/images/000613-move-preview-completed.jpg",
+  "event": {
+    "action": "move.preview",
+    "details": {
+      "disposition": 0,
+      "error": "",
+      "image_capture": {
+        "mean_difference": 0.533738,
+        "mode": "stable",
+        "sampled_frames": 2,
+        "status": "captured"
+      }
+    },
+    "elapsed_ms": 478160,
+    "event_id": "BF-R3-613",
+    "floor": 1,
+    "image": {
+      "codec": "jpeg",
+      "height": 720,
+      "path": "images/000613-move-preview-completed.jpg",
+      "quality": 76,
+      "source_height": 720,
+      "source_width": 1280,
+      "width": 1280
+    },
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 35,
+    "outcome": "success",
+    "phase": "completed",
+    "run_revision": 3,
+    "schema_version": 1,
+    "sequence": 613,
+    "state": {
+      "action_points": 3,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 281474976710660,
+      "decision_id": "BF-D3-3",
+      "expedition_core_away": false,
+      "floor": 1,
+      "hope": 0,
+      "ingots": 17,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 35,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_11",
+          "remaining_charges": 3
+        },
+        {
+          "inventory_index": 2,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_06",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "BF-O88",
+      "observed_current_node": 281474976710660,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 10,
+      "revealed_nodes": [
+        281474976710658,
+        281475010265088,
+        281474976710660,
+        281475043819528,
+        281475010265094,
+        281475043819522,
+        281475010265092,
+        281475043819524,
+        281474976710664,
+        281475010265090,
+        281474976710662,
+        281475043819526
+      ],
+      "run_revision": 3,
+      "seeds": 0,
+      "selected_difficulty": 6,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction": {
+        "action_id": "rogue_6_scrap_M_01:281474976710660:281475043819524:281475043819524",
+        "authoritative_cost": 1,
+        "landing": 281475043819524,
+        "movement": "rogue_6_scrap_M_01",
+        "source": 281474976710660,
+        "stage": 1,
+        "target": 281475043819524
+      },
+      "transaction_id": "BF-T3-4",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 88,
+      "visited_nodes": [
+        281475010265094,
+        281474976710660,
+        281474976710662
+      ],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowRouting",
+    "thread_id": "40904",
+    "timestamp": "2026-10-27T22:15:04.154Z",
+    "timezone": "UTC",
+    "transaction_id": "BF-T3-4"
+  }
+}

@@ -1,0 +1,526 @@
+{
+    "accepted_observation_id": "controlled-recovery-map",
+    "artifact_set_id": "BF-A1-4",
+    "captured_image_height": 0,
+    "captured_image_width": 0,
+    "diagnostic_sequence": 4,
+    "evidence_images": [
+        {
+            "file": "floor-2/BF-A1-4.evidence-1.jpg",
+            "height": 720,
+            "role": "panel-page-1-frame-1",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-4.evidence-2.jpg",
+            "height": 720,
+            "role": "panel-page-1-frame-2",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-4.evidence-3.jpg",
+            "height": 720,
+            "role": "panel-page-1-frame-3",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-4.evidence-4.jpg",
+            "height": 720,
+            "role": "panel-page-1-frame-4",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-4.evidence-5.jpg",
+            "height": 720,
+            "role": "panel-page-1-frame-5",
+            "width": 1280
+        }
+    ],
+    "evidence_type": "movement_panel_ocr",
+    "floor": 2,
+    "floor_four_remembrance": false,
+    "forward_swipes": 0,
+    "items": [
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "loaded": true,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "remaining_match_count": 0,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "loaded": true,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "remaining_match_count": 0,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "loaded": true,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "remaining_match_count": 0,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "loaded": false,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.998142,
+            "remaining_match_count": 0,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "loaded": true,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 18,
+                "width": 68,
+                "x": 1156,
+                "y": 442
+            },
+            "name_score": 0.999869,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999941,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "loaded": false,
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.998142,
+            "remaining_match_count": 0,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "loaded": true,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 18,
+                "width": 68,
+                "x": 1156,
+                "y": 442
+            },
+            "name_score": 0.999869,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_match_count": 1,
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999941,
+            "remaining_charges": 1,
+            "remaining_match_count": 1,
+            "scan_page": 1
+        }
+    ],
+    "map_generation": 1,
+    "map_revision": 7,
+    "map_section_generation": 1,
+    "map_section_key": "floor-2-generation-1",
+    "map_section_label": "2 层",
+    "ocr_name_hits": [
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-1",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-2",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.997693,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1155,
+                "y": 441
+            },
+            "name_score": 0.999864,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-3",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999918,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.998142,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 18,
+                "width": 68,
+                "x": 1156,
+                "y": 442
+            },
+            "name_score": 0.999869,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-4",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999941,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "movement": "walk",
+            "name": "徒步跋涉",
+            "name_rect": {
+                "height": 21,
+                "width": 72,
+                "x": 1154,
+                "y": 300
+            },
+            "name_score": 0.998142,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 18,
+                "width": 68,
+                "x": 1156,
+                "y": 442
+            },
+            "name_score": 0.999869,
+            "scan_page": 1
+        },
+        {
+            "evidence_image_role": "panel-page-1-frame-5",
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 19,
+                "width": 68,
+                "x": 1156,
+                "y": 581
+            },
+            "name_score": 0.999941,
+            "scan_page": 1
+        }
+    ],
+    "outcome": "目标已在当前页装载",
+    "recognition_attempt_count": 0,
+    "recognition_attempt_id": "",
+    "recognition_floor": 0,
+    "recognition_floor_source": "next_level_ocr",
+    "recognition_node_diagnostics": [
+    ],
+    "recognition_ocr_diagnostics": [
+    ],
+    "recognition_retry_count": 0,
+    "recognition_screenshot_us": 0,
+    "recognition_topology_base_edge_count": 0,
+    "recognition_topology_extra_edge_count": 0,
+    "recognition_topology_match_score": 0,
+    "recognition_topology_source_digest": "",
+    "recognition_topology_template_id": "",
+    "recognition_tree_hole_color": "",
+    "recognition_tree_hole_effect": "",
+    "recognition_us": 0,
+    "reset_swipes": 0,
+    "run_revision": 1,
+    "scan_complete": false,
+    "session_active_movement": "rogue_6_scrap_M_01",
+    "session_active_movement_name": "报废轮子",
+    "snapshot_file": "BF-A1-4.snapshot.json",
+    "target": "rogue_6_scrap_M_01",
+    "target_name": "报废轮子",
+    "tree_hole_outer_floor": 0,
+    "trigger": "processing_item_observation"
+}

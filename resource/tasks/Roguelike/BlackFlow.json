@@ -4472,6 +4472,20 @@
             "BlackFlow@Roguelike@StageEncounterLeaveConfirmObserve*2"
         ]
     },
+    "BlackFlow@Roguelike@ExpeditionEndingTitle": {
+        "algorithm": "OcrDetect",
+        "roi": [300, 480, 280, 45],
+        "text": ["未涉足之树"],
+        "fullMatch": true,
+        "fuzzyMatch": false
+    },
+    "BlackFlow@Roguelike@ExpeditionEndingDeparture": {
+        "algorithm": "OcrDetect",
+        "roi": [300, 525, 850, 80],
+        "text": ["你的同伴出发了"],
+        "fullMatch": false,
+        "fuzzyMatch": false
+    },
     "BlackFlow@Roguelike@StageEncounterOcr": {
         "baseTask": "Roguelike@StageEncounterOcr",
         "fuzzyMatchMinLength": 3,

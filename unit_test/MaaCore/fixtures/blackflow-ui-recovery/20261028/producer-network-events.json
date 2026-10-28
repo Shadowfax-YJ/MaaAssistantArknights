@@ -1,0 +1,2855 @@
+[
+  {
+    "action": "movement.processing-item.select",
+    "collector_version": "DEBUG_VERSION",
+    "details": {
+      "image_capture": {
+        "mode": "provided_observation",
+        "status": "captured"
+      },
+      "movement": "rogue_6_scrap_M_01",
+      "rect": [
+        1155,
+        432,
+        68,
+        9
+      ],
+      "remaining_charges": 1
+    },
+    "elapsed_ms": 8,
+    "event_id": "BF-R1-1",
+    "floor": 2,
+    "image": {
+      "codec": "jpeg",
+      "height": 720,
+      "path": "images/000001-movement-processing-item-select-started.jpg",
+      "quality": 76,
+      "source_height": 720,
+      "source_width": 1280,
+      "width": 1280
+    },
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "pending",
+    "phase": "started",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 1,
+    "state": {
+      "action_points": 7,
+      "active_movement": "walk",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowMovement",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.122Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "movement.network-wait",
+    "details": {
+      "image_capture": {
+        "mode": "provided_observation",
+        "status": "captured"
+      },
+      "sample_budget_remaining": 240
+    },
+    "elapsed_ms": 391,
+    "event_id": "BF-R1-2",
+    "floor": 2,
+    "image": {
+      "codec": "jpeg",
+      "height": 720,
+      "path": "images/000002-movement-network-wait-started.jpg",
+      "quality": 76,
+      "source_height": 720,
+      "source_width": 1280,
+      "width": 1280
+    },
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "observed",
+    "phase": "started",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 2,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowMovement",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.505Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "movement.network-wait",
+    "details": {
+      "image_capture": {
+        "mode": "provided_observation",
+        "status": "captured"
+      },
+      "sample_budget_remaining": 191
+    },
+    "elapsed_ms": 543,
+    "event_id": "BF-R1-3",
+    "floor": 2,
+    "image": {
+      "codec": "jpeg",
+      "height": 720,
+      "path": "images/000003-movement-network-wait-resumed.jpg",
+      "quality": 76,
+      "source_height": 720,
+      "source_width": 1280,
+      "width": 1280
+    },
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "observed",
+    "phase": "resumed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 3,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowMovement",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.657Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "telemetry.BlackFlowInitialRevealConsistency",
+    "details": {
+      "consistency": "一致",
+      "correction": "",
+      "entrance": 562949953421312,
+      "expected_revealed_nodes": [
+        562949953421316
+      ],
+      "floor": 2,
+      "floor_four_remembrance": false,
+      "initial_light_manhattan_radius": 2,
+      "map_generation": 1,
+      "missing_revealed_nodes": [],
+      "observed_revealed_nodes": [
+        562949953421316
+      ],
+      "possible_duck_pressure_board_nodes": [],
+      "possible_explanation": "",
+      "possible_revealed_nodes": [
+        562949953421316
+      ],
+      "scope": "floor_entry",
+      "start_rewards": [],
+      "swaddled_eagle_full_reveal": false,
+      "uncertain_revealed_nodes": [],
+      "unexpected_revealed_nodes": []
+    },
+    "elapsed_ms": 840,
+    "event_id": "BF-R1-4",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "observed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 4,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowInitialRevealConsistency",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.954Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "telemetry.BlackFlowMapSummary",
+    "details": {
+      "attempt_count": 0,
+      "confirmed_edge_count": 3,
+      "current_node": 562949953421312,
+      "exploration_notebook": {
+        "edges": [
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421312,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421314
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421314,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421316
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421316,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421318
+          }
+        ],
+        "floor": 2,
+        "nodes": [
+          {
+            "blocks_vision": false,
+            "column": 0,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421312,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": false,
+            "column": 1,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421314,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 2,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421316,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "incident",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "incident",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 3,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421318,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": true,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "final",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "final",
+            "visually_hidden": false
+          }
+        ],
+        "revision": 7
+      },
+      "floor": 2,
+      "floor_from_ocr": true,
+      "forced_edge_count": 0,
+      "map_revision": 7,
+      "node_count": 4,
+      "observation_id": "controlled-recovery-map",
+      "planning_map": {
+        "edges": [
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421312,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421314
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421314,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421316
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421316,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421318
+          }
+        ],
+        "floor": 2,
+        "nodes": [
+          {
+            "blocks_vision": false,
+            "column": 0,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421312,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": false,
+            "column": 1,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421314,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 2,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421316,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "incident",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "incident",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 3,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421318,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": true,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "final",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "final",
+            "visually_hidden": false
+          }
+        ],
+        "revision": 7
+      },
+      "recognition_us": 0,
+      "retry_count": 0,
+      "run_revision": 1,
+      "screenshot_us": 0,
+      "topology_base_edge_count": 0,
+      "topology_extra_edge_count": 0,
+      "topology_match_score": 0,
+      "topology_source_digest": "",
+      "topology_template_id": "",
+      "unclassified_count": 0
+    },
+    "elapsed_ms": 840,
+    "event_id": "BF-R1-5",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "observed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 5,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowMapSummary",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.954Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "telemetry.BlackFlowMilestoneChanged",
+    "details": {
+      "floor": 2,
+      "milestone_id": "automation_collection_floor1_shop",
+      "observation_id": "controlled-recovery-map",
+      "progress": 0,
+      "run_revision": 1,
+      "status": "missed"
+    },
+    "elapsed_ms": 840,
+    "event_id": "BF-R1-6",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "observed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 6,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction_id": "",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowMilestoneChanged",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.954Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "diagnostic.routine_observation",
+    "details": {
+      "artifact_set_id": "BF-A1-1",
+      "captured_image_file": "",
+      "evidence_images": [],
+      "overlay_image_file": "",
+      "snapshot_file": "floor-2/BF-A1-1.snapshot.json",
+      "trigger": "routine_observation"
+    },
+    "elapsed_ms": 849,
+    "event_id": "BF-R1-7",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "persisted",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 7,
+    "state": {
+      "attempt_count": 0,
+      "confirmed_edge_count": 3,
+      "current_node": 562949953421312,
+      "edges": [
+        {
+          "cnn_connected": true,
+          "decision_source": "visual",
+          "first": 562949953421312,
+          "forced_by_connectivity_constraint": false,
+          "knowledge": "confirmed",
+          "probability": 1.0,
+          "second": 562949953421314
+        },
+        {
+          "cnn_connected": true,
+          "decision_source": "visual",
+          "first": 562949953421314,
+          "forced_by_connectivity_constraint": false,
+          "knowledge": "confirmed",
+          "probability": 1.0,
+          "second": 562949953421316
+        },
+        {
+          "cnn_connected": true,
+          "decision_source": "visual",
+          "first": 562949953421316,
+          "forced_by_connectivity_constraint": false,
+          "knowledge": "confirmed",
+          "probability": 1.0,
+          "second": 562949953421318
+        }
+      ],
+      "exploration_notebook": {
+        "edges": [
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421312,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421314
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421314,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421316
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421316,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421318
+          }
+        ],
+        "floor": 2,
+        "nodes": [
+          {
+            "blocks_vision": false,
+            "column": 0,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421312,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": false,
+            "column": 1,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421314,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 2,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421316,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "incident",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "incident",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 3,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421318,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": true,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "final",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": false,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "final",
+            "visually_hidden": false
+          }
+        ],
+        "revision": 7
+      },
+      "floor": 2,
+      "floor_four_remembrance": false,
+      "floor_from_ocr": true,
+      "forced_edge_count": 0,
+      "map_generation": 1,
+      "map_revision": 7,
+      "map_section_generation": 1,
+      "map_section_key": "floor-2-generation-1",
+      "map_section_label": "2 层",
+      "node_count": 4,
+      "nodes": [
+        {
+          "column": 0,
+          "confirmed_by_topology": false,
+          "detected_by_vision": true,
+          "existence_source": "",
+          "id": 562949953421312,
+          "identity_from_prediction": false,
+          "identity_from_topology": false,
+          "identity_revealed": true,
+          "identity_source": "",
+          "identity_state": "classified",
+          "identity_unrecoverable": false,
+          "name": "林间空地",
+          "natural_reveal_suppressed": false,
+          "prediction_rule": "",
+          "progress": "active",
+          "row": 0,
+          "type": "empty",
+          "visual_height": 60,
+          "visual_width": 60,
+          "visual_x": 430.0,
+          "visual_y": 230.0,
+          "visually_hidden": false
+        },
+        {
+          "column": 1,
+          "confirmed_by_topology": false,
+          "detected_by_vision": true,
+          "existence_source": "",
+          "id": 562949953421314,
+          "identity_from_prediction": false,
+          "identity_from_topology": false,
+          "identity_revealed": true,
+          "identity_source": "",
+          "identity_state": "classified",
+          "identity_unrecoverable": false,
+          "name": "林间空地",
+          "natural_reveal_suppressed": false,
+          "prediction_rule": "",
+          "progress": "active",
+          "row": 0,
+          "type": "empty",
+          "visual_height": 60,
+          "visual_width": 60,
+          "visual_x": 530.0,
+          "visual_y": 230.0,
+          "visually_hidden": false
+        },
+        {
+          "column": 2,
+          "confirmed_by_topology": false,
+          "detected_by_vision": true,
+          "existence_source": "",
+          "id": 562949953421316,
+          "identity_from_prediction": false,
+          "identity_from_topology": false,
+          "identity_revealed": true,
+          "identity_source": "",
+          "identity_state": "classified",
+          "identity_unrecoverable": false,
+          "name": "",
+          "natural_reveal_suppressed": false,
+          "prediction_rule": "",
+          "progress": "active",
+          "row": 0,
+          "type": "incident",
+          "visual_height": 60,
+          "visual_width": 60,
+          "visual_x": 630.0,
+          "visual_y": 230.0,
+          "visually_hidden": false
+        },
+        {
+          "column": 3,
+          "confirmed_by_topology": false,
+          "detected_by_vision": true,
+          "existence_source": "",
+          "id": 562949953421318,
+          "identity_from_prediction": false,
+          "identity_from_topology": false,
+          "identity_revealed": true,
+          "identity_source": "",
+          "identity_state": "classified",
+          "identity_unrecoverable": false,
+          "name": "",
+          "natural_reveal_suppressed": false,
+          "prediction_rule": "",
+          "progress": "active",
+          "row": 0,
+          "type": "final",
+          "visual_height": 60,
+          "visual_width": 60,
+          "visual_x": 730.0,
+          "visual_y": 230.0,
+          "visually_hidden": false
+        }
+      ],
+      "observation_id": "controlled-recovery-map",
+      "planning_map": {
+        "edges": [
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421312,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421314
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421314,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421316
+          },
+          {
+            "cnn_connected": true,
+            "decision_source": "visual",
+            "first": 562949953421316,
+            "forced": false,
+            "forced_by_connectivity_constraint": false,
+            "knowledge": "confirmed",
+            "probability": 1.0,
+            "second": 562949953421318
+          }
+        ],
+        "floor": 2,
+        "nodes": [
+          {
+            "blocks_vision": false,
+            "column": 0,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421312,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": false,
+            "column": 1,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421314,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "林间空地",
+            "natural_reveal_suppressed": false,
+            "node_name": "林间空地",
+            "node_type": "empty",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "empty",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 2,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421316,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": false,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "incident",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "incident",
+            "visually_hidden": false
+          },
+          {
+            "blocks_vision": true,
+            "column": 3,
+            "confirmed_by_topology": false,
+            "detected_by_vision": true,
+            "existence_source": "",
+            "fate_event": false,
+            "id": 562949953421318,
+            "identity_from_prediction": false,
+            "identity_from_topology": false,
+            "identity_revealed": true,
+            "identity_source": "",
+            "identity_state": "classified",
+            "identity_unrecoverable": false,
+            "is_exit": true,
+            "marker_display_name": "",
+            "marker_resident_overlap_possible": false,
+            "marker_score": 0.0,
+            "marker_type": "",
+            "name": "",
+            "natural_reveal_suppressed": false,
+            "node_name": "",
+            "node_type": "final",
+            "prediction_rule": "",
+            "progress": "active",
+            "revealed_now": true,
+            "row": 0,
+            "semantically_known": true,
+            "stage_name": "",
+            "type": "final",
+            "visually_hidden": false
+          }
+        ],
+        "revision": 7
+      },
+      "recognition_us": 0,
+      "retry_count": 0,
+      "run_revision": 1,
+      "screenshot_us": 0,
+      "topology_base_edge_count": 0,
+      "topology_extra_edge_count": 0,
+      "topology_match_score": 0,
+      "topology_source_digest": "",
+      "topology_template_id": "",
+      "tree_hole_outer_floor": 0,
+      "trigger": "routine_observation",
+      "unclassified_count": 0
+    },
+    "task": "BlackFlowDiagnostics",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.963Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "diagnostic.processing_item_observation",
+    "details": {
+      "artifact_set_id": "BF-A1-2",
+      "captured_image_file": "",
+      "evidence_images": [
+        {
+          "file": "floor-2/BF-A1-2.evidence-1.jpg",
+          "height": 720,
+          "role": "loaded-icon",
+          "width": 1280
+        }
+      ],
+      "overlay_image_file": "",
+      "snapshot_file": "floor-2/BF-A1-2.snapshot.json",
+      "trigger": "processing_item_observation"
+    },
+    "elapsed_ms": 885,
+    "event_id": "BF-R1-8",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "persisted",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 8,
+    "state": {
+      "evidence_type": "loaded_icon",
+      "floor": 2,
+      "floor_four_remembrance": false,
+      "items": [
+        {
+          "evidence_image_role": "loaded-icon",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 44,
+            "width": 64,
+            "x": 1176,
+            "y": 100
+          },
+          "name_score": 0.882401
+        }
+      ],
+      "map_generation": 1,
+      "map_revision": 7,
+      "map_section_generation": 1,
+      "map_section_key": "floor-2-generation-1",
+      "map_section_label": "2 层",
+      "outcome": "已识别地图装载图标",
+      "run_revision": 1,
+      "scan_complete": false,
+      "session_active_movement": "walk",
+      "session_active_movement_name": "徒步跋涉",
+      "target": "rogue_6_scrap_M_01",
+      "target_name": "报废轮子",
+      "tree_hole_outer_floor": 0,
+      "trigger": "processing_item_observation"
+    },
+    "task": "BlackFlowDiagnostics",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:50.999Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "diagnostic.processing_item_observation",
+    "details": {
+      "artifact_set_id": "BF-A1-3",
+      "captured_image_file": "",
+      "evidence_images": [
+        {
+          "file": "floor-2/BF-A1-3.evidence-1.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-1",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-3.evidence-2.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-2",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-3.evidence-3.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-3",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-3.evidence-4.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-4",
+          "width": 1280
+        }
+      ],
+      "overlay_image_file": "",
+      "snapshot_file": "floor-2/BF-A1-3.snapshot.json",
+      "trigger": "processing_item_observation"
+    },
+    "elapsed_ms": 953,
+    "event_id": "BF-R1-9",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "persisted",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 9,
+    "state": {
+      "evidence_type": "movement_panel_ocr",
+      "floor": 2,
+      "floor_four_remembrance": false,
+      "forward_swipes": 0,
+      "items": [
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": false,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": true,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        }
+      ],
+      "map_generation": 1,
+      "map_revision": 7,
+      "map_section_generation": 1,
+      "map_section_key": "floor-2-generation-1",
+      "map_section_label": "2 层",
+      "ocr_name_hits": [
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "scan_page": 1
+        }
+      ],
+      "outcome": "选择并复核成功",
+      "reset_swipes": 0,
+      "run_revision": 1,
+      "scan_complete": false,
+      "session_active_movement": "rogue_6_scrap_M_01",
+      "session_active_movement_name": "报废轮子",
+      "target": "rogue_6_scrap_M_01",
+      "target_name": "报废轮子",
+      "tree_hole_outer_floor": 0,
+      "trigger": "processing_item_observation"
+    },
+    "task": "BlackFlowDiagnostics",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.067Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "diagnostic.processing_item_observation",
+    "details": {
+      "artifact_set_id": "BF-A1-4",
+      "captured_image_file": "",
+      "evidence_images": [
+        {
+          "file": "floor-2/BF-A1-4.evidence-1.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-1",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-4.evidence-2.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-2",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-4.evidence-3.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-3",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-4.evidence-4.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-4",
+          "width": 1280
+        },
+        {
+          "file": "floor-2/BF-A1-4.evidence-5.jpg",
+          "height": 720,
+          "role": "panel-page-1-frame-5",
+          "width": 1280
+        }
+      ],
+      "overlay_image_file": "",
+      "snapshot_file": "floor-2/BF-A1-4.snapshot.json",
+      "trigger": "processing_item_observation"
+    },
+    "elapsed_ms": 1031,
+    "event_id": "BF-R1-10",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "persisted",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 10,
+    "state": {
+      "evidence_type": "movement_panel_ocr",
+      "floor": 2,
+      "floor_four_remembrance": false,
+      "forward_swipes": 0,
+      "items": [
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": true,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": false,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": true,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "loaded": false,
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "remaining_match_count": 0,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "loaded": true,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_match_count": 1,
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "remaining_charges": 1,
+          "remaining_match_count": 1,
+          "scan_page": 1
+        }
+      ],
+      "map_generation": 1,
+      "map_revision": 7,
+      "map_section_generation": 1,
+      "map_section_key": "floor-2-generation-1",
+      "map_section_label": "2 层",
+      "ocr_name_hits": [
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-1",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-2",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.997693,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1155,
+            "y": 441
+          },
+          "name_score": 0.999864,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-3",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999918,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-4",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "movement": "walk",
+          "name": "徒步跋涉",
+          "name_rect": {
+            "height": 21,
+            "width": 72,
+            "x": 1154,
+            "y": 300
+          },
+          "name_score": 0.998142,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 18,
+            "width": 68,
+            "x": 1156,
+            "y": 442
+          },
+          "name_score": 0.999869,
+          "scan_page": 1
+        },
+        {
+          "evidence_image_role": "panel-page-1-frame-5",
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 19,
+            "width": 68,
+            "x": 1156,
+            "y": 581
+          },
+          "name_score": 0.999941,
+          "scan_page": 1
+        }
+      ],
+      "outcome": "目标已在当前页装载",
+      "reset_swipes": 0,
+      "run_revision": 1,
+      "scan_complete": false,
+      "session_active_movement": "rogue_6_scrap_M_01",
+      "session_active_movement_name": "报废轮子",
+      "target": "rogue_6_scrap_M_01",
+      "target_name": "报废轮子",
+      "tree_hole_outer_floor": 0,
+      "trigger": "processing_item_observation"
+    },
+    "task": "BlackFlowDiagnostics",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.145Z",
+    "timezone": "UTC",
+    "transaction_id": ""
+  },
+  {
+    "action": "move.preview",
+    "details": {
+      "action_id": "controlled-recovery-move",
+      "landing": 562949953421316,
+      "movement": "rogue_6_scrap_M_01",
+      "source": 562949953421312,
+      "target": 562949953421316
+    },
+    "elapsed_ms": 1032,
+    "event_id": "BF-R1-11",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "pending",
+    "phase": "started",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 11,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction": {
+        "action_id": "controlled-recovery-move",
+        "authoritative_cost": 1,
+        "landing": 562949953421316,
+        "movement": "rogue_6_scrap_M_01",
+        "source": 562949953421312,
+        "stage": 0,
+        "target": 562949953421316
+      },
+      "transaction_id": "BF-T1-1",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowRouting",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.146Z",
+    "timezone": "UTC",
+    "transaction_id": "BF-T1-1"
+  },
+  {
+    "action": "move.preview",
+    "details": {
+      "disposition": 0,
+      "error": "",
+      "image_capture": {
+        "mode": "provided_observation",
+        "status": "captured"
+      }
+    },
+    "elapsed_ms": 1034,
+    "event_id": "BF-R1-12",
+    "floor": 2,
+    "image": {
+      "codec": "jpeg",
+      "height": 720,
+      "path": "images/000012-move-preview-completed.jpg",
+      "quality": 76,
+      "source_height": 720,
+      "source_width": 1280,
+      "width": 1280
+    },
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "completed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 12,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction": {
+        "action_id": "controlled-recovery-move",
+        "authoritative_cost": 1,
+        "landing": 562949953421316,
+        "movement": "rogue_6_scrap_M_01",
+        "source": 562949953421312,
+        "stage": 1,
+        "target": 562949953421316
+      },
+      "transaction_id": "BF-T1-1",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowRouting",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.148Z",
+    "timezone": "UTC",
+    "transaction_id": "BF-T1-1"
+  },
+  {
+    "action": "move.confirm",
+    "details": {},
+    "elapsed_ms": 1045,
+    "event_id": "BF-R1-13",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "pending",
+    "phase": "started",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 13,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": false,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction": {
+        "action_id": "controlled-recovery-move",
+        "authoritative_cost": 1,
+        "landing": 562949953421316,
+        "movement": "rogue_6_scrap_M_01",
+        "source": 562949953421312,
+        "stage": 1,
+        "target": 562949953421316
+      },
+      "transaction_id": "BF-T1-1",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowRouting",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.159Z",
+    "timezone": "UTC",
+    "transaction_id": "BF-T1-1"
+  },
+  {
+    "action": "move.confirm",
+    "details": {},
+    "elapsed_ms": 1047,
+    "event_id": "BF-R1-14",
+    "floor": 2,
+    "level": "INFO",
+    "logger": "blackflow.run",
+    "map_generation": 1,
+    "map_revision": 7,
+    "outcome": "success",
+    "phase": "completed",
+    "run_revision": 1,
+    "schema_version": 1,
+    "sequence": 14,
+    "state": {
+      "action_points": 7,
+      "active_movement": "rogue_6_scrap_M_01",
+      "current_node": 562949953421312,
+      "decision_id": "",
+      "expedition_core_away": false,
+      "floor": 2,
+      "hope": 0,
+      "ingots": 0,
+      "lorentz_eye_available": false,
+      "map_generation": 1,
+      "map_revision": 7,
+      "movement_instances": [
+        {
+          "inventory_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        },
+        {
+          "inventory_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "remaining_charges": 1
+        }
+      ],
+      "movement_inventory_refresh_required": true,
+      "observation_id": "controlled-recovery-map",
+      "observed_current_node": 562949953421312,
+      "page": {
+        "changes_floor": false,
+        "entry_kind": "map_node",
+        "floor": 2,
+        "has_landing": true,
+        "node": 562949953421316,
+        "node_name": "",
+        "node_type": "incident",
+        "page_revision": 1,
+        "stage": 1
+      },
+      "painted_liberi": false,
+      "profile": "automation_collection",
+      "random_reveals_on_processing_move": 0,
+      "resources_revision": 2,
+      "revealed_nodes": [
+        562949953421312,
+        562949953421314,
+        562949953421316,
+        562949953421318
+      ],
+      "run_revision": 1,
+      "seeds": 0,
+      "selected_difficulty": 0,
+      "sellable_scraps": 0,
+      "store_purchase_policy": {
+        "sand_table_beta": {
+          "disable_probability": 0.5,
+          "disabled_for_run": true,
+          "quota_override": 0,
+          "scope": "run"
+        }
+      },
+      "strategy_terminal": false,
+      "terminated": false,
+      "transaction": {
+        "action_id": "controlled-recovery-move",
+        "authoritative_cost": 1,
+        "landing": 562949953421316,
+        "movement": "rogue_6_scrap_M_01",
+        "source": 562949953421312,
+        "stage": 2,
+        "target": 562949953421316
+      },
+      "transaction_id": "BF-T1-1",
+      "tree_hole_outer_floor": 0,
+      "viewport_revision": 1,
+      "visited_nodes": [],
+      "white_model_birds": 0
+    },
+    "task": "BlackFlowRouting",
+    "thread_id": "68748",
+    "timestamp": "2026-10-28T05:13:51.161Z",
+    "timezone": "UTC",
+    "transaction_id": "BF-T1-1"
+  }
+]

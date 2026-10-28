@@ -573,6 +573,9 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
 {
     for (int attempt = 0; attempt < 20 && !need_exit(); ++attempt) {
         sleep(400);
+        if (need_exit()) {
+            return false;
+        }
         const cv::Mat image = ctrler()->get_image();
         const bool expedition = picker_task == "BlackFlow@Roguelike@ExpeditionPicker";
         if (image.empty()) {
@@ -597,6 +600,47 @@ bool asst::RoguelikeStageEncounterTaskPlugin::wait_for_secondary_event(std::stri
                     return false;
                 }
                 return abort_expedition("data_sync_interrupted_dispatch");
+            }
+            // The direct ending has a different title layout from an event with options.
+            // Confirm its own title and explicit departure text before handing its checkbox
+            // back to the existing settlement graph; do not click through it here.
+            Matcher ending(image);
+            ending.set_task_info("BlackFlow@Roguelike@CloseEventAfterEncounter");
+            if (ending.analyze()) {
+                OCRer title(image);
+                title.set_task_info("BlackFlow@Roguelike@ExpeditionEndingTitle");
+                OCRer departed(image);
+                departed.set_task_info("BlackFlow@Roguelike@ExpeditionEndingDeparture");
+                departed.set_required({ });
+                if (title.analyze() && title.get_result().size() == 1 &&
+                    title.get_result().front().text == blackflow::ExpeditionEventName &&
+                    title.get_result().front().score >= 0.9 && departed.analyze() &&
+                    std::ranges::any_of(departed.get_result(), [](const auto& text) {
+                        return text.score >= 0.9 && text.text.find("你的同伴出发了") != std::string::npos;
+                    })) {
+                    std::string story_text;
+                    bool readable = true;
+                    for (const auto& text : departed.get_result()) {
+                        story_text += text.text;
+                        readable = readable && text.score >= 0.9;
+                    }
+                    json::object details {
+                        { "secondary_event_layout", "ending" },
+                        { "ending_title", title.get_result().front().text },
+                        { "recognition_scope", "ending_title_and_body_roi" },
+                    };
+                    if (readable) {
+                        details["story_text"] = std::move(story_text);
+                    }
+                    if (!report_expedition("secondary_event", std::move(details), image)) {
+                        return false;
+                    }
+                    m_expedition_evidence.confirmation_image = image.clone();
+                    m_expedition_evidence.confirmation_basis = "secondary_event";
+                    return true;
+                }
+                // A recognized ending from an unrelated event is not a dispatch receipt.
+                continue;
             }
         }
         OCRer event(image);

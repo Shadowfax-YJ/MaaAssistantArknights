@@ -26,6 +26,7 @@ if __name__ == '__main__':
         ('INVENTORY_RESET_EARLY', 'BlackFlowMovementRecognition.cpp', 'bool inventory_reset_can_confirm_early('),
         ('SELECT', 'BlackFlowMovementTaskPlugin.cpp', 'BlackFlowMovementTaskPlugin::SelectionOutcome\n'),
         ('WALK', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::verify_walking_on_map('),
+        ('NETWORK_WAIT', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::wait_for_movement_network('),
         ('CLOSE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::close_panel('),
         ('INVENTORY_OBSERVE', 'BlackFlowMovementTaskPlugin.cpp', 'bool BlackFlowMovementTaskPlugin::observe_inventory('),
         ('INVENTORY_REGION', 'BlackFlowMovementTaskPlugin.cpp', 'cv::Mat inventory_card_region('),

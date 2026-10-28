@@ -1,0 +1,1853 @@
+{
+  "endings": [
+    {
+      "file": "ending-0.jpg",
+      "operator": "凯尔希·思衡托",
+      "details": {
+        "candidate_capture_id": "expedition-3-8:1",
+        "choice_attempt": 1,
+        "dispatch_attempt": 1,
+        "elite_before": 1,
+        "elite_before_source": "runtime_status",
+        "elite_image_confirmed": null,
+        "event_name": "未涉足之树",
+        "evidence_sequence": 29,
+        "expedition_id": "expedition-3-8",
+        "expedition_phase": "unresolved",
+        "operator_description_text": [
+          "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+        ],
+        "operator_name": "凯尔希·思衡托",
+        "operator_preference_order": [
+          "凯尔希·思衡托",
+          "古米"
+        ],
+        "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+        "operator_slot_index_from_left": 1,
+        "page_revision": 8,
+        "preparation_capture_id": "expedition-3-8:6",
+        "reason": "dispatch_confirmation_timeout",
+        "rule_predicted_elite_after": 2,
+        "run_revision": 3,
+        "selected_branch": "interior",
+        "selected_option_index_from_top": 1,
+        "selected_option_red_description": "",
+        "selected_option_text": "尝试探索树的内部",
+        "selection_policy": "fixed_first_option",
+        "source_context": {
+          "floor": 2,
+          "map_generation": 2,
+          "node": 562950054084614,
+          "page_revision": 8,
+          "run_revision": 3,
+          "transaction_id": "BF-T3-8"
+        }
+      },
+      "prelude": [
+        {
+          "phase": "candidates",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "candidates": [
+              {
+                "enabled": true,
+                "option_index_from_top": 1,
+                "red_description": "",
+                "text": "尝试探索树的内部"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 2,
+                "red_description": "",
+                "text": "尝试探索树的源头"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 3,
+                "red_description": "",
+                "text": "休息"
+              }
+            ],
+            "capture_id": "expedition-3-8:1",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 1,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "candidates",
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 8,
+            "run_revision": 3,
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": "ending-0-candidates.jpg"
+        },
+        {
+          "phase": "choice_planned",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 2,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "choice_planned",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 8,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 1,
+            "click_point": [
+              1085,
+              156
+            ],
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 3,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "choice_attempt",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 8,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 4,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "choice_click_issued",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 8,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_confirmed",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 1,
+            "confirmation_basis": "expedition_picker",
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 5,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "choice_confirmed",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 8,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_prepared",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "capture_id": "expedition-3-8:6",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 6,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "dispatch_prepared",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 8,
+            "preparation_capture_id": "expedition-3-8:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": "ending-0-dispatch_prepared.jpg"
+        },
+        {
+          "phase": "dispatch_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 7,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "dispatch_attempt",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 8,
+            "preparation_capture_id": "expedition-3-8:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-3-8:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 8,
+            "expedition_id": "expedition-3-8",
+            "expedition_phase": "dispatch_click_issued",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 8,
+            "preparation_capture_id": "expedition-3-8:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 3,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950054084614,
+              "page_revision": 8,
+              "run_revision": 3,
+              "transaction_id": "BF-T3-8"
+            }
+          },
+          "image": null
+        }
+      ],
+      "inventory_images": [
+        "inventory-0-0.jpg",
+        "inventory-0-1.jpg"
+      ],
+      "inventory_items": [
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_06",
+          "name": "试作外骨骼",
+          "name_rect": {
+            "height": 22,
+            "width": 87,
+            "x": 384,
+            "y": 258
+          },
+          "name_score": 0.999132,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 456,
+                "y": 158
+              }
+            },
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 466,
+                "y": 166
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_10",
+          "name": "坎诺特的触须",
+          "name_rect": {
+            "height": 22,
+            "width": 106,
+            "x": 806,
+            "y": 258
+          },
+          "name_score": 0.999695,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 888,
+                "y": 158
+              }
+            },
+            {
+              "bright_pixels": 37,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 898,
+                "y": 166
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 2,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_03",
+          "name": "标准引擎",
+          "name_rect": {
+            "height": 20,
+            "width": 70,
+            "x": 393,
+            "y": 420
+          },
+          "name_score": 0.999874,
+          "remaining_charges": 3,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 457,
+                "y": 319
+              }
+            },
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 467,
+                "y": 327
+              }
+            },
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 472,
+                "y": 342
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 3,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_11",
+          "name": "结构性原理",
+          "name_rect": {
+            "height": 22,
+            "width": 88,
+            "x": 815,
+            "y": 419
+          },
+          "name_score": 0.99989,
+          "remaining_charges": 3,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 888,
+                "y": 319
+              }
+            },
+            {
+              "bright_pixels": 36,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 898,
+                "y": 327
+              }
+            },
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 903,
+                "y": 342
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 4,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_09",
+          "name": "老妈妈的融雪",
+          "name_rect": {
+            "height": 19,
+            "width": 101,
+            "x": 377,
+            "y": 582
+          },
+          "name_score": 0.999938,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 456,
+                "y": 480
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "ending-1.jpg",
+      "operator": "古米",
+      "details": {
+        "candidate_capture_id": "expedition-6-11:1",
+        "choice_attempt": 1,
+        "dispatch_attempt": 1,
+        "elite_before": 1,
+        "elite_before_source": "runtime_status",
+        "elite_image_confirmed": null,
+        "event_name": "未涉足之树",
+        "evidence_sequence": 29,
+        "expedition_id": "expedition-6-11",
+        "expedition_phase": "unresolved",
+        "operator_description_text": [
+          "干员古米将会在本区域探索结束后归来，并带回一些物资。"
+        ],
+        "operator_name": "古米",
+        "operator_preference_order": [
+          "古米"
+        ],
+        "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+        "operator_slot_index_from_left": 2,
+        "page_revision": 11,
+        "preparation_capture_id": "expedition-6-11:6",
+        "reason": "dispatch_confirmation_timeout",
+        "rule_predicted_elite_after": 1,
+        "run_revision": 6,
+        "selected_branch": "interior",
+        "selected_option_index_from_top": 1,
+        "selected_option_red_description": "",
+        "selected_option_text": "尝试探索树的内部",
+        "selection_policy": "fixed_first_option",
+        "source_context": {
+          "floor": 2,
+          "map_generation": 2,
+          "node": 562950020530182,
+          "page_revision": 11,
+          "run_revision": 6,
+          "transaction_id": "BF-T6-13"
+        }
+      },
+      "prelude": [
+        {
+          "phase": "candidates",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "candidates": [
+              {
+                "enabled": true,
+                "option_index_from_top": 1,
+                "red_description": "",
+                "text": "尝试探索树的内部"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 2,
+                "red_description": "",
+                "text": "尝试探索树的源头"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 3,
+                "red_description": "",
+                "text": "休息"
+              }
+            ],
+            "capture_id": "expedition-6-11:1",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 1,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "candidates",
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 11,
+            "run_revision": 6,
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": "ending-1-candidates.jpg"
+        },
+        {
+          "phase": "choice_planned",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 2,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "choice_planned",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 11,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 1,
+            "click_point": [
+              1085,
+              156
+            ],
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 3,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "choice_attempt",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 11,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 4,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "choice_click_issued",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 11,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_confirmed",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 1,
+            "confirmation_basis": "expedition_picker",
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 5,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "choice_confirmed",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 11,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_prepared",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "capture_id": "expedition-6-11:6",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 6,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "dispatch_prepared",
+            "operator_description_text": [
+              "干员古米将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "古米",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 2,
+            "page_revision": 11,
+            "preparation_capture_id": "expedition-6-11:6",
+            "rule_predicted_elite_after": 1,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": "ending-1-dispatch_prepared.jpg"
+        },
+        {
+          "phase": "dispatch_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 7,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "dispatch_attempt",
+            "operator_description_text": [
+              "干员古米将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "古米",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 2,
+            "page_revision": 11,
+            "preparation_capture_id": "expedition-6-11:6",
+            "rule_predicted_elite_after": 1,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-6-11:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 8,
+            "expedition_id": "expedition-6-11",
+            "expedition_phase": "dispatch_click_issued",
+            "operator_description_text": [
+              "干员古米将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "古米",
+            "operator_preference_order": [
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 2,
+            "page_revision": 11,
+            "preparation_capture_id": "expedition-6-11:6",
+            "rule_predicted_elite_after": 1,
+            "run_revision": 6,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562950020530182,
+              "page_revision": 11,
+              "run_revision": 6,
+              "transaction_id": "BF-T6-13"
+            }
+          },
+          "image": null
+        }
+      ],
+      "inventory_images": [
+        "inventory-1-0.jpg",
+        "inventory-1-1.jpg",
+        "inventory-1-2.jpg"
+      ],
+      "inventory_items": [
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_10",
+          "name": "坎诺特的触须",
+          "name_rect": {
+            "height": 22,
+            "width": 106,
+            "x": 375,
+            "y": 258
+          },
+          "name_score": 0.999607,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 457,
+                "y": 158
+              }
+            },
+            {
+              "bright_pixels": 41,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 467,
+                "y": 166
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_08",
+          "name": "一次性喷气背包",
+          "name_rect": {
+            "height": 19,
+            "width": 121,
+            "x": 798,
+            "y": 260
+          },
+          "name_score": 0.999777,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 887,
+                "y": 158
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 2,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_06",
+          "name": "试作外骨骼",
+          "name_rect": {
+            "height": 25,
+            "width": 90,
+            "x": 382,
+            "y": 418
+          },
+          "name_score": 0.991969,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 456,
+                "y": 319
+              }
+            },
+            {
+              "bright_pixels": 42,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 466,
+                "y": 327
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 3,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_09",
+          "name": "老妈妈的融雪",
+          "name_rect": {
+            "height": 19,
+            "width": 104,
+            "x": 807,
+            "y": 421
+          },
+          "name_score": 0.999933,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 43,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 888,
+                "y": 319
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 4,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_04",
+          "name": "重弹簧",
+          "name_rect": {
+            "height": 23,
+            "width": 56,
+            "x": 400,
+            "y": 580
+          },
+          "name_score": 0.963289,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 457,
+                "y": 480
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 5,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_15",
+          "name": "鸣笛",
+          "name_rect": {
+            "height": 24,
+            "width": 40,
+            "x": 839,
+            "y": 580
+          },
+          "name_score": 0.997222,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 40,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 888,
+                "y": 481
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-2",
+          "instance_index": 6,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_03",
+          "name": "标准引擎",
+          "name_rect": {
+            "height": 20,
+            "width": 71,
+            "x": 865,
+            "y": 259
+          },
+          "name_score": 0.995131,
+          "remaining_charges": 1,
+          "scan_page": 1,
+          "star_slots": [
+            {
+              "bright_pixels": 37,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 929,
+                "y": 158
+              }
+            },
+            {
+              "bright_pixels": 0,
+              "lit": false,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 939,
+                "y": 166
+              }
+            },
+            {
+              "bright_pixels": 0,
+              "lit": false,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 944,
+                "y": 181
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-2",
+          "instance_index": 7,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_11",
+          "name": "结构性原理",
+          "name_rect": {
+            "height": 23,
+            "width": 89,
+            "x": 855,
+            "y": 418
+          },
+          "name_score": 0.999904,
+          "remaining_charges": 2,
+          "scan_page": 1,
+          "star_slots": [
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 928,
+                "y": 318
+              }
+            },
+            {
+              "bright_pixels": 36,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 938,
+                "y": 326
+              }
+            },
+            {
+              "bright_pixels": 0,
+              "lit": false,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 943,
+                "y": 341
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "ending-2.jpg",
+      "operator": "凯尔希·思衡托",
+      "details": {
+        "candidate_capture_id": "expedition-1-7:1",
+        "choice_attempt": 1,
+        "dispatch_attempt": 1,
+        "elite_before": 1,
+        "elite_before_source": "runtime_status",
+        "elite_image_confirmed": null,
+        "event_name": "未涉足之树",
+        "evidence_sequence": 29,
+        "expedition_id": "expedition-1-7",
+        "expedition_phase": "unresolved",
+        "operator_description_text": [
+          "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+        ],
+        "operator_name": "凯尔希·思衡托",
+        "operator_preference_order": [
+          "凯尔希·思衡托",
+          "古米"
+        ],
+        "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+        "operator_slot_index_from_left": 1,
+        "page_revision": 7,
+        "preparation_capture_id": "expedition-1-7:6",
+        "reason": "dispatch_confirmation_timeout",
+        "rule_predicted_elite_after": 2,
+        "run_revision": 1,
+        "selected_branch": "interior",
+        "selected_option_index_from_top": 1,
+        "selected_option_red_description": "",
+        "selected_option_text": "尝试探索树的内部",
+        "selection_policy": "fixed_first_option",
+        "source_context": {
+          "floor": 2,
+          "map_generation": 2,
+          "node": 562949986975748,
+          "page_revision": 7,
+          "run_revision": 1,
+          "transaction_id": "BF-T1-7"
+        }
+      },
+      "prelude": [
+        {
+          "phase": "candidates",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "candidates": [
+              {
+                "enabled": true,
+                "option_index_from_top": 1,
+                "red_description": "",
+                "text": "尝试探索树的内部"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 2,
+                "red_description": "",
+                "text": "尝试探索树的源头"
+              },
+              {
+                "enabled": true,
+                "option_index_from_top": 3,
+                "red_description": "",
+                "text": "休息"
+              }
+            ],
+            "capture_id": "expedition-1-7:1",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 1,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "candidates",
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 7,
+            "run_revision": 1,
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": "ending-2-candidates.jpg"
+        },
+        {
+          "phase": "choice_planned",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 0,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 2,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "choice_planned",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 7,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 1,
+            "click_point": [
+              1085,
+              156
+            ],
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 3,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "choice_attempt",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 7,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 4,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "choice_click_issued",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 7,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "choice_confirmed",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 1,
+            "confirmation_basis": "expedition_picker",
+            "dispatch_attempt": 0,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 5,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "choice_confirmed",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "page_revision": 7,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_prepared",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "capture_id": "expedition-1-7:6",
+            "capture_kind": "expedition_evidence",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 6,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "dispatch_prepared",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 7,
+            "preparation_capture_id": "expedition-1-7:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": "ending-2-dispatch_prepared.jpg"
+        },
+        {
+          "phase": "dispatch_attempt",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 7,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "dispatch_attempt",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 7,
+            "preparation_capture_id": "expedition-1-7:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        },
+        {
+          "phase": "dispatch_click_issued",
+          "details": {
+            "candidate_capture_id": "expedition-1-7:1",
+            "choice_attempt": 1,
+            "dispatch_attempt": 1,
+            "elite_before": 1,
+            "elite_before_source": "runtime_status",
+            "elite_image_confirmed": null,
+            "event_name": "未涉足之树",
+            "evidence_sequence": 8,
+            "expedition_id": "expedition-1-7",
+            "expedition_phase": "dispatch_click_issued",
+            "operator_description_text": [
+              "干员凯尔希·思衡托将会在本区域探索结束后归来，并带回一些物资。"
+            ],
+            "operator_name": "凯尔希·思衡托",
+            "operator_preference_order": [
+              "凯尔希·思衡托",
+              "古米"
+            ],
+            "operator_selection_policy": "unpromoted_core_then_ethan_then_gummy",
+            "operator_slot_index_from_left": 1,
+            "page_revision": 7,
+            "preparation_capture_id": "expedition-1-7:6",
+            "rule_predicted_elite_after": 2,
+            "run_revision": 1,
+            "selected_branch": "interior",
+            "selected_option_index_from_top": 1,
+            "selected_option_red_description": "",
+            "selected_option_text": "尝试探索树的内部",
+            "selection_policy": "fixed_first_option",
+            "source_context": {
+              "floor": 2,
+              "map_generation": 2,
+              "node": 562949986975748,
+              "page_revision": 7,
+              "run_revision": 1,
+              "transaction_id": "BF-T1-7"
+            }
+          },
+          "image": null
+        }
+      ],
+      "inventory_images": [
+        "inventory-2-0.jpg",
+        "inventory-2-1.jpg"
+      ],
+      "inventory_items": [
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 0,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_06",
+          "name": "试作外骨骼",
+          "name_rect": {
+            "height": 22,
+            "width": 89,
+            "x": 383,
+            "y": 258
+          },
+          "name_score": 0.999543,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 456,
+                "y": 158
+              }
+            },
+            {
+              "bright_pixels": 41,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 466,
+                "y": 166
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 1,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_01",
+          "name": "报废轮子",
+          "name_rect": {
+            "height": 23,
+            "width": 72,
+            "x": 823,
+            "y": 258
+          },
+          "name_score": 0.999812,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 888,
+                "y": 158
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 2,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_08",
+          "name": "一次性喷气背包",
+          "name_rect": {
+            "height": 19,
+            "width": 121,
+            "x": 367,
+            "y": 421
+          },
+          "name_score": 0.999875,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 456,
+                "y": 319
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 3,
+          "loaded": true,
+          "movement": "rogue_6_scrap_M_11",
+          "name": "结构性原理",
+          "name_rect": {
+            "height": 19,
+            "width": 88,
+            "x": 814,
+            "y": 421
+          },
+          "name_score": 0.999666,
+          "remaining_charges": 2,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 42,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 887,
+                "y": 319
+              }
+            },
+            {
+              "bright_pixels": 38,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 897,
+                "y": 327
+              }
+            },
+            {
+              "bright_pixels": 0,
+              "lit": false,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 902,
+                "y": 342
+              }
+            }
+          ]
+        },
+        {
+          "evidence_image_role": "inventory-page-1",
+          "instance_index": 4,
+          "loaded": false,
+          "movement": "rogue_6_scrap_M_13",
+          "name": "紧急逃生座椅",
+          "name_rect": {
+            "height": 22,
+            "width": 105,
+            "x": 376,
+            "y": 581
+          },
+          "name_score": 0.999874,
+          "remaining_charges": 1,
+          "scan_page": 0,
+          "star_slots": [
+            {
+              "bright_pixels": 39,
+              "lit": true,
+              "rect": {
+                "height": 11,
+                "width": 11,
+                "x": 457,
+                "y": 481
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "files": [
+    {
+      "file": "ending-0-candidates.jpg",
+      "sha256": "1b30861fe730fe3be924b3580875a92ff15cd4dad8d09f6d6f8ad1c8c9f2af16"
+    },
+    {
+      "file": "ending-0-dispatch_prepared.jpg",
+      "sha256": "86c22fad33e13e30050b02c856bb5341072ed9150eabe52acdc6220f30cd51b7"
+    },
+    {
+      "file": "ending-0.jpg",
+      "sha256": "a907c97e802754fe1297511113eea5bbf13c35166e2cc69c5d48d22258d556a9"
+    },
+    {
+      "file": "ending-1-candidates.jpg",
+      "sha256": "e23da9d59c45a72bd23978fdf3c90fbdfaaad7d7e4c0406ed06649a284accc8d"
+    },
+    {
+      "file": "ending-1-dispatch_prepared.jpg",
+      "sha256": "3c9251fb203f02501ac30872669871c90a067e89cb9ea4af1800c11dde973423"
+    },
+    {
+      "file": "ending-1.jpg",
+      "sha256": "d0a575f510a7a48c7aa4f8577572cc80fd659b48264aa8238886b7e8d3b27cdf"
+    },
+    {
+      "file": "ending-2-candidates.jpg",
+      "sha256": "8a2d6c19b833fe43c74b7d05aa078cdb870643f14db447c2abc6fca26ef59be8"
+    },
+    {
+      "file": "ending-2-dispatch_prepared.jpg",
+      "sha256": "bee6f7b3690e9806c571a48f6c7df414d9564b3a14ce11b744e278f7179e283f"
+    },
+    {
+      "file": "ending-2.jpg",
+      "sha256": "2d7bd3cc30dc11cf30b485a84722c3d7433fa245bc8481d6aacb8b5ea6c9c6e5"
+    },
+    {
+      "file": "network-panel.jpg",
+      "sha256": "c0811e6e45e46f7193d5bfab7be157963622215b1273e3af5811566d66861f2b"
+    },
+    {
+      "file": "selected-panel.jpg",
+      "sha256": "2c076165a47ba348e73864102a8fb4a3e6b16247bc920c0318b4fbc7293a73ff"
+    },
+    {
+      "file": "unselected-panel.jpg",
+      "sha256": "12a889fd8c15f02671f4b15773f6bed4f324db7be2ba58226e5f244b5cb9c777"
+    },
+    {
+      "file": "walk-map.jpg",
+      "sha256": "b70960d1754fa1b901a4a2b556fb27edc8328192c2a1f0063164622a2c861d90"
+    },
+    {
+      "file": "wheel-preview.jpg",
+      "sha256": "56eb4d1c56665b382925a5a954b41ae7e54164a0cc2d0787aaefeb95fbc84087"
+    },
+    {
+      "file": "inventory-0-0.jpg",
+      "sha256": "a68115c5031510401dab0ba87cfdbdea42f2deb44afaa1331e32820045093e37",
+      "source": "run-20261028-060705-991990/floor-2/BF-A3-42.evidence-1.jpg"
+    },
+    {
+      "file": "inventory-0-1.jpg",
+      "sha256": "23daaf598f813737adad6c0eaf3e671958c7393bf358a7b371a9a8e1e805c046",
+      "source": "run-20261028-060705-991990/floor-2/BF-A3-42.evidence-2.jpg"
+    },
+    {
+      "file": "inventory-1-0.jpg",
+      "sha256": "c46351548ed5934ee067ec34a5986f058572a26610dad8572c20264e22943085",
+      "source": "run-20261028-085057-893883/floor-2/BF-A6-70.evidence-1.jpg"
+    },
+    {
+      "file": "inventory-1-1.jpg",
+      "sha256": "a547db91d3efca061e7a1c9808159a8fd3ca4764849ea5cd774d431c28d9b85f",
+      "source": "run-20261028-085057-893883/floor-2/BF-A6-70.evidence-2.jpg"
+    },
+    {
+      "file": "inventory-1-2.jpg",
+      "sha256": "1cfecb42dd44f5a9ef596e0d414b5c96dd61dd2e6e4efe4688ebb12157ab031e",
+      "source": "run-20261028-085057-893883/floor-2/BF-A6-70.evidence-3.jpg"
+    },
+    {
+      "file": "inventory-2-0.jpg",
+      "sha256": "33f66163e5d78b4e54c6bfed25a2f4617686b117990ed2a3fc728cd814727343",
+      "source": "run-20261028-091309-048086/floor-2/BF-A1-35.evidence-1.jpg"
+    },
+    {
+      "file": "inventory-2-1.jpg",
+      "sha256": "396a099a9913e124ad53fe7d195710d6d3ce10826a6809aaf430311429da2073",
+      "source": "run-20261028-091309-048086/floor-2/BF-A1-35.evidence-2.jpg"
+    },
+    {
+      "file": "walk-preview.jpg",
+      "sha256": "aa017e64559b3d7f88434490e4ec58b1eb0ca3ed01af7c830c4c0cad85ebc486",
+      "source": "run-20261028-091309-048086/images/000265-move-preview-completed.jpg"
+    },
+    {
+      "file": "unsupported-after-network.jpg",
+      "sha256": "dc7d0939d8112b20b9271db7a042f1b79a428b380fa6b33dcf5d208a0082e332",
+      "source": "run-20261028-091307-075803/images/000715-run-ended-completed.jpg"
+    }
+  ],
+  "boundaries": "Original ending/network/panel/map/preview pixels; controlled input outcomes, network duration, topology and later map/preview sequence. No post-failure device continuation was recovered."
+}

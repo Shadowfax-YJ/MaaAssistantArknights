@@ -1,0 +1,413 @@
+#include "Config/ResourceLoader.h"
+#include "Config/TaskData.h"
+#include "Config/Roguelike/BlackFlow/BlackFlowNodeExecutionConfig.h"
+#include "MaaUtils/ImageIo.h"
+#include "Task/ProcessTask.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowExpeditionEvidence.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowSacrificeRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowEvidenceFrame.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowMapObservationSource.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowNodeTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRoutingTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowRoutingLoop.h"
+#include "Utils/WorkingDir.hpp"
+#include "Vision/Matcher.h"
+#include "Vision/OCRer.h"
+#include "Vision/Miscellaneous/PipelineAnalyzer.h"
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <tuple>
+
+namespace ui_replay {
+using namespace asst;
+using namespace asst::blackflow;
+void check(bool ok,const std::string& s){if(!ok)throw std::runtime_error(s);}
+void set_error(std::string* e,std::string s){if(e)*e=std::move(s);}
+int vertical_center(const Rect& r){return r.y+r.height/2;}
+/*CONSTANTS*/
+
+// Only the repeated loading/sync reads are cached. The keys refer to immutable
+// original images; the first result is always computed by the native OCRer.
+struct OCRer : asst::OCRer {
+    cv::Mat source;
+    std::string task;
+    using asst::OCRer::set_task_info;
+    explicit OCRer(const cv::Mat& image):asst::OCRer(image),source(image){}
+    void set_task_info(const std::string& name){task=name;asst::OCRer::set_task_info(name);}
+    ResultsVecOpt analyze(){
+        if(task=="LoadingText"||task=="BlackFlow@Roguelike@DataSyncConfirm"){
+            static std::map<std::pair<const uchar*,std::string>,ResultsVecOpt> cache;
+            auto key=std::pair{source.data,task};
+            if(auto i=cache.find(key);i!=cache.end())return i->second;
+            return cache.emplace(key,asst::OCRer::analyze()).first->second;
+        }
+        return asst::OCRer::analyze();
+    }
+};
+struct Parent {bool enabled=true;void set_enable(bool b){enabled=b;}};
+struct IO {
+    enum class Page{Map,Panel,Ending,Preview,Inventory,Entered,Unsupported};
+    Page page=Page::Map;
+    cv::Mat map,unselected,selected_panel,network,ending,preview,entered,unsupported;
+    std::vector<cv::Mat> inventory;
+    int inventory_page=0,selected_reads=0;
+    bool selected=false,network_done=false,auto_map=false,rollback=false,cancelled=false;
+    bool second_network=false;
+    bool unsupported_after_network=false;
+    bool click_ok=true,save_ok=true;
+    long long clock=0,network_start=-1,network_delay=12000,cancel_at=-1;
+    int bad_network_clicks=0,target_clicks=0,opens=0,closes=0,ending_clicks=0,map_ending_clicks=0,animation_clicks=0;
+    int stale_ending_frames=0;
+    bool busy()const{return network_start>=0&&!network_done&&clock-network_start<network_delay;}
+    cv::Mat get_image(){
+        if(page==Page::Map&&stale_ending_frames>0){--stale_ending_frames;return ending;}
+        if(page==Page::Ending)return ending;
+        if(page==Page::Preview)return preview;
+        if(page==Page::Entered)return entered;
+        if(page==Page::Unsupported)return unsupported;
+        if(page==Page::Inventory)return inventory.at(inventory_page);
+        if(page==Page::Panel){
+            if(selected&&!network_done&&selected_reads++>0){
+                if(network_start<0)network_start=clock;
+                if(busy())return network;
+                network_done=true;
+                if(unsupported_after_network){page=Page::Unsupported;return unsupported;}
+                if(rollback)selected=false;
+                if(auto_map){page=Page::Map;return map;}
+            }
+            return selected?selected_panel:unselected;
+        }
+        return map;
+    }
+    bool sleep(int ms){clock+=ms;if(cancel_at>=0&&clock>=cancel_at)cancelled=true;return !cancelled;}
+    bool click(const Rect& r){
+        if(busy()){++bad_network_clicks;return click_ok;}
+        if(!click_ok)return false;
+        if(page==Page::Panel&&r.x>1000){selected=true;selected_reads=0;++target_clicks;}
+        else if(page==Page::Panel&&r.x<80)page=Page::Map;
+        else if(page==Page::Ending){
+            const int x=r.x+r.width/2,y=r.y+r.height/2;
+            if(x>=608&&x<672&&y>=626&&y<690){++ending_clicks;page=Page::Map;}
+            else ++animation_clicks;
+        }
+        else if(page==Page::Map&&r.x>500&&r.y>580){++map_ending_clicks;}
+        else if(page==Page::Inventory){page=Page::Map;}
+        else if(page==Page::Preview){page=Page::Entered;}
+        return true;
+    }
+};
+
+BlackFlowPerceptionSnapshot make_frame(int current,int ap){
+    BlackFlowPerceptionSnapshot f;auto& o=f.observation;
+    o.observation_id="controlled-recovery-map";o.sequence=o.viewport_revision=1;o.floor=2;
+    o.floor_from_ocr=o.recognition_ok=o.graph_connected=true;
+    o.current_marker_temporary_id=current;o.current_marker_score=1;
+    o.hud_action_points=f.run.action_points=ap;f.run.active_movement=MovementKind::Walk;
+    for(int i=0;i<4;++i){PerceptionNodeObservation n;n.temporary_id=i;n.position={0,i};
+        n.exists=n.detected_by_vision=true;n.confidence=1;n.icon_rect={400+100*i,200,60,60};
+        n.type=i==3?"final":i==2?"incident":"empty";o.nodes.push_back(n);
+        if(i)o.edges.push_back({i-1,i,true,true,false,1,"visual"});}
+    return f;
+}
+struct Port : IBlackFlowTaskPort {
+    IO& io;BlackFlowTaskPort writer;
+    BlackFlowPerceptionSnapshot frame;
+    int previews=0,confirmations=0;
+    explicit Port(IO& value):io(value),writer({},nullptr,"Roguelike",std::make_shared<BlackFlowMapObservationSource>()){}
+    bool refresh(const BlackFlowObservationRequest&,BlackFlowPerceptionSnapshot& f,std::string*) override{
+        Matcher map(io.get_image());map.set_task_info("BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+        if(!map.analyze())return false;
+        ++frame.observation.sequence;++frame.observation.viewport_revision;f=frame;return true;
+    }
+    bool preview(const MoveCandidate& c,const ViewportObservation&,MovePreview& p,bool& open,std::string*) override{
+        ++previews;io.page=IO::Page::Preview;
+        Matcher button(io.get_image());button.set_task_info("BlackFlow@Roguelike@MovePreviewEnter");
+        check(button.analyze().has_value(),"actual next-node preview not recognized");
+        p.reachability=PreviewReachability::Reachable;p.exact_action_point_cost=c.predicted_action_point_cost;
+        p.identity_revealed=true;p.displayed_type=NodeType::Incident;open=true;return true;
+    }
+    bool inspect_battle(NodeId,const ViewportObservation&,BattleIntelPreview&,std::string*) override{return false;}
+    MoveConfirmationStatus confirm(const MoveTransaction&,EnteredPageObservation& e,std::string*) override{
+        ++confirmations;e.classified_type=NodeType::Incident;io.page=IO::Page::Entered;return MoveConfirmationStatus::Succeeded;
+    }
+    bool cleanup_open_inventory_if_overloaded(bool& done,std::string*) override{done=false;return true;}
+    bool cleanup_depart_inventory_overload(std::string*) override{return false;}
+    bool capture_event_detail(std::string_view n,std::string_view p,json::object d,const cv::Mat& im,std::string* e) override{
+        return io.save_ok&&writer.capture_event_detail(n,p,std::move(d),im,e);
+    }
+    bool record_run_event(std::uint64_t r,const RunLogEvent& e,std::shared_ptr<cv::Mat> im=nullptr,bool capture=false,std::string* error=nullptr) override{
+        if(!io.save_ok)return false;
+        if(!im&&capture)im=std::make_shared<cv::Mat>(io.get_image());
+        return writer.record_run_event(r,e,std::move(im),false,error);
+    }
+    bool persist_diagnostics(const DiagnosticArtifactRequest& r,std::string* e) override{return writer.persist_diagnostics(r,e);}
+    bool record_node_attribution(std::uint64_t r,int f,NodeId n,std::string_view v,std::string_view a,std::string* e) override{
+        return writer.record_node_attribution(r,f,n,v,a,e);
+    }
+};
+struct Output : BlackFlowTaskPluginBase {
+    using BlackFlowTaskPluginBase::BlackFlowTaskPluginBase;
+    bool verify(AsstMsg,const json::value&) const override{return false;}
+    bool _run() override{return true;}
+    void flush(){report_outputs();}
+};
+void flush(const std::shared_ptr<BlackFlowSession>& s,const std::shared_ptr<Port>& p,
+           const std::shared_ptr<RoguelikeConfig>& config){
+    asst::ProcessTask parent({},nullptr,"Roguelike");Output out({},nullptr,"Roguelike",config,nullptr,s,p);
+    out.set_task_ptr(&parent);out.flush();
+}
+
+struct Expedition {
+    IO& io;Parent parent;Parent* m_task_ptr=&parent;
+    std::shared_ptr<RoguelikeConfig> m_config=std::make_shared<RoguelikeConfig>();
+    std::optional<ExpeditionContext> m_expedition_context;
+    std::string m_expedition_pending_operator;
+    std::optional<std::size_t> m_expedition_initial_choice=0;
+    bool m_expedition_finished=false;
+    struct {json::object details;int sequence=0,choice_attempt=1,dispatch_attempt=1;
+        bool choice_confirmed=true,failed=false;cv::Mat confirmation_image;std::string confirmation_basis;} m_expedition_evidence;
+    std::function<bool(std::string_view,json::object,const cv::Mat&)> m_expedition_evidence_observer;
+    std::function<void(std::string_view)> m_expedition_dispatch_observer;
+    explicit Expedition(IO& value):io(value){}
+    IO* ctrler(){return &io;}
+    bool need_exit()const{return io.cancelled||!parent.enabled;}
+    bool sleep(int ms)const{return io.sleep(ms);}
+    std::optional<std::string> next_event(const std::string&){return {};}
+    bool report_expedition(std::string_view,json::object = {},const cv::Mat& = {});
+    bool abort_expedition(std::string_view);
+    bool confirm_expedition_dispatch(const cv::Mat&,std::string_view);
+    bool wait_for_secondary_event(std::string_view);
+    bool run_pending(){/*PENDING_DISPATCH*/ return false;}
+};
+/*EXPEDITION_METHODS*/
+
+struct Movement {
+    /*MOVEMENT_TYPES*/
+    IO& io;std::shared_ptr<BlackFlowSession> m_session;std::shared_ptr<Port> m_port;
+    std::shared_ptr<RoguelikeConfig> config=std::make_shared<RoguelikeConfig>();
+    PendingWork m_pending=PendingWork::SelectMovement;std::string m_direct_depart_source;
+    int m_inventory_observation_retries=0;
+    static constexpr int NetworkWaitSamples=240;
+    int m_network_wait_samples_remaining=NetworkWaitSamples,m_network_wait_revision=0;
+    Movement(IO& c,std::shared_ptr<BlackFlowSession> s,std::shared_ptr<Port> p):io(c),m_session(std::move(s)),m_port(std::move(p)){}
+    IO* ctrler()const{return &io;}
+    bool need_exit()const{return io.cancelled;}
+    bool sleep(int ms)const{return io.sleep(ms);}
+    bool run_fixed_task(std::string_view task){
+        if(need_exit())return false;
+        if(task==OpenPanelTask){++io.opens;io.page=IO::Page::Panel;
+            if(io.second_network&&io.opens==2){io.network_done=false;io.network_start=-1;io.selected_reads=1;}
+            return io.click_ok;}
+        if(task==ClosePanelTask){++io.closes;
+            const auto one=asst::Task.get("BlackFlow@Roguelike@MovementPanelBackClickOnce");
+            const bool a=io.click(one->specific_rect),b=io.click(one->specific_rect);io.sleep(700);return a&&b;}
+        if(task==InventorySwipeTask)io.inventory_page=std::min(io.inventory_page+1,int(io.inventory.size())-1);
+        if(task==InventorySwipeToStartTask)io.inventory_page=std::max(0,io.inventory_page-1);
+        if(task==InventoryResetCollapseTask){
+            Matcher collapse(io.get_image());collapse.set_task_info(std::string(task));
+            const auto hit=collapse.analyze();return hit&&io.click(hit->rect);
+        }
+        if(task==InventoryScanResetExpandTask){io.page=IO::Page::Inventory;io.inventory_page=0;}
+        return io.click_ok;
+    }
+    bool record_run_event(RunLogLevel level,std::string action,std::string phase,std::string outcome,
+                          json::object details,std::string task,std::shared_ptr<cv::Mat> image=nullptr,bool capture=false){
+        RunLogEvent e{.level=level,.action=std::move(action),.phase=std::move(phase),.outcome=std::move(outcome),
+                      .task=std::move(task),.state=m_session->run_log_state(),.details=std::move(details)};
+        std::string error;return m_port->record_run_event(m_session->run_revision(),e,std::move(image),capture,&error);
+    }
+    void report_outputs(){flush(m_session,m_port,config);}
+    bool observe_inventory();
+    bool cleanup_direct_depart_overload(std::string_view){return false;}
+    bool _run();
+    SelectionOutcome select_movement(MovementKind,std::string*);
+    bool verify_walking_on_map(bool* =nullptr);
+    bool wait_for_movement_network(cv::Mat&,bool&,std::string*);
+    bool ensure_panel_open(std::string*,bool* =nullptr);
+    bool close_panel(std::string*,bool* =nullptr);
+    bool title_visible(const cv::Mat& image)const{
+        asst::OCRer o(image);o.set_task_info(std::string(PanelTitleTask));o.set_required({"选择移动方式"});return o.analyze().has_value();
+    }
+    bool scan_current_frame(PanelFrame&,std::string*)const;
+    bool analyze_frame(const cv::Mat&,PanelFrame&,std::string*)const;
+    bool scan_inventory_frame(InventoryFrame&,std::string*);
+    bool wait_for_inventory_stability(InventoryFrame&,cv::Mat&,std::string*);
+    bool reopen_inventory_for_scan(std::string*);
+    InventoryAnalysisOutcome analyze_inventory_frame(const cv::Mat&,InventoryFrame&,int,std::string*)const;
+    void record_panel_evidence(MovementKind,const std::vector<std::pair<int,PanelFrame>>&,int,int,std::string_view,std::string_view,bool=false)const;
+    void record_inventory_evidence(const InventoryFrame&,std::string_view,std::string_view)const;
+    bool report_target_observation(MovementKind,const PanelItem&,int,std::optional<MovementKind>,std::string*);
+    static const MovementSpec* movement_from_name(std::string_view)noexcept;
+    static std::optional<int> remaining_uses_from_text(std::string_view)noexcept;
+    static std::vector<std::string> ocr_candidates();
+    static std::vector<std::string> inventory_ocr_candidates();
+};
+/*MOVEMENT_METHODS*/
+
+cv::Mat load(const std::filesystem::path& path){
+    auto im=MAA_NS::imread(path);check(!im.empty(),"missing original "+path.string());
+    static std::vector<cv::Mat> originals;originals.push_back(im);return im;
+}
+void setup(const std::shared_ptr<BlackFlowSession>& s,const std::shared_ptr<Port>& p,int ap,bool expedition=false){
+    check(s->initialize("automation_collection")&&s->set_current_floor(2),"session init");
+    check(s->configure_diagnostics({DiagnosticLevel::Detailed,3}),"diagnostics");
+    p->writer.set_collection_popup_session(s);p->frame=make_frame(0,ap);
+    if(expedition)p->frame.observation.nodes[1].type="expedition";
+    check(s->update(p->frame),"initial model map");
+    check(s->apply_movement_inventory_observation({},nullptr,false),"initial inventory");
+}
+MoveCandidate move(int from,int to,MovementKind kind){
+    MoveCandidate m;m.action_id="controlled-recovery-move";m.source=*make_stable_node_id(2,{0,from});
+    m.target=m.landing=*make_stable_node_id(2,{0,to});m.path=m.possible_landings={m.target};m.movement=kind;
+    m.predicted_action_point_cost=1;m.landing_action_point_gains[m.target]=0;return m;
+}
+void complete_and_route(const std::shared_ptr<BlackFlowSession>& s,const std::shared_ptr<Port>& p,
+                        const std::shared_ptr<RoguelikeConfig>& config,IO& io){
+    asst::ProcessTask parent({},nullptr,"Roguelike");BlackFlowNodeTaskPlugin node({},nullptr,"Roguelike",config,nullptr,s,p);
+    node.set_task_ptr(&parent);
+    const auto details=json::object{{"subtask","ProcessTask"},{"details",json::object{{"task","BlackFlow@Roguelike@Event-NodeCompleted"}}}};
+    check(node.verify(AsstMsg::SubTaskCompleted,details)&&node.run(),"production node completion callback");
+    check(s->page_context()&&s->page_context()->stage==PageExecutionStage::Resolved,"node not resolved");
+    p->frame.observation.current_marker_temporary_id=1;p->frame.observation.nodes[1].type="empty";
+    p->frame.run.action_points=p->frame.observation.hud_action_points=s->run().resources.action_points;
+    io.page=IO::Page::Map;
+}
+void close_ending(IO& io){
+    PipelineAnalyzer end(io.get_image());end.set_tasks(asst::Task.get("BlackFlow@Roguelike@StageEncounterReward")->next);
+    const auto hit=end.analyze();check(hit&&hit->task_ptr->name=="BlackFlow@Roguelike@CloseEventAfterEncounter","ending not handed to settlement");
+    check(io.click(hit->rect),"ending input failed");io.sleep(hit->task_ptr->post_delay);
+    auto next=hit->task_ptr->next;
+    for(int n=0;n<16;++n){
+        PipelineAnalyzer page(io.get_image());page.set_tasks(next);const auto found=page.analyze();
+        check(found.has_value(),"settlement did not recognize its next page");
+        check(found->task_ptr->name.find("Abandon")==std::string::npos,"settlement abandoned the game");
+        if(found->task_ptr->name=="BlackFlow@Roguelike@Event-NodeCompleted")return;
+        if(found->task_ptr->action==ProcessTaskAction::ClickSelf)check(io.click(found->rect),"settlement click failed");
+        io.sleep(found->task_ptr->post_delay);next=found->task_ptr->next;
+    }
+    check(false,"settlement did not reach its real node-completion result task");
+}
+} // namespace ui_replay
+
+int main(int argc,char**argv){
+    using namespace ui_replay;if(argc!=3)return 2;
+    const std::filesystem::path repo=argv[1],out=argv[2];
+    check(ResourceLoader::get_instance().load(repo/"resource"),"resources");
+    const auto fixture=repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028";
+    const auto meta=json::open(fixture/"provenance.json").value();
+    int passed=0,failed=0,ordinal=0;
+    const auto previous=UserDir.empty()?std::filesystem::current_path():UserDir.get();
+    const auto batch=out/std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto test=[&](const std::string& name,auto body){try{body();++passed;std::cout<<"PASS "<<name<<'\n';}
+        catch(const std::exception& e){++failed;std::cout<<"FAIL "<<name<<": "<<e.what()<<'\n';}};
+    const auto begin=[&]{auto dir=batch/std::to_string(ordinal++);std::filesystem::create_directories(dir);check(UserDir.set(dir),"UserDir");};
+    for(const auto& c:meta.at("endings").as_array()){
+      for(const std::string fault:{"normal","stale ending frames","missing title","missing departure","secondary save failure","confirmation save failure","stale context","user stop"}){
+        if(c.at("file").as_string()!="ending-0.jpg"&&fault!="normal")continue;
+        test("actual ending -> dispatch recorder -> one close -> node completion -> exploration: "+c.at("file").as_string()+" / "+fault,[&]{
+            begin();IO io;io.ending=load(fixture/c.at("file").as_string());io.map=load(fixture/"walk-map.jpg");
+            io.preview=load(fixture/"walk-preview.jpg");io.page=IO::Page::Ending;
+            auto s=std::make_shared<BlackFlowSession>();auto p=std::make_shared<Port>(io);setup(s,p,7,true);
+            auto entry=move(0,1,MovementKind::Walk);check(s->begin_transaction(entry),"entry");
+            check(s->accept_preview({PreviewReachability::Reachable,1})==PreviewDisposition::ReadyToCommit&&s->commit(),"commit entry");
+            check(s->mark_page_running()&&s->observe_page_content("未涉足之树","RoguelikeEvent"),"running expedition");
+            Expedition plugin(io);const auto& page=*s->page_context();
+            plugin.m_expedition_context=ExpeditionContext{s->run_revision(),page.page_revision,2,{c.at("operator").as_string()}};
+            plugin.m_expedition_pending_operator=c.at("operator").as_string();
+            plugin.m_config->status().opers[plugin.m_expedition_pending_operator].elite=c.get("details","elite_before",1);
+            asst::ProcessTask parent({},nullptr,"Roguelike");
+            BlackFlowNodeTaskPlugin binder({},nullptr,"Roguelike",plugin.m_config,nullptr,s,p);binder.set_task_ptr(&parent);
+            const auto bind=json::object{{"subtask","ProcessTask"},{"details",json::object{{"task","BlackFlow@Roguelike@NodeRedispatch"}}}};
+            check(binder.verify(AsstMsg::SubTaskStart,bind)&&binder.run(),"production node route binding");
+            int dispatch_receipts=0,failed_saves=0;
+            plugin.m_expedition_dispatch_observer=[&](auto name){s->record_expedition_dispatch(name);};
+            plugin.m_expedition_evidence_observer=[&](auto phase,json::object details,const cv::Mat& image){
+                const bool fail=(fault=="secondary save failure"&&phase=="secondary_event")||
+                                (fault=="confirmation save failure"&&phase=="dispatch_confirmed");
+                if(fail){io.save_ok=false;++failed_saves;}
+                std::string error;const bool ok=record_expedition_evidence(*s,*p,phase,std::move(details),image,&error);
+                io.save_ok=true;if(ok&&phase=="dispatch_confirmed")++dispatch_receipts;return ok;};
+            for(const auto& pre:c.at("prelude").as_array()){
+                auto d=pre.at("details").as_object();
+                for(const auto* key:{"run_revision","page_revision","expedition_id","evidence_sequence","capture_id","candidate_capture_id","preparation_capture_id","source_context"})d.erase(key);
+                for(auto& [key,value]:d)plugin.m_expedition_evidence.details[key]=value;
+                const auto image=pre.at("image").is_string()?load(fixture/pre.at("image").as_string()):cv::Mat{};
+                check(plugin.report_expedition(pre.at("phase").as_string(),{},image),"recorded pre-departure evidence");
+            }
+            if(fault=="missing title"||fault=="missing departure"){
+                io.ending=io.ending.clone();
+                io.ending(fault=="missing title"?cv::Rect(300,480,280,45):cv::Rect(300,525,850,80)).setTo(cv::Scalar());
+                static std::vector<cv::Mat> retained_faults;retained_faults.push_back(io.ending);
+            }
+            if(fault=="stale context")++plugin.m_expedition_context->page_revision;
+            if(fault=="user stop")io.cancel_at=io.clock+400;
+            if(fault=="stale ending frames")io.stale_ending_frames=2;
+            if(fault!="normal"&&fault!="stale ending frames"){
+                check(!plugin.run_pending(),"unverified ending accepted");
+                check(dispatch_receipts==0&&io.ending_clicks==0&&io.animation_clicks==0,"invalid ending advanced or granted dispatch");
+                if(fault.find("save failure")!=std::string::npos)check(failed_saves==1,"save failure path not exercised");
+                return;
+            }
+            check(plugin.run_pending()&&plugin.parent.enabled&&!s->terminated(),"ending still times out");
+            check(plugin.m_expedition_finished&&plugin.m_expedition_pending_operator.empty(),"dispatch not committed");
+            check(dispatch_receipts==1,"missing dispatch receipt");
+            check(plugin.confirm_expedition_dispatch(io.ending,"secondary_event")&&dispatch_receipts==1,"dispatch receipt repeated");
+            const bool core=c.at("operator").as_string()==AutomationCollectionCoreOperator;
+            check(s->run_log_state().get("expedition_core_away",false)==core,"operator-away state differs from the actual dispatched operator");
+            check(plugin.m_config->status().opers[c.at("operator").as_string()].elite==(core?2:c.get("details","elite_before",1)),"promotion rule changed");
+            close_ending(io);check(io.ending_clicks==1&&io.map_ending_clicks==0,"ending checkbox clicked more than once");
+            complete_and_route(s,p,plugin.m_config,io);
+            BlackFlowRoutingTaskPlugin routing({},nullptr,"Roguelike",plugin.m_config,nullptr,s,p);routing.set_task_ptr(&parent);
+            for(int attempt=0;attempt<3&&!s->terminated();++attempt){
+                const auto route=json::object{{"subtask","ProcessTask"},{"details",json::object{{"task","BlackFlow@Roguelike@Routing"}}}};
+                check(routing.verify(AsstMsg::SubTaskStart,route)&&routing.run(),"production next routing callback");
+                if(s->movement_inventory_refresh_required()){
+                    io.inventory.clear();for(const auto& image:c.at("inventory_images").as_array())io.inventory.push_back(load(fixture/image.as_string()));
+                    io.page=IO::Page::Inventory;io.inventory_page=0;Movement inventory(io,s,p);
+                    check(inventory.observe_inventory()&&!s->movement_inventory_refresh_required(),"real post-node complete inventory scan");
+                    check(inventory.run_fixed_task(InventoryResetCollapseTask),"actual inventory collapse");
+                }
+                if(s->pending_candidate()||(s->page_context()&&s->page_context()->stage==PageExecutionStage::PendingDispatch))break;
+            }
+            check(s->pending_candidate()||(s->page_context()&&s->page_context()->stage==PageExecutionStage::PendingDispatch),
+                  "did not continue exploration after real node completion: "+s->run_log_state().to_string());
+            check(!s->terminated(),"dispatch recovery terminated session");
+        });
+      }
+    }
+    for(const auto* scenario:{"panel remains open","server already closed","server rolls back","two network episodes","recovery at wait limit","long network timeout","cumulative network timeout","unsupported response page","user stop"}){
+        test(std::string("actual network -> fresh panel proof -> pending movement -> next node: ")+scenario,[&]{
+            begin();IO io;io.map=load(fixture/"walk-map.jpg");io.unselected=load(fixture/"unselected-panel.jpg");
+            io.selected_panel=load(fixture/"selected-panel.jpg");io.network=load(fixture/"network-panel.jpg");io.preview=load(fixture/"wheel-preview.jpg");
+            io.unsupported=load(fixture/"unsupported-after-network.jpg");
+            const std::string name=scenario;io.auto_map=name=="server already closed";io.rollback=name=="server rolls back";
+            io.second_network=name=="two network episodes"||name=="cumulative network timeout";
+            if(name=="recovery at wait limit")io.network_delay=60000;
+            if(name=="cumulative network timeout")io.network_delay=40000;
+            if(name=="unsupported response page"){
+                io.unsupported_after_network=true;io.page=IO::Page::Panel;io.selected=true;io.selected_reads=1;
+            }
+            if(name=="long network timeout")io.network_delay=10000000;
+            if(name=="user stop")io.cancel_at=4000;
+            auto s=std::make_shared<BlackFlowSession>();auto p=std::make_shared<Port>(io);setup(s,p,7);
+            check(s->apply_movement_inventory_observation({{MovementKind::M01,1,0},{MovementKind::M01,1,1}},nullptr,false),"wheel instances");
+            check(s->save_pending_candidate(move(0,2,MovementKind::M01)),"pending original wheel move");
+            Movement plugin(io,s,p);check(plugin._run(),"selection callback");
+            check(io.bad_network_clicks==0,"clicked while the actual network overlay was present");
+            if(name=="long network timeout"||name=="cumulative network timeout"||name=="unsupported response page"){
+                check(s->result()&&s->result()->next_action=="stop_task"&&p->confirmations==0,"network timeout abandoned or continued the run");return;}
+            if(name=="user stop"){check(!s->terminated()&&p->confirmations==0,"user stop became a selection failure");return;}
+            check(!s->terminated(),s->result()?s->result()->termination_reason:"selection failed");
+            check(asst::Task.get("BlackFlow@Roguelike@SelectMovementAction")->next==asst::Task.get("BlackFlow@Roguelike@RoutingResume-Enter")->next,"selection did not restore routing");
+            const auto cycle=execute_pending_routing_cycle(*s,*p);
+            check(cycle.status==RoutingCycleStatus::MoveCommitted,"pending move did not continue: "+cycle.error);
+            check(p->previews==1&&p->confirmations==1&&s->page_context().has_value(),"next node was not entered exactly once");
+            check(io.target_clicks==(io.rollback?2:1),"recovery clicked a stale or unnecessary target");
+            check(io.opens>=2,"network recovery did not reacquire the panel proof");
+        });
+    }
+    UserDir.set(previous);std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
+}

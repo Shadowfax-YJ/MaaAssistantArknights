@@ -199,6 +199,7 @@ struct OCRer
     struct Result
     {
         std::string text;
+        double score = 0.99;
     };
 
     std::vector<Result> result;
@@ -211,6 +212,7 @@ struct OCRer
     }
 
     void set_task_info(std::string_view value) { task = value; }
+    void set_required(std::vector<std::string>) {}
 
     bool analyze()
     {

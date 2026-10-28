@@ -1,4 +1,4 @@
-## v1.1.36
+## v1.1.37
 
 ### Highlights
 
@@ -44,6 +44,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.37 (2026-10-28)</b></summary>
+
+### 修复 | Fix
+
+* 修复派遣完成后停在事件结束页、无法继续探索的问题。 @Shadowfax-YJ
+* 修复装载移动加工品时，短暂网络等待被误判为失败并放弃当前探索的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.36 (2026-10-26)</b></summary>
 
 ### 改进 | Improved

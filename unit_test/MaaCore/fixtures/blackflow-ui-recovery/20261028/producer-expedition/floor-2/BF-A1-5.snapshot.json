@@ -1,0 +1,320 @@
+{
+    "accepted_observation_id": "controlled-recovery-map",
+    "artifact_set_id": "BF-A1-5",
+    "captured_image_height": 0,
+    "captured_image_width": 0,
+    "diagnostic_sequence": 5,
+    "evidence_images": [
+        {
+            "file": "floor-2/BF-A1-5.evidence-1.jpg",
+            "height": 720,
+            "role": "inventory-page-1",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-5.evidence-2.jpg",
+            "height": 720,
+            "role": "inventory-page-2",
+            "width": 1280
+        }
+    ],
+    "evidence_type": "inventory_ocr",
+    "floor": 2,
+    "floor_four_remembrance": false,
+    "items": [
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 0,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_06",
+            "name": "试作外骨骼",
+            "name_rect": {
+                "height": 22,
+                "width": 87,
+                "x": 384,
+                "y": 258
+            },
+            "name_score": 0.999147,
+            "remaining_charges": 2,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 37,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 456,
+                        "y": 158
+                    }
+                },
+                {
+                    "bright_pixels": 36,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 466,
+                        "y": 166
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 1,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_10",
+            "name": "坎诺特的触须",
+            "name_rect": {
+                "height": 22,
+                "width": 106,
+                "x": 806,
+                "y": 258
+            },
+            "name_score": 0.999616,
+            "remaining_charges": 2,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 37,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 888,
+                        "y": 158
+                    }
+                },
+                {
+                    "bright_pixels": 34,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 898,
+                        "y": 166
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 2,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_03",
+            "name": "标准引擎",
+            "name_rect": {
+                "height": 20,
+                "width": 71,
+                "x": 392,
+                "y": 420
+            },
+            "name_score": 0.999955,
+            "remaining_charges": 3,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 35,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 456,
+                        "y": 319
+                    }
+                },
+                {
+                    "bright_pixels": 35,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 466,
+                        "y": 327
+                    }
+                },
+                {
+                    "bright_pixels": 35,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 471,
+                        "y": 342
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 3,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_11",
+            "name": "结构性原理",
+            "name_rect": {
+                "height": 22,
+                "width": 88,
+                "x": 815,
+                "y": 419
+            },
+            "name_score": 0.999907,
+            "remaining_charges": 3,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 37,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 888,
+                        "y": 319
+                    }
+                },
+                {
+                    "bright_pixels": 34,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 898,
+                        "y": 327
+                    }
+                },
+                {
+                    "bright_pixels": 38,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 903,
+                        "y": 342
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 4,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_09",
+            "name": "老妈妈的融雪",
+            "name_rect": {
+                "height": 19,
+                "width": 101,
+                "x": 377,
+                "y": 582
+            },
+            "name_score": 0.999907,
+            "remaining_charges": 1,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 35,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 456,
+                        "y": 480
+                    }
+                }
+            ]
+        }
+    ],
+    "lorentz_eye_found": false,
+    "lorentz_eye_presence": "absent",
+    "map_generation": 1,
+    "map_revision": 9,
+    "map_section_generation": 1,
+    "map_section_key": "floor-2-generation-1",
+    "map_section_label": "2 层",
+    "outcome": "识别完成",
+    "recognition_attempt_count": 0,
+    "recognition_attempt_id": "",
+    "recognition_floor": 0,
+    "recognition_floor_source": "next_level_ocr",
+    "recognition_node_diagnostics": [
+    ],
+    "recognition_ocr_diagnostics": [
+    ],
+    "recognition_retry_count": 0,
+    "recognition_screenshot_us": 0,
+    "recognition_topology_base_edge_count": 0,
+    "recognition_topology_extra_edge_count": 0,
+    "recognition_topology_match_score": 0,
+    "recognition_topology_source_digest": "",
+    "recognition_topology_template_id": "",
+    "recognition_tree_hole_color": "",
+    "recognition_tree_hole_effect": "",
+    "recognition_us": 0,
+    "run_revision": 1,
+    "scan_complete": true,
+    "scan_scope": "whole_inventory",
+    "scan_stop_reason": "已扫描到零件箱末尾",
+    "session_active_movement": "walk",
+    "session_active_movement_name": "徒步跋涉",
+    "snapshot_file": "BF-A1-5.snapshot.json",
+    "stopped_at_ordered_boundary": false,
+    "tree_hole_outer_floor": 0,
+    "trigger": "processing_item_observation",
+    "type_boundary_items": [
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-1",
+            "name": "血橙",
+            "name_rect": {
+                "height": 25,
+                "width": 41,
+                "x": 839,
+                "y": 579
+            },
+            "name_score": 0.999905,
+            "scan_page": 0,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-2",
+            "name": "雾滚草",
+            "name_rect": {
+                "height": 26,
+                "width": 57,
+                "x": 852,
+                "y": 255
+            },
+            "name_score": 0.999949,
+            "scan_page": 1,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-2",
+            "name": "雾滚草",
+            "name_rect": {
+                "height": 23,
+                "width": 56,
+                "x": 853,
+                "y": 419
+            },
+            "name_score": 0.999806,
+            "scan_page": 1,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "空格",
+            "evidence_image_role": "inventory-page-2",
+            "name": "待收集零件",
+            "name_rect": {
+                "height": 23,
+                "width": 95,
+                "x": 974,
+                "y": 547
+            },
+            "name_score": 0.999874,
+            "scan_page": 1,
+            "type_boundary": true
+        }
+    ]
+}

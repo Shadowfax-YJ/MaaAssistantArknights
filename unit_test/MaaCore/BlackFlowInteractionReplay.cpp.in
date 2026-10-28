@@ -100,7 +100,12 @@ struct Matcher {
     }
 };
 struct BlackFlowMovementTaskPlugin {
-    enum class SelectionOutcome { Selected, Unavailable, Failed };
+    struct OCRer {
+        explicit OCRer(const cv::Mat&){}
+        void set_task_info(std::string_view){}
+        std::optional<int> analyze(){return std::nullopt;}
+    };
+    enum class SelectionOutcome { Selected, Unavailable, Failed, NetworkBlocked };
     struct PanelItem { MovementKind movement; Rect name_rect; double name_score; std::optional<int> remaining_uses; bool loaded; };
     struct PanelNameHit { MovementKind movement; Rect name_rect; double name_score; };
     struct PanelFrame { std::vector<PanelItem> items; std::vector<PanelNameHit> name_hits; std::optional<MovementKind> loaded_movement; std::shared_ptr<cv::Mat> image; };
@@ -113,8 +118,12 @@ struct BlackFlowMovementTaskPlugin {
     Controller* ctrler() { return &controller; }
     bool need_exit() const { return controller.cancelled; }
     bool sleep(int) { return !need_exit(); }
-    bool ensure_panel_open(std::string*) { controller.panel=true; return true; }
-    bool close_panel(std::string*);
+    static constexpr int NetworkWaitSamples=240;
+    int m_network_wait_samples_remaining=NetworkWaitSamples;
+    int m_network_wait_revision=0;
+    bool ensure_panel_open(std::string*,bool* =nullptr) { controller.panel=true; return true; }
+    bool close_panel(std::string*,bool* =nullptr);
+    bool wait_for_movement_network(cv::Mat&,bool&,std::string*);
     bool title_visible(const cv::Mat& image) const { return !image.empty()&&image.at<cv::Vec3b>(0,0)[1]; }
     bool run_fixed_task(std::string_view task) {
         if(task==ClosePanelTask) { ++closes; controller.closing=true; if(close_ok)controller.panel=false; }
@@ -133,12 +142,13 @@ struct BlackFlowMovementTaskPlugin {
     }
     void record_panel_evidence(MovementKind,const std::vector<std::pair<int,PanelFrame>>&,int,int,std::string_view,std::string_view,bool=false) {}
     bool report_target_observation(MovementKind,const PanelItem&,int,MovementKind active,std::string*) { m_session->active=active;return true; }
-    template<class... T> void record_run_event(T&&...) {}
+    template<class... T> bool record_run_event(T&&...) {return true;}
     SelectionOutcome select_movement(MovementKind,std::string*);
-    bool verify_walking_on_map();
+    bool verify_walking_on_map(bool* =nullptr);
 };
 /*SELECT*/
 /*WALK*/
+/*NETWORK_WAIT*/
 /*CLOSE*/
 struct BlackFlowNodeEvidenceTaskPlugin {
     std::function<bool(std::string_view,std::optional<Rect>,std::string*)> m_capture=[](auto,auto,auto){return true;};

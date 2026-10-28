@@ -136,6 +136,8 @@ void BlackFlowMovementTaskPlugin::reset_in_run_variables()
     m_pending = PendingWork::None;
     m_direct_depart_source.clear();
     m_inventory_observation_retries = 0;
+    m_network_wait_samples_remaining = NetworkWaitSamples;
+    m_network_wait_revision = 0;
 }
 
 bool BlackFlowMovementTaskPlugin::_run()
@@ -184,7 +186,8 @@ bool BlackFlowMovementTaskPlugin::_run()
         m_session->fail(
             "movement_selection_failed",
             error.empty() ? "movement selection failed" : error,
-            FailureDisposition::RestartRun);
+            outcome == SelectionOutcome::NetworkBlocked ? FailureDisposition::StopTask
+                                                        : FailureDisposition::RestartRun);
         Log.error("BlackFlow movement selection failed", error);
     }
     report_outputs();
@@ -885,12 +888,21 @@ BlackFlowMovementTaskPlugin::InventoryAnalysisOutcome BlackFlowMovementTaskPlugi
 BlackFlowMovementTaskPlugin::SelectionOutcome
     BlackFlowMovementTaskPlugin::select_movement(MovementKind target, std::string* error)
 {
+    m_network_wait_samples_remaining = NetworkWaitSamples;
+    m_network_wait_revision = 0;
+    bool network_affected = false;
+    const auto failure_outcome = [&] {
+        return network_affected ? SelectionOutcome::NetworkBlocked : SelectionOutcome::Failed;
+    };
     if (find_movement_spec(target) == nullptr) {
         set_error(error, "movement selection requested an unknown movement kind");
-        return SelectionOutcome::Failed;
+        return failure_outcome();
     }
 
-    const cv::Mat loaded_icon_image = ctrler()->get_image();
+    cv::Mat loaded_icon_image = ctrler()->get_image();
+    if (!wait_for_movement_network(loaded_icon_image, network_affected, error)) {
+        return failure_outcome();
+    }
     const auto loaded_icon = recognize_loaded_movement_with_evidence(loaded_icon_image);
     {
         const MovementSpec* target_spec = find_movement_spec(target);
@@ -936,15 +948,31 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
         current.target = loaded;
         current.target_found = true;
         if (!m_session->apply_movement_panel_observation(std::move(current), loaded, error)) {
-            return SelectionOutcome::Failed;
+            return failure_outcome();
         }
         const auto same_kind_instances = std::ranges::count_if(
             m_session->run().resources.movement_instances,
             [target](const RunResources::MovementInstance& instance) { return instance.movement == target; });
-        if (loaded == target && same_kind_instances <= 1) {
+        if (loaded == target && same_kind_instances <= 1 &&
+            !network_affected) {
             return SelectionOutcome::Selected;
         }
     }
+    // A network response may roll back an optimistic loaded marker. If a wait
+    // happened after that proof, re-enter the full panel search before routing.
+    // Do not infer ambiguous movement instances from their map icons.
+    const auto finish_loaded_selection = [&](int proof_revision) -> std::optional<SelectionOutcome> {
+        if (!close_panel(error, &network_affected)) {
+            return failure_outcome();
+        }
+        if (proof_revision == m_network_wait_revision) {
+            return SelectionOutcome::Selected;
+        }
+        if (need_exit()) {
+            return failure_outcome();
+        }
+        return std::nullopt;
+    };
     std::vector<std::pair<int, PanelFrame>> observed_frames;
     int reset_swipes = 0;
     int forward_swipes = 0;
@@ -952,8 +980,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
     bool complete_scan_seen = false;
     std::optional<int> preferred_remaining = m_session->minimum_movement_instance_charges(target);
     for (int selection_attempt = 0; selection_attempt < MaxSelectionVerificationAttempts; ++selection_attempt) {
-        if (need_exit() || !ensure_panel_open(error)) {
-            return SelectionOutcome::Failed;
+        if (need_exit() || !ensure_panel_open(error, &network_affected)) {
+            return failure_outcome();
         }
         // 每次重试都重新做一次完整定位。移动列表会在滑动结束后继续回弹，装载卡片也会自动居中；
         // 因此任何一次失败后的旧页码和旧坐标都不再可信。
@@ -985,8 +1013,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                         forward_swipes,
                         "回到列表顶部失败",
                         error == nullptr ? std::string_view {} : std::string_view(*error));
-                    close_panel(nullptr);
-                    return SelectionOutcome::Failed;
+                    close_panel(nullptr, &network_affected);
+                    return failure_outcome();
                 }
                 ++reset_swipes;
                 continue;
@@ -1001,8 +1029,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                         forward_swipes,
                         "向列表尾部翻页失败",
                         error == nullptr ? std::string_view {} : std::string_view(*error));
-                    close_panel(nullptr);
-                    return SelectionOutcome::Failed;
+                    close_panel(nullptr, &network_affected);
+                    return failure_outcome();
                 }
                 ++forward_swipes;
                 ++attempt_forward_swipes;
@@ -1024,8 +1052,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                     forward_swipes,
                     "当前页 OCR 失败",
                     error == nullptr ? std::string_view {} : std::string_view(*error));
-                close_panel(nullptr);
-                return SelectionOutcome::Failed;
+                close_panel(nullptr, &network_affected);
+                return failure_outcome();
             }
             observed_frames.emplace_back(scan_page, frame);
             top_anchor_seen = top_anchor_seen || std::ranges::any_of(frame.items, [](const PanelItem& item) {
@@ -1126,8 +1154,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                     forward_swipes,
                     "目标观测无法写入状态",
                     error == nullptr ? std::string_view {} : std::string_view(*error));
-                close_panel(nullptr);
-                return SelectionOutcome::Failed;
+                close_panel(nullptr, &network_affected);
+                return failure_outcome();
             }
             record_panel_evidence(
                 target,
@@ -1136,7 +1164,10 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 forward_swipes,
                 "目标已在当前页装载",
                 {});
-            return close_panel(error) ? SelectionOutcome::Selected : SelectionOutcome::Failed;
+            if (const auto finished = finish_loaded_selection(m_network_wait_revision)) {
+                return *finished;
+            }
+            continue;
         }
 
         // 扫描到底允许的 10px OCR 容差不能证明卡片已经停稳：整列缓慢滑动也会落入
@@ -1148,7 +1179,7 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
         std::optional<PanelFrame> settled_frame;
         for (int stability_attempt = 0; stability_attempt < MaxSelectionStabilityAttempts; ++stability_attempt) {
             if (need_exit()) {
-                return SelectionOutcome::Failed;
+                return failure_outcome();
             }
             sleep(SelectionStabilityProbeDelay);
             PanelFrame candidate;
@@ -1160,8 +1191,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                     forward_swipes,
                     "点击前稳定帧 OCR 失败",
                     error == nullptr ? std::string_view {} : std::string_view(*error));
-                close_panel(nullptr);
-                return SelectionOutcome::Failed;
+                close_panel(nullptr, &network_affected);
+                return failure_outcome();
             }
             observed_frames.emplace_back(scan_page, candidate);
             std::vector<MovementPanelLayoutEntry> candidate_layout;
@@ -1231,8 +1262,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                     forward_swipes,
                     "目标观测无法写入状态",
                     error == nullptr ? std::string_view {} : std::string_view(*error));
-                close_panel(nullptr);
-                return SelectionOutcome::Failed;
+                close_panel(nullptr, &network_affected);
+                return failure_outcome();
             }
             record_panel_evidence(
                 target,
@@ -1241,7 +1272,10 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 forward_swipes,
                 "稳定等待期间目标已经装载",
                 {});
-            return close_panel(error) ? SelectionOutcome::Selected : SelectionOutcome::Failed;
+            if (const auto finished = finish_loaded_selection(m_network_wait_revision)) {
+                return *finished;
+            }
+            continue;
         }
         if (click_decision == MovementSelectionClickDecision::ReacquireTarget) {
             Log.warn(
@@ -1280,8 +1314,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 forward_swipes,
                 "点击后复核 OCR 失败",
                 error == nullptr ? std::string_view {} : std::string_view(*error));
-            close_panel(nullptr);
-            return SelectionOutcome::Failed;
+            close_panel(nullptr, &network_affected);
+            return failure_outcome();
         }
         observed_frames.emplace_back(scan_page, verification);
         const auto verified_item = std::find_if(
@@ -1298,8 +1332,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                     forward_swipes,
                     "目标观测无法写入状态",
                     error == nullptr ? std::string_view {} : std::string_view(*error));
-                close_panel(nullptr);
-                return SelectionOutcome::Failed;
+                close_panel(nullptr, &network_affected);
+                return failure_outcome();
             }
             record_panel_evidence(
                 target,
@@ -1308,18 +1342,21 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
                 forward_swipes,
                 selection_attempt == 0 ? "选择并复核成功" : "重新完整定位后选择并复核成功",
                 {});
-            return close_panel(error) ? SelectionOutcome::Selected : SelectionOutcome::Failed;
+            if (const auto finished = finish_loaded_selection(m_network_wait_revision)) {
+                return *finished;
+            }
+            continue;
         }
 
         // 顶部徒步卡片的“装载中”可能被固定标题遮挡，OCR 缺失不能证明切换失败。
         // 徒步没有同类实例歧义，关闭面板后可用地图上的独立图标作阳性复核。
         if (target == MovementKind::Walk) {
-            if (!close_panel(error)) {
-                return SelectionOutcome::Failed;
+            if (!close_panel(error, &network_affected)) {
+                return failure_outcome();
             }
-            if (verify_walking_on_map()) {
+            if (verify_walking_on_map(&network_affected)) {
                 if (!report_target_observation(target, *stable_item, attempt_forward_swipes, target, error)) {
-                    return SelectionOutcome::Failed;
+                    return failure_outcome();
                 }
                 record_panel_evidence(
                     target,
@@ -1354,8 +1391,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
             forward_swipes,
             "零件箱确认目标存在，但多次完整向下扫描后仍无法稳定装载",
             error == nullptr ? std::string_view {} : std::string_view(*error));
-        close_panel(nullptr);
-        return SelectionOutcome::Failed;
+        close_panel(nullptr, &network_affected);
+        return failure_outcome();
     }
 
     if (target == MovementKind::Walk) {
@@ -1367,8 +1404,8 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
             forward_swipes,
             "完整扫描后没有识别到徒步",
             error == nullptr ? std::string_view {} : std::string_view(*error));
-        close_panel(nullptr);
-        return SelectionOutcome::Failed;
+        close_panel(nullptr, &network_affected);
+        return failure_outcome();
     }
 
     set_error(error, "authoritative movement target was not recognized after repeated full downward searches");
@@ -1380,15 +1417,20 @@ BlackFlowMovementTaskPlugin::SelectionOutcome
         "零件箱确认目标存在；选择面板已反复扫满安全上限但仍未识别到目标",
         error == nullptr ? std::string_view {} : std::string_view(*error),
         complete_scan_seen);
-    close_panel(nullptr);
-    return SelectionOutcome::Failed;
+    close_panel(nullptr, &network_affected);
+    return failure_outcome();
 }
 
-bool BlackFlowMovementTaskPlugin::verify_walking_on_map()
+bool BlackFlowMovementTaskPlugin::verify_walking_on_map(bool* network_waited)
 {
+    bool local_waited = false;
+    bool& waited = network_waited == nullptr ? local_waited : *network_waited;
     int confirmed_frames = 0;
     for (int sample = 0; sample < 4 && !need_exit(); ++sample) {
-        const cv::Mat image = ctrler()->get_image();
+        cv::Mat image = ctrler()->get_image();
+        if (!wait_for_movement_network(image, waited, nullptr)) {
+            return false;
+        }
         const auto loaded =
             !image.empty() && !title_visible(image) ? recognize_loaded_movement_with_evidence(image) : std::nullopt;
         confirmed_frames = loaded.has_value() && loaded->movement == MovementKind::Walk ? confirmed_frames + 1 : 0;
@@ -1427,16 +1469,121 @@ bool BlackFlowMovementTaskPlugin::verify_walking_on_map()
     return false;
 }
 
-bool BlackFlowMovementTaskPlugin::ensure_panel_open(std::string* error)
+bool BlackFlowMovementTaskPlugin::wait_for_movement_network(
+    cv::Mat& image,
+    bool& network_waited,
+    std::string* error)
 {
-    if (title_visible(ctrler()->get_image())) {
+    bool waiting = false;
+    int ready_frames = 0;
+    cv::Mat last_busy;
+    const auto record = [&](std::string phase, const cv::Mat& frame) {
+        const bool failed = phase == "interrupted" || phase == "timed-out";
+        return record_run_event(
+            failed ? RunLogLevel::Warning : RunLogLevel::Info,
+            "movement.network-wait",
+            std::move(phase),
+            failed ? "error" : "observed",
+            json::object { { "sample_budget_remaining", m_network_wait_samples_remaining } },
+            "BlackFlowMovement",
+            std::make_shared<cv::Mat>(frame.clone()),
+            false);
+    };
+    while (!need_exit()) {
+        bool loading = false;
+        if (!image.empty()) {
+            OCRer syncing(image);
+            syncing.set_task_info("BlackFlow@Roguelike@DataSyncConfirm");
+            if (syncing.analyze()) {
+                network_waited = true;
+                m_network_wait_samples_remaining = 0;
+                set_error(error, "network synchronization interrupted movement selection");
+                (void)record("interrupted", image);
+                return false;
+            }
+            OCRer pending(image);
+            pending.set_task_info("LoadingText");
+            loading = pending.analyze().has_value();
+        }
+        if (loading) {
+            network_waited = true;
+            ready_frames = 0;
+            last_busy = image.clone();
+            if (!waiting) {
+                ++m_network_wait_revision;
+                if (!record("started", image)) {
+                    m_network_wait_samples_remaining = 0;
+                    set_error(error, "movement network-wait evidence could not be saved");
+                    return false;
+                }
+            }
+            waiting = true;
+        }
+        else if (!waiting) {
+            return true;
+        }
+        else if (!image.empty() && ++ready_frames >= 2) {
+            if (!record("resumed", image)) {
+                m_network_wait_samples_remaining = 0;
+                set_error(error, "movement network-resume evidence could not be saved");
+                return false;
+            }
+            return true;
+        }
+        else if (image.empty()) {
+            ready_frames = 0;
+        }
+        if (m_network_wait_samples_remaining <= 0 && ready_frames == 0) {
+            m_network_wait_samples_remaining = 0;
+            set_error(error, "movement network response did not finish within the bounded wait");
+            (void)record("timed-out", image.empty() ? last_busy : image);
+            return false;
+        }
+        if (m_network_wait_samples_remaining > 0) {
+            --m_network_wait_samples_remaining;
+        }
+        if (!sleep(250)) {
+            return false;
+        }
+        image = ctrler()->get_image();
+    }
+    return false;
+}
+
+bool BlackFlowMovementTaskPlugin::ensure_panel_open(std::string* error, bool* network_waited)
+{
+    bool local_waited = false;
+    bool& waited = network_waited == nullptr ? local_waited : *network_waited;
+    cv::Mat image = ctrler()->get_image();
+    if (!wait_for_movement_network(image, waited, error)) {
+        return false;
+    }
+    if (title_visible(image)) {
         return true;
     }
-    for (int attempt = 0; attempt < MaxOpenAttempts; ++attempt) {
+    if (waited && image.empty()) {
+        set_error(error, "movement page is unknown after the network wait");
+        return false;
+    }
+    if (waited) {
+        Matcher map(image);
+        map.set_task_info("BlackFlow@Roguelike@MapPrepare-FloorEnterZoom");
+        Matcher preview(image);
+        preview.set_task_info("BlackFlow@Roguelike@MovementInventoryClosePreview");
+        if (!map.analyze() && !preview.analyze()) {
+            set_error(error, "network response returned to an unsupported movement page");
+            return false;
+        }
+    }
+    for (int attempt = 0; attempt < MaxOpenAttempts && !need_exit(); ++attempt) {
         if (!run_fixed_task(OpenPanelTask)) {
             continue;
         }
-        if (title_visible(ctrler()->get_image())) {
+        image = ctrler()->get_image();
+        if (!wait_for_movement_network(image, waited, error)) {
+            return false;
+        }
+        if (title_visible(image)) {
             return true;
         }
     }
@@ -1444,12 +1591,17 @@ bool BlackFlowMovementTaskPlugin::ensure_panel_open(std::string* error)
     return false;
 }
 
-bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
+bool BlackFlowMovementTaskPlugin::close_panel(std::string* error, bool* network_waited)
 {
+    bool local_waited = false;
+    bool& waited = network_waited == nullptr ? local_waited : *network_waited;
     bool panel_visible = false;
     int confirmed_map_frames = 0;
-    const auto closed_on_map = [&]() {
-        const cv::Mat image = ctrler()->get_image();
+    const auto closed_on_map = [&]() -> std::optional<bool> {
+        cv::Mat image = ctrler()->get_image();
+        if (!wait_for_movement_network(image, waited, error)) {
+            return std::nullopt;
+        }
         panel_visible = !image.empty() && title_visible(image);
         if (image.empty() || panel_visible) {
             confirmed_map_frames = 0;
@@ -1460,7 +1612,11 @@ bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
         confirmed_map_frames = map_matcher.analyze().has_value() ? confirmed_map_frames + 1 : 0;
         return confirmed_map_frames >= 2;
     };
-    if (closed_on_map()) {
+    const auto initial = closed_on_map();
+    if (!initial) {
+        return false;
+    }
+    if (*initial) {
         return true;
     }
     for (int attempt = 0; attempt < MaxOpenAttempts && !need_exit(); ++attempt) {
@@ -1472,7 +1628,11 @@ bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
             if (!sleep(250)) {
                 return false;
             }
-            if (closed_on_map()) {
+            const auto closed = closed_on_map();
+            if (!closed) {
+                return false;
+            }
+            if (*closed) {
                 return true;
             }
         }
@@ -1482,7 +1642,11 @@ bool BlackFlowMovementTaskPlugin::close_panel(std::string* error)
         if (!sleep(250)) {
             return false;
         }
-        if (closed_on_map()) {
+        const auto closed = closed_on_map();
+        if (!closed) {
+            return false;
+        }
+        if (*closed) {
             return true;
         }
     }
