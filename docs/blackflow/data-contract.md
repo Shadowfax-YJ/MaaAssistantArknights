@@ -1,5 +1,24 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.38 发布与公开包核验（2026-10-29）
+
+Windows、macOS 通用采集版及 GitHub/CDN 更新源已发布为
+[blackflow-v1.1.38](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.38)，来源提交 `c569227259ff5010cbc69ffb6785f29d7bad0f66`；流水线
+[40725409134](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40725409134)
+成功。本版仅修复常规过载清理后的错误停止：使用底部收起模板、观察实际页面后有限重试，
+保留清理后完整重扫及直接前往战斗的原有处理；公开说明仅写用户可感知的修复。
+
+CI 两平台构建、macOS DMG 实际校验及 Windows 上传前回归通过；新增普通清理至完整重扫、
+后续移动的 10 项真实截图组合回放通过。国内两个完整包下载后，GitHub 资产 SHA-256、
+双份更新清单、macOS 更新签名、Windows ZIP/文件清单/版本身份、实际收起模板与资源、
+Core 修复标记核验通过。普通版 Latest Release 保持 `v15.0.1`。结果保存在
+`build/diagnostics/20261029/v1.1.38-public-verification/verification.json`。
+
+73 项共享契约检查确认新旧数据及独立 v1 归档兼容。原始 v1、图片/签名 schema、能力、
+固定验证器 bundle、任务族和宿主协议保持；旧缺项未知、未知版本拒绝，历史包、缓存、
+审核、冻结报告及分子分母定义不变，无需消费者生产代码升级或部署。没有替换或重启运行
+实例，未进行新版完整实机对局。下方段落保留发布准备与源码验证阶段的状态。
+
 ## v1.1.38 发布准备（2026-10-29）
 
 用户要求发布本次常规过载清理收尾修复，维护端将 CI 采集版版本从 v1.1.37 调整为
