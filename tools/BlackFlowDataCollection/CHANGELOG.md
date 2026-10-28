@@ -1,4 +1,4 @@
-## v1.1.37
+## v1.1.38
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.38 (2026-10-29)</b></summary>
+
+### 修复 | Fix
+
+* 修复零件箱过载清理完成后仍报错停止的问题，恢复库存重扫和继续探索。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.37 (2026-10-28)</b></summary>
 
 ### 修复 | Fix

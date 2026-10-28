@@ -3498,9 +3498,9 @@
         "postDelay": 700
     },
     "BlackFlow@Roguelike@MovementInventoryOverloadClose": {
-        "algorithm": "JustReturn",
-        "action": "ClickRect",
-        "specificRect": [18, 8, 60, 58],
+        "Doc": "过载清理后只在底部收起模板阳性时单步关闭；页面复核及有限重试由清理流程控制，不跳转路由。",
+        "baseTask": "BlackFlow@Roguelike@MovementInventoryResetCollapse",
+        "template": "BlackFlow@Roguelike@MovementInventoryCollapse.png",
         "postDelay": 700
     },
     "BlackFlow@Roguelike@MovementInventoryObservationAction": {

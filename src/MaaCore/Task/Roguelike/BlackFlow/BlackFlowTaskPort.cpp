@@ -1688,10 +1688,37 @@ bool BlackFlowTaskPort::cleanup_overloaded_inventory(
             return true;
         }
         if (current->page == InventoryOverloadPage::Inventory) {
-            if (!run_task(InventoryOverloadCloseTask, "parts-box could not return to routing after cleanup")) {
-                return false;
+            // A successful input is not a closed inventory. Observe before retrying
+            // so delayed frames cannot make a second click reopen the box on the map.
+            for (int attempt = 0; attempt < 3; ++attempt) {
+                if (!run_task(InventoryOverloadCloseTask, "parts-box could not return to routing after cleanup")) {
+                    // The page may have closed between the observation and template matching.
+                    // A fresh cleared map can finish cleanup, but a lost capture or stop cannot.
+                    if (!evidence_failed && !m_task_context->stopped()) {
+                        current = observe_stable("returned-to-map");
+                        if (current && current->cleared() && current->page == InventoryOverloadPage::Map) {
+                            if (error != nullptr) {
+                                error->clear();
+                            }
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                for (int observation = 0; observation < 4; ++observation) {
+                    current = observe_stable("returned-to-map");
+                    if (!current || !current->cleared()) {
+                        return false;
+                    }
+                    if (current->page == InventoryOverloadPage::Map) {
+                        return true;
+                    }
+                    if (observation != 3 &&
+                        !run_task(InventoryResetWaitTask, "parts-box close observation was interrupted")) {
+                        return false;
+                    }
+                }
             }
-            current = observe_stable("returned-to-map");
         }
         if (!current || !current->cleared() || current->page != InventoryOverloadPage::Map) {
             set_error(error, "parts-box cleanup did not reach a confirmed normal map");

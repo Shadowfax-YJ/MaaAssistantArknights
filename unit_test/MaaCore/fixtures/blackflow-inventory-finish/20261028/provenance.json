@@ -1,0 +1,140 @@
+{
+  "source_run": "run-20261028-175027-941189",
+  "overload_pages": [
+    "overloaded-0.jpg",
+    "overloaded-1.jpg",
+    "overloaded-2.jpg",
+    "overloaded-3.jpg",
+    "overloaded-4.jpg"
+  ],
+  "rescan_pages": [
+    "rescan-0.jpg",
+    "rescan-1.jpg",
+    "rescan-2.jpg",
+    "rescan-3.jpg",
+    "rescan-4.jpg",
+    "rescan-5.jpg"
+  ],
+  "files": [
+    {
+      "file": "overloaded-0.jpg",
+      "source": "images\\001158-inventory-overload-capture-before-input.jpg",
+      "sequence": 1158,
+      "sha256": "2068585fa16df8bb6ce9818cf7e3f5cd0b7bf8cda74a8750f6f3ed3b561de94a"
+    },
+    {
+      "file": "overloaded-1.jpg",
+      "source": "images\\001159-inventory-overload-capture-before-input.jpg",
+      "sequence": 1159,
+      "sha256": "facf733d1b42932ee90e1de05a842384a66c004bd0709684847126562f41b065"
+    },
+    {
+      "file": "overloaded-2.jpg",
+      "source": "images\\001160-inventory-overload-capture-before-input.jpg",
+      "sequence": 1160,
+      "sha256": "a8dd7d1fe9f590546d11454435c130a086e3865b97309f5d8a3a1468cfa7eb5a"
+    },
+    {
+      "file": "overloaded-3.jpg",
+      "source": "images\\001161-inventory-overload-capture-before-input.jpg",
+      "sequence": 1161,
+      "sha256": "d0df7f62fa61f46b9115ba253683b26808a525dd69ec1bcd8e72d9c529338e4f"
+    },
+    {
+      "file": "overloaded-4.jpg",
+      "source": "images\\001162-inventory-overload-capture-before-selection.jpg",
+      "sequence": 1162,
+      "sha256": "c6ff6b9a110aee1789d4969915e3971b8db8455aefdf69927058fb41541977d3"
+    },
+    {
+      "file": "discard-detail.jpg",
+      "source": "images\\001173-inventory-overload-capture-discard-selected.jpg",
+      "sequence": 1173,
+      "sha256": "1577bf80ddab543b33c755477f3784e4b14235f12a6e1fed636e458df99bdd49"
+    },
+    {
+      "file": "after-discard.jpg",
+      "source": "images\\001175-inventory-overload-capture-after-discard.jpg",
+      "sequence": 1175,
+      "sha256": "6c4c81c515fa7a9aa61b8135c671b88ca1338c74cee442e68de0baa70baaba8f"
+    },
+    {
+      "file": "uncollapsed.jpg",
+      "source": "images\\001178-inventory-overload-capture-returned-to-map.jpg",
+      "sequence": 1178,
+      "sha256": "8a061d7c62a5d6ce1587124aaee195a39a099b1c90a9ca00345d518869133f43"
+    },
+    {
+      "file": "clear-map.jpg",
+      "source": "images\\001193-task-finished-failed.jpg",
+      "sequence": 1193,
+      "sha256": "bcf3e611bfa4eb2e6ecedad850fde85caba19fc3c319509412f8fe520300e460"
+    },
+    {
+      "file": "overloaded-map.jpg",
+      "source": "images\\001126-map-refresh-completed.jpg",
+      "sequence": 1126,
+      "sha256": "e746d31b73ddc968c6712a0280fa73233573e7e2260673832ae789989c86851d"
+    },
+    {
+      "file": "next-preview.jpg",
+      "source": "images\\001128-battle-intel-preview-completed.jpg",
+      "sequence": 1128,
+      "sha256": "cab3a0e04fc1cfea8d604af49bc1dadc61de4cd43b25327769fbbfd788623e74"
+    },
+    {
+      "file": "rescan-0.jpg",
+      "source": "floor-1/BF-A4-27.evidence-1.jpg",
+      "sequence": 1046,
+      "sha256": "d03243caa54de238ef9812cf423f8a97423d01b8d9c6fd366a990bb22f6b150e"
+    },
+    {
+      "file": "rescan-1.jpg",
+      "source": "floor-1/BF-A4-27.evidence-2.jpg",
+      "sequence": 1046,
+      "sha256": "8ed59f2e10b0236498296b18896523935e31f71e92660a0876c1e3005924abfc"
+    },
+    {
+      "file": "rescan-2.jpg",
+      "source": "floor-1/BF-A4-27.evidence-3.jpg",
+      "sequence": 1046,
+      "sha256": "dd3928a5b846d0e2ecc71598b3971d88dbae642afa6d3ae3f63f448308f91e2f"
+    },
+    {
+      "file": "rescan-3.jpg",
+      "source": "floor-1/BF-A4-27.evidence-4.jpg",
+      "sequence": 1046,
+      "sha256": "3b4d71f39e029bc92615e30d7615f66778ccb39d2602a875b474b40e82e425e2"
+    },
+    {
+      "file": "rescan-4.jpg",
+      "source": "floor-1/BF-A4-27.evidence-5.jpg",
+      "sequence": 1046,
+      "sha256": "c26f6c3a0dba30552787e61ae230bff820a1164a12f946d7a211e6ce2288b72b"
+    },
+    {
+      "file": "rescan-5.jpg",
+      "source": "floor-1/BF-A4-27.evidence-6.jpg",
+      "sequence": 1046,
+      "sha256": "656ba2ec53e344a0fe29caf801c43eded19dfe8ddc8278004a59f279019888a0"
+    }
+  ],
+  "expected_movement_instances": [
+    {
+      "movement": "rogue_6_scrap_M_03",
+      "remaining_charges": 3,
+      "name": "标准引擎"
+    },
+    {
+      "movement": "rogue_6_scrap_M_01",
+      "remaining_charges": 1,
+      "name": "报废轮子"
+    },
+    {
+      "movement": "rogue_6_scrap_M_11",
+      "remaining_charges": 3,
+      "name": "结构性原理"
+    }
+  ],
+  "boundary": "Discard/close originals come from the failed 18:06 cleanup. Complete scan pages come from the same run successful 18:05 cleanup, not an unrecorded post-failure scan. Input outcomes, timing, topology and next-node confirmation are controlled; pixels unchanged."
+}

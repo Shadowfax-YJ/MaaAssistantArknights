@@ -1,0 +1,181 @@
+#include "Task/Roguelike/BlackFlow/BlackFlowAutomationStoreRules.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowInventoryRules.h"
+#include "Utils/StringMisc.hpp"
+
+namespace finish_replay {
+using namespace asst;
+using namespace asst::blackflow;
+using ui_replay::check;
+using ui_replay::load;
+using ui_replay::set_error;
+/*CONSTANTS*/
+/*HELPERS*/
+
+struct Context {
+    enum class Page { Inventory, Detail, Cleared, Map, OverloadedMap, Unknown };
+    Page page=Page::Inventory;
+    std::vector<cv::Mat> pages;
+    cv::Mat detail,cleared,map,overloaded_map,unknown;
+    std::shared_ptr<ui_replay::Port> port;
+    int index=0,close_inputs=0,close_requests=0,left_inputs=0,discards=0,card_inputs=0,waits=0;
+    int ignored_closes=0,stale_frames=0,remaining_stale=0;
+    bool stuck=false,unknown_after_close=false,stop_on_close=false,stopped_flag=false;
+    bool map_after_discard=false,map_before_close_recognition=false,completed_cleanup=false,detail_opened=false;
+    std::string selected_name;
+    cv::Mat capture(){
+        if(completed_cleanup)return port->io.get_image();
+        if(page==Page::Map&&remaining_stale>0){--remaining_stale;return cleared;}
+        if(page==Page::Map)return map;
+        if(page==Page::OverloadedMap)return overloaded_map;
+        if(page==Page::Detail)return detail;
+        if(page==Page::Cleared)return cleared;
+        if(page==Page::Unknown)return unknown;
+        return pages.at(index);
+    }
+    bool stopped()const{return stopped_flag;}
+    bool execute(const std::vector<std::string>& tasks,std::string*){
+        if(stopped())return false;
+        const auto& name=tasks.front();
+        if(name==InventoryResetWaitTask||name==InventoryDiscardDetailWaitTask){++waits;return true;}
+        if(name==InventorySwipeTask){index=std::min(index+1,int(pages.size())-1);return true;}
+        if(name==InventorySwipeToStartTask){index=std::max(0,index-1);return true;}
+        if(name==InventoryResetCollapseTask){
+            Matcher match(capture());match.set_task_info(name);if(!match.analyze())return false;
+            page=Page::OverloadedMap;return true;
+        }
+        if(name==InventoryResetExpandTask||name==InventoryOverloadOpenTask){page=Page::Inventory;index=0;return true;}
+        if(name==InventoryDiscardButtonTask){
+            asst::OCRer button(capture());button.set_task_info(name);
+            if(page!=Page::Detail||!button.analyze())return false;
+            ++discards;page=map_after_discard?Page::Map:Page::Cleared;return true;
+        }
+        if(name==InventoryOverloadCloseTask){
+            ++close_requests;auto task=Task.get(name);
+            if(task->action==ProcessTaskAction::ClickRect){++close_inputs;++left_inputs;return true;}
+            check(task->action==ProcessTaskAction::ClickSelf,"cleanup close is not a guarded template click");
+            if(map_before_close_recognition)page=Page::Map;
+            Matcher collapse(capture());collapse.set_task_info(name);
+            const auto hit=collapse.analyze();if(!hit)return false;
+            check(hit->rect.x>=589&&hit->rect.y>=639,"cleanup did not select the actual bottom collapse");
+            ++close_inputs;
+            if(stop_on_close){stopped_flag=true;return true;}
+            if(stuck||ignored_closes-->0)return true;
+            page=unknown_after_close?Page::Unknown:Page::Map;remaining_stale=stale_frames;return true;
+        }
+        throw std::runtime_error("unexpected cleanup task "+name);
+    }
+    bool click(const Rect&){
+        check(selected_name=="枯苔藓球","production policy selected a different part: "+selected_name);
+        ++card_inputs;page=Page::Detail;detail_opened=true;return true;
+    }
+};
+struct Cleanup {
+    Context* m_task_context=nullptr;
+    std::weak_ptr<BlackFlowSession> m_collection_popup_session;
+    bool fail_close_evidence=false;
+    bool record_run_event(std::uint64_t revision,const RunLogEvent& e,std::shared_ptr<cv::Mat> image,bool capture,std::string* error){
+        if(e.phase=="detail-input")m_task_context->selected_name=e.details.get("selected_name",std::string());
+        if(fail_close_evidence&&e.phase=="before-input"&&e.details.get("input_task",std::string())==InventoryOverloadCloseTask)return false;
+        return m_task_context->port->record_run_event(revision,e,std::move(image),capture,error);
+    }
+    bool cleanup_overloaded_inventory(bool,std::string*,bool=false);
+    bool cleanup_open_inventory_if_overloaded(bool&,std::string*);
+    bool cleanup_depart_inventory_overload(std::string*);
+};
+/*CLEANUP*/
+}
+
+int main(int argc,char**argv){
+    using namespace ui_replay;
+    if(argc!=3&&argc!=4)return 2;
+    const std::filesystem::path repo=argv[1],out=argv[2];
+    check(ResourceLoader::get_instance().load(repo/"resource"),"resources");
+    const auto fixture=repo/"unit_test/MaaCore/fixtures/blackflow-inventory-finish/20261028";
+    const auto meta=json::open(fixture/"provenance.json").value();
+    const auto previous=UserDir.empty()?std::filesystem::current_path():UserDir.get();
+    const auto batch=out/std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    int passed=0,failed=0,ordinal=0;
+    for(const std::string scenario:{"ordinary cleanup then full rescan and routing","first collapse input ineffective",
+            "stale expanded frames after collapse","already on map after discard","collapse never takes effect",
+            "unknown page after collapse","evidence failure before close","user stops during close","direct departure keeps inventory open",
+            "map appears before collapse task recognition"}){
+      if(argc==4&&scenario!=argv[3])continue;
+      try {
+        const auto dir=batch/std::to_string(ordinal++);std::filesystem::create_directories(dir);check(UserDir.set(dir),"UserDir");
+        IO io;io.map=load(fixture/"clear-map.jpg");io.preview=load(fixture/"next-preview.jpg");
+        for(const auto& file:meta.at("rescan_pages").as_array())io.inventory.push_back(load(fixture/file.as_string()));
+        auto session=std::make_shared<BlackFlowSession>();auto port=std::make_shared<Port>(io);
+        check(session->initialize("automation_collection")&&session->set_current_floor(2),"session");
+        check(session->configure_diagnostics({DiagnosticLevel::Detailed,3}),"diagnostics");
+        port->writer.set_collection_popup_session(session);port->frame=make_frame(0,7);
+        port->frame.observation.nodes[1].type="incident";
+        check(session->update(port->frame),"controlled map with the adjacent next incident");
+        // An obsolete, deliberately different inventory must be replaced by the complete native scan.
+        check(session->apply_movement_inventory_observation({{MovementKind::M04,1,0}},nullptr,false),"old inventory");
+        session->invalidate_movement_inventory();
+        finish_replay::Context context;context.port=port;
+        for(const auto& file:meta.at("overload_pages").as_array())context.pages.push_back(load(fixture/file.as_string()));
+        context.detail=load(fixture/"discard-detail.jpg");context.cleared=load(fixture/"uncollapsed.jpg");
+        context.map=io.map;context.overloaded_map=load(fixture/"overloaded-map.jpg");
+        context.unknown=load(repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028/unsupported-after-network.jpg");
+        context.ignored_closes=scenario=="first collapse input ineffective"?1:0;
+        context.stale_frames=scenario=="stale expanded frames after collapse"?4:0;
+        context.stuck=scenario=="collapse never takes effect";
+        context.unknown_after_close=scenario=="unknown page after collapse";
+        context.stop_on_close=scenario=="user stops during close";
+        context.map_after_discard=scenario=="already on map after discard";
+        context.map_before_close_recognition=scenario=="map appears before collapse task recognition";
+        finish_replay::Cleanup cleanup;cleanup.m_task_context=&context;cleanup.m_collection_popup_session=session;
+        cleanup.fail_close_evidence=scenario=="evidence failure before close";
+        if(scenario=="direct departure keeps inventory open"){
+            std::string error;check(cleanup.cleanup_depart_inventory_overload(&error),error);
+            check(context.discards==1&&context.close_inputs==0&&context.page==finish_replay::Context::Page::Cleared,
+                  "direct departure closed before its mandatory full rescan");
+        }
+        else {
+            port->cleanup_hook=[&](bool& performed,std::string* error){
+                const bool ok=cleanup.cleanup_open_inventory_if_overloaded(performed,error);
+                if(ok&&performed){context.completed_cleanup=true;io.page=IO::Page::Map;}
+                return ok;
+            };
+            Movement observer(io,session,port);check(observer.observe_inventory(),"ordinary inventory callback");
+            const bool negative=context.stuck||context.unknown_after_close||context.stop_on_close||cleanup.fail_close_evidence;
+            if(negative){
+                check(session->terminated(),"failed cleanup was accepted");
+                check(context.close_inputs==(context.stuck?3:cleanup.fail_close_evidence?0:1),"unsafe or unbounded close inputs");
+                check(context.discards==1&&context.left_inputs==0,"cleanup repeated a discard or used the blind top-left input");
+            }
+            else {
+                check(!session->terminated(),session->result()?session->result()->termination_reason:"cleanup failed");
+                check(context.discards==1&&context.left_inputs==0,"wrong cleanup input");
+                check(context.close_inputs==((context.map_after_discard||context.map_before_close_recognition)?0:scenario=="first collapse input ineffective"?2:1),
+                      "close retry was missing or penetrated to the map");
+                check(asst::Task.get(std::string(InventoryObservationAction))->next==asst::Task.get(std::string(InventoryCheckTask))->next,
+                      "successful cleanup skipped the existing rescan route");
+                // Execute the existing reopen/observe handoff with an expanded-page proof.
+                const auto open=asst::Task.get("BlackFlow@Roguelike@MovementInventoryOpen");
+                check(open->action==ProcessTaskAction::ClickRect,"normal inventory open action changed");
+                io.page=IO::Page::Inventory;io.inventory_page=0;
+                Matcher opened(io.get_image());opened.set_task_info("BlackFlow@Roguelike@MovementInventoryOpened");
+                check(opened.analyze().has_value(),"actual reopened inventory not recognized");
+                check(observer.observe_inventory()&&!session->terminated()&&!session->movement_inventory_refresh_required(),
+                      "complete post-cleanup scan failed");
+                check(!session->run().resources.movement_instances.empty()&&
+                      std::ranges::none_of(session->run().resources.movement_instances,[](const auto& item){return item.movement==MovementKind::M04;}),
+                      "obsolete inventory survived the real rescan");
+                check(observer.run_fixed_task(InventoryResetCollapseTask),"actual rescan collapse");
+                Matcher map(io.get_image());map.set_task_info("BlackFlow@Roguelike@MapPrepare-Ready");
+                check(map.analyze().has_value(),"normal map not confirmed after rescan");
+                // A valid following movement exercises the real preview/confirmation transaction.
+                check(session->save_pending_candidate(move(0,1,MovementKind::Walk)),"next movement");
+                const auto cycle=execute_pending_routing_cycle(*session,*port);
+                check(cycle.status==RoutingCycleStatus::MoveCommitted&&port->previews==1&&port->confirmations==1,
+                      "cleanup did not continue through the next node transaction: "+cycle.error);
+            }
+        }
+        ++passed;std::cout<<"PASS "<<scenario<<'\n';
+      }
+      catch(const std::exception& e){++failed;std::cout<<"FAIL "<<scenario<<": "<<e.what()<<'\n';}
+    }
+    UserDir.set(previous);std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
+}

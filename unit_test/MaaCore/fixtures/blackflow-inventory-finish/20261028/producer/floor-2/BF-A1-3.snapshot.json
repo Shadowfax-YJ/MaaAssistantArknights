@@ -1,0 +1,380 @@
+{
+    "accepted_observation_id": "controlled-recovery-map",
+    "artifact_set_id": "BF-A1-3",
+    "captured_image_height": 0,
+    "captured_image_width": 0,
+    "diagnostic_sequence": 3,
+    "evidence_images": [
+        {
+            "file": "floor-2/BF-A1-3.evidence-1.jpg",
+            "height": 720,
+            "role": "inventory-page-1",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-3.evidence-2.jpg",
+            "height": 720,
+            "role": "inventory-page-2",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-3.evidence-3.jpg",
+            "height": 720,
+            "role": "inventory-page-3",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-3.evidence-4.jpg",
+            "height": 720,
+            "role": "inventory-page-4",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-3.evidence-5.jpg",
+            "height": 720,
+            "role": "inventory-page-5",
+            "width": 1280
+        },
+        {
+            "file": "floor-2/BF-A1-3.evidence-6.jpg",
+            "height": 720,
+            "role": "inventory-page-6",
+            "width": 1280
+        }
+    ],
+    "evidence_type": "inventory_ocr",
+    "floor": 2,
+    "floor_four_remembrance": false,
+    "items": [
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 0,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_03",
+            "name": "标准引擎",
+            "name_rect": {
+                "height": 20,
+                "width": 71,
+                "x": 392,
+                "y": 259
+            },
+            "name_score": 0.999952,
+            "remaining_charges": 3,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 35,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 456,
+                        "y": 158
+                    }
+                },
+                {
+                    "bright_pixels": 37,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 466,
+                        "y": 166
+                    }
+                },
+                {
+                    "bright_pixels": 38,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 471,
+                        "y": 181
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 1,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_01",
+            "name": "报废轮子",
+            "name_rect": {
+                "height": 23,
+                "width": 74,
+                "x": 391,
+                "y": 419
+            },
+            "name_score": 0.999892,
+            "remaining_charges": 1,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 38,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 457,
+                        "y": 319
+                    }
+                }
+            ]
+        },
+        {
+            "evidence_image_role": "inventory-page-1",
+            "instance_index": 2,
+            "loaded": false,
+            "movement": "rogue_6_scrap_M_11",
+            "name": "结构性原理",
+            "name_rect": {
+                "height": 22,
+                "width": 90,
+                "x": 382,
+                "y": 581
+            },
+            "name_score": 0.999923,
+            "remaining_charges": 3,
+            "scan_page": 0,
+            "star_slots": [
+                {
+                    "bright_pixels": 38,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 456,
+                        "y": 481
+                    }
+                },
+                {
+                    "bright_pixels": 38,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 466,
+                        "y": 489
+                    }
+                },
+                {
+                    "bright_pixels": 36,
+                    "lit": true,
+                    "rect": {
+                        "height": 11,
+                        "width": 11,
+                        "x": 471,
+                        "y": 504
+                    }
+                }
+            ]
+        }
+    ],
+    "lorentz_eye_found": false,
+    "lorentz_eye_presence": "absent",
+    "map_generation": 1,
+    "map_revision": 7,
+    "map_section_generation": 1,
+    "map_section_key": "floor-2-generation-1",
+    "map_section_label": "2 层",
+    "outcome": "识别完成",
+    "recognition_attempt_count": 0,
+    "recognition_attempt_id": "",
+    "recognition_floor": 0,
+    "recognition_floor_source": "next_level_ocr",
+    "recognition_node_diagnostics": [
+    ],
+    "recognition_ocr_diagnostics": [
+    ],
+    "recognition_retry_count": 0,
+    "recognition_screenshot_us": 0,
+    "recognition_topology_base_edge_count": 0,
+    "recognition_topology_extra_edge_count": 0,
+    "recognition_topology_match_score": 0,
+    "recognition_topology_source_digest": "",
+    "recognition_topology_template_id": "",
+    "recognition_tree_hole_color": "",
+    "recognition_tree_hole_effect": "",
+    "recognition_us": 0,
+    "run_revision": 1,
+    "scan_complete": true,
+    "scan_scope": "whole_inventory",
+    "scan_stop_reason": "已扫描到零件箱末尾",
+    "session_active_movement": "walk",
+    "session_active_movement_name": "徒步跋涉",
+    "snapshot_file": "BF-A1-3.snapshot.json",
+    "stopped_at_ordered_boundary": false,
+    "tree_hole_outer_floor": 0,
+    "trigger": "processing_item_observation",
+    "type_boundary_items": [
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-1",
+            "name": "血橙",
+            "name_rect": {
+                "height": 24,
+                "width": 42,
+                "x": 839,
+                "y": 257
+            },
+            "name_score": 0.999953,
+            "scan_page": 0,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-1",
+            "name": "薄葬草",
+            "name_rect": {
+                "height": 23,
+                "width": 57,
+                "x": 830,
+                "y": 419
+            },
+            "name_score": 0.999682,
+            "scan_page": 0,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-1",
+            "name": "枯苔藓球",
+            "name_rect": {
+                "height": 23,
+                "width": 73,
+                "x": 823,
+                "y": 580
+            },
+            "name_score": 0.998026,
+            "scan_page": 0,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-2",
+            "name": "枯苔藓球",
+            "name_rect": {
+                "height": 22,
+                "width": 74,
+                "x": 872,
+                "y": 258
+            },
+            "name_score": 0.998202,
+            "scan_page": 1,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-2",
+            "name": "枯苔藓球",
+            "name_rect": {
+                "height": 23,
+                "width": 74,
+                "x": 872,
+                "y": 419
+            },
+            "name_score": 0.998756,
+            "scan_page": 1,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-2",
+            "name": "枯苔藓球",
+            "name_rect": {
+                "height": 23,
+                "width": 73,
+                "x": 873,
+                "y": 580
+            },
+            "name_score": 0.998173,
+            "scan_page": 1,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-3",
+            "name": "种子",
+            "name_rect": {
+                "height": 26,
+                "width": 42,
+                "x": 919,
+                "y": 256
+            },
+            "name_score": 0.999679,
+            "scan_page": 2,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-3",
+            "name": "种子",
+            "name_rect": {
+                "height": 26,
+                "width": 43,
+                "x": 919,
+                "y": 417
+            },
+            "name_score": 0.999689,
+            "scan_page": 2,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "概念体",
+            "evidence_image_role": "inventory-page-3",
+            "name": "白模坎诺特",
+            "name_rect": {
+                "height": 22,
+                "width": 87,
+                "x": 897,
+                "y": 581
+            },
+            "name_score": 0.999735,
+            "scan_page": 2,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-4",
+            "name": "种子",
+            "name_rect": {
+                "height": 26,
+                "width": 41,
+                "x": 867,
+                "y": 256
+            },
+            "name_score": 0.999762,
+            "scan_page": 3,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "自然物",
+            "evidence_image_role": "inventory-page-4",
+            "name": "种子",
+            "name_rect": {
+                "height": 25,
+                "width": 42,
+                "x": 867,
+                "y": 418
+            },
+            "name_score": 0.999662,
+            "scan_page": 3,
+            "type_boundary": true
+        },
+        {
+            "boundary_label": "概念体",
+            "evidence_image_role": "inventory-page-4",
+            "name": "白模坎诺特",
+            "name_rect": {
+                "height": 22,
+                "width": 89,
+                "x": 843,
+                "y": 581
+            },
+            "name_score": 0.999841,
+            "scan_page": 3,
+            "type_boundary": true
+        }
+    ]
+}
