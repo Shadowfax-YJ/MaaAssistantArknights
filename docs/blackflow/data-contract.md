@@ -1,5 +1,24 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.40 发布与公开包核验（2026-10-29）
+
+Windows、macOS 通用采集版及 GitHub/CDN 更新源已发布为
+[blackflow-v1.1.40](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.40)，来源提交 `1079c79ad7b2cdac0848661aa90cbd743695e10d`；流水线
+[40875367802](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40875367802)
+成功。本版修复零件箱列表回弹导致采集中断：向右滑动后等待画面稳定，再确认末尾，
+等待失败保留证据与旧库存状态。公开说明只写用户可感知的修复。
+
+CI 两平台构建、macOS DMG 实际校验及 Windows 上传前检查通过；库存回放共 15 项，
+其中新增 5 项使用本次九张原图，覆盖成功及有界失败。完整下载国内两个包后，
+GitHub 资产 SHA-256、双份更新清单、macOS 更新签名、Windows ZIP/文件清单/版本
+身份、资源与 Core 稳定等待标记核验通过。普通版 Latest 保持 `v15.0.1`。
+核验记录在 `build/diagnostics/20261029/v1.1.40-public-verification/verification.json`。
+
+78 项共享契约检查通过；原始/图片/签名 v1、能力、固定验证器 bundle、任务族和
+宿主协议不变，旧缺项未知、未知版本拒绝。历史包、缓存、人工审核、冻结报告及
+分子分母定义保持，无需消费者生产代码升级或部署。未替换或重启运行实例；
+原图回放的被动时序为受控模拟，没有新版完整实机对局验证。
+
 ## v1.1.40 发布准备（2026-10-29）
 
 用户要求发布满箱末尾回弹修复，维护端将 CI 版本从 v1.1.39 调整为 v1.1.40，
