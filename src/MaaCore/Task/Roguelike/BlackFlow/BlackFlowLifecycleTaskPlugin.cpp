@@ -420,6 +420,36 @@ bool BlackFlowLifecycleTaskPlugin::record_opening_evidence(
     return saved;
 }
 
+bool BlackFlowLifecycleTaskPlugin::record_settlement_evidence(
+    std::string_view phase,
+    json::object details,
+    std::shared_ptr<cv::Mat> image)
+{
+    const bool failed = phase == "failed";
+    details["scope"] = "run_settlement";
+    details["acquisition_status"] = "not_an_acquisition";
+    const auto reason = details.get("failure_reason", std::string("settlement evidence could not be saved"));
+    const bool saved = record_run_event(
+        failed ? RunLogLevel::Error : RunLogLevel::Info,
+        phase == "detail-before-close" ? "settlement.detail.capture" : "settlement.navigation",
+        std::string(phase),
+        failed ? "stop_task" : "observed",
+        std::move(details),
+        "RoguelikeSettlementTaskPlugin",
+        std::move(image));
+    if (failed || !saved) {
+        m_session->fail(
+            failed ? "settlement_navigation_failed" : "settlement_evidence_failed",
+            reason,
+            FailureDisposition::StopTask);
+        report_outputs();
+        if (m_task_ptr != nullptr) {
+            m_task_ptr->set_enable(false);
+        }
+    }
+    return saved && !failed;
+}
+
 void BlackFlowLifecycleTaskPlugin::tree_hole_return_failed(std::string error)
 {
     ++m_tree_hole_return_failures;

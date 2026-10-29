@@ -1,4 +1,4 @@
-## v1.1.38
+## v1.1.39
 
 ### Highlights
 
@@ -44,6 +44,16 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.39 (2026-10-29)</b></summary>
+
+### 修复 | Fix
+
+* 修复战败结算时物品详情弹窗未关闭，导致卡在结算页的问题。 @Shadowfax-YJ
+* 修复结算返回流程反复点击、无法开始下一局的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.38 (2026-10-29)</b></summary>
 
 ### 修复 | Fix

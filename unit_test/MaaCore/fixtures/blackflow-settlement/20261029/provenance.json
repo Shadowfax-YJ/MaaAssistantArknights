@@ -1,0 +1,55 @@
+{
+  "files": [
+    {
+      "file": "detail.png",
+      "source": "build\\diagnostics\\20261029\\001-battle-stall\\continuation\\00-before-close.png",
+      "sha256": "80a96e9df3e7348e6349bad79a1c537d037862f5307c9ae935cdca07a77a9f55"
+    },
+    {
+      "file": "summary.png",
+      "source": "build\\diagnostics\\20261029\\001-battle-stall\\continuation\\01-detail-closed.png",
+      "sha256": "db500056865171085f6f9f6c0134e059e6856971d43fdc31ff0c9c3aa0dde7a9"
+    },
+    {
+      "file": "statistics-transition.png",
+      "source": "build\\diagnostics\\20261029\\001-battle-stall\\continuation\\02-settlement-next.png",
+      "sha256": "2f6626025102ad04baded0f65c7941568199d899636a95940ccaba6681e02369"
+    },
+    {
+      "file": "statistics.png",
+      "source": "build\\diagnostics\\20261029\\001-battle-stall\\continuation\\03-settlement-ready.png",
+      "sha256": "88a5608f05f06f811e19973fb87a780256ed31b053eced0a8b6922ae2e095ff8"
+    },
+    {
+      "file": "entry.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261029-125444-515557\\images\\000005-run-difficulty-verified-completed.jpg",
+      "sequence": 5,
+      "sha256": "4680f276c706cff30666f54f8fd54a7e701837972b1ce81f45dac081fa0288e0"
+    },
+    {
+      "file": "next-opening.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261029-125444-515557\\images\\000029-start-opening-roles-observed-observed.jpg",
+      "sequence": 29,
+      "sha256": "4a076832e4330f64777183a91b7cb5574cdd3c3180701434ed425adc68b9326d"
+    },
+    {
+      "file": "battle-interruption.png",
+      "source": "build\\diagnostics\\20261029\\001-battle-stall\\continuation\\04-after-settlement-confirm.png",
+      "sha256": "d9b1ab65bd2457725b850d769ac02911e2d6b13bb5bb608c86a82ae8d787fbac",
+      "purpose": "negative only: task had been restarted concurrently; not a successful settlement continuation"
+    },
+    {
+      "file": "initial-reward.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261029-125444-515557\\images\\000014-start-cultivation-reward-observed-observed.jpg",
+      "sha256": "1590a8b36435f20d92a4f66e832d44b7f0aa4b092e8558193d3dc4af1f0cbd43",
+      "sequence": 14
+    },
+    {
+      "file": "opening-popup.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-001\\debug\\BlackFlow\\run-20261029-125444-515557\\collection-popups\\sources\\start-reward\\000026-collection-popup-capture-before-click.jpg",
+      "sha256": "cbee29c35f89dd5b150c27da0cd5aed8816e3ee12966d8548c94ea62a1d57c1f",
+      "purpose": "negative: actual next-run acquisition, not old settlement detail"
+    }
+  ],
+  "boundaries": "Detail, summary and statistics are exact manually observed continuation of the stopped case; entrance and next-opening are actual images of the later successful 12:54 start. The missing confirm-to-entrance transition and timings are controlled in replay. 04-after-settlement-confirm.png is a different live battle after a concurrent task restart and is excluded."
+}

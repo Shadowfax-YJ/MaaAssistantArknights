@@ -1,0 +1,217 @@
+#include "Config/GeneralConfig.h"
+#include "Task/Roguelike/RoguelikeResetTaskPlugin.h"
+#include "Task/Roguelike/BlackFlow/BlackFlowLifecycleTaskPlugin.h"
+#include "Vision/RegionOCRer.h"
+#include "Utils/StringMisc.hpp"
+
+namespace settlement_replay {
+using namespace asst;
+using namespace asst::blackflow;
+using ui_replay::check;
+using ui_replay::OCRer;
+
+struct Device {
+    enum class Page { Detail, Summary, Transition, Statistics, Entrance, Opening, Unknown, Battle };
+    Page page=Page::Detail;
+    cv::Mat detail,summary,transition,statistics,entrance,opening,unknown,battle,loading;
+    long long now=0,transition_at=0,loading_until=0,cancel_at=-1;
+    bool cancelled=false,stuck_detail=false,loading_forever=false,empty=false;
+    int ignore_closes=0,stale_detail_frames=0,stale_left=0;
+    int closes=0,advances=0,confirms=0,starts=0,bad_inputs=0;
+    cv::Mat get_image(){
+        if(empty)return {};
+        if(loading_forever||now<loading_until)return loading;
+        if(stale_left>0){--stale_left;return detail;}
+        if(page==Page::Transition&&now-transition_at>=1500)page=Page::Statistics;
+        switch(page){
+        case Page::Detail:return detail;case Page::Summary:return summary;
+        case Page::Transition:return transition;case Page::Statistics:return statistics;
+        case Page::Entrance:return entrance;case Page::Opening:return opening;
+        case Page::Battle:return battle;default:return unknown;}
+    }
+    bool sleep(int ms){now+=ms;if(cancel_at>=0&&now>=cancel_at)cancelled=true;return !cancelled;}
+    bool click(const Rect& r){
+        if(cancelled)return false;
+        const int x=r.x+r.width/2,y=r.y+r.height/2;
+        if(page==Page::Detail&&x>=626&&x<=666&&y>=530&&y<=570){
+            ++closes;if(stuck_detail||ignore_closes-->0)return true;
+            page=Page::Summary;stale_left=stale_detail_frames;return true;
+        }
+        if(page==Page::Summary&&x>1180&&y>290&&y<430){++advances;page=Page::Transition;transition_at=now;return true;}
+        if(page==Page::Statistics&&x>580&&x<710&&y>590){++confirms;page=Page::Entrance;return true;}
+        if(page==Page::Entrance&&x>950&&y>530){++starts;page=Page::Opening;return true;}
+        ++bad_inputs;return true;
+    }
+};
+struct Settlement {
+    enum class BlackFlowGoal { BeforeFinalPage, Statistics, Entrance, Failed };
+    Device& device;
+    std::shared_ptr<RoguelikeConfig> m_config;
+    ProcessTask* m_task_ptr=nullptr;
+    mutable bool m_game_pass=false;
+    mutable BlackFlowGoal m_blackflow_goal=BlackFlowGoal::Statistics;
+    bool m_statistics_reported=false;int m_return_invocations=0;
+    std::function<bool(std::string_view,json::object,std::shared_ptr<cv::Mat>)> m_settlement_observer;
+    std::vector<json::value> statistics_messages;
+    Device* ctrler(){return &device;}
+    bool need_exit()const{return device.cancelled||!m_task_ptr->get_enable();}
+    bool sleep(int ms){return device.sleep(ms);}
+    json::value basic_info_with_what(std::string what){return json::object{{"what",std::move(what)},{"details",json::object{}}};}
+    void callback(AsstMsg,const json::value& info){statistics_messages.push_back(info);}
+    void save_img(const cv::Mat&,const std::filesystem::path&,std::string){}
+    bool verify(AsstMsg,const json::value&)const;
+    bool _run();void reset_in_run_variables();
+    bool record_blackflow_settlement(std::string_view,const cv::Mat&,json::object={});
+    bool fail_blackflow_settlement(std::string,const cv::Mat&);
+    bool report_blackflow_statistics(const cv::Mat&);
+    bool prepare_blackflow_settlement(BlackFlowGoal,cv::Mat&);
+    bool get_settlement_info(json::value&,const cv::Mat&);
+    bool wait_for_whole_page();
+};
+/*METHODS*/
+
+struct Port : ui_replay::Port {
+    using ui_replay::Port::Port;
+    int archives=0,resets=0;
+    bool queue_current_run_archive(std::string*)override{++archives;return true;}
+    void reset_run()override{++resets;writer.reset_run();}
+};
+cv::Mat load(const std::filesystem::path& path){
+    auto image=MAA_NS::imread(path);check(!image.empty(),"missing fixture "+path.string());
+    if(image.cols!=1280)cv::resize(image,image,{1280,720},0,0,cv::INTER_AREA);
+    static std::vector<cv::Mat> originals;originals.push_back(image);return image;
+}
+json::value event(std::string task){return json::object{{"subtask","ProcessTask"},{"details",json::object{{"task",std::move(task)}}}};}
+}
+
+int main(int argc,char**argv){
+    using namespace settlement_replay;
+    if(argc!=3&&argc!=4)return 2;
+    const std::filesystem::path repo=argv[1],out=argv[2];
+    if(!ResourceLoader::get_instance().load(repo/"resource")){std::cout<<"FAIL resource loading\n";return 1;}
+    const auto fixture=repo/"unit_test/MaaCore/fixtures/blackflow-settlement/20261029";
+    const auto previous=UserDir.empty()?std::filesystem::current_path():UserDir.get();
+    const auto batch=out/std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    int passed=0,failed=0,ordinal=0;
+    for(const std::string scenario:{"detail through statistics and next start","pre-final return closes the detail first",
+            "already on statistics","first close input ineffective","stale detail frames","loading then settlement",
+            "detail never closes","unknown page","loading never ends","evidence save failure","user cancellation",
+            "page changes to battle during recording","empty camera","already at entrance","handoff budget exhausted",
+            "victory trigger uses the settlement exit successor","recognized gameplay continuation after failure",
+            "investment mode does not add statistics callbacks","opening reward cannot be old settlement statistics",
+            "new-run item popup is not an old settlement detail","page changes to battle before final confirmation"}){
+        if(argc==4&&scenario!=argv[3])continue;
+        try {
+            const auto dir=batch/std::to_string(ordinal++);std::filesystem::create_directories(dir);check(UserDir.set(dir),"UserDir");
+            Device io;io.detail=load(fixture/"detail.png");io.summary=load(fixture/"summary.png");
+            io.transition=load(fixture/"statistics-transition.png");io.statistics=load(fixture/"statistics.png");
+            io.entrance=load(fixture/"entry.jpg");io.opening=load(fixture/"next-opening.jpg");
+            io.unknown=load(repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028/walk-map.jpg");
+            io.loading=load(repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028/network-panel.jpg");
+            io.battle=load(fixture/"battle-interruption.png");
+            io.ignore_closes=scenario=="first close input ineffective"?1:0;
+            io.stale_detail_frames=scenario=="stale detail frames"?5:0;
+            io.loading_until=scenario=="loading then settlement"?5000:0;
+            io.stuck_detail=scenario=="detail never closes";io.loading_forever=scenario=="loading never ends";
+            io.empty=scenario=="empty camera";
+            if(scenario=="unknown page")io.page=Device::Page::Unknown;
+            if(scenario=="opening reward cannot be old settlement statistics"){
+                io.unknown=load(fixture/"initial-reward.jpg");io.page=Device::Page::Unknown;
+            }
+            if(scenario=="new-run item popup is not an old settlement detail"){
+                io.unknown=load(fixture/"opening-popup.jpg");io.page=Device::Page::Unknown;
+            }
+            if(scenario=="already on statistics")io.page=Device::Page::Statistics;
+            if(scenario=="already at entrance")io.page=Device::Page::Entrance;
+            if(scenario=="recognized gameplay continuation after failure")io.page=Device::Page::Unknown;
+            if(scenario=="user cancellation")io.cancel_at=500;
+            auto config=std::make_shared<RoguelikeConfig>();
+            const bool investment=scenario=="investment mode does not add statistics callbacks";
+            check(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",static_cast<int>(investment?RoguelikeMode::Investment:RoguelikeMode::BlackFlowAutomationCollection)}}),"config");
+            auto session=std::make_shared<BlackFlowSession>();ui_replay::IO log_io;log_io.map=io.entrance;
+            auto port=std::make_shared<Port>(log_io);ProcessTask parent({},nullptr,"Roguelike");
+            auto life=parent.register_plugin<BlackFlowLifecycleTaskPlugin>(config,nullptr,session,port);
+            check(life->load_params(json::object{{"blackflow_strategy",investment?"investment":"automation_collection"}}),"lifecycle load");
+            port->writer.set_collection_popup_session(session);check(session->set_current_floor(2),"old run progress");
+            Settlement plugin{io,config,&parent};
+            bool scene_changed=false;
+            plugin.m_settlement_observer=[&](std::string_view phase,json::object details,std::shared_ptr<cv::Mat> image){
+                if(phase=="detail-before-close"&&scenario=="user cancellation")io.cancelled=true;
+                if(phase=="detail-before-close"&&scenario=="page changes to battle during recording"&&!scene_changed){
+                    scene_changed=true;io.page=Device::Page::Battle;
+                }
+                if(phase=="statistics-before-confirm"&&scenario=="page changes to battle before final confirmation")io.page=Device::Page::Battle;
+                if(phase=="detail-before-close"&&scenario=="evidence save failure")return false;
+                return life->record_settlement_evidence(phase,std::move(details),std::move(image));
+            };
+            if(scenario=="handoff budget exhausted")plugin.m_return_invocations=32;
+            if(investment){
+                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed"))&&plugin._run(),"investment return failed");
+                check(plugin.statistics_messages.empty()&&io.page==Device::Page::Entrance&&io.bad_inputs==0,"investment added a callback or used a blind return");
+                ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+            }
+            if(scenario=="recognized gameplay continuation after failure"){
+                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPoint"))&&plugin._run(),"recognized map continuation was lost");
+                check(io.bad_inputs==0&&io.closes==0&&port->archives==0&&!session->terminated(),"gameplay continuation was clicked, archived or terminated");
+                ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+            }
+            const bool negative=io.stuck_detail||io.loading_forever||io.empty||scenario=="unknown page"||
+                scenario=="evidence save failure"||scenario=="user cancellation"||
+                scenario=="page changes to battle during recording"||scenario=="handoff budget exhausted"||
+                scenario=="opening reward cannot be old settlement statistics"||
+                scenario=="new-run item popup is not an old settlement detail";
+            if(scenario=="pre-final return closes the detail first"){
+                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPoint"))&&plugin._run(),"pre-final recovery");
+                check(io.page==Device::Page::Summary&&io.closes==1&&io.bad_inputs==0,"pre-final return did not yield to the known ending");
+            }
+            const bool victory=scenario=="victory trigger uses the settlement exit successor";
+            const std::string trigger=victory?"BlackFlow@Roguelike@GamePass":"BlackFlow@Roguelike@MissionFailedFlag2";
+            check(plugin.verify(AsstMsg::SubTaskStart,event(trigger)),"settlement verify");
+            const bool ready=plugin._run();
+            if(negative){
+                check(!ready,"unverified settlement accepted");check(io.bad_inputs==0&&io.starts==0,"unsafe fallback input");
+                if(scenario!="user cancellation")check(session->terminated(),"unresolved settlement did not write a failure result");
+                check(io.closes==(io.stuck_detail?3:0),"missing close bound or input followed unsaved/stale evidence");
+            }
+            else {
+                check(ready&&!session->terminated(),"statistics preparation failed");
+                const bool at_entry=scenario=="already at entrance";
+                check(at_entry||io.page==Device::Page::Statistics,"item detail still blocks settlement statistics");
+                check(at_entry?plugin.statistics_messages.empty():plugin.statistics_messages.size()==1,"statistics callback count");
+                if(!at_entry){
+                    check(io.page==Device::Page::Statistics,"statistics not ready");
+                    check(plugin.statistics_messages.front().get("details","score",-1)==868,"actual score not read");
+                    check(plugin.statistics_messages.front().get("details","game_pass",!victory)==victory,"result flag changed");
+                }
+                if(victory)check(Task.get(trigger)->next==std::vector<std::string>{"BlackFlow@Roguelike@ClickToStartPointAfterFailed"},"victory loops before exiting statistics");
+                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed")),"exit verify");
+                const bool exited=plugin._run();
+                if(scenario=="page changes to battle before final confirmation"){
+                    check(!exited&&session->terminated()&&io.confirms==0&&io.bad_inputs==0,"stale final-confirm input reached the live battle");
+                    ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+                }
+                check(exited,"exit settlement");
+                check(io.page==Device::Page::Entrance&&!session->terminated(),"exit did not reach the real entrance");
+                check(at_entry?plugin.statistics_messages.empty():plugin.statistics_messages.size()==1,"statistics emitted twice");
+                const auto next=Task.get("BlackFlow@Roguelike@ClickToStartPointAfterFailed")->next;
+                check(std::ranges::find(next,"BlackFlow@Roguelike@ClickToStartPointAfterFailed")==next.end(),"unbounded fallback remains");
+                PipelineAnalyzer entrance(io.get_image());entrance.set_tasks(next);const auto start=entrance.analyze();
+                check(start&&start->task_ptr->name=="BlackFlow@Roguelike@StartExplore","real entrance branch not selected");
+                RoguelikeResetTaskPlugin reset({},nullptr,"Roguelike",config,nullptr);reset.set_task_ptr(&parent);
+                check(reset.verify(AsstMsg::SubTaskStart,event(start->task_ptr->name))&&reset.run(),"production next-run reset");
+                plugin.reset_in_run_variables();check(io.click(start->rect),"start input");
+                check(io.page==Device::Page::Opening&&port->archives==1&&port->resets==1&&session->run_revision()==2,"old run not finalized once before next start");
+                asst::OCRer opening(io.get_image());opening.set_task_info("BlackFlow@Roguelike@StageEncounterOcr");
+                opening.set_roi({300,0,680,100});opening.set_required({"选择招募组合"});
+                check(opening.analyze().has_value(),"actual next-run opening image not recognized");
+                check(life->record_opening_evidence("roles.observed",
+                    {{"recognition_scope","opening_header"},{"recognized_header","选择招募组合"}},
+                    std::make_shared<cv::Mat>(io.get_image())),"new-run opening evidence");
+                check(io.bad_inputs==0&&io.starts==1,"unsafe or repeated start input");
+            }
+            ++passed;std::cout<<"PASS "<<scenario<<'\n';
+        }
+        catch(const std::exception& e){++failed;std::cout<<"FAIL "<<scenario<<": "<<e.what()<<'\n';}
+    }
+    UserDir.set(previous);std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
+}

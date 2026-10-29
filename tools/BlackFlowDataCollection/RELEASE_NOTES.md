@@ -1,8 +1,9 @@
-黑流树海采集版 v1.1.38
+黑流树海采集版 v1.1.39
 
 ### 本次更新
 
-* 修复零件箱过载清理完成后仍报错停止的问题，恢复库存重扫和继续探索。
+* 修复战败结算时物品详情弹窗未关闭，导致卡在结算页的问题。
+* 修复结算返回流程反复点击、无法开始下一局的问题。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -15,8 +16,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.38/MAA-BlackFlow-Data-Collection-v1.1.38-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.38/MAA-BlackFlow-Data-Collection-v1.1.38-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.39/MAA-BlackFlow-Data-Collection-v1.1.39-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.39/MAA-BlackFlow-Data-Collection-v1.1.39-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

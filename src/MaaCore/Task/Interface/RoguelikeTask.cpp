@@ -81,7 +81,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_roguelike_task_ptr->register_plugin<ScreenshotTaskPlugin>();
     m_roguelike_task_ptr->register_plugin<RoguelikeFormationTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeResetTaskPlugin>(m_config_ptr, m_control_ptr);
-    m_roguelike_task_ptr->register_plugin<RoguelikeSettlementTaskPlugin>(m_config_ptr, m_control_ptr);
+    auto settlement_plugin =
+        m_roguelike_task_ptr->register_plugin<RoguelikeSettlementTaskPlugin>(m_config_ptr, m_control_ptr);
+    settlement_plugin->set_retry_times(0);
     m_invest_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeInvestTaskPlugin>(m_config_ptr, m_control_ptr);
 
     m_debug_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeDebugTaskPlugin>(m_config_ptr, m_control_ptr);
@@ -435,6 +437,13 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
         m_control_ptr,
         m_blackflow_session_ptr,
         m_blackflow_port_ptr);
+    settlement_plugin->set_blackflow_settlement_observer(
+        [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(lifecycle_plugin)](
+            std::string_view phase, json::object details, std::shared_ptr<cv::Mat> image) {
+            const auto lifecycle = weak_lifecycle.lock();
+            return lifecycle != nullptr &&
+                   lifecycle->record_settlement_evidence(phase, std::move(details), std::move(image));
+        });
     m_custom_ptr->set_blackflow_opening_evidence_observer(
         [weak_lifecycle = std::weak_ptr<blackflow::BlackFlowLifecycleTaskPlugin>(lifecycle_plugin)](
             std::string_view kind, json::object details, std::shared_ptr<cv::Mat> image) {

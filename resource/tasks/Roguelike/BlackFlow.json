@@ -2126,7 +2126,8 @@
         "next": ["BlackFlow@Roguelike@ExitThenAbandon"]
     },
     "BlackFlow@Roguelike@GamePass": {
-        "template": "BlackFlow@Roguelike@GamePass.png"
+        "template": "BlackFlow@Roguelike@GamePass.png",
+        "next": ["BlackFlow@Roguelike@ClickToStartPointAfterFailed"]
     },
     "BlackFlow@Roguelike@GamePassSkip1": {
         "template": "BlackFlow@Roguelike@GamePassSkip1.png"
@@ -5427,6 +5428,58 @@
     },
     "BlackFlow@RoguelikeSettlementConfirm": {
         "template": "BlackFlow@Roguelike@GamePassTheEndConfirm.png"
+    },
+    "BlackFlow@Roguelike@SettlementDetail": {
+        "Doc": "结算中的已持有物品详情，只识别 X，不走节点奖励归属或节点路由。",
+        "template": "BlackFlow@Roguelike@CloseCollection.png",
+        "roi": [1, 447, 1275, 166],
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@SettlementPage": {
+        "Doc": "左上查看数据回溯标志，用于在详情特效遮挡中间标题时确认结算页面。",
+        "template": "BlackFlow@Roguelike@SettlementPage.png",
+        "roi": [10, 0, 280, 100],
+        "templThreshold": 0.92,
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@SettlementNext": {
+        "template": "BlackFlow@Roguelike@SettlementNext.png",
+        "roi": [1150, 280, 130, 180],
+        "templThreshold": 0.92,
+        "action": "DoNothing"
+    },
+    "BlackFlow@Roguelike@ClickToStartPoint": {
+        "Doc": "由结算插件根据实际页面关闭详情或推进失败画面，禁止点击旧的左下祝福区。",
+        "baseTask": "Roguelike@ClickToStartPoint",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@MissionFailedFlag2",
+            "BlackFlow@Roguelike@StartExplore",
+            "BlackFlow@Roguelike@Stages#next",
+            "BlackFlow@Roguelike@GamePass",
+            "BlackFlow@Roguelike@TodoEnter",
+            "BlackFlow@Roguelike@Continue",
+            "BlackFlow@Roguelike@ReturnButtons#next",
+            "BlackFlow@Roguelike@ReturnConfirm",
+            "BlackFlow@Roguelike@StartUpThemes#next",
+            "BlackFlow@Roguelike@ClickToStartPoint"
+        ]
+    },
+    "BlackFlow@Roguelike@ClickToStartPointAfterFailed": {
+        "Doc": "结算插件确认探索入口后才交回开局，不再无条件自循环点击。",
+        "baseTask": "Roguelike@ClickToStartPointAfterFailed",
+        "action": "DoNothing",
+        "next": [
+            "BlackFlow@Roguelike@StartExplore",
+            "BlackFlow@Roguelike@StartExploreCD",
+            "BlackFlow@Roguelike@StartUpThemes#next",
+            "BlackFlow@Roguelike@SettlementRecoveryFailed"
+        ]
+    },
+    "BlackFlow@Roguelike@SettlementRecoveryFailed": {
+        "Doc": "结算恢复失去入口时保存现场并报错停止，由结算插件处理。",
+        "algorithm": "JustReturn",
+        "action": "DoNothing"
     },
     "BlackFlow@Roguelike@PortalPrice": {
         "algorithm": "OcrDetect",
