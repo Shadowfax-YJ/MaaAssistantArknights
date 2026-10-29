@@ -1,5 +1,24 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.39 发布与公开包核验（2026-10-29）
+
+Windows、macOS 通用采集版及 GitHub/CDN 更新源已发布为
+[blackflow-v1.1.39](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.39)，来源提交 `ecb36978ae06851c8fde3dc94fdc35123b522f34`；流水线
+[40829425674](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/40829425674)
+成功。本版修复结算详情漏处理与无限回退：识别详情、翻页、统计确认与探索入口，
+保存查看证据且不算新增获得；公开说明仅写结算卡住及无法开始下一局的用户可感知修复。
+
+CI 两平台构建、macOS DMG 实际校验及 Windows 上传前回归通过；新增详情关闭、结算退出至
+下一局开局的 21 项真实截图场景检查通过。国内两个完整包下载后，GitHub 资产 SHA-256、
+双份更新清单、macOS 更新签名、Windows ZIP/文件清单/版本身份、两个结算模板与资源、
+Core 修复标记核验通过。普通版 Latest Release 保持 `v15.0.1`。结果保存在
+`build/diagnostics/20261029/v1.1.39-public-verification/verification.json`。
+
+77 项共享契约检查确认新旧数据及独立 v1 归档兼容。原始 v1、图片/签名 schema、能力、
+固定验证器 bundle、任务族和宿主协议保持；旧缺项未知、未知版本拒绝，历史包、缓存、
+审核、冻结报告及分子分母定义不变，无需消费者生产代码升级或部署。没有替换或重启运行
+实例，未进行新版完整实机对局。下方段落保留发布准备与源码验证阶段的状态。
+
 ## v1.1.39 发布准备（2026-10-29）
 
 用户要求发布结算详情与无限回退修复，维护端将 CI 采集版从 v1.1.38 调整为 v1.1.39，
