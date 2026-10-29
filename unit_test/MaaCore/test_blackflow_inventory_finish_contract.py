@@ -36,6 +36,19 @@ def test_original_failure_and_rescan_pixels_are_preserved():
         assert hashlib.sha256((FIXTURE / entry['file']).read_bytes()).hexdigest() == entry['sha256']
 
 
+def test_original_full_inventory_tail_rebound_pixels_are_preserved():
+    fixture = ROOT / 'unit_test/MaaCore/fixtures/blackflow-inventory/20261029-instance002'
+    provenance = json.loads((fixture / 'provenance.json').read_bytes())
+    assert provenance['source_run'] == 'MAA-002/run-20261029-190705-320729'
+    assert provenance['artifact'] == 'BF-A18-137'
+    assert len(provenance['files']) == 9
+    for entry in provenance['files']:
+        assert hashlib.sha256((fixture / entry['file']).read_bytes()).hexdigest() == entry['sha256']
+    instances = provenance['expected_movement_instances']
+    assert len(instances) == 8
+    assert sum(item['movement'] == 'rogue_6_scrap_M_08' for item in instances) == 2
+
+
 def test_success_receipt_precedes_complete_rescan_and_next_movement():
     rows = events()
     discarded, = [e for e in rows if e['action'] == 'inventory.overload.capture' and e['phase'] == 'discard-selected']

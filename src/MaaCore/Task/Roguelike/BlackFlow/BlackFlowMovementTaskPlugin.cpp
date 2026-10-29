@@ -622,6 +622,19 @@ bool BlackFlowMovementTaskPlugin::scan_inventory_frame(InventoryFrame& frame, st
             set_error(error, "inventory page disappeared during observation");
             return false;
         }
+        if (scan_page > 0) {
+            // 末尾回弹时继续滑动会反复打断收敛，满箱又没有空槽可确认结束。
+            // 与起点回滑一样先被动等待稳定，再做整屏末尾比较和新右列识别。
+            // 等待失败时保留最后画面，不提交部分库存，也不继续发送手势。
+            InventoryFrame settled;
+            if (!wait_for_inventory_stability(settled, image, error)) {
+                frame.page_lost = settled.page_lost;
+                if (!image.empty()) {
+                    frame.images.emplace_back(scan_page, std::make_shared<cv::Mat>(image.clone()));
+                }
+                return false;
+            }
+        }
         InventoryFrame page;
         std::string latest_error;
         InventoryAnalysisOutcome outcome = InventoryAnalysisOutcome::Failed;
@@ -717,7 +730,7 @@ bool BlackFlowMovementTaskPlugin::wait_for_inventory_stability(
         frame = {};
         if (!movement_inventory_page_visible(image)) {
             frame.page_lost = true;
-            set_error(error, "inventory page disappeared while waiting for the reset swipe to settle");
+            set_error(error, "inventory page disappeared while waiting for the swipe to settle");
             return false;
         }
         (void)analyze_inventory_frame(image, frame, 0, nullptr);
@@ -731,7 +744,7 @@ bool BlackFlowMovementTaskPlugin::wait_for_inventory_stability(
             break;
         }
     }
-    set_error(error, "inventory reset swipe did not settle before the observation limit");
+    set_error(error, "inventory swipe did not settle before the observation limit");
     return false;
 }
 

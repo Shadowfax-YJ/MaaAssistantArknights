@@ -1,0 +1,88 @@
+{
+  "source_run": "MAA-002/run-20261029-190705-320729",
+  "artifact": "BF-A18-137",
+  "collector_version": "v1.1.38",
+  "error_time_Asia_Shanghai": "2026-10-29 19:47:09",
+  "files": [
+    {
+      "file": "page-1.jpg",
+      "source": "floor-5/BF-A18-137.evidence-1.jpg",
+      "sha256": "5d8d07e318e2c391e9b34be73137561004dfce5443ecce2ee770b974e440e0ec"
+    },
+    {
+      "file": "page-2.jpg",
+      "source": "floor-5/BF-A18-137.evidence-2.jpg",
+      "sha256": "e971c68f5e27b24208a2ae4736fc8d34b9156df7566200bf5584bbe89decd901"
+    },
+    {
+      "file": "page-3.jpg",
+      "source": "floor-5/BF-A18-137.evidence-3.jpg",
+      "sha256": "b92fb4683729e01e2cde90e61e5cd837d8ef4d61930e82c6c3a80d6522d199c6"
+    },
+    {
+      "file": "page-4.jpg",
+      "source": "floor-5/BF-A18-137.evidence-4.jpg",
+      "sha256": "281039b8d559d7229cd498e151ce4502153599629a835288c639db7185bfcf5a"
+    },
+    {
+      "file": "page-5.jpg",
+      "source": "floor-5/BF-A18-137.evidence-5.jpg",
+      "sha256": "e1cb6de750a984f96a210bbb1fbcbed07715218b19d8a6d83eea78028ed6c9ed"
+    },
+    {
+      "file": "page-6.jpg",
+      "source": "floor-5/BF-A18-137.evidence-6.jpg",
+      "sha256": "653a6357f6155a00fefeb08a91f9d20e5a2101f77a211ec1609d964d3e474794"
+    },
+    {
+      "file": "page-7.jpg",
+      "source": "floor-5/BF-A18-137.evidence-7.jpg",
+      "sha256": "7274d7e87076c06937d480f98836bca364e0178e2375c6b57fa87bde64805aa9"
+    },
+    {
+      "file": "page-8.jpg",
+      "source": "floor-5/BF-A18-137.evidence-8.jpg",
+      "sha256": "758700490486df09efdddb7fc5e62943b96dca60035cae75c64dc30091ee6c1f"
+    },
+    {
+      "file": "page-9.jpg",
+      "source": "floor-5/BF-A18-137.evidence-9.jpg",
+      "sha256": "3d57859fc03857af4002faecf429e2ee83725a9d44bea1a3278da2aaced338e5"
+    }
+  ],
+  "expected_movement_instances": [
+    {
+      "movement": "rogue_6_scrap_M_06",
+      "remaining_charges": 2
+    },
+    {
+      "movement": "rogue_6_scrap_M_08",
+      "remaining_charges": 1
+    },
+    {
+      "movement": "rogue_6_scrap_M_03",
+      "remaining_charges": 2
+    },
+    {
+      "movement": "rogue_6_scrap_M_08",
+      "remaining_charges": 1
+    },
+    {
+      "movement": "rogue_6_scrap_M_09",
+      "remaining_charges": 1
+    },
+    {
+      "movement": "rogue_6_scrap_M_05",
+      "remaining_charges": 1
+    },
+    {
+      "movement": "rogue_6_scrap_M_13",
+      "remaining_charges": 1
+    },
+    {
+      "movement": "rogue_6_scrap_M_11",
+      "remaining_charges": 1
+    }
+  ],
+  "controlled_timing": "After a forward gesture, passive 250 ms observations replay original tail positions, then hold original frame 7 from 750 ms onward. This models settling; it is not footage recorded without additional swipes."
+}

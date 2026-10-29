@@ -1,4 +1,4 @@
-## v1.1.39
+## v1.1.40
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.40 (2026-10-29)</b></summary>
+
+### 修复 | Fix
+
+* 修复零件箱列表回弹时无法确认末尾，导致自动采集中断的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.39 (2026-10-29)</b></summary>
 
 ### 修复 | Fix

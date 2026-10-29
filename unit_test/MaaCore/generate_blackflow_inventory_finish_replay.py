@@ -2,6 +2,7 @@
 import argparse
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -15,7 +16,11 @@ here = Path(__file__).resolve().parent
 repo = here.parents[1]
 base = a.output.parent / 'ui-base.cpp'
 a.output.parent.mkdir(parents=True, exist_ok=True)
-subprocess.run([sys.executable, str(here / 'generate_blackflow_ui_recovery_replay.py'), str(base)], check=True)
+shutil.copyfile(here / 'BlackFlowInventoryTailReplay.h', a.output.parent / 'BlackFlowInventoryTailReplay.h')
+base_args = [sys.executable, str(here / 'generate_blackflow_ui_recovery_replay.py'), str(base)]
+if a.source_ref:
+    base_args += ['--source-ref', a.source_ref]
+subprocess.run(base_args, check=True)
 text = base.read_text('utf-8').split('\nint main(')[0]
 text = text.replace('bool cleanup_open_inventory_if_overloaded(bool& done,std::string*) override{done=false;return true;}',
     'std::function<bool(bool&,std::string*)> cleanup_hook;\n'

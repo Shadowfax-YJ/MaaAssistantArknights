@@ -53,6 +53,8 @@ struct IO {
     Page page=Page::Map;
     cv::Mat map,unselected,selected_panel,network,ending,preview,entered,unsupported;
     std::vector<cv::Mat> inventory;
+    std::function<cv::Mat()> inventory_image;
+    std::function<void(std::string_view)> inventory_input;
     int inventory_page=0,selected_reads=0;
     bool selected=false,network_done=false,auto_map=false,rollback=false,cancelled=false;
     bool second_network=false;
@@ -68,7 +70,7 @@ struct IO {
         if(page==Page::Preview)return preview;
         if(page==Page::Entered)return entered;
         if(page==Page::Unsupported)return unsupported;
-        if(page==Page::Inventory)return inventory.at(inventory_page);
+        if(page==Page::Inventory)return inventory_image?inventory_image():inventory.at(inventory_page);
         if(page==Page::Panel){
             if(selected&&!network_done&&selected_reads++>0){
                 if(network_start<0)network_start=clock;
@@ -198,6 +200,7 @@ struct Movement {
     bool sleep(int ms)const{return io.sleep(ms);}
     bool run_fixed_task(std::string_view task){
         if(need_exit())return false;
+        if(io.inventory_input&&(task==InventorySwipeTask||task==InventorySwipeToStartTask))io.inventory_input(task);
         if(task==OpenPanelTask){++io.opens;io.page=IO::Page::Panel;
             if(io.second_network&&io.opens==2){io.network_done=false;io.network_start=-1;io.selected_reads=1;}
             return io.click_ok;}

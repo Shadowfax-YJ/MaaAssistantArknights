@@ -1,7 +1,7 @@
 name: Release Pipeline
 
 env:
-  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.39
+  BLACKFLOW_DATA_COLLECTION_VERSION: v1.1.40
 
 on:
   push:
@@ -192,7 +192,7 @@ jobs:
         run: ./unit_test/MaaCore/run_blackflow_depart_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow actual expedition endings and movement network recovery through recorders and routing
         run: ./unit_test/MaaCore/run_blackflow_ui_recovery_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
-      - name: Test BlackFlow ordinary overload cleanup through real collapse, full scan and next movement
+      - name: Test BlackFlow overload cleanup, inventory tail rebound and complete rescan
         run: ./unit_test/MaaCore/run_blackflow_inventory_finish_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'
       - name: Test BlackFlow settlement detail recovery through next-run lifecycle reset
         run: ./unit_test/MaaCore/run_blackflow_settlement_replay.ps1 -CoreBuildDirectory 'build/package-blackflow-${{ needs.meta.outputs.tag }}/core'

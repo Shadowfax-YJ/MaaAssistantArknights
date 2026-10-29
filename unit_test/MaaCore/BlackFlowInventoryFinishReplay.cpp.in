@@ -85,6 +85,8 @@ struct Cleanup {
 /*CLEANUP*/
 }
 
+#include "BlackFlowInventoryTailReplay.h"
+
 int main(int argc,char**argv){
     using namespace ui_replay;
     if(argc!=3&&argc!=4)return 2;
@@ -177,5 +179,7 @@ int main(int argc,char**argv){
       }
       catch(const std::exception& e){++failed;std::cout<<"FAIL "<<scenario<<": "<<e.what()<<'\n';}
     }
+    const auto tail=run_inventory_tail_replay(repo,batch,argc==4?argv[3]:"");
+    passed+=tail.first;failed+=tail.second;
     UserDir.set(previous);std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
 }
