@@ -51,6 +51,9 @@ public:
         m_duel_preparation_observer = std::move(observer);
     }
 
+    const std::optional<std::string>& preparation_failure() const noexcept { return m_preparation_failure; }
+    void reset_preparation_failure() noexcept { m_preparation_failure.reset(); }
+
     virtual bool verify(AsstMsg msg, const json::value& details) const override;
 
 protected:
@@ -206,6 +209,8 @@ protected:
     std::function<void(std::string_view)> m_virtual_auto_skill_observer;
     std::function<bool(std::string_view, json::object, const cv::Mat&)> m_duel_preparation_observer;
     std::optional<int> m_duel_preparation_tier;
+    // Survives a disabled parent and diagnostic-save failure; reset at task entry.
+    std::optional<std::string> m_preparation_failure;
     blackflow::BattleTotalKillsAggregator m_total_kills_aggregator;
 
     // 缓存干员精英

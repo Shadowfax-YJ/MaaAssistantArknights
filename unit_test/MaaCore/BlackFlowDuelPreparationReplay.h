@@ -26,6 +26,36 @@ void duel_preparation_regressions(const std::filesystem::path& repo, Test&& test
     using namespace asst;
     using namespace asst::blackflow;
     const auto fixture = json::open(repo / "unit_test/MaaCore/fixtures/blackflow-duel/preparation.json").value();
+    const auto counter_dir = repo / "unit_test/MaaCore/fixtures/blackflow-duel/20261030";
+    const auto counters = json::open(counter_dir / "counters.json").value();
+    for (const auto& sample : counters.at("cases").as_array()) {
+        const auto name = "native duel completed counter with scenery noise: " + sample.at("name").as_string();
+        test(name.c_str(), [&] {
+            const auto image = MAA_NS::imread(counter_dir / sample.at("image").as_string());
+            require(!image.empty(), "original duel frame missing");
+            OCRer start(image);
+            start.set_task_info("BlackFlow@Roguelike@BattlePreparationStart");
+            OCRer counter(image);
+            counter.set_task_info("BlackFlow@Roguelike@BattlePreparationDeployCount");
+            OCRer cancel(image);
+            cancel.set_task_info("BlackFlow@Roguelike@BattlePreparationDeployCancel");
+            require(start.analyze().has_value() && counter.analyze().has_value() && !cancel.analyze(),
+                    "original image is not a completed preparation page");
+            require(select_preparation_deployment_count(counter.get_result()) == std::pair { 2, 2 },
+                    "native counter recognition lost the completed deployment");
+            // Stored frames are captured after the failing OCR read; retain the actual
+            // runtime results as well, so image timing/compression cannot hide the bug.
+            std::vector<TextRect> runtime;
+            for (const auto& row : sample.at("ocr").as_array()) {
+                const auto& r = row.at("rect");
+                runtime.emplace_back(
+                    Rect { r[0].as_integer(), r[1].as_integer(), r[2].as_integer(), r[3].as_integer() },
+                    row.at("score").as_double(), row.at("text").as_string());
+            }
+            require(runtime.size() > 1 && select_preparation_deployment_count(runtime) == std::pair { 2, 2 },
+                    "recorded noise rejected the valid counter");
+        });
+    }
     test("native duel choice resets between battles and rejects changing a selected tier", [&] {
         auto config = std::make_shared<RoguelikeConfig>();
         RoguelikeBattleTaskPlugin probe({ }, nullptr, "Roguelike", config, nullptr);

@@ -127,6 +127,25 @@ private:
     return std::pair { deployed, total };
 }
 
+// The counter ROI can also contain animated scenery (X, GO, b, etc.). Only
+// complete n/m readings are evidence; conflicting valid readings stay unknown.
+template <class Results>
+[[nodiscard]] std::optional<std::pair<int, int>> select_preparation_deployment_count(const Results& results)
+{
+    std::optional<std::pair<int, int>> count;
+    for (const auto& result : results) {
+        const auto parsed = parse_preparation_deployment_count(result.text);
+        if (!parsed.has_value()) {
+            continue;
+        }
+        if (count.has_value() && count != parsed) {
+            return std::nullopt;
+        }
+        count = parsed;
+    }
+    return count;
+}
+
 // 拖拽后先取消选中，再用部署栏卡片状态确认结果。未取消选中时，失败的拖拽也会
 // 让卡片暂时不可用，不能据此判定部署成功。
 [[nodiscard]] inline constexpr bool deployment_attempt_confirmed(

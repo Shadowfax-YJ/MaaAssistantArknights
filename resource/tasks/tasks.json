@@ -538,7 +538,7 @@
     },
     "StageQueue": {
         "baseTask": "Fight",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "exceededNext": ["Stop"],
         "next": ["StageQueue@GoLastBattle", "StageQueue"]
     },
@@ -739,7 +739,7 @@
     },
     "SwitchAccount": {
         "baseTask": "StartUp",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["Settings"]
     },
     "Settings": {
@@ -965,7 +965,7 @@
     "StartAtHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["Home", "StartUpBegin"],
         "postDelay_Doc": "等待以防万一（StartUp还有双倍的任务延迟等待，默认0.5s x2",
         "postDelay": 1000
@@ -982,7 +982,7 @@
     },
     "StartUp": {
         "Doc": "有时候明明已经在主界面了，停了一小会又弹个窗。多检测几次，一直在主界面才算完成",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "action": "DoNothing",
         "roi": [227, 327, 159, 152],
         "postDelay": 1000,
@@ -1694,7 +1694,7 @@
     },
     "Fight": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Terminal-Entry"],
         "next": ["Fight@GoLastBattle", "Fight@CloseAnnos#next", "Fight@GoTerminalStopflag", "Fight@ReturnButtons#next"]
@@ -1742,7 +1742,7 @@
     },
     "Recruit": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Recruit-Entry"],
         "next": ["RecruitBegin@LoadingText", "RecruitBegin"]
@@ -1814,7 +1814,7 @@
     "MiningActivitiesReturnHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["MiningActivities", "Stop"]
     },
     "MiningActivities": {
@@ -1854,7 +1854,7 @@
     "OrundumActivitiesReturnHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["OrundumActivities", "Stop"]
     },
     "OrundumActivities": {
@@ -1927,7 +1927,7 @@
     "RecruitingActivitiesReturnHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["RecruitingActivities", "Stop"]
     },
     "RecruitingActivities": {
@@ -2022,7 +2022,7 @@
     "SpecialAccessActivitiesReturnHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["SpecialAccessActivities", "Stop"]
     },
     "SpecialAccessActivities": {
@@ -2069,7 +2069,7 @@
     },
     "Award": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Task-Entry"],
         "next": ["ReceiveAward", "DailyTask", "WeeklyTask", "Award@CloseAnnos#next"]
@@ -2124,7 +2124,7 @@
     "MailReturnToHome": {
         "baseTask": "Home",
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["Mail", "MailWithoutAward"]
     },
     "Mail": {
@@ -2172,7 +2172,7 @@
     },
     "Visit": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Friends-Entry"],
         "next": ["FriendsList", "Visit@CloseAnnos#next"]
@@ -2241,7 +2241,7 @@
     },
     "Mall": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Mall-Entry"],
         "next": ["CreditStoreOcr", "Mall@CloseAnnos#next"]
@@ -2283,7 +2283,7 @@
     },
     "Home": {
         "action": "Stop",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152]
     },
     "CreditShop-Commodities": {
@@ -2450,7 +2450,7 @@
     },
     "Infrast": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Infrast-Entry"],
         "next": ["InfrastEnteredFlag", "Infrast@InfrastLoading", "Infrast@CloseAnnos#next", "Infrast@OfflineConfirm"]
@@ -4370,7 +4370,7 @@
     },
     "Depot": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Depot-Entry"],
         "next": ["DepotMaterialTab"]
@@ -4453,7 +4453,7 @@
     },
     "OperBox": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["OperBox-Entry"],
         "next": ["OperBoxRoleTabSelect", "OperBoxSortTabSelect", "OperBoxRoleTab"]
@@ -5106,7 +5106,7 @@
     },
     "Gacha": {
         "action": "DoNothing",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "roi": [227, 327, 159, 152],
         "sub": ["Gacha-Entry"],
         "next": ["Gacha@LoadingText", "DoGacha"]
@@ -5192,7 +5192,7 @@
     },
     "Store@EnterStore": {
         "baseTask": "Mall",
-        "template": "SwitchTheme@ToggleSettingsMenu.png",
+        "template": ["SwitchTheme@ToggleSettingsMenu.png", "SwitchTheme@ToggleSettingsMenu-v2.png"],
         "next": ["Store@EnterTicketStore@LoadingIcon", "Store@EnterTicketStore"]
     },
     "Store@EnterTicketStore": {

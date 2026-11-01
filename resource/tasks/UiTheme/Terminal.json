@@ -7,24 +7,7 @@
             "roi": [903, 120, 97, 58],
             "mask": []
         },
-        "next": [
-            "TerminalDefault",
-            "TerminalDark",
-            "TerminalSami",
-            "TerminalMistCity",
-            "TerminalSiege",
-            "TerminalSarkaz",
-            "TerminalDelicious",
-            "TerminalGaming",
-            "TerminalDahuangCity",
-            "TerminalDreamland",
-            "TerminalJieGarden",
-            "TerminalAveMujica",
-            "TerminalTogether",
-            "TerminalLoneTrail",
-            "TerminalReconstruct",
-            "TerminalHunting"
-        ],
+        "next": ["TerminalDefault"],
         "onErrorNext": ["Terminal-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "TerminalDefault": {
@@ -32,7 +15,7 @@
         "maskRange": [1, 255],
         "roi": [844, 58, 268, 272],
         "postDelay": 3000,
-        "template": "Default/Terminal.png",
+        "template": ["Default/Terminal.png", "Default/Terminal-90.png"],
         "next": ["#self", "Stop"]
     },
     "TerminalDark": {

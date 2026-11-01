@@ -1,0 +1,24 @@
+{
+  "source_instance": "MAA-002",
+  "source_run": "run-20261102-022334-524296",
+  "collector_version": "v1.1.40",
+  "observed_at_Asia_Shanghai": "2026-11-02 03:28:50 through 03:29:43",
+  "files": [
+    {
+      "file": "experience.png",
+      "source": "build\\diagnostics\\20261102\\002-settlement-experience\\experience.png",
+      "sha256": "c64ba4ed726ef2242730b5a8f1a88a11d1cdc9e5946b79bffbef6453d13dfd7c"
+    },
+    {
+      "file": "summary.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-002\\debug\\BlackFlow\\run-20261102-022334-524296\\images\\006038-settlement-navigation-summary-before-advance.jpg",
+      "sha256": "a5109e789ca95665b6e47a69961117582fa8e70086be7de801c3761488c95e7f"
+    },
+    {
+      "file": "statistics.jpg",
+      "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-002\\debug\\BlackFlow\\run-20261102-022334-524296\\images\\006039-settlement-navigation-statistics-ready.jpg",
+      "sha256": "b1395bafad9cd4bbe11ce009390d8afec00eb9d8884f379979b39bdc705d4f75"
+    }
+  ],
+  "scope": "Unmodified original summary/statistics frames and user-provided experience screenshot. Entry and next opening reuse 20261029 fixtures; transitions and inputs are controlled."
+}

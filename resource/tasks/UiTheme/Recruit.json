@@ -6,31 +6,14 @@
             "roi": [935, 480, 145, 61],
             "mask": [125, 0, 25, 20]
         },
-        "next": [
-            "RecruitDefault",
-            "RecruitDark",
-            "RecruitSami",
-            "RecruitMistCity",
-            "RecruitSiege",
-            "RecruitSarkaz",
-            "RecruitDelicious",
-            "RecruitGaming",
-            "RecruitDahuangCity",
-            "RecruitDreamland",
-            "RecruitJieGarden",
-            "RecruitAveMujica",
-            "RecruitTogether",
-            "RecruitLoneTrail",
-            "RecruitReconstruct",
-            "RecruitHunting"
-        ],
+        "next": ["RecruitDefault"],
         "onErrorNext": ["Recruit-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "RecruitDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [925, 425, 200, 150],
-        "template": "Default/Recruit.png",
+        "template": ["Default/Recruit.png", "Default/Recruit-90.png"],
         "postDelay": 500,
         "next": ["#self", "Stop"]
     },

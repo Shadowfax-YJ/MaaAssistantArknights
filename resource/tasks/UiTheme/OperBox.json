@@ -6,31 +6,14 @@
             "roi": [945, 301, 85, 78],
             "mask": []
         },
-        "next": [
-            "OperBoxDefault",
-            "OperBoxDark",
-            "OperBoxSami",
-            "OperBoxMistCity",
-            "OperBoxSiege",
-            "OperBoxSarkaz",
-            "OperBoxDelicious",
-            "OperBoxGaming",
-            "OperBoxDahuangCity",
-            "OperBoxDreamland",
-            "OperBoxJieGarden",
-            "OperBoxAveMujica",
-            "OperBoxTogether",
-            "OperBoxLoneTrail",
-            "OperBoxReconstruct",
-            "OperBoxHunting"
-        ],
+        "next": ["OperBoxDefault"],
         "onErrorNext": ["OperBox-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "OperBoxDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [935, 300, 265, 110],
-        "template": "Default/OperBoxEnter.png",
+        "template": ["Default/OperBoxEnter.png", "Default/OperBoxEnter-90.png"],
         "postDelay": 500,
         "next": ["#self", "Stop"]
     },

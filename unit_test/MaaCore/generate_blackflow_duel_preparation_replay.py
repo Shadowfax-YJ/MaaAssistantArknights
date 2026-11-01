@@ -11,4 +11,8 @@ result = (here / 'BlackFlowDuelPreparationReplay.cpp.in').read_text('utf-8')
 for marker, name in [('SELECT_TIER', 'select_duel_preparation_tier'),
                      ('RECORD', 'record_duel_preparation'), ('PREPARE', 'run_preparation_phase')]:
     result = result.replace('/*' + marker + '*/', extract(source, 'bool asst::RoguelikeBattleTaskPlugin::' + name + '('))
+entry = extract(source, 'bool asst::RoguelikeBattleTaskPlugin::_run()')
+entry = entry[:entry.index('    if (has_preparation_camera_animation)')]
+entry = entry.replace('::_run()', '::run_preparation_entry()') + '    return true;\n}\n'
+result = result.replace('/*PREPARATION_ENTRY*/', entry)
 Path(sys.argv[1]).write_text(result, 'utf-8')

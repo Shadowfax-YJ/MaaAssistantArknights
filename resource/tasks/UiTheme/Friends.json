@@ -6,24 +6,7 @@
             "roi": [300, 550, 128, 41],
             "mask": []
         },
-        "next": [
-            "FriendsDefault",
-            "FriendsDark",
-            "FriendsSami",
-            "FriendsMistCity",
-            "FriendsSiege",
-            "FriendsSarkaz",
-            "FriendsDelicious",
-            "FriendsGaming",
-            "FriendsDahuangCity",
-            "FriendsDreamland",
-            "FriendsJieGarden",
-            "FriendsAveMujica",
-            "FriendsTogether",
-            "FriendsLoneTrail",
-            "FriendsReconstruct",
-            "FriendsHunting"
-        ],
+        "next": ["FriendsDefault"],
         "onErrorNext": ["Friends-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "FriendsDefault": {
@@ -31,7 +14,7 @@
         "maskRange": [1, 255],
         "roi": [250, 500, 200, 200],
         "templThreshold": 0.7,
-        "template": "Default/Friends.png",
+        "template": ["Default/Friends.png", "Default/Friends-90.png"],
         "postDelay": 1000,
         "next": ["#self", "Stop"]
     },

@@ -11,6 +11,7 @@ class RoguelikeControlTaskPlugin;
 class RoguelikeInvestTaskPlugin;
 class RoguelikeDebugTaskPlugin;
 class RoguelikeCustomStartTaskPlugin;
+class RoguelikeBattleTaskPlugin;
 class RoguelikeFoldartalStartTaskPlugin;
 class RoguelikeFoldartalUseTaskPlugin;
 
@@ -39,6 +40,7 @@ private:
     std::shared_ptr<RoguelikeInvestTaskPlugin> m_invest_ptr = nullptr;
     std::shared_ptr<RoguelikeDebugTaskPlugin> m_debug_ptr = nullptr;
     std::shared_ptr<RoguelikeCustomStartTaskPlugin> m_custom_ptr = nullptr;
+    std::shared_ptr<RoguelikeBattleTaskPlugin> m_battle_ptr = nullptr;
     std::shared_ptr<RoguelikeFoldartalStartTaskPlugin> m_foldartal_start_ptr = nullptr;
     std::shared_ptr<RoguelikeFoldartalUseTaskPlugin> m_foldartal_use_ptr = nullptr;
     std::shared_ptr<blackflow::BlackFlowSession> m_blackflow_session_ptr = nullptr;

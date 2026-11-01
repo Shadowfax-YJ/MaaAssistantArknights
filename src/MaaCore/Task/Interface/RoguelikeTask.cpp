@@ -91,6 +91,7 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_roguelike_task_ptr->register_plugin<RoguelikeShoppingTaskPlugin>(m_config_ptr, m_control_ptr)->set_retry_times(0);
 
     auto battle_plugin = m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr);
+    m_battle_ptr = battle_plugin;
     battle_plugin->set_retry_times(0).set_ignore_error(true);
     auto recruit_plugin =
         m_roguelike_task_ptr->register_plugin<RoguelikeRecruitTaskPlugin>(m_config_ptr, m_control_ptr);
@@ -514,6 +515,9 @@ bool asst::RoguelikeTask::run()
             return false;
         }
         m_run_started = true;
+        if (m_battle_ptr != nullptr) {
+            m_battle_ptr->reset_preparation_failure();
+        }
         use_blackflow_map = get_enable() && m_config_ptr->get_theme() == RoguelikeTheme::BlackFlow &&
                             m_blackflow_map_source_ptr != nullptr;
     }
@@ -583,6 +587,16 @@ bool asst::RoguelikeTask::run()
     try {
         bool result = InterfaceTask::run();
         if (use_blackflow_map && m_blackflow_session_ptr != nullptr) {
+            if (!need_exit() && m_blackflow_session_ptr->profile() == "automation_collection" &&
+                m_battle_ptr != nullptr && m_battle_ptr->preparation_failure().has_value()) {
+                // Disabling ProcessTask is a successful interruption. Preserve the
+                // actual failure independently of callback error handling or image I/O.
+                m_blackflow_session_ptr->fail(
+                    "battle_preparation_failed",
+                    "battle preparation failed: " + *m_battle_ptr->preparation_failure(),
+                    blackflow::FailureDisposition::StopTask);
+                result = false;
+            }
             if (m_custom_ptr != nullptr && m_custom_ptr->blackflow_opening_failed()) {
                 // Persistence can itself fail. The task status must not depend
                 // on the diagnostic observer having written the failure event.

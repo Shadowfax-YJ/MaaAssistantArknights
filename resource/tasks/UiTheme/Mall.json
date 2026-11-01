@@ -6,31 +6,14 @@
             "roi": [822, 457, 86, 71],
             "mask": []
         },
-        "next": [
-            "MallDefault",
-            "MallDark",
-            "MallSami",
-            "MallMistCity",
-            "MallSiege",
-            "MallSarkaz",
-            "MallDelicious",
-            "MallGaming",
-            "MallDahuangCity",
-            "MallDreamland",
-            "MallJieGarden",
-            "MallAveMujica",
-            "MallTogether",
-            "MallLoneTrail",
-            "MallReconstruct",
-            "MallHunting"
-        ],
+        "next": ["MallDefault"],
         "onErrorNext": ["Mall-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "MallDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [772, 407, 186, 171],
-        "template": "Default/Mall.png",
+        "template": ["Default/Mall.png", "Default/Mall-90.png"],
         "postDelay": 500,
         "next": ["#self", "Stop"]
     },

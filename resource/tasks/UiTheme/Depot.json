@@ -6,31 +6,14 @@
             "roi": [1153, 606, 77, 79],
             "mask": []
         },
-        "next": [
-            "DepotDefault",
-            "DepotDark",
-            "DepotSami",
-            "DepotMistCity",
-            "DepotSiege",
-            "DepotSarkaz",
-            "DepotDelicious",
-            "DepotGaming",
-            "DepotDahuangCity",
-            "DepotDreamland",
-            "DepotJieGarden",
-            "DepotAveMujica",
-            "DepotTogether",
-            "DepotLoneTrail",
-            "DepotReconstruct",
-            "DepotHunting"
-        ],
+        "next": ["DepotDefault"],
         "onErrorNext": ["Depot-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "DepotDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [1109, 560, 171, 160],
-        "template": "Default/DepotEnter.png",
+        "template": ["Default/DepotEnter.png", "Default/DepotEnter-90.png"],
         "postDelay": 500,
         "next": ["#self", "Stop"]
     },

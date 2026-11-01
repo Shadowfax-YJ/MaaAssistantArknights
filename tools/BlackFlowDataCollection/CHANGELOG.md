@@ -1,4 +1,4 @@
-## v1.1.40
+## v1.1.41
 
 ### Highlights
 
@@ -44,6 +44,17 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.41 (2026-11-02)</b></summary>
+
+### 修复 | Fix
+
+* 修复结算后可能停在经验页或任务页、无法继续下一局的问题。 @Shadowfax-YJ
+* 修复狭路相逢准备阶段偶发误判，并纠正准备失败被显示为任务完成的问题。 @Shadowfax-YJ
+* 移植上游 v6.21.0 的主界面识别适配，兼容新旧日间主题入口与主题切换，保留黑流定制逻辑。 ([#18955](https://github.com/MaaAssistantArknights/MaaAssistantArknights/pull/18955)) @Daydreamer114 @ABA2396
+
+</details>
+
+<details>
 <summary><b>v1.1.40 (2026-10-29)</b></summary>
 
 ### 修复 | Fix

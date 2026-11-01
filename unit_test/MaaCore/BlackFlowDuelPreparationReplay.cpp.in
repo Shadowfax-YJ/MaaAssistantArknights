@@ -1,4 +1,5 @@
 // Production preparation methods; only controller, recognition and persistence boundaries are supplied.
+#define LogTraceFunction
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -10,6 +11,7 @@
 #include <random>
 #include <ranges>
 #include <stdexcept>
+#include <tuple>
 #include <unordered_set>
 #include <opencv2/core.hpp>
 #include "Common/AsstBattleDef.h"
@@ -57,6 +59,7 @@ struct
 
 namespace asst
 {
+namespace utils { inline std::filesystem::path path(std::string_view value) { return std::filesystem::u8path(value); } }
 enum class RoguelikeMode
 {
     BlackFlowAutomationCollection,
@@ -81,7 +84,7 @@ struct ReplayConfig
 struct ReplayController
 {
     bool started = false, wrong_page = false, wrong_count = false, cancel = false, empty = false, stopped = false;
-    int count = 0, total = 1, starts = 0, ticks = 0;
+    int count = 0, total = 1, starts = 0, ticks = 0, stop_after_ticks = 40;
     std::vector<std::string> operations;
 
     cv::Mat get_image()
@@ -98,6 +101,8 @@ struct ReplayController
 
 struct OCRer
 {
+    inline static std::vector<std::vector<std::string>> counter_results;
+    inline static std::size_t counter_reads = 0;
     cv::Mat image;
     std::string task;
 
@@ -131,6 +136,12 @@ struct OCRer
             return false;
         }
         if (task.ends_with("DeployCount")) {
+            if (!counter_results.empty()) {
+                for (const auto& text : counter_results.at(std::min(counter_reads++, counter_results.size() - 1))) {
+                    result.push_back({ text });
+                }
+                return !result.empty();
+            }
             auto pixel = image.at<cv::Vec3b>(0, 0);
             result.push_back({ std::to_string(pixel[1]) + "/" + std::to_string(pixel[2]) });
         }
@@ -200,6 +211,14 @@ public:
     std::unordered_map<Point, int> m_normal_tile_info, m_side_tile_info;
     Point m_retreat_button_pos, m_skill_button_pos;
     int retry_deployments = 0;
+    struct Parent { bool enabled = true; void set_enable(bool value) { enabled = value; } } parent;
+    Parent* m_task_ptr = &parent;
+    std::optional<std::string> m_preparation_failure;
+    bool save_ok = true;
+    int failure_saves = 0;
+    bool calc_stage_info() { return true; }
+    bool save_img(const std::filesystem::path&, bool) { ++failure_saves; return save_ok; }
+    bool run_preparation_entry();
 
     ReplayController* ctrler() { return &controller; }
 
@@ -207,7 +226,7 @@ public:
 
     bool sleep(int)
     {
-        if (++controller.ticks > 40) {
+        if (++controller.ticks > controller.stop_after_ticks) {
             controller.stopped = true;
         }
         return !need_exit();
@@ -251,6 +270,7 @@ bool ProcessTask::run()
 /*SELECT_TIER*/
 /*RECORD*/
 /*PREPARE*/
+/*PREPARATION_ENTRY*/
 
 int main(int argc, char** argv)
 {
@@ -259,6 +279,8 @@ int main(int argc, char** argv)
     int passed = 0, failed = 0;
     json::array samples;
     auto test = [&](const std::string& name, auto function) {
+        OCRer::counter_results.clear();
+        OCRer::counter_reads = 0;
         try {
             function();
             ++passed;
@@ -385,6 +407,54 @@ int main(int argc, char** argv)
         };
         require(p.run_preparation_phase(), "random path failed");
         require(p.m_duel_preparation_tier >= 0 && p.m_duel_preparation_tier < 3, "invalid random index");
+    });
+    const auto counter_fixture = json::open(repo / "unit_test/MaaCore/fixtures/blackflow-duel/20261030/counters.json").value();
+    const auto make_coop = [&]() {
+        RoguelikeBattleTaskPlugin p;
+        p.m_stage_name = "共斗";
+        p.controller.total = 2;
+        p.m_preparation_deploy_plan["机械师"] = { { Point { 4, 3 } } };
+        p.m_preparation_deploy_plan["凯尔希·思衡托"] = { { Point { 5, 3 } } };
+        p.m_duel_preparation_observer = [](auto, auto, const auto&) { return true; };
+        require(p.select_duel_preparation_tier(1), "middle tier");
+        return p;
+    };
+    for (const auto& row : counter_fixture.at("cases").as_array()) {
+        test("captured counter noise: " + row.at("name").as_string(), [&] {
+            auto p = make_coop();
+            std::vector<std::string> observed;
+            for (const auto& item : row.at("ocr").as_array()) observed.push_back(item.at("text").as_string());
+            OCRer::counter_results = { observed };
+            require(p.run_preparation_phase() && p.controller.starts == 1, "valid completed counter rejected with noise");
+        });
+    }
+    for (const auto& [name, sequence, succeeds] : std::vector<std::tuple<std::string, std::vector<std::vector<std::string>>, bool>> {
+             { "transient unreadable frame", { {}, { "GO" }, { "2/2" }, { "2/2" } }, true },
+             { "conflict recovers", { { "2/2", "1/2" }, { "2/2" }, { "2/2" } }, true },
+             { "conflict persists", { { "2/2", "1/2" } }, false },
+             { "only one ready frame", { { "2/2" }, {} }, false },
+             { "wrong total", { { "3/3", "X" } }, false },
+             { "incomplete deployment", { { "1/2", "GO" } }, false },
+             { "duplicate equivalent readings", { { "2/2", "2/2" } }, true },
+         }) {
+        test("final preparation confirmation: " + name, [&] {
+            auto p = make_coop(); OCRer::counter_results = sequence;
+            const bool ok = p.run_preparation_phase();
+            require(ok == succeeds && p.controller.starts == int(succeeds), "unexpected final confirmation");
+            require(OCRer::counter_reads <= 6, "final confirmation exceeded its sample budget");
+        });
+    }
+    test("preparation entry latches failure before disabling the parent even if image saving fails", [&] {
+        auto p = make_coop(); p.m_task_ptr = &p.parent; p.save_ok = false;
+        OCRer::counter_results = { { "1/2" } };
+        require(!p.run_preparation_entry() && !p.parent.enabled, "failed preparation continued input");
+        require(p.m_preparation_failure == "共斗" && p.failure_saves == 1, "preparation failure was not retained");
+    });
+    test("manual stop during final confirmation does not invent a preparation failure", [&] {
+        auto p = make_coop(); p.m_task_ptr = &p.parent; p.controller.stop_after_ticks = 0;
+        OCRer::counter_results = { {} };
+        require(!p.run_preparation_entry() && p.controller.starts == 0, "stop was ignored");
+        require(!p.m_preparation_failure && p.parent.enabled && p.failure_saves == 0, "manual stop became failure");
     });
     std::ofstream output(argv[2]);
     output << json::value(samples).format();

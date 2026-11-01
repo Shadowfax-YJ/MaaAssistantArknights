@@ -6,31 +6,14 @@
             "roi": [1095, 497, 167, 56],
             "mask": []
         },
-        "next": [
-            "GachaDefault",
-            "GachaDark",
-            "GachaSami",
-            "GachaMistCity",
-            "GachaSiege",
-            "GachaSarkaz",
-            "GachaDelicious",
-            "GachaGaming",
-            "GachaDahuangCity",
-            "GachaDreamland",
-            "GachaJieGarden",
-            "GachaAveMujica",
-            "GachaTogether",
-            "GachaLoneTrail",
-            "GachaReconstruct",
-            "GachaHunting"
-        ],
+        "next": ["GachaDefault"],
         "onErrorNext": ["Gacha-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "GachaDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [1052, 426, 228, 174],
-        "template": "Default/GachaEnter.png",
+        "template": ["Default/GachaEnter.png", "Default/GachaEnter-90.png"],
         "postDelay": 500,
         "next": ["#self", "Stop"]
     },

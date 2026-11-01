@@ -1,0 +1,79 @@
+{
+  "action": "settlement.navigation",
+  "details": {
+    "acquisition_status": "not_an_acquisition",
+    "destination": "startup_transition",
+    "image_capture": {
+      "mode": "provided_observation",
+      "status": "captured"
+    },
+    "scope": "run_settlement"
+  },
+  "elapsed_ms": 832,
+  "event_id": "BF-R1-5",
+  "floor": 2,
+  "image": {
+    "codec": "jpeg",
+    "height": 720,
+    "path": "images/000005-settlement-navigation-navigation-ready.jpg",
+    "quality": 76,
+    "source_height": 720,
+    "source_width": 1280,
+    "width": 1280
+  },
+  "level": "INFO",
+  "logger": "blackflow.run",
+  "map_generation": 1,
+  "map_revision": 0,
+  "outcome": "observed",
+  "phase": "navigation-ready",
+  "run_revision": 1,
+  "schema_version": 1,
+  "sequence": 5,
+  "state": {
+    "action_points": 0,
+    "active_movement": "",
+    "current_node": 18446744073709551615,
+    "decision_id": "",
+    "expedition_core_away": false,
+    "floor": 2,
+    "hope": 0,
+    "ingots": 0,
+    "lorentz_eye_available": false,
+    "map_generation": 1,
+    "map_revision": 0,
+    "movement_instances": [],
+    "movement_inventory_refresh_required": true,
+    "observation_id": "",
+    "observed_current_node": 18446744073709551615,
+    "painted_liberi": false,
+    "profile": "automation_collection",
+    "random_reveals_on_processing_move": 0,
+    "resources_revision": 0,
+    "revealed_nodes": [],
+    "run_revision": 1,
+    "seeds": 0,
+    "selected_difficulty": -1,
+    "sellable_scraps": 0,
+    "store_purchase_policy": {
+      "sand_table_beta": {
+        "disable_probability": 0.5,
+        "disabled_for_run": true,
+        "quota_override": 0,
+        "scope": "run"
+      }
+    },
+    "strategy_terminal": false,
+    "terminated": false,
+    "transaction_id": "",
+    "tree_hole_outer_floor": 0,
+    "viewport_revision": 0,
+    "visited_nodes": [],
+    "white_model_birds": 0
+  },
+  "task": "RoguelikeSettlementTaskPlugin",
+  "thread_id": "13584",
+  "timestamp": "2026-11-01T20:15:17.136Z",
+  "timezone": "UTC",
+  "transaction_id": ""
+}

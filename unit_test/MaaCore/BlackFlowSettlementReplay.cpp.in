@@ -11,11 +11,16 @@ using ui_replay::check;
 using ui_replay::OCRer;
 
 struct Device {
-    enum class Page { Detail, Summary, Transition, Statistics, Entrance, Opening, Unknown, Battle };
+    enum class Page { Detail, Summary, Transition, Statistics, Experience, Tasks, Entrance, Opening, Unknown, Battle };
     Page page=Page::Detail;
-    cv::Mat detail,summary,transition,statistics,entrance,opening,unknown,battle,loading;
+    cv::Mat detail,summary,transition,statistics,experience,tasks,entrance,opening,unknown,battle,loading;
     long long now=0,transition_at=0,loading_until=0,cancel_at=-1;
     bool cancelled=false,stuck_detail=false,loading_forever=false,empty=false;
+    bool after_statistics_experience=false,stuck_experience=false;
+    bool after_statistics_tasks=false,late_tasks=false;
+    long long pending_tasks_at=-1;
+    int tasks_confirms=0;
+    int ignored_experience_inputs=0,experience_confirms=0;
     int ignore_closes=0,stale_detail_frames=0,stale_left=0;
     int closes=0,advances=0,confirms=0,starts=0,bad_inputs=0;
     cv::Mat get_image(){
@@ -23,9 +28,12 @@ struct Device {
         if(loading_forever||now<loading_until)return loading;
         if(stale_left>0){--stale_left;return detail;}
         if(page==Page::Transition&&now-transition_at>=1500)page=Page::Statistics;
+        if(page==Page::Entrance&&pending_tasks_at>=0&&now>=pending_tasks_at){page=Page::Tasks;pending_tasks_at=-1;}
         switch(page){
         case Page::Detail:return detail;case Page::Summary:return summary;
         case Page::Transition:return transition;case Page::Statistics:return statistics;
+        case Page::Experience:return experience;
+        case Page::Tasks:return tasks;
         case Page::Entrance:return entrance;case Page::Opening:return opening;
         case Page::Battle:return battle;default:return unknown;}
     }
@@ -38,7 +46,14 @@ struct Device {
             page=Page::Summary;stale_left=stale_detail_frames;return true;
         }
         if(page==Page::Summary&&x>1180&&y>290&&y<430){++advances;page=Page::Transition;transition_at=now;return true;}
-        if(page==Page::Statistics&&x>580&&x<710&&y>590){++confirms;page=Page::Entrance;return true;}
+        if(page==Page::Statistics&&x>580&&x<710&&y>590){
+            ++confirms;page=after_statistics_experience?Page::Experience:after_statistics_tasks?Page::Tasks:Page::Entrance;
+            if(late_tasks){page=Page::Entrance;pending_tasks_at=now+1000;}return true;
+        }
+        if(page==Page::Experience&&x>600&&x<700&&y>520&&y<600){
+            ++experience_confirms;if(!stuck_experience&&ignored_experience_inputs--<=0)page=after_statistics_tasks?Page::Tasks:Page::Entrance;return true;
+        }
+        if(page==Page::Tasks&&x>580&&x<710&&y>590){++tasks_confirms;page=Page::Entrance;return true;}
         if(page==Page::Entrance&&x>950&&y>530){++starts;page=Page::Opening;return true;}
         ++bad_inputs;return true;
     }
@@ -82,6 +97,25 @@ cv::Mat load(const std::filesystem::path& path){
     static std::vector<cv::Mat> originals;originals.push_back(image);return image;
 }
 json::value event(std::string task){return json::object{{"subtask","ProcessTask"},{"details",json::object{{"task",std::move(task)}}}};}
+
+// Follow the repository's actual next lists and native PipelineAnalyzer results;
+// the device supplies only page transitions and input effects, never a page order.
+bool run_return_chain(Settlement& plugin,Device& io){
+    std::vector<std::string> next={"BlackFlow@Roguelike@ClickToStartPointAfterFailed"};
+    for(int step=0;step<96&&!plugin.need_exit();++step){
+        PipelineAnalyzer analyzer(io.get_image());analyzer.set_tasks(next);const auto hit=analyzer.analyze();
+        check(hit.has_value(),"return resource chain has no match");
+        const auto& task=hit->task_ptr;
+        if(task->name=="BlackFlow@Roguelike@StartExplore")return true;
+        if(plugin.verify(AsstMsg::SubTaskStart,event(task->name))&&!plugin._run())return false;
+        if(plugin.need_exit())return false;
+        if(task->action==ProcessTaskAction::ClickSelf)check(io.click(hit->rect),"return click");
+        else check(task->action==ProcessTaskAction::DoNothing,"unexpected return action");
+        if(!io.sleep(task->post_delay))return false;
+        next=task->next;
+    }
+    return false;
+}
 }
 
 int main(int argc,char**argv){
@@ -99,7 +133,11 @@ int main(int argc,char**argv){
             "page changes to battle during recording","empty camera","already at entrance","handoff budget exhausted",
             "victory trigger uses the settlement exit successor","recognized gameplay continuation after failure",
             "investment mode does not add statistics callbacks","opening reward cannot be old settlement statistics",
-            "new-run item popup is not an old settlement detail","page changes to battle before final confirmation"}){
+            "new-run item popup is not an old settlement detail","page changes to battle before final confirmation",
+            "statistics through experience and next start","experience first input ineffective","experience never closes",
+            "already on experience","optional confirmation without a page title","experience evidence save failure",
+            "experience changes to battle during recording",
+            "optional pages neither","optional pages tasks only","optional pages experience and tasks","late optional tasks after entrance first appears"}){
         if(argc==4&&scenario!=argv[3])continue;
         try {
             const auto dir=batch/std::to_string(ordinal++);std::filesystem::create_directories(dir);check(UserDir.set(dir),"UserDir");
@@ -109,6 +147,26 @@ int main(int argc,char**argv){
             io.unknown=load(repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028/walk-map.jpg");
             io.loading=load(repo/"unit_test/MaaCore/fixtures/blackflow-ui-recovery/20261028/network-panel.jpg");
             io.battle=load(fixture/"battle-interruption.png");
+            const bool experience_case=scenario.find("experience")!=std::string::npos||scenario=="optional confirmation without a page title";
+            const bool optional_case=scenario.starts_with("optional pages")||scenario.starts_with("late optional");
+            const bool current_frames=experience_case||optional_case;
+            if(current_frames){
+                const auto current=repo/"unit_test/MaaCore/fixtures/blackflow-settlement/20261102";
+                io.experience=load(current/"experience.png");io.statistics=load(current/"statistics.jpg");
+                io.summary=load(current/"summary.jpg");io.page=Device::Page::Summary;
+                io.after_statistics_experience=experience_case;
+                io.after_statistics_tasks=scenario=="optional pages tasks only"||scenario=="optional pages experience and tasks";
+                io.late_tasks=scenario=="late optional tasks after entrance first appears";
+                // A controlled optional overlay retaining the old generic confirm control.
+                // Its body is deliberately not a claimed original task-page screenshot.
+                io.tasks=io.statistics.clone();io.tasks(cv::Rect(0,0,1280,580)).setTo(cv::Scalar());
+                io.ignored_experience_inputs=scenario=="experience first input ineffective"?1:0;
+                io.stuck_experience=scenario=="experience never closes";
+                if(scenario=="already on experience"||scenario=="optional confirmation without a page title")io.page=Device::Page::Experience;
+                if(scenario=="optional confirmation without a page title"){
+                    io.experience=io.experience.clone();io.experience(cv::Rect(430,280,440,140)).setTo(cv::Scalar());
+                }
+            }
             io.ignore_closes=scenario=="first close input ineffective"?1:0;
             io.stale_detail_frames=scenario=="stale detail frames"?5:0;
             io.loading_until=scenario=="loading then settlement"?5000:0;
@@ -129,7 +187,7 @@ int main(int argc,char**argv){
             const bool investment=scenario=="investment mode does not add statistics callbacks";
             check(config->verify_and_load_params(json::object{{"theme","BlackFlow"},{"mode",static_cast<int>(investment?RoguelikeMode::Investment:RoguelikeMode::BlackFlowAutomationCollection)}}),"config");
             auto session=std::make_shared<BlackFlowSession>();ui_replay::IO log_io;log_io.map=io.entrance;
-            auto port=std::make_shared<Port>(log_io);ProcessTask parent({},nullptr,"Roguelike");
+            auto port=std::make_shared<Port>(log_io);asst::ProcessTask parent({},nullptr,"Roguelike");
             auto life=parent.register_plugin<BlackFlowLifecycleTaskPlugin>(config,nullptr,session,port);
             check(life->load_params(json::object{{"blackflow_strategy",investment?"investment":"automation_collection"}}),"lifecycle load");
             port->writer.set_collection_popup_session(session);check(session->set_current_floor(2),"old run progress");
@@ -140,13 +198,26 @@ int main(int argc,char**argv){
                 if(phase=="detail-before-close"&&scenario=="page changes to battle during recording"&&!scene_changed){
                     scene_changed=true;io.page=Device::Page::Battle;
                 }
-                if(phase=="statistics-before-confirm"&&scenario=="page changes to battle before final confirmation")io.page=Device::Page::Battle;
+                if(phase=="navigation-ready"&&io.page==Device::Page::Statistics&&scenario=="page changes to battle before final confirmation"){
+                    io.page=Device::Page::Battle;io.cancel_at=io.now+1500;
+                }
+                if(phase=="navigation-ready"&&io.page==Device::Page::Experience&&scenario=="experience evidence save failure")log_io.save_ok=false;
+                if(phase=="navigation-ready"&&io.page==Device::Page::Experience&&scenario=="experience changes to battle during recording"){
+                    io.page=Device::Page::Battle;io.cancel_at=io.now+1500;
+                }
                 if(phase=="detail-before-close"&&scenario=="evidence save failure")return false;
                 return life->record_settlement_evidence(phase,std::move(details),std::move(image));
             };
             if(scenario=="handoff budget exhausted")plugin.m_return_invocations=32;
+            if(scenario=="already on experience"||scenario=="optional confirmation without a page title"){
+                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed")),"experience verify");
+                const bool exited=run_return_chain(plugin,io);
+                check(plugin.statistics_messages.empty()&&io.bad_inputs==0,"experience page became statistics or received unsafe input");
+                check(exited&&io.page==Device::Page::Entrance&&io.experience_confirms==1,"generic confirmation did not reach entrance");
+                ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+            }
             if(investment){
-                check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed"))&&plugin._run(),"investment return failed");
+                check(run_return_chain(plugin,io),"investment return failed");
                 check(plugin.statistics_messages.empty()&&io.page==Device::Page::Entrance&&io.bad_inputs==0,"investment added a callback or used a blind return");
                 ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
             }
@@ -180,21 +251,32 @@ int main(int argc,char**argv){
                 check(at_entry?plugin.statistics_messages.empty():plugin.statistics_messages.size()==1,"statistics callback count");
                 if(!at_entry){
                     check(io.page==Device::Page::Statistics,"statistics not ready");
-                    check(plugin.statistics_messages.front().get("details","score",-1)==868,"actual score not read");
+                    check(plugin.statistics_messages.front().get("details","score",-1)==(current_frames?1063:868),"actual score not read");
                     check(plugin.statistics_messages.front().get("details","game_pass",!victory)==victory,"result flag changed");
                 }
                 if(victory)check(Task.get(trigger)->next==std::vector<std::string>{"BlackFlow@Roguelike@ClickToStartPointAfterFailed"},"victory loops before exiting statistics");
                 check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed")),"exit verify");
-                const bool exited=plugin._run();
+                const bool exited=run_return_chain(plugin,io);
+                if(scenario=="experience never closes"||scenario=="experience evidence save failure"||
+                   scenario=="experience changes to battle during recording"){
+                    check(!exited&&io.bad_inputs==0&&io.starts==0,"unverified experience exit was accepted");
+                    check(io.stuck_experience?(io.experience_confirms>0&&io.experience_confirms<=32):io.experience_confirms==0,"experience input escaped its bound or used stale/unsaved evidence");
+                    if(!io.cancelled)check(session->terminated(),"experience failure was not recorded");
+                    ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+                }
                 if(scenario=="page changes to battle before final confirmation"){
-                    check(!exited&&session->terminated()&&io.confirms==0&&io.bad_inputs==0,"stale final-confirm input reached the live battle");
+                    check(!exited&&io.confirms==0&&io.bad_inputs==0,"stale final-confirm input reached the live battle");
+                    if(!io.cancelled)check(session->terminated(),"unresolved return did not fail");
                     ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
                 }
                 check(exited,"exit settlement");
                 check(io.page==Device::Page::Entrance&&!session->terminated(),"exit did not reach the real entrance");
+                if(experience_case)check(io.experience_confirms==(scenario=="experience first input ineffective"?2:1),"wrong experience confirm count");
                 check(at_entry?plugin.statistics_messages.empty():plugin.statistics_messages.size()==1,"statistics emitted twice");
                 const auto next=Task.get("BlackFlow@Roguelike@ClickToStartPointAfterFailed")->next;
-                check(std::ranges::find(next,"BlackFlow@Roguelike@ClickToStartPointAfterFailed")==next.end(),"unbounded fallback remains");
+                check(next.back()=="BlackFlow@Roguelike@ClickToStartPointAfterFailed"&&plugin.m_return_invocations<=32,"bounded next loop missing");
+                check(Task.get("BlackFlow@Roguelike@ClickToStartPointAfterFailed")->post_delay==1500,"legacy late-popup wait lost");
+                if(optional_case)check(io.tasks_confirms==int(io.after_statistics_tasks||io.late_tasks),"optional task page skipped or invented");
                 PipelineAnalyzer entrance(io.get_image());entrance.set_tasks(next);const auto start=entrance.analyze();
                 check(start&&start->task_ptr->name=="BlackFlow@Roguelike@StartExplore","real entrance branch not selected");
                 RoguelikeResetTaskPlugin reset({},nullptr,"Roguelike",config,nullptr);reset.set_task_ptr(&parent);

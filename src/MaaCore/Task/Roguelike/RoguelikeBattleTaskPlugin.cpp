@@ -71,6 +71,7 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
     const bool has_preparation_camera_animation = !m_preparation_deploy_plan.empty();
     if (!run_preparation_phase()) {
         if (!need_exit()) {
+            m_preparation_failure = m_stage_name;
             Log.error("Battle preparation failed; stopping the task before the battle-result wait", m_stage_name);
             save_img(utils::path("debug/roguelike/battle-preparation"), false);
             // Callback plugins do not propagate run() failures to their parent ProcessTask.
@@ -437,27 +438,49 @@ bool asst::RoguelikeBattleTaskPlugin::run_preparation_phase()
 
     const std::string start_task = m_config->get_theme() + "@Roguelike@BattlePreparationStart";
     if (m_duel_preparation_tier.has_value()) {
-        // The provided frame must still show the completed preparation, before
-        // ProcessTask is allowed to send the start click.
-        const cv::Mat image = ctrler()->get_image();
-        OCRer start(image);
-        start.set_task_info(start_task);
-        OCRer counter(image);
-        counter.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCount");
-        OCRer cancel(image);
-        cancel.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCancel");
-        if (image.empty() || !start.analyze() || !counter.analyze() || counter.get_result().size() != 1 ||
-            cancel.analyze()) {
+        // Recheck the completed preparation without input. A single noisy frame
+        // must not undo the confirmed deployments, nor may one good frame start
+        // combat while the counter is still changing.
+        const int expected = static_cast<int>(target_locations.size());
+        constexpr int MaximumSamples = 6;
+        int ready_frames = 0;
+        cv::Mat prepared_image;
+        for (int sample = 0; sample < MaximumSamples && !need_exit(); ++sample) {
+            const cv::Mat image = ctrler()->get_image();
+            OCRer start(image);
+            start.set_task_info(start_task);
+            OCRer counter(image);
+            counter.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCount");
+            OCRer cancel(image);
+            cancel.set_task_info(m_config->get_theme() + "@Roguelike@BattlePreparationDeployCancel");
+            std::optional<std::pair<int, int>> count;
+            if (!image.empty() && start.analyze() && counter.analyze()) {
+                count = blackflow::select_preparation_deployment_count(counter.get_result());
+            }
+            const bool ready = count == std::pair { expected, expected } && !cancel.analyze();
+            ready_frames = ready ? ready_frames + 1 : 0;
+            if (ready_frames >= 2) {
+                prepared_image = image;
+                break;
+            }
+            if (sample + 1 < MaximumSamples && !sleep(200)) {
+                return false;
+            }
+        }
+        if (need_exit()) {
+            return false;
+        }
+        if (prepared_image.empty()) {
             Log.error("Duel preparation evidence is not a completed preparation page", m_stage_name);
             return false;
         }
-        const auto count = blackflow::parse_preparation_deployment_count(counter.get_result().front().text);
-        const int expected = static_cast<int>(target_locations.size());
-        if (!count.has_value() || count->first != expected || count->second != expected ||
-            !record_duel_preparation("before-start", image)) {
+        if (!record_duel_preparation("before-start", prepared_image)) {
             Log.error("Failed to preserve duel preparation before starting", m_stage_name);
             return false;
         }
+    }
+    if (need_exit()) {
+        return false;
     }
     if (!ProcessTask(*this, { start_task }).set_task_delay(0).set_retry_times(5).run()) {
         Log.error("Failed to click the battle preparation start button", m_stage_name);
@@ -654,8 +677,8 @@ std::optional<bool> asst::RoguelikeBattleTaskPlugin::confirm_preparation_deploym
         OCRer counter(image);
         counter.set_task_info(prefix + "DeployCount");
         std::optional<std::pair<int, int>> count;
-        if (preparation.analyze() && counter.analyze() && counter.get_result().size() == 1) {
-            count = blackflow::parse_preparation_deployment_count(counter.get_result().front().text);
+        if (preparation.analyze() && counter.analyze()) {
+            count = blackflow::select_preparation_deployment_count(counter.get_result());
         }
         if (!count || count->second != total || (count->first != expected && count->first != expected - 1)) {
             deployed_frames = undeployed_frames = 0;

@@ -1,0 +1,92 @@
+{
+  "collector_version": "v1.1.40",
+  "cases": [
+    {
+      "name": "002-20:24 2/2 + X",
+      "image": "002-2024.png",
+      "sha256": "c152b97c43a34d7e64474a234310b67387f11766c90e5f1e483440bde780bc72",
+      "ocr": [
+        {
+          "text": "2/2",
+          "rect": [
+            591,
+            72,
+            98,
+            47
+          ],
+          "score": 0.999578
+        },
+        {
+          "text": "X",
+          "rect": [
+            677,
+            93,
+            29,
+            28
+          ],
+          "score": 0.128875
+        }
+      ],
+      "source_log_line": "[2026-10-30 20:24:16.877][TRC][Px66920][Tx26338] Proceed [{ text: 2/2, rect: [ 591, 72, 98, 47 ], score: 0.999578 }, { text: X, rect: [ 677, 93, 29, 28 ], score: 0.128875 }]",
+      "image_timing": "Saved failure screenshot after the OCR check"
+    },
+    {
+      "name": "002-22:30 2/2 + GO",
+      "image": "002-2230.png",
+      "sha256": "6aa0dcd8cddfc2a15a90bc60e67fa01cd27c8109b5ad582e857aa871b8542120",
+      "ocr": [
+        {
+          "text": "2/2",
+          "rect": [
+            591,
+            71,
+            105,
+            52
+          ],
+          "score": 0.998932
+        },
+        {
+          "text": "GO",
+          "rect": [
+            673,
+            89,
+            32,
+            33
+          ],
+          "score": 0.459434
+        }
+      ],
+      "source_log_line": "[2026-10-30 22:29:57.223][TRC][Px66920][Tx26338] Proceed [{ text: 2/2, rect: [ 591, 71, 105, 52 ], score: 0.998932 }, { text: GO, rect: [ 673, 89, 32, 33 ], score: 0.459434 }]",
+      "image_timing": "Saved failure screenshot after the OCR check"
+    },
+    {
+      "name": "003-22:33 2/2 + b",
+      "image": "003-2233.jpg",
+      "sha256": "61df61fd0756b70a317672cd8462aba31b8ad9500335b2aea43faf354bd4f14b",
+      "ocr": [
+        {
+          "text": "2/2",
+          "rect": [
+            594,
+            74,
+            91,
+            43
+          ],
+          "score": 0.999803
+        },
+        {
+          "text": "b",
+          "rect": [
+            602,
+            113,
+            19,
+            13
+          ],
+          "score": 0.389203
+        }
+      ],
+      "source_log_line": "[2026-10-30 22:33:06.959][TRC][Px44772][Tx57179] Proceed [{ text: 2/2, rect: [ 594, 74, 91, 43 ], score: 0.999803 }, { text: b, rect: [ 602, 113, 19, 13 ], score: 0.389203 }]",
+      "image_timing": "Successful before-start frame after the noisy deployment observations"
+    }
+  ]
+}

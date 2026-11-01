@@ -6,31 +6,14 @@
             "roi": [935, 570, 85, 75],
             "mask": []
         },
-        "next": [
-            "InfrastDefault",
-            "InfrastDark",
-            "InfrastSami",
-            "InfrastMistCity",
-            "InfrastSiege",
-            "InfrastSarkaz",
-            "InfrastDelicious",
-            "InfrastGaming",
-            "InfrastDahuangCity",
-            "InfrastDreamland",
-            "InfrastJieGarden",
-            "InfrastAveMujica",
-            "InfrastTogether",
-            "InfrastLoneTrail",
-            "InfrastReconstruct",
-            "InfrastHunting"
-        ],
+        "next": ["InfrastDefault"],
         "onErrorNext": ["Infrast-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "InfrastDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [930, 540, 230, 180],
-        "template": "Default/EnterInfrast.png",
+        "template": ["Default/EnterInfrast.png", "Default/EnterInfrast-90.png"],
         "postDelay": 5000,
         "next": ["#self", "Stop"]
     },

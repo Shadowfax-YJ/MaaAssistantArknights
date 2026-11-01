@@ -11,10 +11,43 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / 'unit_test/MaaCore/fixtures/blackflow-settlement/20261029'
+EXPERIENCE = ROOT / 'unit_test/MaaCore/fixtures/blackflow-settlement/20261102'
 
 
 def events(which='old'):
     return json.loads((FIXTURE / f'producer-{which}-events.json').read_bytes())
+
+
+def experience_event():
+    return json.loads((EXPERIENCE / 'experience-event.json').read_bytes())
+
+
+def test_original_experience_and_same_run_statistics_are_preserved():
+    provenance = json.loads((EXPERIENCE / 'provenance.json').read_bytes())
+    for item in provenance['files']:
+        assert hashlib.sha256((EXPERIENCE / item['file']).read_bytes()).hexdigest() == item['sha256']
+    row = experience_event()
+    assert row['action'] == 'settlement.navigation' and row['phase'] == 'navigation-ready'
+    assert row['details']['destination'] == 'startup_transition'
+    assert row['details']['scope'] == 'run_settlement'
+    assert row['details']['acquisition_status'] == 'not_an_acquisition'
+    assert 'statistics' not in row['details'] and 'attribution' not in row['details']
+    assert (EXPERIENCE / 'producer' / row['image']['path']).is_file()
+
+
+def test_consumer_experience_confirmation_is_not_a_reward_or_new_statistics():
+    analysis = os.environ.get('BLACKFLOW_ANALYSIS_ROOT')
+    if not analysis:
+        pytest.skip('BLACKFLOW_ANALYSIS_ROOT must name the mapped consumer')
+    sys.path.insert(0, str(Path(analysis) / 'src'))
+    from lubiao_pipeline.normalize import normalize
+    from lubiao_pipeline.processing import plan
+
+    row = experience_event()
+    result = normalize([row], {'schema_version': 1}, {}, 'experience', 'events', 'revision')
+    assert plan(row) is None
+    assert not any(o['kind'] in {'reward_evidence', 'recruitment', 'node_resolution', 'processing_task'}
+                   for o in result['observations'])
 
 
 def test_original_pages_and_template_crops_keep_provenance():
@@ -87,7 +120,7 @@ def test_independent_v1_archive_accepts_settlement_diagnostics_and_originals():
     archive.setUp()
     try:
         original = [json.loads(line) for line in archive.files['run-fixture/run-events.jsonl'].splitlines()]
-        rows = original[:2] + [e for e in events() if e['action'] not in {'run.started', 'run.ended'}] + original[-1:]
+        rows = original[:2] + [e for e in events() if e['action'] not in {'run.started', 'run.ended'}] + [experience_event()] + original[-1:]
         for sequence, row in enumerate(rows, 1):
             row.update(sequence=sequence, elapsed_ms=sequence, timestamp=original[0]['timestamp'])
             row.pop('run_uuid', None)
@@ -100,6 +133,8 @@ def test_independent_v1_archive_accepts_settlement_diagnostics_and_originals():
                 continue
             path = e['image']['path']
             source = FIXTURE / 'producer-old' / path
+            if not source.is_file():
+                source = EXPERIENCE / 'producer' / path
             if source.is_file():
                 data = source.read_bytes()
                 archive.files['run-fixture/' + path] = data

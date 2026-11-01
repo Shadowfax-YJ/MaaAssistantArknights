@@ -313,13 +313,19 @@ struct CompletionPort {
 };
 struct Source {bool prepare(std::string*){return true;} void release(){}};
 struct Config {RoguelikeTheme theme=RoguelikeTheme::BlackFlow;RoguelikeTheme get_theme(){return theme;}};
-struct InterfaceTask {bool pipeline_success=true;bool run(){return pipeline_success;}};
+struct InterfaceTask {bool pipeline_success=true;std::function<void()> pipeline;bool run(){if(pipeline)pipeline();return pipeline_success;}};
+struct BattlePreparation {
+    std::optional<std::string> failure;
+    const auto& preparation_failure()const{return failure;}
+    void reset_preparation_failure(){failure.reset();}
+};
 struct CustomOpening {bool failed=false;bool blackflow_opening_failed(){return failed;}};
 struct RoguelikeTask:InterfaceTask {
     bool m_run_started=false, cancelled=false;
     std::mutex m_run_state_mutex;
     std::shared_ptr<Config> m_config_ptr=std::make_shared<Config>();
     std::shared_ptr<CustomOpening> m_custom_ptr=std::make_shared<CustomOpening>();
+    std::shared_ptr<BattlePreparation> m_battle_ptr=std::make_shared<BattlePreparation>();
     std::shared_ptr<Source> m_blackflow_map_source_ptr=std::make_shared<Source>();
     std::shared_ptr<CompletionSession> m_blackflow_session_ptr=std::make_shared<CompletionSession>();
     std::shared_ptr<CompletionPort> m_blackflow_port_ptr=std::make_shared<CompletionPort>();
@@ -1168,6 +1174,16 @@ int main(int argc,char** argv) {
     test("normal BlackFlow strategy ending stays successful",[]{completion_replay::RoguelikeTask p;
         p.m_blackflow_session_ptr->value=completion_replay::Result{true,"stop_run","completed","done"};
         check(p.run(),"normal strategy stop became task error");});
+    test("battle preparation failure survives successful parent interruption",[]{completion_replay::RoguelikeTask p;
+        p.pipeline=[&]{p.m_battle_ptr->failure="共斗";};
+        check(!p.run(),"failed preparation reported successful completion");
+        const auto& e=p.m_blackflow_port_ptr->events.back();
+        check(e.phase=="failed"&&e.outcome=="battle_preparation_failed"&&!e.details.at("task_succeeded").as_boolean(),
+              "task.finished lost preparation failure");});
+    test("new task clears the prior battle preparation failure",[]{completion_replay::RoguelikeTask p;
+        p.pipeline=[&]{p.m_battle_ptr->failure="共斗";};check(!p.run(),"first failure disappeared");
+        p.m_blackflow_session_ptr->value.reset();p.pipeline={};
+        check(p.run()&&!p.m_battle_ptr->preparation_failure(),"failure leaked into the next task");});
     test("ordinary themes keep package completion semantics",[]{completion_replay::RoguelikeTask p;
         p.m_config_ptr->theme=completion_replay::RoguelikeTheme::Other;
         p.m_blackflow_session_ptr->value=completion_replay::Result{};

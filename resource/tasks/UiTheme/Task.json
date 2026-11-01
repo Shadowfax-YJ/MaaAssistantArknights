@@ -6,31 +6,14 @@
             "roi": [720, 553, 75, 70],
             "mask": []
         },
-        "next": [
-            "TaskDefault",
-            "TaskDark",
-            "TaskSami",
-            "TaskMistCity",
-            "TaskSiege",
-            "TaskSarkaz",
-            "TaskDelicious",
-            "TaskGaming",
-            "TaskDahuangCity",
-            "TaskDreamland",
-            "TaskJieGarden",
-            "TaskAveMujica",
-            "TaskTogether",
-            "TaskLoneTrail",
-            "TaskReconstruct",
-            "TaskHunting"
-        ],
+        "next": ["TaskDefault"],
         "onErrorNext": ["Task-Entry@SwitchTheme@ToggleSettingsMenu"]
     },
     "TaskDefault": {
         "action": "ClickSelf",
         "maskRange": [1, 255],
         "roi": [700, 530, 230, 190],
-        "template": "Default/Task.png",
+        "template": ["Default/Task.png", "Default/Task-90.png"],
         "postDelay": 1000,
         "next": ["#self", "Stop"]
     },

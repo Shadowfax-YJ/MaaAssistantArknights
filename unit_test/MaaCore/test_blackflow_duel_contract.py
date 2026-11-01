@@ -17,6 +17,16 @@ def samples():
     return json.loads((FIXTURE / 'producer-events.json').read_bytes())
 
 
+def test_counter_noise_originals_and_runtime_observations_are_preserved():
+    fixture = FIXTURE / '20261030'
+    document = json.loads((fixture / 'counters.json').read_bytes())
+    for case in document['cases']:
+        assert hashlib.sha256((fixture / case['image']).read_bytes()).hexdigest() == case['sha256']
+        assert len(case['ocr']) > 1
+        assert case['ocr'][0]['text'] == '2/2'
+        assert 'Proceed' in case['source_log_line']
+
+
 def test_preparation_tiers_match_both_real_tile_maps():
     payloads = json.loads((FIXTURE / 'preparation.json').read_bytes())
     assert len(payloads) == 12
@@ -96,3 +106,26 @@ def test_consumer_keeps_choices_without_ocr_or_claiming_combat_rewards():
     future[0]['schema_version'] = 99
     with pytest.raises(Unsupported):
         normalize(future, {}, {}, 'future', 'events', 'revision')
+
+
+@pytest.mark.parametrize('failed', [False, True])
+def test_consumer_accepts_legacy_and_corrected_preparation_task_status_without_rewards(failed):
+    analysis = os.environ.get('BLACKFLOW_ANALYSIS_REPO')
+    if not analysis:
+        pytest.skip('BLACKFLOW_ANALYSIS_REPO is required for independent consumer checks')
+    sys.path.insert(0, str(Path(analysis) / 'src'))
+    from lubiao_pipeline.normalize import normalize
+
+    # Existing task.finished envelope: old wrong-success and corrected StopTask
+    # are both readable; a preparation diagnostic is never a won battle/reward.
+    event = copy.deepcopy(samples()[0])
+    event.update(action='task.finished', task='RoguelikeTask',
+                 phase='failed' if failed else 'completed',
+                 outcome='battle_preparation_failed' if failed else 'stopped')
+    event.pop('image', None)
+    event['details'] = {'task_succeeded': not failed, 'strategy_result': {
+        'outcome': 'battle_preparation_failed', 'succeeded': False, 'next_action': 'stop_task',
+    } if failed else None}
+    facts = normalize([event], {'schema_version': 1}, {}, 'preparation-status', 'events', 'revision')
+    assert not any(row['kind'] in {'reward_evidence', 'recruitment', 'node_resolution', 'movement'}
+                   for row in facts['observations'])
