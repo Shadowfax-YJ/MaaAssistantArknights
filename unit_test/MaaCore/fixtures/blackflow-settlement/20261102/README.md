@@ -37,8 +37,11 @@ positive task fixture has been removed, not retained as evidence of coverage.
 
 The monthly resource now recognizes the actual title, reuses the original
 ClickToStartPoint rectangle and 1500ms delay, and returns through next. The
-parent remains DoNothing and the settlement C++ plugin is unchanged. Tests
-cover repeated/ineffective clicks, the existing return budget, evidence-save
+parent remains DoNothing and the settlement C++ plugin is unchanged. The same
+monthly node is also a successor of CollectionBegin and Begin, so restarting
+while this page is visible can reach the return chain. Both real startup paths
+are replayed; CollectionBegin failed with no matching successor before this
+connection was added. Tests cover repeated/ineffective clicks, the existing return budget, evidence-save
 failure, cancellation and a page change during recording. A title-masked frame
 is used only as an explicitly synthetic negative check, alongside actual
 experience, summary, statistics, detail, entrance, opening and battle frames.

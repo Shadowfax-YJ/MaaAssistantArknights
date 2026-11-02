@@ -102,8 +102,8 @@ json::value event(std::string task){return json::object{{"subtask","ProcessTask"
 
 // Follow the repository's actual next lists and native PipelineAnalyzer results;
 // the device supplies only page transitions and input effects, never a page order.
-bool run_return_chain(Settlement& plugin,Device& io){
-    std::vector<std::string> next={"BlackFlow@Roguelike@ClickToStartPointAfterFailed"};
+bool run_return_chain(Settlement& plugin,Device& io,std::string entry="BlackFlow@Roguelike@ClickToStartPointAfterFailed"){
+    std::vector<std::string> next={std::move(entry)};
     for(int step=0;step<96&&!plugin.need_exit();++step){
         PipelineAnalyzer analyzer(io.get_image());analyzer.set_tasks(next);const auto hit=analyzer.analyze();
         check(hit.has_value(),"return resource chain has no match");
@@ -140,7 +140,7 @@ int main(int argc,char**argv){
             "statistics through experience and next start","experience first input ineffective","experience never closes",
             "already on experience","optional confirmation without a page title","experience evidence save failure",
             "experience changes to battle during recording",
-            "monthly task page in return next","monthly task already visible","monthly task first input ineffective",
+            "monthly task page in return next","monthly task collection startup","monthly task regular startup","monthly task already visible","monthly task first input ineffective",
             "monthly task never closes","monthly task evidence save failure","monthly task changes to battle during recording",
             "monthly task user cancellation","optional pages neither","optional pages tasks only","optional pages experience and tasks","late optional tasks after entrance first appears"}){
         if(argc==4&&scenario!=argv[3])continue;
@@ -250,10 +250,14 @@ int main(int argc,char**argv){
             };
             if(scenario=="handoff budget exhausted")plugin.m_return_invocations=32;
             if(monthly_case){
-                const bool exited=run_return_chain(plugin,io);
+                const bool collection_start=scenario=="monthly task collection startup";
+                const bool regular_start=scenario=="monthly task regular startup";
+                const std::string entry=collection_start?"BlackFlow@Roguelike@CollectionBegin":regular_start?
+                    "BlackFlow@Roguelike@Begin":"BlackFlow@Roguelike@ClickToStartPointAfterFailed";
+                const bool exited=run_return_chain(plugin,io,entry);
                 check(plugin.statistics_messages.empty()&&io.bad_inputs==0&&io.starts==0&&port->archives==0,
                       "monthly overlay became statistics, received unsafe input or started/archived a run");
-                if(scenario=="monthly task already visible"||scenario=="monthly task first input ineffective"){
+                if(collection_start||regular_start||scenario=="monthly task already visible"||scenario=="monthly task first input ineffective"){
                     check(exited&&io.page==Device::Page::Entrance,"monthly overlay did not reach entrance");
                     check(io.tasks_confirms==(scenario=="monthly task first input ineffective"?2:1),"wrong monthly click count");
                 }
