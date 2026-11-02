@@ -5471,6 +5471,7 @@
         "action": "DoNothing",
         "next": [
             "BlackFlow@Roguelike@SettlementReturnConfirm",
+            "BlackFlow@Roguelike@SettlementMonthlyCommission",
             "BlackFlow@Roguelike@StartExplore",
             "BlackFlow@Roguelike@StartExploreCD",
             "BlackFlow@Roguelike@StartUpThemes#next",
@@ -5480,6 +5481,15 @@
     "BlackFlow@Roguelike@SettlementReturnConfirm": {
         "baseTask": "BlackFlow@Roguelike@GamePassTheEndConfirm",
         "template": "BlackFlow@Roguelike@GamePassTheEndConfirm.png",
+        "next": ["BlackFlow@Roguelike@ClickToStartPointAfterFailed"]
+    },
+    "BlackFlow@Roguelike@SettlementMonthlyCommission": {
+        "Doc": "本月委托结算页没有确认勾选按钮；识别标题后复用原返回任务的翻页点击和 1500ms 等待。",
+        "baseTask": "Roguelike@ClickToStartPoint",
+        "algorithm": "OcrDetect",
+        "text": ["进行中的本月委托"],
+        "fullMatch": true,
+        "roi": [500, 70, 280, 60],
         "next": ["BlackFlow@Roguelike@ClickToStartPointAfterFailed"]
     },
     "BlackFlow@Roguelike@SettlementRecoveryFailed": {

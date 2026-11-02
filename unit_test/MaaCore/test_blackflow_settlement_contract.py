@@ -22,7 +22,7 @@ def experience_event():
     return json.loads((EXPERIENCE / 'experience-event.json').read_bytes())
 
 
-def test_original_experience_and_same_run_statistics_are_preserved():
+def test_original_optional_pages_and_same_run_statistics_are_preserved():
     provenance = json.loads((EXPERIENCE / 'provenance.json').read_bytes())
     for item in provenance['files']:
         assert hashlib.sha256((EXPERIENCE / item['file']).read_bytes()).hexdigest() == item['sha256']

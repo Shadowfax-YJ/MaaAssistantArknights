@@ -18,7 +18,15 @@
       "file": "statistics.jpg",
       "source": "D:\\ShadowfaxData\\Downloads\\MAAInstanceManager-v0.1.0-win-x64\\managed_instances\\MAA-002\\debug\\BlackFlow\\run-20261102-022334-524296\\images\\006039-settlement-navigation-statistics-ready.jpg",
       "sha256": "b1395bafad9cd4bbe11ce009390d8afec00eb9d8884f379979b39bdc705d4f75"
+    },
+    {
+      "file": "tasks.png",
+      "source": "User attachment codex-clipboard-096aa10c-84af-4e79-ba70-919f2e1b9769.png",
+      "source_instance": "MAA-003",
+      "source_run": "run-20261102-094356-204843",
+      "collector_version": "v1.1.41",
+      "sha256": "cf6f7f798d5f7c7bfc585e9e6164ad2e6dc97b23dd7edfc4518dca1f2c9fbac2"
     }
   ],
-  "scope": "Unmodified original summary/statistics frames and user-provided experience screenshot. Entry and next opening reuse 20261029 fixtures; transitions and inputs are controlled."
+  "scope": "Unmodified original summary/statistics frames and user-provided experience/monthly-task screenshots. tasks.png overrides the default source instance/run with MAA-003 v1.1.41. Entry and next opening reuse 20261029 fixtures; timing and input effects are controlled."
 }

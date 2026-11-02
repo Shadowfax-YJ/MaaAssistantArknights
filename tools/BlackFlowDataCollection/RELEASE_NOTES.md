@@ -1,10 +1,8 @@
-黑流树海采集版 v1.1.41
+黑流树海采集版 v1.1.42
 
 ### 本次更新
 
-* 修复结算后可能停在经验页或任务页、无法继续下一局的问题。
-* 修复狭路相逢准备阶段偶发误判，并纠正准备失败被显示为任务完成的问题。
-* 移植上游 v6.21.0 的主界面识别适配，兼容新旧日间主题入口与主题切换，保留黑流定制逻辑。
+* 修复结算后停在本月委托页面、无法开始下一局的问题。
 
 本次仍沿用现有难度 6 采集范围，难度 16、险路尽头的新分支及新结局路线暂未适配。
 
@@ -17,8 +15,8 @@
 
 ### 下载
 
-* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.41/MAA-BlackFlow-Data-Collection-v1.1.41-win-x64.zip)
-* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.41/MAA-BlackFlow-Data-Collection-v1.1.41-macos-universal.dmg)
+* [Windows x64 国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.42/MAA-BlackFlow-Data-Collection-v1.1.42-win-x64.zip)
+* [macOS 通用包国内下载](https://cdn.lubiao.wiki/maa/blackflow/v1.1.42/MAA-BlackFlow-Data-Collection-v1.1.42-macos-universal.dmg)
 * GitHub 下载见本 Release 附件。
 
 提交数据时，请直接上传 `debug/BlackFlow` 中程序自动生成的原始 ZIP，不要修改内容或重新压缩。

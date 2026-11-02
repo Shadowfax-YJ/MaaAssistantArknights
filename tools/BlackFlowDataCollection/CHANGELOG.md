@@ -1,4 +1,4 @@
-## v1.1.41
+## v1.1.42
 
 ### Highlights
 
@@ -44,6 +44,15 @@ Windows and macOS now support a dedicated collection update channel that preserv
 以下是详细内容：
 
 <details open>
+<summary><b>v1.1.42 (2026-11-02)</b></summary>
+
+### 修复 | Fix
+
+* 修复结算后停在本月委托页面、无法开始下一局的问题。 @Shadowfax-YJ
+
+</details>
+
+<details>
 <summary><b>v1.1.41 (2026-11-02)</b></summary>
 
 ### 修复 | Fix

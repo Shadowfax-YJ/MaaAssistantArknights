@@ -1,4 +1,4 @@
-# Experience overlay after settlement statistics
+# Optional experience and monthly commission overlays after settlement statistics
 
 MAA-002 v1.1.40, `run-20261102-022334-524296`, 2026-11-02 03:28–03:29
 Asia/Shanghai. The original run first advanced the summary, reported score 1063,
@@ -17,11 +17,31 @@ resource `next` chain. The experience-specific C++ classifier was removed;
 
 The replay executes TaskData.next with native PipelineAnalyzer matching. It
 covers no optional page, experience only, tasks only, both pages, and a delayed
-task overlay after the entrance first appears. Task overlays are controlled
-frames retaining the existing confirmation control; they are not claimed to
-be original task-page screenshots. No task-page title or fixed sequence is
-assumed by production code. Input effects and later entrance/opening frames
-remain controlled/reused as described in provenance.json.
+task overlay after the entrance first appears. All positive experience and
+monthly-task frames are unmodified screenshots. Page transitions, input effects
+and the reused entrance/opening frames remain controlled.
+
+## MAA-003 monthly commission regression in v1.1.41
+
+`tasks.png` is the user's original 1280x720 screenshot of 进行中的本月委托.
+MAA-003's installed Core and BlackFlow resource matched the published v1.1.41
+package byte for byte. In `run-20261102-094356-204843`, the log reports the
+entrance at 09:46:54.832 Asia/Shanghai, then repeatedly sees the monthly page
+until the user stops the task at 09:47:21.625.
+
+The previous "tasks" replay was a masked statistics frame retaining a checkbox.
+It could not catch this failure: the real monthly page has no checkbox. Replacing
+it with this image makes v1.1.41 fail with `FAIL optional pages tasks only: exit
+settlement`; a one-frame native next-candidate check also fails. The masked
+positive task fixture has been removed, not retained as evidence of coverage.
+
+The monthly resource now recognizes the actual title, reuses the original
+ClickToStartPoint rectangle and 1500ms delay, and returns through next. The
+parent remains DoNothing and the settlement C++ plugin is unchanged. Tests
+cover repeated/ineffective clicks, the existing return budget, evidence-save
+failure, cancellation and a page change during recording. A title-masked frame
+is used only as an explicitly synthetic negative check, alongside actual
+experience, summary, statistics, detail, entrance, opening and battle frames.
 
 The recorder sample in `experience-event.json` now comes from navigation-ready
 in the passing resource-chain replay. Its scope remains run_settlement and

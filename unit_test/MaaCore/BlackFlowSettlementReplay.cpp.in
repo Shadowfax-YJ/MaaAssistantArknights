@@ -19,7 +19,7 @@ struct Device {
     bool after_statistics_experience=false,stuck_experience=false;
     bool after_statistics_tasks=false,late_tasks=false;
     long long pending_tasks_at=-1;
-    int tasks_confirms=0;
+    int tasks_confirms=0,ignored_tasks_inputs=0;bool stuck_tasks=false;
     int ignored_experience_inputs=0,experience_confirms=0;
     int ignore_closes=0,stale_detail_frames=0,stale_left=0;
     int closes=0,advances=0,confirms=0,starts=0,bad_inputs=0;
@@ -53,7 +53,9 @@ struct Device {
         if(page==Page::Experience&&x>600&&x<700&&y>520&&y<600){
             ++experience_confirms;if(!stuck_experience&&ignored_experience_inputs--<=0)page=after_statistics_tasks?Page::Tasks:Page::Entrance;return true;
         }
-        if(page==Page::Tasks&&x>580&&x<710&&y>590){++tasks_confirms;page=Page::Entrance;return true;}
+        if(page==Page::Tasks&&x>=261&&x<292&&y>=640&&y<672){
+            ++tasks_confirms;if(!stuck_tasks&&ignored_tasks_inputs--<=0)page=Page::Entrance;return true;
+        }
         if(page==Page::Entrance&&x>950&&y>530){++starts;page=Page::Opening;return true;}
         ++bad_inputs;return true;
     }
@@ -110,6 +112,7 @@ bool run_return_chain(Settlement& plugin,Device& io){
         if(plugin.verify(AsstMsg::SubTaskStart,event(task->name))&&!plugin._run())return false;
         if(plugin.need_exit())return false;
         if(task->action==ProcessTaskAction::ClickSelf)check(io.click(hit->rect),"return click");
+        else if(task->action==ProcessTaskAction::ClickRect)check(io.click(task->specific_rect),"return rectangle click");
         else check(task->action==ProcessTaskAction::DoNothing,"unexpected return action");
         if(!io.sleep(task->post_delay))return false;
         next=task->next;
@@ -137,9 +140,36 @@ int main(int argc,char**argv){
             "statistics through experience and next start","experience first input ineffective","experience never closes",
             "already on experience","optional confirmation without a page title","experience evidence save failure",
             "experience changes to battle during recording",
-            "optional pages neither","optional pages tasks only","optional pages experience and tasks","late optional tasks after entrance first appears"}){
+            "monthly task page in return next","monthly task already visible","monthly task first input ineffective",
+            "monthly task never closes","monthly task evidence save failure","monthly task changes to battle during recording",
+            "monthly task user cancellation","optional pages neither","optional pages tasks only","optional pages experience and tasks","late optional tasks after entrance first appears"}){
         if(argc==4&&scenario!=argv[3])continue;
         try {
+            if(scenario=="monthly task page in return next"){
+                const auto image=load(repo/"unit_test/MaaCore/fixtures/blackflow-settlement/20261102/tasks.png");
+                std::vector<std::string> known;
+                for(const auto& name:Task.get("BlackFlow@Roguelike@ClickToStartPointAfterFailed")->next){
+                    const auto task=Task.get(name);
+                    if(task&&task->algorithm!=AlgorithmType::JustReturn)known.push_back(name);
+                }
+                PipelineAnalyzer analyzer(image);analyzer.set_tasks(known);const auto hit=analyzer.analyze();
+                check(hit.has_value(),"real monthly task page has no recognized return successor");
+                check(hit->task_ptr->name=="BlackFlow@Roguelike@SettlementMonthlyCommission", "wrong monthly successor");
+                check(hit->task_ptr->action==ProcessTaskAction::ClickRect&&hit->task_ptr->post_delay==1500,
+                      "legacy recognized-page click or delay changed");
+                PipelineAnalyzer checkbox(image);checkbox.set_tasks({"BlackFlow@Roguelike@SettlementReturnConfirm"});
+                check(!checkbox.analyze(),"monthly fixture must not have the experience/statistics checkbox");
+                const auto rejects=[&](const cv::Mat& other){
+                    PipelineAnalyzer guard(other);guard.set_tasks({hit->task_ptr->name});
+                    check(!guard.analyze(),"monthly click matched an unrelated page");
+                };
+                for(const auto& name:{"detail.png","summary.png","statistics.png","entry.jpg","next-opening.jpg",
+                                     "initial-reward.jpg","opening-popup.jpg","battle-interruption.png"})rejects(load(fixture/name));
+                rejects(load(repo/"unit_test/MaaCore/fixtures/blackflow-settlement/20261102/experience.png"));
+                auto no_title=image.clone();no_title(cv::Rect(500,70,280,60)).setTo(cv::Scalar());
+                rejects(no_title);
+                ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+            }
             const auto dir=batch/std::to_string(ordinal++);std::filesystem::create_directories(dir);check(UserDir.set(dir),"UserDir");
             Device io;io.detail=load(fixture/"detail.png");io.summary=load(fixture/"summary.png");
             io.transition=load(fixture/"statistics-transition.png");io.statistics=load(fixture/"statistics.png");
@@ -149,7 +179,8 @@ int main(int argc,char**argv){
             io.battle=load(fixture/"battle-interruption.png");
             const bool experience_case=scenario.find("experience")!=std::string::npos||scenario=="optional confirmation without a page title";
             const bool optional_case=scenario.starts_with("optional pages")||scenario.starts_with("late optional");
-            const bool current_frames=experience_case||optional_case;
+            const bool monthly_case=scenario.starts_with("monthly task");
+            const bool current_frames=experience_case||optional_case||monthly_case;
             if(current_frames){
                 const auto current=repo/"unit_test/MaaCore/fixtures/blackflow-settlement/20261102";
                 io.experience=load(current/"experience.png");io.statistics=load(current/"statistics.jpg");
@@ -157,9 +188,11 @@ int main(int argc,char**argv){
                 io.after_statistics_experience=experience_case;
                 io.after_statistics_tasks=scenario=="optional pages tasks only"||scenario=="optional pages experience and tasks";
                 io.late_tasks=scenario=="late optional tasks after entrance first appears";
-                // A controlled optional overlay retaining the old generic confirm control.
-                // Its body is deliberately not a claimed original task-page screenshot.
-                io.tasks=io.statistics.clone();io.tasks(cv::Rect(0,0,1280,580)).setTo(cv::Scalar());
+                // The original MAA-003 monthly commission overlay has no generic checkbox.
+                io.tasks=load(current/"tasks.png");
+                if(monthly_case)io.page=Device::Page::Tasks;
+                io.ignored_tasks_inputs=scenario=="monthly task first input ineffective"?1:0;
+                io.stuck_tasks=scenario=="monthly task never closes";
                 io.ignored_experience_inputs=scenario=="experience first input ineffective"?1:0;
                 io.stuck_experience=scenario=="experience never closes";
                 if(scenario=="already on experience"||scenario=="optional confirmation without a page title")io.page=Device::Page::Experience;
@@ -205,10 +238,33 @@ int main(int argc,char**argv){
                 if(phase=="navigation-ready"&&io.page==Device::Page::Experience&&scenario=="experience changes to battle during recording"){
                     io.page=Device::Page::Battle;io.cancel_at=io.now+1500;
                 }
+                if(phase=="navigation-ready"&&io.page==Device::Page::Tasks){
+                    if(scenario=="monthly task evidence save failure")log_io.save_ok=false;
+                    if(scenario=="monthly task changes to battle during recording"){
+                        io.page=Device::Page::Battle;io.cancel_at=io.now+1500;
+                    }
+                    if(scenario=="monthly task user cancellation")io.cancelled=true;
+                }
                 if(phase=="detail-before-close"&&scenario=="evidence save failure")return false;
                 return life->record_settlement_evidence(phase,std::move(details),std::move(image));
             };
             if(scenario=="handoff budget exhausted")plugin.m_return_invocations=32;
+            if(monthly_case){
+                const bool exited=run_return_chain(plugin,io);
+                check(plugin.statistics_messages.empty()&&io.bad_inputs==0&&io.starts==0&&port->archives==0,
+                      "monthly overlay became statistics, received unsafe input or started/archived a run");
+                if(scenario=="monthly task already visible"||scenario=="monthly task first input ineffective"){
+                    check(exited&&io.page==Device::Page::Entrance,"monthly overlay did not reach entrance");
+                    check(io.tasks_confirms==(scenario=="monthly task first input ineffective"?2:1),"wrong monthly click count");
+                }
+                else{
+                    check(!exited,"unverified monthly overlay exit was accepted");
+                    check(io.stuck_tasks?(io.tasks_confirms>0&&io.tasks_confirms<=32):io.tasks_confirms==0,
+                          "monthly input escaped its bound or used stale/unsaved evidence");
+                    if(!io.cancelled)check(session->terminated(),"monthly failure was not recorded");
+                }
+                ++passed;std::cout<<"PASS "<<scenario<<'\n';continue;
+            }
             if(scenario=="already on experience"||scenario=="optional confirmation without a page title"){
                 check(plugin.verify(AsstMsg::SubTaskStart,event("BlackFlow@Roguelike@ClickToStartPointAfterFailed")),"experience verify");
                 const bool exited=run_return_chain(plugin,io);
