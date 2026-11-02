@@ -17,9 +17,11 @@ resource `next` chain. The experience-specific C++ classifier was removed;
 
 The replay executes TaskData.next with native PipelineAnalyzer matching. It
 covers no optional page, experience only, tasks only, both pages, and a delayed
-task overlay after the entrance first appears. All positive experience and
-monthly-task frames are unmodified screenshots. Page transitions, input effects
-and the reused entrance/opening frames remain controlled.
+task overlay after the entrance first appears. All monthly-task positive cases
+use the unmodified screenshot. Experience cases use the original screenshot,
+plus one explicitly title-masked variant checking the existing checkbox without
+a title; that variant is never used as a monthly-task positive. Page transitions,
+input effects and the reused entrance/opening frames remain controlled.
 
 ## MAA-003 monthly commission regression in v1.1.41
 
@@ -41,7 +43,9 @@ parent remains DoNothing and the settlement C++ plugin is unchanged. The same
 monthly node is also a successor of CollectionBegin and Begin, so restarting
 while this page is visible can reach the return chain. Both real startup paths
 are replayed; CollectionBegin failed with no matching successor before this
-connection was added. Tests cover repeated/ineffective clicks, the existing return budget, evidence-save
+connection was added. CollectionBegin keeps ExitThenAbandon and Abandon as its
+first two successors, with the monthly page after them; the existing routing
+contract test remains unchanged. Tests cover repeated/ineffective clicks, the existing return budget, evidence-save
 failure, cancellation and a page change during recording. A title-masked frame
 is used only as an explicitly synthetic negative check, alongside actual
 experience, summary, statistics, detail, entrance, opening and battle frames.

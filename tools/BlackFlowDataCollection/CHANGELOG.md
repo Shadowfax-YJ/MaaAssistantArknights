@@ -48,7 +48,7 @@ Windows and macOS now support a dedicated collection update channel that preserv
 
 ### 修复 | Fix
 
-* 修复结算后停在本月委托页面、无法开始下一局的问题。 @Shadowfax-YJ
+* 修复结算后停在本月委托页面的问题，并支持停止在此页后重启继续。 @Shadowfax-YJ
 
 </details>
 
