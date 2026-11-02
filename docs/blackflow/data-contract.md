@@ -1,5 +1,27 @@
 # BlackFlow 采集契约与下游联动
 
+## v1.1.42 发布与真实委托页核验（2026-11-02）
+
+[blackflow-v1.1.42](https://github.com/Shadowfax-YJ/MaaAssistantArknights/releases/tag/blackflow-v1.1.42) 已发布 Windows、macOS 通用包及 GitHub/COS/CDN
+更新源，来源 `cb16deb17fc855a70f6ce649aef6c146470bbe21`，流水线
+[41380749551](https://github.com/Shadowfax-YJ/MaaAssistantArknights/actions/runs/41380749551) 成功。
+修复 v1.1.41 遗漏无勾选按钮的本月委托页：资源识别标题后复用原翻页动作、延迟和 next，
+同一节点接入 CollectionBegin/Begin，覆盖停止后的重启。结算 C++ 仍与 v1.1.39 相同，
+其他结算保护、狭路修复和主界面适配保持。
+
+用户提供的 003 实图在修复前使完整 next 回放与单帧原生检查失败，修复后两者通过；
+旧模拟任务页正例已被替换。发布 CI 的 41 项结算回放及全部既有检查通过，macOS
+双架构及 DMG 校验成功。本地 83 项共享契约和已安装 v1.1.41 Core 资源加载通过。
+两个国内完整包均已下载，SHA-256 与 GitHub 和双份更新清单一致，macOS 两份更新
+签名有效；Windows 包内委托节点、继承动作和延迟、既有主页资源、Core 版本及修复
+标记均通过。普通版 Latest 保持 `v15.0.1`。
+记录：build/diagnostics/20261102/v1.1.42-public-verification/verification.json。
+
+原始/图片/签名 v1、能力、固定验证器、事件语义、任务族及宿主协议不变；旧数据兼容，
+未知版本拒绝，缓存、人工审核、冻结报告和统计分子分母保持，无需消费者生产部署。
+实际任务页采用未修改原图，输入效果、时序与后续页面为受控回放；未点击、替换或
+重启运行实例，不宣称完整实机验证。
+
 ## v1.1.42 本月委托页修复与发布准备（2026-11-02）
 
 003 的 Core 和 BlackFlow 资源逐字节匹配公开 v1.1.41，仍在本月委托页停住。
